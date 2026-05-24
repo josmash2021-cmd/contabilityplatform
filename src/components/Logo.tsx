@@ -1,0 +1,17 @@
+export function Logo({ className = "w-7 h-7" }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 180 180"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className={className}
+    >
+      <rect width="180" height="180" rx="40" fill="#000000"/>
+      <line x1="45" y1="130" x2="140" y2="130" stroke="#ffffff" strokeWidth="6" strokeLinecap="round"/>
+      <line x1="45" y1="130" x2="45" y2="35" stroke="#ffffff" strokeWidth="6" strokeLinecap="round"/>
+      <rect x="62" y="70" width="16" height="60" rx="8" fill="#ffffff"/>
+      <rect x="96" y="50" width="16" height="80" rx="8" fill="#ffffff"/>
+      <rect x="130" y="30" width="16" height="100" rx="8" fill="#ffffff"/>
+    </svg>
+  );
+}

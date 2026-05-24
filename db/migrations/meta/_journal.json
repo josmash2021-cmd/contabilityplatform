@@ -1,0 +1,27 @@
+{
+  "version": "7",
+  "dialect": "mysql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "5",
+      "when": 1778861554016,
+      "tag": "0000_slippery_kronos",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "5",
+      "when": 1778881988553,
+      "tag": "0001_smiling_captain_america",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1778954309371,
+      "tag": "0002_busy_orphan",
+      "breakpoints": true
+    }
+  ]
+}

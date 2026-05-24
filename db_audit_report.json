@@ -1,0 +1,551 @@
+{
+  "missing_tables": [],
+  "extra_tables": [],
+  "table_comparisons": {
+    "accounts": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "type",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "bankAccounts": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "createdAt",
+          "found": {
+            "type": "timestamp",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "extra": "DEFAULT_GENERATED"
+          }
+        },
+        {
+          "column": "currency",
+          "found": {
+            "type": "varchar(10)",
+            "nullable": true,
+            "default": "USD",
+            "extra": ""
+          }
+        }
+      ],
+      "type_mismatches": [
+        {
+          "column": "accountNumber",
+          "expected": "varchar(50)",
+          "actual": "varchar(255)"
+        },
+        {
+          "column": "accountType",
+          "expected": "varchar(50)",
+          "actual": "varchar(100)"
+        }
+      ],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "bankTransactions": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "plaidTransactionId",
+          "found": {
+            "type": "varchar(255)",
+            "nullable": true,
+            "default": null,
+            "extra": ""
+          }
+        },
+        {
+          "column": "updatedAt",
+          "found": {
+            "type": "timestamp",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "extra": "DEFAULT_GENERATED on update CURRENT_TIMESTAMP"
+          }
+        }
+      ],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "category",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "type",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "cloverAccounts": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "createdAt",
+          "found": {
+            "type": "timestamp",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "extra": "DEFAULT_GENERATED"
+          }
+        }
+      ],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "cloverTransactions": {
+      "missing_columns": [
+        {
+          "column": "cardLastFour",
+          "expected": {
+            "type": "varchar(4)"
+          }
+        },
+        {
+          "column": "cardType",
+          "expected": {
+            "type": "varchar(50)"
+          }
+        },
+        {
+          "column": "cloverOrderId",
+          "expected": {
+            "type": "varchar(255)"
+          }
+        },
+        {
+          "column": "deviceName",
+          "expected": {
+            "type": "varchar(255)"
+          }
+        },
+        {
+          "column": "notes",
+          "expected": {
+            "type": "text"
+          }
+        },
+        {
+          "column": "receiptUrl",
+          "expected": {
+            "type": "text"
+          }
+        },
+        {
+          "column": "status",
+          "expected": {
+            "type": "enum('pending','processing','completed','failed','cancelled','refunded')",
+            "default": "pending"
+          }
+        },
+        {
+          "column": "updatedAt",
+          "expected": {
+            "type": "timestamp",
+            "default": "CURRENT_TIMESTAMP",
+            "notNull": true
+          }
+        }
+      ],
+      "extra_columns": [
+        {
+          "column": "tipAmount",
+          "found": {
+            "type": "decimal(12,2)",
+            "nullable": true,
+            "default": "0.00",
+            "extra": ""
+          }
+        }
+      ],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "companySettings": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "companyName",
+          "expected": "NULLABLE",
+          "actual": "NOT NULL"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "customers": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "isActive",
+          "found": {
+            "type": "boolean",
+            "nullable": true,
+            "default": "1",
+            "extra": ""
+          }
+        }
+      ],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "clientType",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "expenses": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "isRecurring",
+          "found": {
+            "type": "boolean",
+            "nullable": true,
+            "default": "0",
+            "extra": ""
+          }
+        },
+        {
+          "column": "recurringFrequency",
+          "found": {
+            "type": "varchar(50)",
+            "nullable": true,
+            "default": null,
+            "extra": ""
+          }
+        },
+        {
+          "column": "updatedAt",
+          "found": {
+            "type": "timestamp",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "extra": "DEFAULT_GENERATED"
+          }
+        }
+      ],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "createdBy",
+          "expected": "NULLABLE",
+          "actual": "NOT NULL"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "paymentMethod",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "journalEntries": {
+      "missing_columns": [],
+      "extra_columns": [
+        {
+          "column": "notes",
+          "found": {
+            "type": "text",
+            "nullable": true,
+            "default": null,
+            "extra": ""
+          }
+        },
+        {
+          "column": "updatedAt",
+          "found": {
+            "type": "timestamp",
+            "nullable": true,
+            "default": "CURRENT_TIMESTAMP",
+            "extra": "DEFAULT_GENERATED"
+          }
+        }
+      ],
+      "type_mismatches": [
+        {
+          "column": "reference",
+          "expected": "varchar(100)",
+          "actual": "varchar(255)"
+        }
+      ],
+      "null_mismatches": [
+        {
+          "column": "createdBy",
+          "expected": "NULLABLE",
+          "actual": "NOT NULL"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "journalEntryLines": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "passwordResetCodes": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [
+        {
+          "column": "code",
+          "expected": "varchar(6)",
+          "actual": "varchar(10)"
+        }
+      ],
+      "null_mismatches": [
+        {
+          "column": "createdAt",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "paymentRecords": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "method",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "status",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "periodClosures": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "saleServices": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "sales": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "paymentMethod",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "status",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "services": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "subscriptionPayments": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "plan",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "status",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "subscriptions": {
+      "missing_columns": [
+        {
+          "column": "stripePriceId",
+          "expected": {
+            "type": "varchar(255)"
+          }
+        }
+      ],
+      "extra_columns": [],
+      "type_mismatches": [],
+      "null_mismatches": [
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "plan",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "status",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    },
+    "users": {
+      "missing_columns": [],
+      "extra_columns": [],
+      "type_mismatches": [
+        {
+          "column": "role",
+          "expected": "enum('user','admin')",
+          "actual": "varchar(50)"
+        }
+      ],
+      "null_mismatches": [
+        {
+          "column": "email",
+          "expected": "NULLABLE",
+          "actual": "NOT NULL"
+        },
+        {
+          "column": "id",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        },
+        {
+          "column": "lastSignInAt",
+          "expected": "NOT NULL",
+          "actual": "NULLABLE"
+        }
+      ],
+      "default_mismatches": []
+    }
+  }
+}
