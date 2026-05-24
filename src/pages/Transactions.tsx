@@ -1,84 +1,521 @@
+import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
-import { formatCurrency, formatDateTime } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Eye } from "lucide-react";
-import { useState } from "react";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import { formatCurrency, formatDateTime } from "@/lib/utils";
+import { toast } from "sonner";
+import {
+  ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
+  ChevronDown, TrendingUp, TrendingDown, Wallet,
+  Fuel, Receipt, RotateCcw,
+} from "lucide-react";
 
-const PAYMENT_LABELS: Record<string, string> = { cash: "Caja", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  completed: { label: "Completada", cls: "bg-neutral-100 text-neutral-600" },
-  pending: { label: "Pendiente", cls: "bg-amber-50 text-amber-700" },
-  cancelled: { label: "Cancelada", cls: "bg-red-50 text-red-600" },
-  refunded: { label: "Reembolsada", cls: "bg-neutral-50 text-neutral-400" },
-};
+/** Same dropdown as PersonalTransactions - avoids scroll issues */
+function AccountDropdown({
+  accounts,
+  selectedId,
+  onChange,
+}: {
+  accounts: any[];
+  selectedId: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
 
-export default function Transactions() {
-  const { data: salesList } = trpc.sales.list.useQuery();
-  const [sel, setSel] = useState<number | null>(null);
-  const { data: detail } = trpc.sales.byId.useQuery({ id: sel! }, { enabled: !!sel });
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
 
-  const total = (salesList ?? []).reduce((s: number, v: NonNullable<typeof salesList>[0]) => s + Number(v.total), 0);
+  const selected = accounts.find((a) => String(a.id) === selectedId);
 
   return (
-    <div className="p-8 lg:p-10 space-y-6 bg-white min-h-screen">
-      <AnimatedPage>
-        <div className="flex items-end justify-between">
-          <div>
-            <h1 className="text-2xl font-medium text-black">Transacciones</h1>
-            <p className="text-neutral-400 text-sm mt-1">{salesList?.length ?? 0} ventas - Total: {formatCurrency(total)}</p>
-          </div>
-        </div>
-      </AnimatedPage>
-      <AnimatedPage delay={80}>
-        <div className="border border-neutral-200 rounded-lg overflow-hidden hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-neutral-100 hover:bg-transparent">
-                <TableHead className="text-neutral-400 text-xs font-normal">Factura</TableHead>
-                <TableHead className="text-neutral-400 text-xs font-normal">Cliente</TableHead>
-                <TableHead className="text-neutral-400 text-xs font-normal">Metodo</TableHead>
-                <TableHead className="text-neutral-400 text-xs font-normal">Total</TableHead>
-                <TableHead className="text-neutral-400 text-xs font-normal">Estado</TableHead>
-                <TableHead className="text-neutral-400 text-xs font-normal">Fecha</TableHead>
-                <TableHead className="text-right"></TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(salesList ?? []).map((s: NonNullable<typeof salesList>[0]) => (
-                <TableRow key={s.id} className="border-neutral-100 hover:bg-neutral-50 transition-colors duration-150">
-                  <TableCell className="text-sm text-black font-medium">{s.invoiceNumber}</TableCell>
-                  <TableCell className="text-sm text-neutral-600">{s.customerName || "General"}</TableCell>
-                  <TableCell><span className="text-xs text-neutral-400">{PAYMENT_LABELS[s.paymentMethod] || s.paymentMethod}</span></TableCell>
-                  <TableCell className="text-sm text-black font-medium">{formatCurrency(s.total)}</TableCell>
-                  <TableCell><Badge className={`${STATUS_LABELS[s.status]?.cls || ""} text-[10px] font-normal`}>{STATUS_LABELS[s.status]?.label || s.status}</Badge></TableCell>
-                  <TableCell className="text-xs text-neutral-400">{formatDateTime(s.createdAt)}</TableCell>
-                  <TableCell className="text-right"><button onClick={() => setSel(s.id)} className="text-neutral-300 hover:text-black transition-colors duration-150"><Eye className="w-4 h-4" /></button></TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-      </AnimatedPage>
-      <Dialog open={!!sel} onOpenChange={() => setSel(null)}>
-        <DialogContent className="bg-white border-neutral-200 max-w-md">
-          <DialogHeader><DialogTitle className="text-black font-medium text-base">Venta {detail?.invoiceNumber}</DialogTitle></DialogHeader>
-          {detail && (
-            <div className="space-y-3">
-              <div className="flex justify-between text-sm"><span className="text-neutral-400">Cliente</span><span className="text-black">{detail.customerName || "General"}</span></div>
-              <div className="flex justify-between text-sm"><span className="text-neutral-400">Metodo</span><span className="text-neutral-600">{PAYMENT_LABELS[detail.paymentMethod] || detail.paymentMethod}</span></div>
-              <div className="border-t border-neutral-100 pt-2 space-y-1.5">
-                {(detail.items ?? []).map((i: NonNullable<typeof detail.items>[0]) => (
-                  <div key={i.id} className="flex justify-between text-sm"><span className="text-neutral-600">{i.serviceName} x{i.quantity}</span><span className="text-black">{formatCurrency(i.total)}</span></div>
-                ))}
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
+      >
+        <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+          {accounts.map((acc: any) => (
+            <button
+              key={acc.id}
+              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <span className="truncate">{acc.bankName} {acc.accountType ? `(${acc.accountType})` : ""}</span>
               </div>
-              <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-black font-medium">{formatCurrency(detail.total)}</span></div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+              <span className={`text-xs font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   );
+}
+
+export default function Transactions() {
+  const now = new Date();
+  const [year, setYear] = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [filterType, setFilterType] = useState("all");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const utils = trpc.useUtils();
+
+  // Check if bank is connected
+  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
+    staleTime: 60000,
+    refetchOnMount: true,
+  });
+  const hasBankConnected = bankConnection?.hasBank === true;
+
+  // Fetch ALL accounts from Plaid (only when bank is connected)
+  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
+    staleTime: 60000,
+    enabled: hasBankConnected,
+  });
+
+  // Fetch bank accounts from DB (only when bank is connected)
+  const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
+    enabled: hasBankConnected,
+    onSuccess: (data) => {
+      if (data && data.length > 0 && !selectedAccountId) {
+        setSelectedAccountId(String(data[0].id));
+      }
+    },
+  });
+
+  const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  const accounts = plaidAccounts.length > 0
+    ? plaidAccounts.map((pa: any) => {
+        const dbMatch = (dbAccounts ?? []).find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
+        return dbMatch ? { ...pa, currentBalance: dbMatch.currentBalance } : pa;
+      })
+    : (dbAccounts ?? []);
+
+  const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
+
+  // Fetch bank transactions (only when bank is connected)
+  const { data: monthData, isLoading: isLoadingBank } = trpc.bank.getMonthData.useQuery({
+    year: parseInt(year),
+    month: parseInt(month),
+    accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+  });
+
+  // Fetch sales (invoices) - ALWAYS (doesn't need bank)
+  const { data: salesList, isLoading: isLoadingSales } = trpc.sales.list.useQuery({ limit: 100, offset: 0 });
+
+  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
+    onSuccess: (data) => {
+      if (data.fixed && data.fixed > 0) {
+        utils.bank.getMonthData.invalidate();
+      }
+    },
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      autoFixMutation.mutate();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const syncMutation = trpc.bank.syncTransactions.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        toast.success(`${data.added} transacciones sincronizadas`);
+      }
+      utils.bank.getMonthData.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const allBankTransactions = monthData?.transactions ?? [];
+  const allSales = salesList ?? [];
+
+  // ─── Filter helpers ───
+  const isZelleRecibido = (t: any) => t.category === "zelle_income";
+  const isZelleEnviado = (t: any) => t.category === "zelle_sent";
+  const isCashDeposit = (t: any) => t.category === "cash_deposit";
+  const isCashWithdrawal = (t: any) => t.category === "cash_withdrawal";
+  const isVenta = (t: any) => {
+    if (t.type !== "income") return false;
+    return t.category === "business_income" || t.category === "sale" || t.category === "income";
+  };
+  const isDevolucion = (t: any) => {
+    const n = (t.description || "").toLowerCase();
+    return t.category === "refund" || n.includes("refund") || n.includes("devolucion") || n.includes("reembolso");
+  };
+
+  const GAS_BRANDS = [
+    "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
+    "wawa","valero","citgo","phillips 66","circle k","costco gas","walmart gas",
+    "7-eleven","7 eleven","sam's club gas","buc-ee's","bucees","quik trip","quiktrip",
+    "race trac","racetrac","love's","loves travel","pilot flying j","pilot","flying j",
+    "ta travel","travelcenters","petro","ambest","casey's","caseys","kum & go","kum and go",
+    "stripes","murphy usa","murphy express","thorntons","maverik","sinclair","gulf",
+    "76 gas","union 76","esso","arco","ampm","am pm","kwik trip","kwik star",
+    "holiday","cumberland farms","royal farms","ritter's","ritters","getgo","get-go",
+    "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66"];
+  const isGas = (t: any) => {
+    const n = (t.description || "").toLowerCase();
+    if (t.category === "gasolina") return true;
+    for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
+    return false;
+  };
+
+  // ─── Apply bank filters ───
+  const filteredBankTransactions =
+    filterType === "all" ? allBankTransactions :
+    filterType === "income" ? allBankTransactions.filter((t: any) => t.type === "income") :
+    filterType === "expense" ? allBankTransactions.filter((t: any) => t.type === "expense") :
+    filterType === "ventas" ? allBankTransactions.filter((t: any) => isVenta(t)) :
+    filterType === "devoluciones" ? allBankTransactions.filter((t: any) => isDevolucion(t)) :
+    filterType === "zelle_in" ? allBankTransactions.filter((t: any) => isZelleRecibido(t)) :
+    filterType === "zelle_out" ? allBankTransactions.filter((t: any) => isZelleEnviado(t)) :
+    filterType === "cash_deposit" ? allBankTransactions.filter((t: any) => isCashDeposit(t)) :
+    filterType === "cash_withdrawal" ? allBankTransactions.filter((t: any) => isCashWithdrawal(t)) :
+    filterType === "gasolina" ? allBankTransactions.filter((t: any) => isGas(t)) :
+    allBankTransactions;
+
+  // ─── Sales data (ALWAYS available, no bank needed) ───
+  const salesAsTransactions =
+    filterType === "ventas" ? allSales.filter((s: any) => s.status === "completed") :
+    filterType === "devoluciones" ? allSales.filter((s: any) => s.status === "refunded") :
+    filterType === "all" ? allSales :
+    [];
+
+  const salesMapped = salesAsTransactions.map((s: any) => ({
+    id: `sale-${s.id}`,
+    description: `Venta ${s.invoiceNumber} - ${s.customerName || "General"}`,
+    amount: Number(s.total),
+    type: "income" as const,
+    category: s.status === "refunded" ? "refund" : "sale",
+    transactionDate: s.createdAt,
+    transaction_date: s.createdAt,
+    accountNumber: null,
+    _source: "sale" as const,
+    status: s.status,
+    invoiceNumber: s.invoiceNumber,
+    paymentMethod: s.paymentMethod,
+  }));
+
+  // Combine bank + sales for display
+  const displayTransactions =
+    filterType === "ventas" || filterType === "devoluciones"
+      ? salesMapped
+      : hasBankConnected
+        ? filteredBankTransactions
+        : [];
+
+  const totalIncome = allBankTransactions
+    .filter((t: any) => t.type === "income")
+    .reduce((s: number, t: any) => s + Number(t.amount), 0);
+  const totalExpense = allBankTransactions
+    .filter((t: any) => t.type === "expense")
+    .reduce((s: number, t: any) => s + Number(t.amount), 0);
+
+  const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
+  const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
+
+  // Which filters to show based on bank connection
+  const bankFilters = [
+    { key: "all", label: "Todos" },
+    { key: "income", label: "Ingresos" },
+    { key: "expense", label: "Gastos" },
+    { key: "ventas", label: "Ventas" },
+    { key: "devoluciones", label: "Devoluciones" },
+    { key: "zelle_in", label: "Zelle Recibidos" },
+    { key: "zelle_out", label: "Zelle Enviados" },
+    { key: "cash_deposit", label: "Dep. Efectivo" },
+    { key: "cash_withdrawal", label: "Ret. Efectivo" },
+    { key: "gasolina", label: "Gasolina" },
+  ];
+
+  const nonBankFilters = [
+    { key: "all", label: "Todos" },
+    { key: "ventas", label: "Ventas" },
+    { key: "devoluciones", label: "Devoluciones" },
+  ];
+
+  const filterButtons = hasBankConnected ? bankFilters : nonBankFilters;
+
+  // Auto-switch to a valid filter if bank disconnected
+  useEffect(() => {
+    if (!hasBankConnected) {
+      const bankOnlyFilters = ["income", "expense", "zelle_in", "zelle_out", "cash_deposit", "cash_withdrawal", "gasolina"];
+      if (bankOnlyFilters.includes(filterType)) {
+        setFilterType("all");
+      }
+    }
+  }, [hasBankConnected, filterType]);
+
+  const filterTitle =
+    filterType === "income" ? "Ingresos" :
+    filterType === "expense" ? "Gastos" :
+    filterType === "ventas" ? "Ventas" :
+    filterType === "devoluciones" ? "Devoluciones" :
+    filterType === "zelle_in" ? "Zelle Recibidos" :
+    filterType === "zelle_out" ? "Zelle Enviados" :
+    filterType === "cash_deposit" ? "Depósitos de Efectivo" :
+    filterType === "cash_withdrawal" ? "Retiros de Efectivo" :
+    filterType === "gasolina" ? "Gasolina" :
+    "Transacciones";
+
+  const isLoading = isLoadingBank || isLoadingSales;
+
+  return (
+    <AnimatedPage className="p-4 lg:p-6">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
+          <p className="text-xs text-neutral-500">
+            {filterType === "ventas" || filterType === "devoluciones"
+              ? `${salesMapped.length} registros`
+              : `${allBankTransactions.length} registros · ${monthData?.monthName ?? ""}`}
+          </p>
+        </div>
+      </div>
+
+      {/* Controls: dropdown, month, year, sync — ONLY when bank connected */}
+      {hasBankConnected && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {(accounts ?? []).length > 0 && (
+            <AccountDropdown
+              accounts={accounts ?? []}
+              selectedId={effectiveAccountId}
+              onChange={setSelectedAccountId}
+            />
+          )}
+          <Select value={month} onValueChange={setMonth}>
+            <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={year} onValueChange={setYear}>
+            <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={() => syncMutation.mutate({
+              year: parseInt(year),
+              month: parseInt(month),
+              accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+            })}
+            disabled={syncMutation.isPending}
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 border-neutral-200"
+          >
+            {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
+        </div>
+      )}
+
+      {/* Filter buttons */}
+      <div className="flex bg-gray-100 rounded-full p-1 mb-4 overflow-x-auto gap-1">
+        {(filterButtons as const).map((f: any) => (
+          <button
+            key={f.key}
+            onClick={() => setFilterType(f.key)}
+            className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Summary Cards — bank KPIs ONLY when bank connected AND showing bank data */}
+      {hasBankConnected && filterType !== "ventas" && filterType !== "devoluciones" && (
+        <div className="grid grid-cols-4 gap-3 mb-4">
+          <Card className="border-emerald-200 rounded-xl shadow-none">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
+                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                </div>
+                <p className="text-[10px] text-neutral-500">Ingresos</p>
+              </div>
+              <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-rose-200 rounded-xl shadow-none">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
+                  <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                </div>
+                <p className="text-[10px] text-neutral-500">Gastos</p>
+              </div>
+              <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-sky-200 rounded-xl shadow-none">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
+                  <Wallet className="w-3.5 h-3.5 text-sky-600" />
+                </div>
+                <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
+              </div>
+              <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
+            </CardContent>
+          </Card>
+          <Card className="border-violet-200 rounded-xl shadow-none">
+            <CardContent className="p-3">
+              <div className="flex items-center gap-1.5 mb-1">
+                <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center">
+                  <Receipt className="w-3.5 h-3.5 text-violet-600" />
+                </div>
+                <p className="text-[10px] text-neutral-500">Transacciones</p>
+              </div>
+              <p className="text-sm font-semibold text-violet-700">{displayTransactions.length}</p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* Bank-only filter selected but NO bank connected → prompt to connect */}
+      {!hasBankConnected && !isCheckingBank && filterType !== "ventas" && filterType !== "devoluciones" && (
+        <div className="flex flex-col items-center justify-center py-16 border border-neutral-200 rounded-xl bg-white">
+          <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
+            <Landmark className="w-8 h-8 text-neutral-400" />
+          </div>
+          <h3 className="text-base font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
+          <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">Conecta tu cuenta bancaria para ver transacciones automaticas, saldo en tiempo real y analisis de flujo de caja.</p>
+          <button
+            onClick={() => window.location.href = "/bank"}
+            className="flex items-center gap-2 h-10 px-5 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+          >
+            <Landmark className="w-4 h-4" />
+            Conectar Banco
+          </button>
+        </div>
+      )}
+
+      {/* Transaction List */}
+      {(hasBankConnected || filterType === "ventas" || filterType === "devoluciones") && (
+        <div className="space-y-0">
+          {isLoading ? (
+            <div className="space-y-2 py-4">
+              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+            </div>
+          ) : displayTransactions.length === 0 ? (
+            <div className="text-center py-10">
+              <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+              <p className="text-sm text-neutral-400">
+                {filterType === "ventas" ? "No hay ventas registradas" : filterType === "devoluciones" ? "No hay devoluciones registradas" : "No hay transacciones este mes"}
+              </p>
+              <p className="text-xs text-neutral-400 mt-1">
+                {filterType === "ventas" || filterType === "devoluciones" ? "Crea una factura para verla aqui" : "Presiona sincronizar para traer datos del banco"}
+              </p>
+            </div>
+          ) : (
+            displayTransactions.map((tx: any) => (
+              <div
+                key={tx.id}
+                className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
+              >
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                    tx._source === "sale"
+                      ? (tx.status === "refunded" ? "bg-orange-100" : "bg-blue-100")
+                      : tx.type === "income" ? "bg-emerald-100" : "bg-rose-100"
+                  }`}>
+                    {tx._source === "sale" ? (
+                      tx.status === "refunded" ? (
+                        <RotateCcw className="w-4 h-4 text-orange-600" />
+                      ) : (
+                        <Receipt className="w-4 h-4 text-blue-600" />
+                      )
+                    ) : tx.type === "income" ? (
+                      <ArrowUpRight className="w-4 h-4 text-emerald-600" />
+                    ) : (
+                      <ArrowDownRight className="w-4 h-4 text-rose-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-black truncate">{tx.description}</p>
+                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
+                      <span className="capitalize">{getCategoryLabel(tx.category ?? "")}</span>
+                      <span>·</span>
+                      <span>{tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}</span>
+                      {tx._source === "sale" && tx.paymentMethod && (
+                        <>
+                          <span>·</span>
+                          <span className="text-neutral-400">{tx.paymentMethod}</span>
+                        </>
+                      )}
+                      {tx.accountNumber && (
+                        <>
+                          <span>·</span>
+                          <span className="text-neutral-400">{tx.accountNumber}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+                <span className={`text-sm font-semibold shrink-0 ml-3 ${
+                  tx._source === "sale"
+                    ? (tx.status === "refunded" ? "text-orange-700" : "text-blue-700")
+                    : tx.type === "income" ? "text-emerald-700" : "text-rose-700"
+                }`}>
+                  {tx._source === "sale"
+                    ? (tx.status === "refunded" ? "-" : "+") + formatCurrency(tx.amount)
+                    : (tx.type === "income" ? "+" : "-") + formatCurrency(tx.amount)
+                  }
+                </span>
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </AnimatedPage>
+  );
+}
+
+function getCategoryLabel(cat: string): string {
+  const labels: Record<string, string> = {
+    zelle_income: "Zelle Recibido",
+    zelle_sent: "Zelle Enviado",
+    deposit: "Deposito",
+    cash_deposit: "Dep. Efectivo",
+    cash_withdrawal: "Retiro ATM",
+    subscription: "Suscripcion",
+    transfer: "Transferencia",
+    business_expense: "Negocio",
+    gasolina: "Gasolina",
+    home_expense: "Hogar",
+    shopping: "Compras",
+    cash_income: "Efectivo",
+    sale: "Venta",
+    refund: "Devolucion",
+    other: "Otro",
+  };
+  return labels[cat] || cat;
 }

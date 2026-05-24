@@ -102,13 +102,22 @@ export default function PersonalTransactions() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>(qpAccount ?? "");
   const utils = trpc.useUtils();
 
-  // Fetch ALL accounts from Plaid (like Dashboard)
+  // Check if bank is connected — controls visibility of bank-related UI
+  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
+    staleTime: 60000,
+    refetchOnMount: true,
+  });
+  const hasBankConnected = bankConnection?.hasBank === true;
+
+  // Fetch ALL accounts from Plaid (like Dashboard) — only when bank is connected
   const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
     staleTime: 60000,
+    enabled: hasBankConnected,
   });
 
-  // Fetch bank accounts from DB (for currentBalance)
+  // Fetch bank accounts from DB (for currentBalance) — only when bank is connected
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
+    enabled: hasBankConnected,
     onSuccess: (data) => {
       if (data && data.length > 0 && !selectedAccountId && !qpAccount) {
         setSelectedAccountId(String(data[0].id));
@@ -236,38 +245,39 @@ export default function PersonalTransactions() {
         </div>
       </div>
 
-      {/* Controls: dropdown, month, year, sync — ABOVE filters */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {(accounts ?? []).length > 0 && (
-          <AccountDropdown
-            accounts={accounts ?? []}
-            selectedId={effectiveAccountId}
-            onChange={setSelectedAccountId}
-          />
-        )}
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 12 }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>
-                {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={year} onValueChange={setYear}>
-          <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={() => syncMutation.mutate({
-            year: parseInt(year),
-            month: parseInt(month),
-            accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-          })}
-          disabled={syncMutation.isPending}
+      {/* Controls: dropdown, month, year, sync — ABOVE filters — ONLY when bank connected */}
+      {hasBankConnected && (
+        <div className="flex items-center gap-2 mb-3 flex-wrap">
+          {(accounts ?? []).length > 0 && (
+            <AccountDropdown
+              accounts={accounts ?? []}
+              selectedId={effectiveAccountId}
+              onChange={setSelectedAccountId}
+            />
+          )}
+          <Select value={month} onValueChange={setMonth}>
+            <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {Array.from({ length: 12 }, (_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={year} onValueChange={setYear}>
+            <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button
+            onClick={() => syncMutation.mutate({
+              year: parseInt(year),
+              month: parseInt(month),
+              accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+            })}
+            disabled={syncMutation.isPending}
           variant="outline"
           size="sm"
           className="h-8 px-2 border-neutral-200"
@@ -275,6 +285,7 @@ export default function PersonalTransactions() {
           {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
         </Button>
       </div>
+      )}
 
       {/* Quick filter buttons — same design as Subscriptions */}
       <div className="flex bg-gray-100 rounded-full p-1 mb-4 overflow-x-auto gap-1">
@@ -295,7 +306,26 @@ export default function PersonalTransactions() {
         ))}
       </div>
 
-      {/* Summary Cards */}
+      {/* No bank connected — show empty state */}
+      {!hasBankConnected && !isCheckingBank && (
+        <div className="flex flex-col items-center justify-center py-16 border border-neutral-200 rounded-xl bg-white">
+          <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
+            <Landmark className="w-8 h-8 text-neutral-400" />
+          </div>
+          <h3 className="text-base font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
+          <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">Conecta tu cuenta bancaria para ver transacciones automaticas, saldo en tiempo real y analisis de flujo de caja.</p>
+          <button
+            onClick={() => window.location.href = "/bank"}
+            className="flex items-center gap-2 h-10 px-5 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
+          >
+            <Landmark className="w-4 h-4" />
+            Conectar Banco
+          </button>
+        </div>
+      )}
+
+      {/* Summary Cards — ONLY when bank connected */}
+      {hasBankConnected && (
       <div className="grid grid-cols-3 gap-3 mb-4">
         <Card className="border-emerald-200 rounded-xl shadow-none">
           <CardContent className="p-3">
@@ -334,10 +364,12 @@ export default function PersonalTransactions() {
           </CardContent>
         </Card>
       </div>
+      )}
 
 
 
-      {/* Transaction List */}
+      {/* Transaction List — ONLY when bank connected */}
+      {hasBankConnected && (
       <div className="space-y-0">
         {isLoading ? (
           <div className="space-y-2 py-4">
@@ -385,6 +417,7 @@ export default function PersonalTransactions() {
           ))
         )}
       </div>
+      )}
     </AnimatedPage>
   );
 }

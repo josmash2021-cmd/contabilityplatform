@@ -569,6 +569,13 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
   }
 }
 
+// ─── HELPER: Check if user has an active bank connection ───
+async function hasActiveBank(userId: number): Promise<boolean> {
+  const db = getDb();
+  const allAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+  return allAccounts.some((a: any) => a.plaidAccessToken && a.isActive);
+}
+
 // ═══════════════════════════════════════════════════════════
 // ROUTER
 // ═══════════════════════════════════════════════════════════
@@ -663,6 +670,8 @@ export const bankRouter = createRouter({
 
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
+    // Guard: no active bank = no data
+    if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
     const { year, month, accountId } = input;
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -729,6 +738,7 @@ export const bankRouter = createRouter({
   // ─── LIVE BALANCE ───
   getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
     if (!ctx.user) return { balance: "0", accountCount: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { balance: "0", accountCount: 0 };
     const db = getDb();
     try {
       if (input?.accountId) {
@@ -746,6 +756,7 @@ export const bankRouter = createRouter({
   // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS ───
   refreshAllBalances: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
+    if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay cuenta bancaria conectada" };
     const db = getDb();
     try {
       const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
@@ -820,6 +831,7 @@ export const bankRouter = createRouter({
   // ─── GET ALL ACCOUNTS DIRECTLY FROM PLAID ───
   getAllPlaidAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { accounts: [], count: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { accounts: [], count: 0 };
     const db = getDb();
     try {
       const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
@@ -863,6 +875,8 @@ export const bankRouter = createRouter({
   // ─── SUBSCRIPTIONS (Elite Rewrite) ───
   getSubscriptions: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
     if (!ctx.user) return { subscriptions: [], totalMonthly: "0", membershipMonthly: "0", paymentMonthly: "0", creditCardMonthly: "0", cancelledCount: 0, totalTransactions: 0, totalMerchants: 0 };
+    // Guard: no active bank = no data
+    if (!await hasActiveBank(ctx.user.id)) return { subscriptions: [], totalMonthly: "0", membershipMonthly: "0", paymentMonthly: "0", creditCardMonthly: "0", cancelledCount: 0, totalTransactions: 0, totalMerchants: 0 };
     const userId = ctx.user.id;
     const db = getDb();
     try {
@@ -1069,6 +1083,7 @@ export const bankRouter = createRouter({
   // Silently fixes miscategorized transactions — runs automatically on every page load
   autoFixCategories: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { fixed: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { fixed: 0 };
     const db = getDb();
     try {
       // Find transactions that were miscategorized by old algorithm
