@@ -141,7 +141,7 @@ export default function Login() {
                   {/* Sliding background pill — Black for Business, White for Personal */}
                   <div
                     className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                      mode === "business" ? "bg-black" : "bg-white"
+                      mode === "personal" ? "bg-black" : "bg-white"
                     }`}
                     style={{
                       left: mode === "business" ? "4px" : "calc(50%)",
@@ -151,7 +151,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setMode("business")}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-700"
+                      mode === "business" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
                     }`}
                   >
                     <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
@@ -160,7 +160,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setMode("personal")}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                      mode === "personal" ? "text-white" : "text-neutral-500 hover:text-neutral-700"
                     }`}
                   >
                     <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
