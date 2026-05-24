@@ -159,8 +159,8 @@ export default function Bank() {
   const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
   const hasBankConnected = connection?.hasBank === true;
 
-  // listAccounts only when bank is connected
-  const { data: allAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false, enabled: hasBankConnected });
+  // listAccounts - always run to get account data
+  const { data: allAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
   const account = allAccounts?.find((a: NonNullable<typeof allAccounts>[0]) => String(a.id) === selectedAccountId) || allAccounts?.[0] || null;
   const accountIdNum = account?.id ? Number(account.id) : undefined;
 
