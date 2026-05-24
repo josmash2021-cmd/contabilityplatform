@@ -74,19 +74,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";
   const detailed = plaidCategories?.[1]?.toUpperCase() || "";
 
-  // Income
-  if (pfc === "INCOME") return { type: "income", category: "paycheck" };
-  if (detailed.includes("PAYROLL") || desc.includes("payroll") || desc.includes("salary") || desc.includes("wage")) return { type: "income", category: "paycheck" };
-  if (detailed.includes("DEPOSIT") || desc.includes("deposit")) return { type: "income", category: "deposit" };
-
-  // Transfer
-  if (detailed.includes("TRANSFER") || desc.includes("transfer") || desc.includes("zelle")) return { type: plaidAmount >= 0 ? "income" : "expense", category: "transfer" };
-
-  // Investment
-  if (detailed.includes("INVESTMENT") || desc.includes("dividend")) return { type: "income", category: "investment" };
-  if (detailed.includes("INVESTMENT") || desc.includes("interest")) return { type: "income", category: "interest" };
-
-  // ─── ATM CASH DEPOSITS (must be before P2P and other rules) ───
+  // ─── ATM CASH DEPOSITS (MUST be FIRST — before generic "deposit" rule) ───
   const isAtmDeposit =
     detailed.includes("ATM DEPOSIT") ||
     detailed.includes("ATM CASH DEPOSIT") ||
@@ -96,7 +84,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
     (desc.includes("cash") && desc.includes("deposit") && !desc.includes("app"));
   if (isAtmDeposit) return { type: "income", category: "cash_deposit" };
 
-  // ─── ATM CASH WITHDRAWALS (must be before P2P and other rules) ───
+  // ─── ATM CASH WITHDRAWALS (MUST be FIRST — before generic rules) ───
   const isAtmWithdrawal =
     detailed.includes("ATM WITHDRAWAL") ||
     detailed.includes("ATM WDL") ||
@@ -105,6 +93,19 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
     (desc.includes("atm") && (desc.includes("withdrawal") || desc.includes("wdl"))) ||
     (desc.includes("withdrawal") && !desc.includes("transfer") && !desc.includes("zelle"));
   if (isAtmWithdrawal) return { type: "expense", category: "cash_withdrawal" };
+
+  // Income
+  if (pfc === "INCOME") return { type: "income", category: "paycheck" };
+  if (detailed.includes("PAYROLL") || desc.includes("payroll") || desc.includes("salary") || desc.includes("wage")) return { type: "income", category: "paycheck" };
+  // Generic deposit: only if NOT an ATM deposit (already handled above)
+  if (detailed.includes("DEPOSIT") || desc.includes("deposit")) return { type: "income", category: "deposit" };
+
+  // Transfer
+  if (detailed.includes("TRANSFER") || desc.includes("transfer") || desc.includes("zelle")) return { type: plaidAmount >= 0 ? "income" : "expense", category: "transfer" };
+
+  // Investment
+  if (detailed.includes("INVESTMENT") || desc.includes("dividend")) return { type: "income", category: "investment" };
+  if (detailed.includes("INVESTMENT") || desc.includes("interest")) return { type: "income", category: "interest" };
 
   // P2P Payment Apps (PayPal, Cash App, Venmo, Square, Facebook) - NOT cash deposits
   const p2pKeywords = ["paypal","cash app","venmo","square","facebook pay"];
