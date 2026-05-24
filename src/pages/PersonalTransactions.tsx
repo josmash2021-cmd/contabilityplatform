@@ -197,6 +197,10 @@ export default function PersonalTransactions() {
   // EXACT category match only — no broad keyword matching
   const isCashDeposit = (t: any) => t.category === "cash_deposit";
   const isCashWithdrawal = (t: any) => t.category === "cash_withdrawal";
+  const isCompras = (t: any) => {
+    const n = (t.description || "").toLowerCase();
+    return t.category === "shopping" || n.includes("purchase") || n.includes("retail") || n.includes("store") || n.includes("shop");
+  };
   const transactions =
     filterType === "all" ? allTransactions :
     filterType === "zelle_in" ? allTransactions.filter((t: any) => isZelleRecibido(t)) :
@@ -205,6 +209,7 @@ export default function PersonalTransactions() {
     filterType === "expense" ? allTransactions.filter((t: any) => t.type === "expense") :
     filterType === "cash_deposit" ? allTransactions.filter((t: any) => isCashDeposit(t)) :
     filterType === "cash_withdrawal" ? allTransactions.filter((t: any) => isCashWithdrawal(t)) :
+    filterType === "compras" ? allTransactions.filter((t: any) => isCompras(t)) :
     filterType === "gasolina" ? allTransactions.filter((t: any) => isGas(t)) :
     allTransactions;
 
@@ -225,7 +230,7 @@ export default function PersonalTransactions() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-lg font-semibold text-black">
-            {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
+            {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "compras" ? "Compras" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
           </h1>
           <p className="text-xs text-neutral-500">{allTransactions.length} registros · {monthData?.monthName ?? ""}</p>
         </div>
@@ -281,6 +286,7 @@ export default function PersonalTransactions() {
           { key: "zelle_out", label: "Zelle Enviados" },
           { key: "cash_deposit", label: "Dep. Efectivo" },
           { key: "cash_withdrawal", label: "Ret. Efectivo" },
+          { key: "compras", label: "Compras" },
           { key: "gasolina", label: "Gasolina" },
         ] as const).map((f) => (
           <button key={f.key} onClick={() => setFilterType(f.key)} className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>

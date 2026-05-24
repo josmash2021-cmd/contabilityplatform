@@ -29,7 +29,7 @@ const EXPENSE_CATS: Record<string, { label: string; icon: typeof TrendingDown; i
   zelle_sent: { label: "Zelle Enviados", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
   cash_withdrawal: { label: "Retiro de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
   subscription: { label: "Suscripciones", icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
-  shopping: { label: "Compras y Tiendas", icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
+  shopping: { label: "Compras", icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
   home_expense: { label: "Comida y Hogar", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
   business_expense: { label: "Negocio", icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
   gasolina: { label: "Gasolina", icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
