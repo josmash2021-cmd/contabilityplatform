@@ -155,16 +155,20 @@ export default function Bank() {
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const wasConnectedRef = useRef(false);
 
-  const { data: allAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
+  // Use checkConnection as PRIMARY source for bank detection (same as Transactions.tsx)
+  const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
+  const hasBankConnected = connection?.hasBank === true;
+
+  // listAccounts only when bank is connected
+  const { data: allAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false, enabled: hasBankConnected });
   const account = allAccounts?.find((a: NonNullable<typeof allAccounts>[0]) => String(a.id) === selectedAccountId) || allAccounts?.[0] || null;
   const accountIdNum = account?.id ? Number(account.id) : undefined;
 
-  const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { enabled: !!account, retry: false });
   const { data: liveBalanceData, isLoading: loadingBalance } = trpc.bank.getLiveBalance.useQuery(
-    { accountId: accountIdNum }, { enabled: !!account && !!accountIdNum, retry: 1 }
+    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1 }
   );
   const { data: monthData, isLoading: loadingMonth } = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: !!account && !!accountIdNum }
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
   // DEBUG: Log month selection
   useEffect(() => {
@@ -222,15 +226,15 @@ export default function Bank() {
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
-  // Initial auto-sync on first Plaid connection
+  // Initial auto-sync on first bank connection
   useEffect(() => {
-    const isPlaidConnected = !!connection?.hasPlaid && !loadingConnection;
-    if (isPlaidConnected && !wasConnectedRef.current) {
+    const bankNowConnected = connection?.hasBank === true && !loadingConnection;
+    if (bankNowConnected && !wasConnectedRef.current) {
       wasConnectedRef.current = true;
       setSyncing(true);
       syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth) });
     }
-  }, [connection?.hasPlaid, loadingConnection, selectedYear, selectedMonth, syncMutation]);
+  }, [connection?.hasBank, loadingConnection, selectedYear, selectedMonth, syncMutation]);
 
   // Note: Auto-sync removed to prevent accidental data loss.
   // User must manually click "Sincronizar" to sync a month.
@@ -249,8 +253,8 @@ export default function Bank() {
     }
   }, [allAccounts]);
 
-  const isPlaidConnected = !!connection?.hasPlaid && !loadingConnection;
-  const needsReconnect = !loadingConnection && !!account && !connection?.hasPlaid;
+  const isPlaidConnected = hasBankConnected && !loadingConnection;
+  const needsReconnect = !loadingConnection && hasBankConnected && !!account && !connection?.hasBank;
   const hasAccount = !!account;
   const balance = liveBalanceData?.balance ?? account?.currentBalance ?? "0";
 
@@ -290,7 +294,23 @@ export default function Bank() {
     );
   }
 
-  if (!loadingAccounts && !account) {
+  // Loading state while checking connection
+  if (loadingConnection) {
+    return (
+      <div className="max-w-5xl mx-auto p-6 lg:p-10">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
+          <p className="text-sm text-neutral-400 mt-1">Verificando conexion bancaria...</p>
+        </div>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+      </div>
+    );
+  }
+
+  // No bank connected — show empty state
+  if (!hasBankConnected) {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
