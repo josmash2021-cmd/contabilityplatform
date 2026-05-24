@@ -156,11 +156,13 @@ export default function Register() {
           </div>
 
           <div className="text-center space-y-2">
-            <h1 className="text-3xl font-semibold text-white lg:text-black">Crea tu cuenta</h1>
-            <p className="text-neutral-300 lg:text-neutral-400 text-base">Empieza gratis, sin tarjeta de credito</p>
+            <h1 className={`text-3xl font-semibold transition-colors duration-300 ${mode === "personal" ? "text-white" : "text-black"}`}>Crea tu cuenta</h1>
+            <p className={`text-base transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-400"}`}>Empieza gratis, sin tarjeta de credito</p>
           </div>
 
-          <Card className="border-neutral-200 rounded-2xl shadow-none bg-white">
+          <Card className={`rounded-2xl shadow-none border transition-colors duration-300 ${
+            mode === "personal" ? "bg-black border-white/20 text-white" : "bg-white border-neutral-200 text-black"
+          }`}>
             <CardContent className="p-6 sm:p-8">
               {/* Mode Toggle */}
               {/* Animated Mode Switch — Business = Black, Personal = White */}
@@ -198,57 +200,57 @@ export default function Register() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <Label className="text-xs text-neutral-500">Nombre completo</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Nombre completo</Label>
                   <Input
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1.5 rounded-xl border-neutral-200 h-12 text-base"
+                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-neutral-500">Email</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Email</Label>
                   <Input
                     type="email"
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5 rounded-xl border-neutral-200 h-12 text-base"
+                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-neutral-500">Contrasena</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Contrasena</Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Minimo 6 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-neutral-200 h-12 text-base"
+                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-300 ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-400 hover:text-neutral-600"}`}
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <Label className="text-xs text-neutral-500">Confirmar contrasena</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Confirmar contrasena</Label>
                   <Input
                     type={showPassword ? "text" : "password"}
                     placeholder="Repite tu contrasena"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1.5 rounded-xl border-neutral-200 h-12 text-base"
+                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
                   />
                 </div>
                 <Button
                   type="submit"
                   disabled={registerMut.isPending}
-                  className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-10 mt-2"
+                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
                 >
                   {registerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Crear Cuenta
@@ -261,9 +263,9 @@ export default function Register() {
             <p className="text-sm text-neutral-300 lg:text-neutral-400">
               Al registrarte, aceptas nuestros <Link to="#" className="text-white lg:text-black hover:underline">Terminos</Link> y <Link to="#" className="text-white lg:text-black hover:underline">Privacidad</Link>
             </p>
-            <p className="text-sm text-neutral-300 lg:text-neutral-400">
+            <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
               Ya tienes cuenta?{" "}
-              <Link to="/login" className="text-white lg:text-black hover:underline font-medium">Inicia sesion</Link>
+              <Link to="/login" className={`transition-colors duration-300 hover:underline font-medium ${mode === "personal" ? "text-white" : "text-black"}`}>Inicia sesion</Link>
             </p>
           </div>
         </div>
