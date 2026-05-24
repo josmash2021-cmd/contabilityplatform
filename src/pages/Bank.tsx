@@ -103,11 +103,11 @@ function MonthSelector({ value, onChange }: { value: string; onChange: (m: strin
   ];
   return (
     <Select value={value} onValueChange={(val) => { console.log("[DEBUG] MonthSelector onValueChange:", val); onChange(val); }}>
-      <SelectTrigger className="h-9 w-[120px] border-neutral-200 rounded-lg text-sm focus:ring-1 focus:ring-black">
+      <SelectTrigger className="h-8 w-[90px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
         <SelectValue placeholder="Mes" />
       </SelectTrigger>
       <SelectContent className="bg-white border-neutral-200">
-        {months.map((m) => <SelectItem key={m.value} value={m.value} className="text-sm focus:bg-neutral-50">{m.label}</SelectItem>)}
+        {months.map((m) => <SelectItem key={m.value} value={m.value} className="text-xs focus:bg-neutral-50">{m.label}</SelectItem>)}
       </SelectContent>
     </Select>
   );
@@ -118,11 +118,11 @@ function YearSelector({ value, onChange }: { value: string; onChange: (y: string
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-9 w-[88px] border-neutral-200 rounded-lg text-sm focus:ring-1 focus:ring-black">
+      <SelectTrigger className="h-8 w-[64px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="bg-white border-neutral-200">
-        {years.map((y) => <SelectItem key={y} value={y.toString()} className="text-sm focus:bg-neutral-50">{y}</SelectItem>)}
+        {years.map((y) => <SelectItem key={y} value={y.toString()} className="text-xs focus:bg-neutral-50">{y}</SelectItem>)}
       </SelectContent>
     </Select>
   );
@@ -389,23 +389,24 @@ export default function Bank() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {allAccounts && allAccounts.length > 0 && (
               <select value={selectedAccountId || String(account?.id) || ""} onChange={(e) => setSelectedAccountId(e.target.value)}
-                className="border border-neutral-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-black">
+                className="border border-neutral-200 rounded-lg text-xs px-2 py-1.5 h-8 bg-white focus:outline-none focus:ring-1 focus:ring-black">
                 {allAccounts.map((acc: typeof allAccounts[0]) => (
                   <option key={acc.id} value={String(acc.id)}>
-                    {acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""} - {formatCurrency(acc.currentBalance)}
+                    {acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""}
                   </option>
                 ))}
               </select>
             )}
-            <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
-            <YearSelector value={selectedYear} onChange={setSelectedYear} />
-            <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg text-sm h-9 w-9 p-0" title="Sincronizar mes actual">
-              <RefreshCw className={`w-4 h-4 ${syncing ? "animate-spin" : ""}`} />
-            </Button>
-            {/* Historial button removed */}
+            <div className="flex items-center gap-1.5">
+              <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
+              <YearSelector value={selectedYear} onChange={setSelectedYear} />
+              <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0" title="Sincronizar mes actual">
+                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+              </Button>
+            </div>
             {account && (
               confirmDisconnect ? (
                 <div className="flex items-center gap-1">
@@ -414,8 +415,8 @@ export default function Bank() {
                   <Button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white">Si</Button>
                 </div>
               ) : (
-                <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-9 px-3 rounded-lg text-xs">
-                  <LogOut className="w-3.5 h-3.5 mr-1.5" /> Desconectar
+                <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-8 px-2 rounded-lg text-xs">
+                  <LogOut className="w-3 h-3 mr-1" /> Desconectar
                 </Button>
               )
             )}
