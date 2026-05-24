@@ -159,9 +159,11 @@ export default function Bank() {
   const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
   const hasBankConnected = connection?.hasBank === true;
 
-  // listAccounts - always run to get account data
-  const { data: allAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
-  const account = allAccounts?.find((a: NonNullable<typeof allAccounts>[0]) => String(a.id) === selectedAccountId) || allAccounts?.[0] || null;
+  // getAllPlaidAccounts - same as Transactions.tsx (this works)
+  const { data: plaidAccountsData, isLoading: loadingAccounts } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
+  const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  const allAccounts = plaidAccounts;
+  const account = plaidAccounts.find((a: any) => String(a.id) === selectedAccountId) || plaidAccounts[0] || null;
   const accountIdNum = account?.id ? Number(account.id) : undefined;
 
   const { data: liveBalanceData, isLoading: loadingBalance } = trpc.bank.getLiveBalance.useQuery(
