@@ -344,15 +344,23 @@ export default function Bank() {
     );
   }
 
+  // Build category map from actual transactions (backend doesn't return byCategory)
   const byCategoryMap = new Map<string, { total: number; count: number; type: string }>();
-  (monthData?.byCategory ?? []).forEach((c: any) => {
-    byCategoryMap.set(c.category, { total: Number(c.total), count: c.count, type: c.type });
+  (monthData?.transactions ?? []).forEach((tx: any) => {
+    const key = tx.category || "other";
+    const existing = byCategoryMap.get(key);
+    if (existing) {
+      existing.total += Number(tx.amount ?? 0);
+      existing.count += 1;
+    } else {
+      byCategoryMap.set(key, { total: Number(tx.amount ?? 0), count: 1, type: tx.type || "expense" });
+    }
   });
 
   const incomeCats = Array.from(byCategoryMap.entries()).filter(([, v]) => v.type === "income");
   const expenseCats = Array.from(byCategoryMap.entries()).filter(([, v]) => v.type === "expense");
 
-  const monthIncome = Number(monthData?.income?.total ?? 0);
+  const monthIncome = Number(monthData?.income ?? 0);
   const monthExpense = Number(monthData?.expense ?? 0);
   const isCurrentMonth = parseInt(selectedMonth) === new Date().getMonth() + 1 && parseInt(selectedYear) === new Date().getFullYear();
 
@@ -380,12 +388,12 @@ export default function Bank() {
             )}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {allAccounts && allAccounts.length > 1 && (
+            {allAccounts && allAccounts.length > 0 && (
               <select value={selectedAccountId || String(account?.id) || ""} onChange={(e) => setSelectedAccountId(e.target.value)}
                 className="border border-neutral-200 rounded-lg text-sm px-3 py-2 bg-white focus:outline-none focus:ring-1 focus:ring-black">
                 {allAccounts.map((acc: typeof allAccounts[0]) => (
                   <option key={acc.id} value={String(acc.id)}>
-                    {acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""} - {formatCurrency(acc.currentBalance)}
+                    {acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""} - {formatCurrency(acc.currentBalance)}
                   </option>
                 ))}
               </select>
@@ -434,7 +442,7 @@ export default function Bank() {
           { label: "Saldo Actual", value: formatCurrency(balance), sub: isPlaidConnected ? "En vivo desde tu banco" : "Sincroniza para actualizar", icon: Wallet, color: "bg-blue-50 text-blue-600", valColor: Number(balance) >= 0 ? "text-blue-600" : "text-red-600" },
           { label: "Ingresos", value: formatCurrency(monthData?.income?.total ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
           { label: "Gastos", value: formatCurrency(monthData?.expense ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingDown, color: "bg-red-50 text-red-600", valColor: "text-red-600" },
-          { label: "Transacciones", value: `${monthData?.count ?? 0}`, sub: `${(monthData?.transactions ?? []).filter((t: any) => t.type === "income").length} ingresos . ${(monthData?.transactions ?? []).filter((t: any) => t.type === "expense").length} gastos`, icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
+          { label: "Transacciones", value: `${(monthData?.transactions ?? []).length}`, sub: `${(monthData?.transactions ?? []).filter((t: any) => t.type === "income").length} ingresos . ${(monthData?.transactions ?? []).filter((t: any) => t.type === "expense").length} gastos`, icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
         ].map((s, i) => (
           <AnimatedCard key={s.label} delay={100 + i * 80}>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
@@ -542,7 +550,7 @@ export default function Bank() {
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
                   <Receipt className="w-4 h-4 text-neutral-500" /> Transacciones del Mes
                 </CardTitle>
-                <span className="text-xs text-neutral-400">{monthData?.count ?? 0} total</span>
+                <span className="text-xs text-neutral-400">{(monthData?.transactions ?? []).length} total</span>
               </CardHeader>
               <CardContent className="pt-0">
                 {loadingMonth && !monthData ? (
