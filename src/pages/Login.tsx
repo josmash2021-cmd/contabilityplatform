@@ -135,12 +135,14 @@ export default function Login() {
           <Card className="border-white/20 rounded-2xl shadow-none bg-black/60 backdrop-blur-md lg:bg-white lg:border-neutral-200">
             <CardContent className="p-6 sm:p-8">
               {/* Mode Toggle */}
-              {/* Animated Mode Switch */}
+              {/* Animated Mode Switch — Business = Black, Personal = White */}
               <div className="flex items-center justify-center mb-5">
-                <div className="relative flex items-center p-1 bg-neutral-100/80 backdrop-blur-sm rounded-xl w-full max-w-[280px]">
-                  {/* Sliding background pill */}
+                <div className="relative flex items-center p-1 bg-neutral-200 rounded-xl w-full max-w-[280px] overflow-hidden">
+                  {/* Sliding background pill — Black for Business, White for Personal */}
                   <div
-                    className="absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-md transition-all duration-300 ease-out"
+                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
+                      mode === "business" ? "bg-black" : "bg-white"
+                    }`}
                     style={{
                       left: mode === "business" ? "4px" : "calc(50%)",
                     }}
@@ -149,7 +151,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setMode("business")}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                      mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-700"
                     }`}
                   >
                     <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
