@@ -125,6 +125,23 @@ export default function PersonalDashboard() {
   const hasAutoSelected = useRef(false);
   const utils = trpc.useUtils();
 
+  // ─── AI Auto-Categorization Agent ───
+  // Silently fixes miscategorized transactions on page load
+  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
+    onSuccess: (data) => {
+      if (data.fixed && data.fixed > 0) {
+        utils.bank.getMonthData.invalidate();
+      }
+    },
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      autoFixMutation.mutate();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // ─── Accounts from DB ───
   const { data: dbAccounts, isLoading: accountsLoading } = trpc.bank.listAccounts.useQuery(undefined, {
     onSuccess: (data) => {

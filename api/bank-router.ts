@@ -86,6 +86,26 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (detailed.includes("INVESTMENT") || desc.includes("dividend")) return { type: "income", category: "investment" };
   if (detailed.includes("INVESTMENT") || desc.includes("interest")) return { type: "income", category: "interest" };
 
+  // ─── ATM CASH DEPOSITS (must be before P2P and other rules) ───
+  const isAtmDeposit =
+    detailed.includes("ATM DEPOSIT") ||
+    detailed.includes("ATM CASH DEPOSIT") ||
+    detailed.includes("DEPOSIT ATM") ||
+    detailed.includes("CASH DEPOSIT") ||
+    (desc.includes("atm") && desc.includes("deposit")) ||
+    (desc.includes("cash") && desc.includes("deposit") && !desc.includes("app"));
+  if (isAtmDeposit) return { type: "income", category: "cash_deposit" };
+
+  // ─── ATM CASH WITHDRAWALS (must be before P2P and other rules) ───
+  const isAtmWithdrawal =
+    detailed.includes("ATM WITHDRAWAL") ||
+    detailed.includes("ATM WDL") ||
+    detailed.includes("WITHDRAWAL") ||
+    detailed.includes("ATM DEBIT") ||
+    (desc.includes("atm") && (desc.includes("withdrawal") || desc.includes("wdl"))) ||
+    (desc.includes("withdrawal") && !desc.includes("transfer") && !desc.includes("zelle"));
+  if (isAtmWithdrawal) return { type: "expense", category: "cash_withdrawal" };
+
   // P2P Payment Apps (PayPal, Cash App, Venmo, Square, Facebook) - NOT cash deposits
   const p2pKeywords = ["paypal","cash app","venmo","square","facebook pay"];
   for (const kw of p2pKeywords) {
@@ -95,12 +115,6 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
       return { type: "expense", category: "transfer" };
     }
   }
-
-  // Cash withdrawal - ONLY real ATM withdrawals
-  if ((detailed.includes("ATM") || desc.includes("atm")) && (desc.includes("withdrawal") || desc.includes("wdl"))) return { type: "expense", category: "cash_withdrawal" };
-
-  // Cash deposit - ONLY real ATM deposits
-  if ((detailed.includes("ATM") || desc.includes("atm")) && (desc.includes("deposit"))) return { type: "income", category: "cash_deposit" };
 
   // Rent
   if (detailed.includes("RENT") || desc.includes("rent")) return { type: "expense", category: "rent" };
