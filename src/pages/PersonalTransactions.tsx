@@ -77,13 +77,28 @@ export default function PersonalTransactions() {
   const now = new Date();
   // Read query params from Dashboard navigation
   const qpType = searchParams.get("type");
+  const qpFilter = searchParams.get("filter");
   const qpMonth = searchParams.get("month");
   const qpYear = searchParams.get("year");
   const qpAccount = searchParams.get("account");
 
+  // Map category to filter type
+  const categoryToFilter: Record<string, string> = {
+    zelle_income: "zelle_in",
+    zelle_sent: "zelle_out",
+    cash_deposit: "cash_deposit",
+    cash_withdrawal: "cash_withdrawal",
+    deposit: "income",
+    income: "income",
+    expense: "expense",
+    gasolina: "gasolina",
+  };
+
+  const initialFilter = qpFilter && categoryToFilter[qpFilter] ? categoryToFilter[qpFilter] : (qpType ?? "all");
+
   const [year, setYear] = useState(qpYear ?? String(now.getFullYear()));
   const [month, setMonth] = useState(qpMonth ?? String(now.getMonth() + 1));
-  const [filterType, setFilterType] = useState(qpType ?? "all");
+  const [filterType, setFilterType] = useState(initialFilter);
   const [selectedAccountId, setSelectedAccountId] = useState<string>(qpAccount ?? "");
   const utils = trpc.useUtils();
 
