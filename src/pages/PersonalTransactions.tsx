@@ -11,7 +11,7 @@ import { useSearchParams } from "react-router";
 import {
   ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
   ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Fuel, Tag,
+  Fuel,
 } from "lucide-react";
 
 /** Same dropdown as Dashboard - avoids scroll issues */
@@ -87,17 +87,30 @@ export default function PersonalTransactions() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>(qpAccount ?? "");
   const utils = trpc.useUtils();
 
-  // Fetch bank accounts (same as Dashboard)
-  const { data: accounts } = trpc.bank.listAccounts.useQuery(undefined, {
+  // Fetch ALL accounts from Plaid (like Dashboard)
+  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
+    staleTime: 60000,
+  });
+
+  // Fetch bank accounts from DB (for currentBalance)
+  const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
     onSuccess: (data) => {
-      // Only auto-select first account if no account from query params
       if (data && data.length > 0 && !selectedAccountId && !qpAccount) {
         setSelectedAccountId(String(data[0].id));
       }
     },
   });
 
-  const effectiveAccountId = selectedAccountId || (accounts?.[0] ? String(accounts[0].id) : "");
+  // Merge Plaid accounts with DB data for currentBalance
+  const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  const accounts = plaidAccounts.length > 0
+    ? plaidAccounts.map((pa: any) => {
+        const dbMatch = (dbAccounts ?? []).find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
+        return dbMatch ? { ...pa, currentBalance: dbMatch.currentBalance } : pa;
+      })
+    : (dbAccounts ?? []);
+
+  const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
 
   // Use SAME endpoint as Dashboard - bank.getMonthData
   const { data: monthData, isLoading } = trpc.bank.getMonthData.useQuery({
@@ -106,14 +119,23 @@ export default function PersonalTransactions() {
     accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
   });
 
-  // Re-categorize existing transactions
-  const recatMutation = trpc.bank.recategorize.useMutation({
+  // ─── AI Auto-Categorization Agent ───
+  // Silently fixes miscategorized transactions on page load
+  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
     onSuccess: (data) => {
-      if (data.updated > 0) toast.success(`${data.updated} transacciones re-categorizadas`);
-      utils.bank.getMonthData.invalidate();
+      if (data.fixed && data.fixed > 0) {
+        utils.bank.getMonthData.invalidate();
+      }
     },
-    onError: (err) => toast.error(err.message),
   });
+
+  // Run auto-fix on page load
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      autoFixMutation.mutate();
+    }, 2000); // Wait 2s for data to load first
+    return () => clearTimeout(timer);
+  }, []);
 
   // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
@@ -139,16 +161,35 @@ export default function PersonalTransactions() {
   }, [year, month, effectiveAccountId]);
 
   const allTransactions = monthData?.transactions ?? [];
+  const GAS_BRANDS = [
+    "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
+    "wawa","valero","citgo","phillips 66","circle k","costco gas","walmart gas",
+    "7-eleven","7 eleven","sam's club gas","buc-ee's","bucees","quik trip","quiktrip",
+    "race trac","racetrac","love's","loves travel","pilot flying j","pilot","flying j",
+    "ta travel","travelcenters","petro","ambest","casey's","caseys","kum & go","kum and go",
+    "stripes","murphy usa","murphy express","thorntons","maverik","sinclair","gulf",
+    "76 gas","union 76","esso","arco","ampm","am pm","kwik trip","kwik star",
+    "holiday","cumberland farms","royal farms","ritter's","ritters","getgo","get-go",
+    "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66"];
   const isGas = (t: any) => {
     const n = (t.description || "").toLowerCase();
-    return t.category === "gasolina" || n.includes("shell") || n.includes("exxon") || n.includes("chevron") || n.includes("bp") || n.includes("mobil") || n.includes("texaco") || n.includes("marathon") || n.includes("circle k") || n.includes("speedway") || n.includes("sheetz") || n.includes("wawa") || n.includes("valero") || n.includes("citgo") || n.includes("phillips") || n.includes("gas");
+    if (t.category === "gasolina") return true;
+    for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
+    return false;
   };
-  const isZelle = (t: any) => t.category === "zelle_income" || t.category === "zelle_sent";
-  const isTransfer = (t: any) => t.category === "transfer";
+  const isZelleRecibido = (t: any) => t.category === "zelle_income";
+  const isZelleEnviado = (t: any) => t.category === "zelle_sent";
+  // EXACT category match only — no broad keyword matching
+  const isCashDeposit = (t: any) => t.category === "cash_deposit";
+  const isCashWithdrawal = (t: any) => t.category === "cash_withdrawal";
   const transactions =
     filterType === "all" ? allTransactions :
-    filterType === "zelle" ? allTransactions.filter((t: any) => isZelle(t)) :
-    filterType === "transfers" ? allTransactions.filter((t: any) => isTransfer(t)) :
+    filterType === "zelle_in" ? allTransactions.filter((t: any) => isZelleRecibido(t)) :
+    filterType === "zelle_out" ? allTransactions.filter((t: any) => isZelleEnviado(t)) :
+    filterType === "income" ? allTransactions.filter((t: any) => t.type === "income") :
+    filterType === "expense" ? allTransactions.filter((t: any) => t.type === "expense") :
+    filterType === "cash_deposit" ? allTransactions.filter((t: any) => isCashDeposit(t)) :
+    filterType === "cash_withdrawal" ? allTransactions.filter((t: any) => isCashWithdrawal(t)) :
     filterType === "gasolina" ? allTransactions.filter((t: any) => isGas(t)) :
     allTransactions;
 
@@ -159,11 +200,9 @@ export default function PersonalTransactions() {
     .filter((t: any) => t.type === "expense")
     .reduce((s: number, t: any) => s + Number(t.amount), 0);
 
-  // Balance REAL: always use first account from listAccounts
-  // The DB select() returns full rows including currentBalance
-  const liveBalance = accounts && accounts.length > 0
-    ? parseFloat(accounts[0].currentBalance ?? "0")
-    : 0;
+  // Balance of the SELECTED account (not just first)
+  const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
+  const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
 
   return (
     <AnimatedPage className="p-4 lg:p-6">
@@ -171,20 +210,68 @@ export default function PersonalTransactions() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-lg font-semibold text-black">
-            {filterType === "zelle" ? "Zelle" : filterType === "transfers" ? "Transferencias" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
+            {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
           </h1>
           <p className="text-xs text-neutral-500">{allTransactions.length} registros · {monthData?.monthName ?? ""}</p>
         </div>
       </div>
 
-      {/* Quick filter buttons */}
-      <div className="flex gap-2 mb-4 flex-wrap">
-        <Button onClick={() => setFilterType("all")} variant={filterType === "all" ? "default" : "outline"} size="sm" className={`h-8 text-xs rounded-lg ${filterType === "all" ? "bg-black text-white" : "border-neutral-200"}`}>Todos</Button>
-        <Button onClick={() => setFilterType("zelle")} variant={filterType === "zelle" ? "default" : "outline"} size="sm" className={`h-8 text-xs rounded-lg ${filterType === "zelle" ? "bg-purple-600 text-white" : "border-neutral-200"}`}>Zelle</Button>
-        <Button onClick={() => setFilterType("transfers")} variant={filterType === "transfers" ? "default" : "outline"} size="sm" className={`h-8 text-xs rounded-lg ${filterType === "transfers" ? "bg-amber-600 text-white" : "border-neutral-200"}`}>Transferencias</Button>
-        <Button onClick={() => setFilterType("gasolina")} variant={filterType === "gasolina" ? "default" : "outline"} size="sm" className={`h-8 text-xs rounded-lg ${filterType === "gasolina" ? "bg-orange-600 text-white" : "border-neutral-200"}`}>
-          <Fuel className="w-3.5 h-3.5 mr-1" />Gasolina
+      {/* Controls: dropdown, month, year, sync — ABOVE filters */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {(accounts ?? []).length > 0 && (
+          <AccountDropdown
+            accounts={accounts ?? []}
+            selectedId={effectiveAccountId}
+            onChange={setSelectedAccountId}
+          />
+        )}
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {Array.from({ length: 12 }, (_, i) => (
+              <SelectItem key={i + 1} value={String(i + 1)}>
+                {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={year} onValueChange={setYear}>
+          <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={() => syncMutation.mutate({
+            year: parseInt(year),
+            month: parseInt(month),
+            accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+          })}
+          disabled={syncMutation.isPending}
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 border-neutral-200"
+        >
+          {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
         </Button>
+      </div>
+
+      {/* Quick filter buttons — same design as Subscriptions */}
+      <div className="flex bg-gray-100 rounded-full p-1 mb-4 overflow-x-auto gap-1">
+        {([
+          { key: "all", label: "Todos" },
+          { key: "income", label: "Ingresos" },
+          { key: "expense", label: "Gastos" },
+          { key: "zelle_in", label: "Zelle Recibidos" },
+          { key: "zelle_out", label: "Zelle Enviados" },
+          { key: "cash_deposit", label: "Dep. Efectivo" },
+          { key: "cash_withdrawal", label: "Ret. Efectivo" },
+          { key: "gasolina", label: "Gasolina" },
+        ] as const).map((f) => (
+          <button key={f.key} onClick={() => setFilterType(f.key)} className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
+            {f.label}
+          </button>
+        ))}
       </div>
 
       {/* Summary Cards */}
@@ -228,56 +315,6 @@ export default function PersonalTransactions() {
       </div>
 
 
-
-      {/* Filters */}
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        {(accounts ?? []).length > 0 && (
-          <AccountDropdown
-            accounts={accounts ?? []}
-            selectedId={effectiveAccountId}
-            onChange={setSelectedAccountId}
-          />
-        )}
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {Array.from({ length: 12 }, (_, i) => (
-              <SelectItem key={i + 1} value={String(i + 1)}>
-                {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={year} onValueChange={setYear}>
-          <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={() => syncMutation.mutate({
-            year: parseInt(year),
-            month: parseInt(month),
-            accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-          })}
-          disabled={syncMutation.isPending}
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 border-neutral-200"
-        >
-          {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-        </Button>
-        <Button
-          onClick={() => recatMutation.mutate()}
-          disabled={recatMutation.isPending}
-          variant="outline"
-          size="sm"
-          title="Actualizar categorias"
-          className="h-8 px-2 border-neutral-200"
-        >
-          {recatMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Tag className="w-3.5 h-3.5" />}
-        </Button>
-      </div>
 
       {/* Transaction List */}
       <div className="space-y-0">
@@ -333,7 +370,7 @@ export default function PersonalTransactions() {
 
 function getCategoryLabel(cat: string): string {
   const labels: Record<string, string> = {
-    zelle_income: "Zelle",
+    zelle_income: "Zelle Recibido",
     zelle_sent: "Zelle Enviado",
     deposit: "Deposito",
     cash_deposit: "Dep. Efectivo",

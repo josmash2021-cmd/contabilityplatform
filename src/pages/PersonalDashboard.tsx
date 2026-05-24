@@ -65,23 +65,35 @@ function AccountDropdown({ accounts, selectedId, onChange }: {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  const selected = accounts.find((a: any) => String(a.id) === selectedId);
+  const selected = accounts.find((a) => String(a.id) === selectedId);
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen(!open)} className="flex items-center gap-1.5 h-9 px-3 border border-neutral-200 rounded-md bg-white text-sm hover:border-neutral-300 transition-colors">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
+      >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[120px]">{selected?.bankName ?? "Cuenta"}</span>
+        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-          {accounts.map((acc: any, idx: number) => (
-            <button key={acc.id} onClick={() => { onChange(String(acc.id)); setOpen(false); }} className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${String(acc.id) === selectedId ? "bg-sky-50 text-sky-700 font-medium" : "text-neutral-600 hover:bg-neutral-50"}`}>
+          {accounts.map((acc: any) => (
+            <button
+              key={acc.id}
+              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
+              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
               <div className="flex items-center gap-2 min-w-0">
                 <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate">{acc.bankName} {acc.accountType ? `(${acc.accountType})` : ""} {idx === 0 ? "(Principal)" : ""}</span>
+                <span className="truncate">{acc.bankName}</span>
               </div>
+              <span className={`text-xs font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
+              </span>
             </button>
           ))}
         </div>
@@ -124,7 +136,13 @@ export default function PersonalDashboard() {
 
   const dbAccountsList = dbAccounts ?? [];
 
-  // ─── Month data ───
+  // ─── ALL ACCOUNTS DIRECTLY FROM PLAID (for dropdown) ───
+  // This returns ALL bank accounts regardless of transactions
+  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
+    staleTime: 60000,
+  });
+
+  // ─── Month data (filtered by selected account for display) ───
   const { data: monthData, isLoading } = trpc.bank.getMonthData.useQuery({
     year: parseInt(selectedYear),
     month: parseInt(selectedMonth),
@@ -135,16 +153,15 @@ export default function PersonalDashboard() {
   // Balance always from getMonthData (backend calculates from bankAccounts table)
   const balance = parseFloat(monthData?.liveBalance ?? "0");
 
-  // ─── ALL accounts for dropdown: merge DB accounts + tx accounts ───
-  // DB accounts have currentBalance, tx accounts ensure ALL appear in dropdown
-  const txAccounts = extractAccountsFromTxs(transactions);
-  // Merge: start with txAccounts, enrich with DB data (currentBalance)
-  const mergedAccounts = txAccounts.length > 0 ? txAccounts.map((txAcc: any) => {
-    const dbMatch = dbAccountsList.find((dbAcc: any) => dbAcc.id === txAcc.id || dbAcc.bankName === txAcc.bankName);
-    return dbMatch ? { ...txAcc, currentBalance: dbMatch.currentBalance } : txAcc;
-  }) : dbAccountsList;
-  // If still empty, use dbAccounts directly
-  const accounts = mergedAccounts.length > 0 ? mergedAccounts : dbAccountsList;
+  // ─── Accounts for dropdown: use Plaid data (ALL accounts) ───
+  // Merge Plaid accounts with DB data for currentBalance
+  const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  const accounts = plaidAccounts.length > 0
+    ? plaidAccounts.map((pa: any) => {
+        const dbMatch = dbAccountsList.find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
+        return dbMatch ? { ...pa, currentBalance: dbMatch.currentBalance } : pa;
+      })
+    : dbAccountsList;
   const activeId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
   const activeAccount = accounts.find((a: any) => String(a.id) === activeId) ?? accounts[0];
 
@@ -211,6 +228,20 @@ export default function PersonalDashboard() {
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <AccountDropdown accounts={accounts} selectedId={activeId} onChange={setSelectedAccountId} />
+          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+            <SelectTrigger className="h-9 w-[120px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>{months
+              .filter(m => parseInt(selectedYear) < now.getFullYear() || parseInt(m.value) <= now.getMonth() + 1)
+              .map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
+          </Select>
+          <Select value={selectedYear} onValueChange={setSelectedYear}>
+            <SelectTrigger className="h-9 w-[88px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
+            <SelectContent>{[2026, 2025, 2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+          </Select>
+          <Button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} variant="outline" size="sm" className="h-9 px-2.5 border-neutral-200">
+            {refreshMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+          </Button>
+          {/* Salir button next to sync */}
           {accounts.length > 0 && (
             confirmDisconnect ? (
               <div className="flex items-center gap-1">
@@ -224,17 +255,6 @@ export default function PersonalDashboard() {
               </button>
             )
           )}
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-9 w-[120px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{months.map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="h-9 w-[88px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{[2026, 2025, 2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-          </Select>
-          <Button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} variant="outline" size="sm" className="h-9 px-2.5 border-neutral-200">
-            {refreshMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          </Button>
         </div>
       </div>
 
@@ -246,7 +266,7 @@ export default function PersonalDashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Landmark className="w-4 h-4 text-neutral-400" />
-                  <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? "Banco"} {activeAccount?.accountType ? `(${activeAccount.accountType})` : ""}</span>
+                  <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? "Banco"}</span>
                   {accounts[0]?.id === activeAccount?.id && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
                 </div>
                 <p className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(balance)}</p>
@@ -281,7 +301,7 @@ export default function PersonalDashboard() {
             <Card className="border-sky-200 rounded-xl shadow-none">
               <CardContent className="p-4">
                 <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Wallet className="w-4 h-4 text-sky-600" /></div><span className="text-xs text-neutral-500">Balance Total</span></div>
-                <p className="text-lg font-semibold text-sky-700">{formatCurrency(accounts.reduce((sum: number, a: any) => sum + parseFloat(a.currentBalance ?? "0"), 0))}</p>
+                <p className="text-lg font-semibold text-sky-700">{formatCurrency(balance)}</p>
                 <p className="text-[10px] text-neutral-400">{accounts.length} cuenta{accounts.length !== 1 ? "s" : ""}</p>
               </CardContent>
             </Card>

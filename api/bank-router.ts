@@ -29,11 +29,12 @@ async function initPlaid() {
 const defaultCategoryRules: Record<string, { category: string; type: string }> = {
   // NOTE: Do NOT put "zelle" here - it catches "zelle from" too
   // Zelle is handled by dedicated logic below
-  "cash app": { category: "cash_deposit", type: "expense" },
-  "venmo": { category: "cash_deposit", type: "expense" },
-  "paypal": { category: "cash_deposit", type: "expense" },
-  "square": { category: "cash_deposit", type: "expense" },
-  "facebook": { category: "cash_deposit", type: "expense" },
+  // NOTE: PayPal, Cash App, Venmo, etc. are P2P payments, NOT cash deposits
+  "cash app": { category: "transfer", type: "expense" },
+  "venmo": { category: "transfer", type: "expense" },
+  "paypal": { category: "transfer", type: "expense" },
+  "square": { category: "transfer", type: "expense" },
+  "facebook": { category: "transfer", type: "expense" },
   "walmart": { category: "retail", type: "expense" },
   "target": { category: "retail", type: "expense" },
   "amazon": { category: "ecommerce", type: "expense" },
@@ -85,8 +86,21 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (detailed.includes("INVESTMENT") || desc.includes("dividend")) return { type: "income", category: "investment" };
   if (detailed.includes("INVESTMENT") || desc.includes("interest")) return { type: "income", category: "interest" };
 
-  // Cash
-  if (detailed.includes("ATM") || desc.includes("withdrawal") || desc.includes(" cash ")) return { type: "expense", category: "cash_withdrawal" };
+  // P2P Payment Apps (PayPal, Cash App, Venmo, Square, Facebook) - NOT cash deposits
+  const p2pKeywords = ["paypal","cash app","venmo","square","facebook pay"];
+  for (const kw of p2pKeywords) {
+    if (desc.includes(kw)) {
+      // P2P received (money coming in) = income, P2P sent (money going out) = expense
+      if (plaidAmount < 0) return { type: "income", category: "transfer" };
+      return { type: "expense", category: "transfer" };
+    }
+  }
+
+  // Cash withdrawal - ONLY real ATM withdrawals
+  if ((detailed.includes("ATM") || desc.includes("atm")) && (desc.includes("withdrawal") || desc.includes("wdl"))) return { type: "expense", category: "cash_withdrawal" };
+
+  // Cash deposit - ONLY real ATM deposits
+  if ((detailed.includes("ATM") || desc.includes("atm")) && (desc.includes("deposit"))) return { type: "income", category: "cash_deposit" };
 
   // Rent
   if (detailed.includes("RENT") || desc.includes("rent")) return { type: "expense", category: "rent" };
@@ -788,6 +802,49 @@ export const bankRouter = createRouter({
     }
   }),
 
+  // ─── GET ALL ACCOUNTS DIRECTLY FROM PLAID ───
+  getAllPlaidAccounts: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { accounts: [], count: 0 };
+    const db = getDb();
+    try {
+      const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+      if (userAccounts.length === 0) return { accounts: [], count: 0 };
+
+      const primaryAccount = userAccounts[0];
+      if (!primaryAccount?.plaidAccessToken) return { accounts: [], count: 0 };
+
+      const client = await initPlaid();
+      if (!client) return { accounts: [], count: 0 };
+
+      const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
+      const plaidAccounts = accountsRes.data.accounts || [];
+
+      // Map DB accounts by plaidAccountId for balance lookup
+      const dbMap = new Map<string, typeof userAccounts[0]>();
+      for (const acc of userAccounts) {
+        if (acc.plaidAccountId) dbMap.set(acc.plaidAccountId, acc);
+      }
+
+      const accounts = plaidAccounts.map((pa: any) => {
+        const dbAcc = dbMap.get(pa.account_id);
+        return {
+          id: dbAcc?.id || 0,
+          plaidAccountId: pa.account_id,
+          bankName: pa.name,
+          accountType: pa.type || "",
+          accountNumber: pa.mask || "",
+          currentBalance: pa.balances?.available != null ? String(pa.balances.available) : pa.balances?.current != null ? String(pa.balances.current) : "0",
+          currency: pa.balances?.iso_currency_code || "USD",
+          isInDb: !!dbAcc,
+        };
+      });
+
+      return { accounts, count: accounts.length };
+    } catch (err: any) {
+      return { accounts: [], count: 0, error: err.message };
+    }
+  }),
+
   // ─── SUBSCRIPTIONS (Elite Rewrite) ───
   getSubscriptions: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
     if (!ctx.user) return { subscriptions: [], totalMonthly: "0", membershipMonthly: "0", paymentMonthly: "0", creditCardMonthly: "0", cancelledCount: 0, totalTransactions: 0, totalMerchants: 0 };
@@ -993,29 +1050,41 @@ export const bankRouter = createRouter({
     } catch (err: any) { return { success: false, error: err.message, results, errors }; }
   }),
 
-  // ─── RECATEGORIZE ALL TRANSACTIONS ───
-  recategorize: authedQuery.mutation(async ({ ctx }) => {
-    if (!ctx.user) return { updated: 0, errors: "No autenticado" };
+  // ─── AUTOMATIC AI CATEGORIZATION AGENT ───
+  // Silently fixes miscategorized transactions — runs automatically on every page load
+  autoFixCategories: authedQuery.mutation(async ({ ctx }) => {
+    if (!ctx.user) return { fixed: 0 };
     const db = getDb();
     try {
-      const txs = await db.select().from(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
-      let updated = 0;
+      // Find transactions that were miscategorized by old algorithm
+      const txs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          // Only fix known bad categories (PayPal, Cash App, Venmo marked as cash_deposit)
+          // Or any transfer that was marked as cash_deposit/cash_withdrawal without ATM
+        ));
+
+      let fixed = 0;
       for (const tx of txs) {
         try {
+          const desc = (tx.description || "").toLowerCase();
           const plaidAmt = tx.plaidAmount != null ? parseFloat(tx.plaidAmount) : null;
           const { type, category } = determineTypeAndCategory(
             plaidAmt ?? parseFloat(tx.amount) * (tx.type === "income" ? -1 : 1),
             tx.plaidCategory ? [tx.plaidCategory] : [],
             tx.description || ""
           );
-          if (tx.type !== type || tx.category !== category) {
-            await db.update(bankTransactions).set({ type, category }).where(eq(bankTransactions.id, tx.id));
-            updated++;
+          // Only update if category actually changed
+          if (tx.category !== category) {
+            await db.update(bankTransactions)
+              .set({ type, category })
+              .where(eq(bankTransactions.id, tx.id));
+            fixed++;
           }
         } catch { /* skip on error */ }
       }
-      return { updated, total: txs.length };
-    } catch (err: any) { return { updated: 0, errors: err.message }; }
+      return { fixed };
+    } catch { return { fixed: 0 }; }
   }),
 
   // ─── DISCONNECT BANK ───

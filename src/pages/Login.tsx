@@ -46,32 +46,26 @@ export default function Login() {
 
   return (
     <div className="min-h-screen flex relative">
-      {/* Mobile video background - full screen */}
-      <div className="absolute inset-0 z-0 lg:hidden">
+      {/* Video background - ALL screen sizes */}
+      <div className="fixed inset-0 z-0">
         <video
           autoPlay
           muted
           loop
           playsInline
           preload="auto"
+          poster="/logo.png"
           className="w-full h-full object-cover"
+          style={{ minHeight: "100vh", minWidth: "100vw" }}
         >
           <source src="/videos/hero-bg.mp4" type="video/mp4" />
         </video>
+        {/* Overlay: lighter on mobile, darker on desktop */}
+        <div className="absolute inset-0 bg-black/20 lg:bg-black/50" />
       </div>
 
-      {/* ─── LEFT PANEL: Video background (desktop only) ─── */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative overflow-hidden">
-        {/* Video background - no overlay, full brightness */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-        >
-          <source src="/videos/hero-bg.mp4" type="video/mp4" />
-        </video>
+      {/* ─── LEFT PANEL: Content over video (desktop only) ─── */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative z-10">
 
         {/* Top */}
         <div className="relative z-10">
@@ -122,7 +116,7 @@ export default function Login() {
       </div>
 
       {/* ─── RIGHT PANEL: Login Form ─── */}
-      <div className="flex-1 flex items-center justify-center lg:bg-white p-6 sm:p-8 lg:p-8 relative z-10">
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-8 relative z-10">
         <div className="w-full max-w-sm space-y-8">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
@@ -138,7 +132,7 @@ export default function Login() {
             <p className="text-neutral-300 lg:text-neutral-400 text-base">Inicia sesion en tu cuenta</p>
           </div>
 
-          <Card className="border-neutral-200 rounded-2xl shadow-none bg-white">
+          <Card className="border-white/20 rounded-2xl shadow-none bg-black/60 backdrop-blur-md lg:bg-white lg:border-neutral-200">
             <CardContent className="p-6 sm:p-8">
               {/* Mode Toggle */}
               <div className="flex items-center justify-center gap-1 mb-5 p-1 bg-neutral-100 rounded-lg">
@@ -168,24 +162,24 @@ export default function Login() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <Label className="text-xs text-neutral-500">Email</Label>
+                  <Label className="text-xs text-neutral-300 lg:text-neutral-500">Email</Label>
                   <Input
                     type="email"
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5 rounded-xl border-neutral-200 h-12 text-base"
+                    className="mt-1.5 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-neutral-500">Contrasena</Label>
+                  <Label className="text-xs text-neutral-300 lg:text-neutral-500">Contrasena</Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Tu contrasena"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-neutral-200 h-12 text-base"
+                      className="pr-10 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
                     />
                     <button
                       type="button"
@@ -210,13 +204,13 @@ export default function Login() {
             </CardContent>
           </Card>
 
-          <div className="text-center space-y-3">
-            <p className="text-sm text-neutral-300 lg:text-neutral-400">
-              <Link to="/forgot-password" className="text-white lg:text-black hover:underline">Olvidaste tu contrasena?</Link>
+          <div className="text-center space-y-3 mt-4">
+            <p className="text-sm">
+              <Link to="/forgot-password" className="text-white/80 hover:text-white hover:underline">Olvidaste tu contrasena?</Link>
             </p>
-            <p className="text-sm text-neutral-300 lg:text-neutral-400">
+            <p className="text-sm text-white/60">
               No tienes cuenta?{" "}
-              <Link to="/register" className="text-white lg:text-black hover:underline font-medium">Registrate</Link>
+              <Link to="/register" className="text-white hover:underline font-medium">Registrate</Link>
             </p>
           </div>
         </div>
