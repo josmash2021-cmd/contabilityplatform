@@ -132,16 +132,22 @@ export default function Login() {
             <p className="text-neutral-300 lg:text-neutral-400 text-base">Inicia sesion en tu cuenta</p>
           </div>
 
-          <Card className="border-white/20 rounded-2xl shadow-none bg-black/60 backdrop-blur-md lg:bg-white lg:border-neutral-200">
+          <Card className={`rounded-2xl shadow-none border transition-colors duration-300 ${
+            mode === "personal"
+              ? "bg-black border-white/20 text-white"
+              : "bg-white border-neutral-200 text-black"
+          }`}>
             <CardContent className="p-6 sm:p-8">
               {/* Mode Toggle */}
-              {/* Animated Mode Switch — Business = Black, Personal = White */}
+                  {/* Animated Mode Switch */}
               <div className="flex items-center justify-center mb-5">
-                <div className="relative flex items-center p-1 bg-neutral-200 rounded-xl w-full max-w-[280px] overflow-hidden">
-                  {/* Sliding background pill — Black for Business, White for Personal */}
+                <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
+                  mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
+                }`}>
+                  {/* Sliding background pill */}
                   <div
                     className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                      mode === "personal" ? "bg-black" : "bg-white"
+                      mode === "personal" ? "bg-white" : "bg-black"
                     }`}
                     style={{
                       left: mode === "business" ? "4px" : "calc(50%)",
@@ -151,7 +157,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setMode("business")}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                      mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
                     }`}
                   >
                     <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
@@ -160,7 +166,7 @@ export default function Login() {
                     type="button"
                     onClick={() => setMode("personal")}
                     className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "personal" ? "text-white" : "text-neutral-500 hover:text-neutral-700"
+                      mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
                     }`}
                   >
                     <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
@@ -187,7 +193,7 @@ export default function Login() {
                       placeholder="Tu contrasena"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
+                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-300 bg-white text-black placeholder:text-neutral-400"}`}
                     />
                     <button
                       type="button"
@@ -201,7 +207,7 @@ export default function Login() {
                 <Button
                   type="submit"
                   disabled={loginMut.isPending}
-                  className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-10 mt-2"
+                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
                 >
                   {loginMut.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -214,11 +220,11 @@ export default function Login() {
 
           <div className="text-center space-y-3 mt-4">
             <p className="text-sm">
-              <Link to="/forgot-password" className="text-white/80 hover:text-white hover:underline">Olvidaste tu contrasena?</Link>
+              <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
             </p>
-            <p className="text-sm text-white/60">
+            <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
               No tienes cuenta?{" "}
-              <Link to="/register" className="text-white hover:underline font-medium">Registrate</Link>
+              <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "personal" ? "text-white" : "text-black"}`}>Registrate</Link>
             </p>
           </div>
         </div>
