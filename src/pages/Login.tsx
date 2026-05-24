@@ -135,29 +135,35 @@ export default function Login() {
           <Card className="border-white/20 rounded-2xl shadow-none bg-black/60 backdrop-blur-md lg:bg-white lg:border-neutral-200">
             <CardContent className="p-6 sm:p-8">
               {/* Mode Toggle */}
-              <div className="flex items-center justify-center gap-1 mb-5 p-1 bg-neutral-100 rounded-lg">
-                <button
-                  type="button"
-                  onClick={() => setMode("business")}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    mode === "business"
-                      ? "bg-white text-black shadow-sm"
-                      : "text-neutral-500 hover:text-neutral-700"
-                  }`}
-                >
-                  <Building2 className="w-4 h-4" /> Negocios
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setMode("personal")}
-                  className={`flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium transition-all ${
-                    mode === "personal"
-                      ? "bg-white text-black shadow-sm"
-                      : "text-neutral-500 hover:text-neutral-700"
-                  }`}
-                >
-                  <User className="w-4 h-4" /> Personal
-                </button>
+              {/* Animated Mode Switch */}
+              <div className="flex items-center justify-center mb-5">
+                <div className="relative flex items-center p-1 bg-neutral-100/80 backdrop-blur-sm rounded-xl w-full max-w-[280px]">
+                  {/* Sliding background pill */}
+                  <div
+                    className="absolute top-1 bottom-1 w-[calc(50%-4px)] bg-white rounded-lg shadow-md transition-all duration-300 ease-out"
+                    style={{
+                      left: mode === "business" ? "4px" : "calc(50%)",
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setMode("business")}
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
+                      mode === "business" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                    }`}
+                  >
+                    <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMode("personal")}
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
+                      mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                    }`}
+                  >
+                    <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
+                  </button>
+                </div>
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-5">
