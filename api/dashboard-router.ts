@@ -236,14 +236,37 @@ export const dashboardRouter = createRouter({
         });
       }
 
+      // Recent sales for the month with product items
+      const recentSalesRaw = await db.select({
+        id: sales.id, invoiceNumber: sales.invoiceNumber, total: sales.total,
+        paymentMethod: sales.paymentMethod, status: sales.status,
+        customerName: sales.customerName, createdAt: sales.createdAt,
+      }).from(sales).where(and(
+        userId ? eq(sales.createdBy, userId) : undefined,
+        gte(sales.createdAt, monthStart),
+        sql`${sales.createdAt} <= ${monthEnd}`,
+      )).orderBy(desc(sales.createdAt)).limit(50);
+
+      const recentSales = await Promise.all(recentSalesRaw.map(async (sale) => {
+        const items = await db.select({
+          serviceName: saleServices.serviceName,
+          quantity: saleServices.quantity,
+          unitPrice: saleServices.unitPrice,
+          total: saleServices.total,
+        }).from(saleServices).where(eq(saleServices.saleId, sale.id));
+        return { ...sale, items };
+      }));
+
       return {
         monthName,
         totalSales: String(monthSalesTotal.toFixed(2)),
         totalCount: salesAgg[0]?.count ?? 0,
+        totalSalesCount: salesAgg[0]?.count ?? 0,
         totalExpenses: String(monthExpTotal.toFixed(2)),
         netIncome: String((monthSalesTotal - monthExpTotal).toFixed(2)),
         paymentBreakdown: (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({ method: p.method, total: String(Number(p.total).toFixed(2)), count: p.count })),
         dailySales,
+        recentSales: recentSales as any[],
       };
     }),
 });
