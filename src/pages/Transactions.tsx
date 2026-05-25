@@ -322,11 +322,16 @@ export default function Transactions() {
           <Select value={month} onValueChange={setMonth}>
             <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
             <SelectContent>
-              {Array.from({ length: 12 }, (_, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>
-                  {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
-                </SelectItem>
-              ))}
+              {(() => {
+                const currentYear = new Date().getFullYear();
+                const currentMonth = new Date().getMonth() + 1;
+                const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
+                return Array.from({ length: maxMonth }, (_, i) => (
+                  <SelectItem key={i + 1} value={String(i + 1)}>
+                    {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                  </SelectItem>
+                ));
+              })()}
             </SelectContent>
           </Select>
           <Select value={year} onValueChange={setYear}>
