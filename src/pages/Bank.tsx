@@ -651,48 +651,6 @@ export default function Bank() {
             </AnimatedCard>
           )}
 
-          {/* ACCOUNTING AGENT: Anomaly Detection */}
-          {anomaliesData?.anomalies && anomaliesData.anomalies.length > 0 && (
-            <AnimatedCard delay={240}>
-              <Card className="border-amber-200 rounded-xl shadow-none bg-amber-50/30">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-amber-500" /> Alertas del Agente Contable
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="space-y-2">
-                    {anomaliesData.anomalies.slice(0, 5).map((a: any, i: number) => (
-                      <div key={i} className={`flex items-start gap-2.5 py-2 px-3 rounded-lg ${
-                        a.severity === "high" ? "bg-red-50 border border-red-100" :
-                        a.severity === "medium" ? "bg-amber-50 border border-amber-100" :
-                        "bg-blue-50 border border-blue-100"
-                      }`}>
-                        {a.severity === "high" ? (
-                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                        ) : a.severity === "medium" ? (
-                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
-                        ) : (
-                          <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                        )}
-                        <div className="min-w-0">
-                          <p className={`text-xs font-medium ${
-                            a.severity === "high" ? "text-red-700" :
-                            a.severity === "medium" ? "text-amber-700" :
-                            "text-blue-700"
-                          }`}>{a.description}</p>
-                          {a.type === "large_expense" && a.transaction && (
-                            <p className="text-[10px] text-neutral-500 mt-0.5">{a.transaction.description} — {a.transaction.transactionDate ? new Date(a.transaction.transactionDate).toLocaleDateString("es") : ""}</p>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </AnimatedCard>
-          )}
-
           {/* Transactions List */}
           <AnimatedCard delay={260}>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
