@@ -51,6 +51,7 @@ export default function POS() {
   const [showCart, setShowCart] = useState(false);
   const [showZellePanel, setShowZellePanel] = useState(false);
   const [copiedZelle, setCopiedZelle] = useState(false);
+  const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -71,7 +72,8 @@ export default function POS() {
   };
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
-  const discountAmt = parseFloat(discount) || 0;
+  const discountRaw = parseFloat(discount) || 0;
+  const discountAmt = discountType === "percentage" ? Math.min(subtotal * (discountRaw / 100), subtotal) : Math.min(discountRaw, subtotal);
   const total = Math.max(0, subtotal - discountAmt);
 
   const companyZelleEmail = settings?.zelleEmail || "No configurado";
@@ -217,11 +219,27 @@ export default function POS() {
           </ScrollArea>
           <div className="mt-4 pt-4 border-t border-neutral-100 space-y-3">
             <div className="flex justify-between text-sm"><span className="text-neutral-500">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
-            <div className="flex justify-between text-sm items-center"><span className="text-neutral-500">Descuento</span><Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-24 h-8 text-right text-sm border-neutral-200" min="0" step="0.01" /></div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-neutral-500">Descuento</span>
+              <div className="flex items-center gap-2">
+                {/* Discount type toggle */}
+                <div className="flex bg-gray-100 rounded-full p-0.5">
+                  <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
+                  <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
+                </div>
+                <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-20 h-8 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
+              </div>
+            </div>
+            {discountType === "percentage" && discountRaw > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-neutral-400">Equivale a</span>
+                <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
+              </div>
+            )}
             <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium text-base">Total</span><span className="text-xl font-bold text-black">{formatCurrency(total)}</span></div>
             <Dialog open={showPayment} onOpenChange={setShowPayment}>
               <DialogTrigger asChild>
-                <Button className="w-full bg-black hover:bg-neutral-800 text-white h-12 text-base font-medium rounded-xl" disabled={cart.length === 0}>Pagar</Button>
+                <Button className="w-full bg-black hover:bg-neutral-800 text-white h-12 text-base font-medium rounded-xl" disabled={cart.length === 0}>Cobrar</Button>
               </DialogTrigger>
               <DialogContent className="bg-white border-neutral-200 max-w-sm mx-4">
                 <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
@@ -273,11 +291,26 @@ export default function POS() {
         </ScrollArea>
         <div className="px-5 py-4 border-t border-neutral-100 space-y-3">
           <div className="flex justify-between text-sm"><span className="text-neutral-400">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
-          <div className="flex justify-between text-sm"><span className="text-neutral-400">Descuento</span><Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-20 h-7 text-right text-sm border-neutral-200" min="0" step="0.01" /></div>
+          <div className="flex justify-between text-sm items-center">
+            <span className="text-neutral-400">Descuento</span>
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100 rounded-full p-0.5">
+                <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
+                <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
+              </div>
+              <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
+            </div>
+          </div>
+          {discountType === "percentage" && discountRaw > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-neutral-400">Equivale a</span>
+              <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
+            </div>
+          )}
           <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
           <Dialog open={showPayment} onOpenChange={setShowPayment}>
             <DialogTrigger asChild>
-              <Button className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm" disabled={cart.length === 0}>Pagar</Button>
+              <Button className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm" disabled={cart.length === 0}>Cobrar</Button>
             </DialogTrigger>
             <DialogContent className="bg-white border-neutral-200 max-w-md">
               <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
