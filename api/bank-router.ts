@@ -777,6 +777,36 @@ export const bankRouter = createRouter({
     };
   }),
 
+  // ─── LIST BY CATEGORY (for BankCategoryDetail page) ───
+  listByCategory: authedQuery.input(z.object({
+    category: z.string(),
+    year: z.number().optional(),
+    month: z.number().optional(),
+  })).query(async ({ input, ctx }) => {
+    if (!ctx.user) return [];
+    const db = getDb();
+    const { category, year, month } = input;
+
+    const conditions = [
+      eq(bankTransactions.userId, ctx.user.id),
+      eq(bankTransactions.category, category as any),
+    ];
+
+    if (year && month) {
+      const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDay = new Date(year, month, 0).getDate();
+      const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+      conditions.push(sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`);
+      conditions.push(sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`);
+    }
+
+    const txs = await db.select().from(bankTransactions)
+      .where(and(...conditions))
+      .orderBy(desc(bankTransactions.transactionDate));
+
+    return txs;
+  }),
+
   // ─── GET YEAR DATA (annual summary for selected account) ───
   getYearData: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { income: "0", expense: "0", transactionCount: 0 };
