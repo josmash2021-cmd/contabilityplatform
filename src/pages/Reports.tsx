@@ -41,7 +41,6 @@ export default function Reports() {
   const [selectedBankAccount, setSelectedBankAccount] = useState<string>("");
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("month");
-  const [paymentFilter, setPaymentFilter] = useState<string>("all");
 
   const incomeQuery = trpc.reports.incomeStatement.useQuery({});
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
@@ -128,16 +127,6 @@ export default function Reports() {
     value: Number(p.total),
   }));
 
-  // Filter payment breakdown by payment method
-  const filteredPaymentBreakdown = paymentFilter === "all"
-    ? paymentBreakdown
-    : paymentBreakdown.filter((p) => p.method === paymentFilter);
-
-  const filteredPieData = filteredPaymentBreakdown.map((p) => ({
-    name: PAYMENT_LABELS[p.method] || p.method,
-    value: Number(p.total),
-  }));
-
   // Period filter options
   const periodOptions = [
     { key: "today", label: "Hoy" },
@@ -146,13 +135,7 @@ export default function Reports() {
     { key: "year", label: "Año" },
   ];
 
-  // Payment method filter options
-  const paymentOptions = [
-    { key: "all", label: "Todos" },
-    { key: "cash", label: "Efectivo" },
-    { key: "zelle", label: "Zelle" },
-    { key: "card", label: "Tarjeta" },
-  ];
+
 
   return (
     <div className="p-6 lg:p-10 space-y-6 bg-white min-h-screen max-w-7xl mx-auto">
@@ -173,15 +156,7 @@ export default function Reports() {
           ))}
         </div>
 
-        {/* Payment Method Filter Carousel */}
-        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-1 bg-gray-100 rounded-xl p-1 mt-2" style={{ scrollbarWidth: "none" }}>
-          <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
-          {paymentOptions.map((f) => (
-            <button key={f.key} onClick={() => setPaymentFilter(f.key)} className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-5 ${paymentFilter === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
-              {f.label}
-            </button>
-          ))}
-        </div>
+
       </AnimatedPage>
 
       {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
@@ -385,8 +360,8 @@ export default function Reports() {
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5 space-y-3">
                       <p className="text-xs text-neutral-400">Resumen de pagos</p>
-                      {filteredPieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">Sin datos</p>}
-                      {filteredPieData.map((p, i) => (
+                      {pieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">Sin datos</p>}
+                      {pieData.map((p, i) => (
                         <div key={p.name} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
