@@ -214,7 +214,7 @@ export default function Reports() {
         >
           {[
             { key: "monthly", label: "Ventas del Mes" },
-            { key: "income", label: "Ganancias y Perdidas" },
+            { key: "income", label: "Ingresos y Gastos" },
             { key: "balance", label: "Lo que Tengo y Debo" },
             { key: "bank", label: "Mi Banco" },
             { key: "journal", label: "Movimientos Detallados" },
@@ -324,7 +324,7 @@ export default function Reports() {
               <AnimatedCard delay={100} className="lg:col-span-2">
                 <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-black">Ganancias y Perdidas</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-black">Ingresos y Gastos</CardTitle>
                     <p className="text-[11px] text-neutral-400">{incomeData.period.start} - {incomeData.period.end}</p>
                   </CardHeader>
                   <CardContent className="p-5 space-y-4">
