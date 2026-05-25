@@ -669,7 +669,7 @@ export default function Bank() {
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <PiggyBank className="w-4 h-4 text-neutral-500" /> Resumen del Mes
+                  <PiggyBank className="w-4 h-4 text-neutral-500" /> Resumen del Año
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-4">
@@ -681,28 +681,19 @@ export default function Bank() {
                   <span className="text-sm text-neutral-500">Gastos</span>
                   <span className="text-sm font-bold text-red-600">{formatCurrency(monthExpense)}</span>
                 </div>
-                <Separator />
-                <div className="flex justify-between items-center">
-                  <span className="text-sm font-medium text-black">Flujo Neto</span>
-                  <span className={`text-lg font-bold ${monthIncome - monthExpense >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                    {formatCurrency(monthIncome - monthExpense)}
-                  </span>
-                </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-neutral-500">Transacciones</span>
                   <span className="text-sm text-black font-medium">{(monthData?.transactions ?? []).length}</span>
                 </div>
-                {isCurrentMonth && (
-                  <div className="pt-2 border-t border-neutral-100">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm font-medium text-black">Saldo en Banco</span>
-                      <span className={`text-lg font-bold ${Number(balance) >= 0 ? "text-blue-600" : "text-red-600"}`}>
-                        {formatCurrency(balance)}
-                      </span>
-                    </div>
-                    <p className="text-[10px] text-neutral-400 pt-1">Saldo real segun tu banco</p>
+                <div className="pt-2 border-t border-neutral-100">
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm font-medium text-black">Saldo en Banco</span>
+                    <span className={`text-lg font-bold ${Number(balance) >= 0 ? "text-blue-600" : "text-red-600"}`}>
+                      {formatCurrency(balance)}
+                    </span>
                   </div>
-                )}
+                  <p className="text-[10px] text-neutral-400 pt-1">Saldo real segun tu banco</p>
+                </div>
               </CardContent>
             </Card>
           </AnimatedCard>
