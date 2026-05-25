@@ -219,7 +219,7 @@ export default function POS() {
       )}
 
       {/* Cart Panel - Mobile: slide up, Desktop: sidebar */}
-      <div className={`lg:hidden fixed inset-x-0 bottom-0 bg-white border-t border-neutral-200 rounded-t-2xl shadow-2xl transition-transform duration-300 z-40 flex flex-col ${showCart ? "translate-y-0" : "translate-y-full"}`} style={{ maxHeight: "85vh" }}>
+      <div className={`lg:hidden fixed inset-x-0 bottom-0 bg-white border-t border-neutral-200 rounded-t-2xl shadow-2xl transition-transform duration-300 z-40 flex flex-col ${showCart ? "translate-y-0 pb-20" : "translate-y-full"}`} style={{ maxHeight: "85vh" }}>
         {/* Header */}
         <div className="shrink-0 px-4 pt-4 pb-3 border-b border-neutral-100 flex items-center justify-between">
           <p className="text-sm font-medium">Carrito ({cart.length})</p>
