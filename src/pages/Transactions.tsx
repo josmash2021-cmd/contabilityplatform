@@ -173,16 +173,19 @@ export default function Transactions() {
   const GAS_BRANDS = [
     "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
     "wawa","valero","citgo","phillips 66","circle k","costco gas","walmart gas",
-    "7-eleven","7 eleven","sam's club gas","buc-ee's","bucees","quik trip","quiktrip",
+    "7-eleven gas","7 eleven gas","sam's club gas","buc-ee's","bucees","quik trip","quiktrip",
     "race trac","racetrac","love's","loves travel","pilot flying j","pilot","flying j",
     "ta travel","travelcenters","petro","ambest","casey's","caseys","kum & go","kum and go",
     "stripes","murphy usa","murphy express","thorntons","maverik","sinclair","gulf",
-    "76 gas","union 76","esso","arco","ampm","am pm","kwik trip","kwik star",
+    "union 76","esso","arco","kwik trip","kwik star",
     "holiday","cumberland farms","royal farms","ritter's","ritters","getgo","get-go",
-    "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66"];
+    "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66",
+    "76 gas","gasoline","petrol","fuel","gas station","gas sta","gasoline station",
+    "sheetz","wawa","racetrac","speedway","marathon","valero","citgo","phillips 66",
+    "love's travel","pilot truck","ta truck","ambest","maverik","quiktrip"];
   const isGas = (t: any) => {
     const n = (t.description || "").toLowerCase();
-    if (t.category === "gasolina") return true;
+    // Only check gas brands — no generic category matching
     for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
     return false;
   };
