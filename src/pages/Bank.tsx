@@ -469,7 +469,7 @@ export default function Bank() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
           { label: "Saldo Actual", value: formatCurrency(balance), sub: isPlaidConnected ? "En vivo desde tu banco" : "Sincroniza para actualizar", icon: Wallet, color: "bg-blue-50 text-blue-600", valColor: Number(balance) >= 0 ? "text-blue-600" : "text-red-600" },
-          { label: "Ingresos", value: formatCurrency(monthData?.income?.total ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
+          { label: "Ingresos", value: formatCurrency(monthData?.income ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
           { label: "Gastos", value: formatCurrency(monthData?.expense ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingDown, color: "bg-red-50 text-red-600", valColor: "text-red-600" },
           { label: "Transacciones", value: `${(monthData?.transactions ?? []).length}`, sub: `${(monthData?.transactions ?? []).filter((t: any) => t.type === "income").length} ingresos . ${(monthData?.transactions ?? []).filter((t: any) => t.type === "expense").length} gastos`, icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
         ].map((s, i) => (
