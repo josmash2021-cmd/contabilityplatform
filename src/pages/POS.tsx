@@ -393,7 +393,7 @@ function ParticleBackground() {
     window.addEventListener("resize", handleResize);
     return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", handleResize); };
   }, []);
-  return <canvas ref={canvasRef} className="absolute top-0 left-0 right-0 h-[160px] pointer-events-none z-0" />;
+  return <canvas ref={canvasRef} className="absolute top-[56px] left-0 right-0 h-[70px] pointer-events-none z-0" />;
 }
 
 // Extracted Payment Dialog Component
