@@ -710,7 +710,7 @@ export const bankRouter = createRouter({
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
     // Build conditions: always filter by user and date range
-    const conditions = [
+    let conditions: any[] = [
       eq(bankTransactions.userId, ctx.user.id),
       sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
       sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
@@ -720,9 +720,20 @@ export const bankRouter = createRouter({
       conditions.push(eq(bankTransactions.bankAccountId, accountId));
     }
 
-    const txs = await db.select().from(bankTransactions)
+    let txs = await db.select().from(bankTransactions)
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
+
+    // Fallback: if no results with account filter, get ALL user transactions for the month
+    if (txs.length === 0 && accountId) {
+      txs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+        ))
+        .orderBy(desc(bankTransactions.transactionDate));
+    }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
@@ -775,7 +786,8 @@ export const bankRouter = createRouter({
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
 
-    const conditions = [
+    // Try with account filter first
+    let conditions: any[] = [
       eq(bankTransactions.userId, ctx.user.id),
       sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
       sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
@@ -784,8 +796,18 @@ export const bankRouter = createRouter({
       conditions.push(eq(bankTransactions.bankAccountId, accountId));
     }
 
-    const txs = await db.select().from(bankTransactions)
+    let txs = await db.select().from(bankTransactions)
       .where(and(...conditions));
+
+    // Fallback: if no results with account filter, get ALL user transactions for the year
+    if (txs.length === 0 && accountId) {
+      txs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+        ));
+    }
 
     let inc = 0, exp = 0;
     for (const t of txs) {
