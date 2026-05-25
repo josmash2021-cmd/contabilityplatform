@@ -1,6 +1,6 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { sales, expenses, accounts, bankTransactions, bankAccounts, journalEntries, journalEntryLines, customers } from "@db/schema";
+import { sales, saleServices, expenses, accounts, bankTransactions, bankAccounts, journalEntries, journalEntryLines, customers } from "@db/schema";
 import { sql, desc, and, eq, gte, count } from "drizzle-orm";
 import { z } from "zod";
 
@@ -89,12 +89,23 @@ export const dashboardRouter = createRouter({
         });
       }
 
-      // Recent sales (top 8)
-      const recentSales = await db.select({
+      // Recent sales (top 8) with their service items
+      const recentSalesRaw = await db.select({
         id: sales.id, invoiceNumber: sales.invoiceNumber, total: sales.total,
         paymentMethod: sales.paymentMethod, status: sales.status,
         customerName: sales.customerName, createdAt: sales.createdAt,
       }).from(sales).where(eq(sales.createdBy, userId)).orderBy(desc(sales.createdAt)).limit(8);
+
+      // Fetch service items for each sale
+      const recentSales = await Promise.all(recentSalesRaw.map(async (sale) => {
+        const items = await db.select({
+          serviceName: saleServices.serviceName,
+          quantity: saleServices.quantity,
+          unitPrice: saleServices.unitPrice,
+          total: saleServices.total,
+        }).from(saleServices).where(eq(saleServices.saleId, sale.id));
+        return { ...sale, items };
+      }));
 
       // Customer count
       let customerCount = 0;

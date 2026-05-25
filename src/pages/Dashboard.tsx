@@ -157,15 +157,25 @@ export default function Dashboard() {
               <span className="text-xs text-neutral-400">Ventas recientes</span>
               <Link to="/transactions" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">Ver todo <ArrowUpRight className="w-3 h-3" /></Link>
             </div>
-            {safeData.recentSales?.length ? safeData.recentSales.map((sale: any) => (
-              <div key={sale.id} className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0">
-                <div>
-                  <p className="text-xs font-medium text-black">{sale.invoiceNumber}</p>
-                  <p className="text-[10px] text-neutral-400">{sale.customerName || "Sin cliente"}</p>
+            {safeData.recentSales?.length ? safeData.recentSales.map((sale: any) => {
+              const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || "Sin productos";
+              const saleDate = sale.createdAt ? new Date(sale.createdAt) : null;
+              const dateStr = saleDate ? saleDate.toLocaleDateString("es", { day: "2-digit", month: "short" }) : "";
+              const timeStr = saleDate ? saleDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+              return (
+                <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-medium text-black truncate">{productNames}</p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-[10px] text-neutral-500">{dateStr} · {timeStr}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500">{paymentLabel}</span>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-black ml-3 shrink-0">{formatCurrency(sale.total)}</span>
                 </div>
-                <span className="text-xs font-medium text-black">{formatCurrency(sale.total)}</span>
-              </div>
-            )) : <p className="text-sm text-neutral-400 text-center py-8">No hay ventas aun. Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar.</p>}
+              );
+            }) : <p className="text-sm text-neutral-400 text-center py-8">No hay ventas aun. Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar.</p>}
           </div>
         </AnimatedCard>
       </div>
