@@ -352,7 +352,7 @@ export default function Transactions() {
 
       {/* Summary Cards — bank KPIs ONLY when bank connected AND showing bank data */}
       {hasBankConnected && filterType !== "ventas" && filterType !== "devoluciones" && (
-        <div className="grid grid-cols-4 gap-3 mb-4">
+        <div className="grid grid-cols-3 gap-3 mb-4">
           <Card className="border-emerald-200 rounded-xl shadow-none">
             <CardContent className="p-3">
               <div className="flex items-center gap-1.5 mb-1">
@@ -384,17 +384,6 @@ export default function Transactions() {
                 <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
               </div>
               <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-violet-200 rounded-xl shadow-none">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center">
-                  <Receipt className="w-3.5 h-3.5 text-violet-600" />
-                </div>
-                <p className="text-[10px] text-neutral-500">Transacciones</p>
-              </div>
-              <p className="text-sm font-semibold text-violet-700">{displayTransactions.length}</p>
             </CardContent>
           </Card>
         </div>
