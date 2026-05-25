@@ -12,12 +12,24 @@ export const salesRouter = createRouter({
       const userId = ctx.user.id;
       const limit = input?.limit ?? 50;
       const offset = input?.offset ?? 0;
-      return db.select({
+      // Fetch sales
+      const salesRows = await db.select({
         id: sales.id, invoiceNumber: sales.invoiceNumber, customerId: sales.customerId,
         customerName: sales.customerName, subtotal: sales.subtotal, discount: sales.discount,
         total: sales.total, paymentMethod: sales.paymentMethod, status: sales.status,
         notes: sales.notes, createdAt: sales.createdAt,
       }).from(sales).where(eq(sales.createdBy, userId)).orderBy(desc(sales.createdAt)).limit(limit).offset(offset);
+      // Fetch items for each sale
+      const result = await Promise.all(salesRows.map(async (sale) => {
+        const items = await db.select({
+          serviceName: saleServices.serviceName,
+          quantity: saleServices.quantity,
+          unitPrice: saleServices.unitPrice,
+          total: saleServices.total,
+        }).from(saleServices).where(eq(saleServices.saleId, sale.id));
+        return { ...sale, items };
+      }));
+      return result;
     }),
 
   byId: authedQuery

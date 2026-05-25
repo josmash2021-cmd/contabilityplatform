@@ -209,20 +209,25 @@ export default function Transactions() {
     filterType === "all" ? allSales :
     [];
 
-  const salesMapped = salesAsTransactions.map((s: any) => ({
-    id: `sale-${s.id}`,
-    description: `Venta ${s.invoiceNumber} - ${s.customerName || "General"}`,
-    amount: Number(s.total),
-    type: "income" as const,
-    category: s.status === "refunded" ? "refund" : "sale",
-    transactionDate: s.createdAt,
-    transaction_date: s.createdAt,
-    accountNumber: null,
-    _source: "sale" as const,
-    status: s.status,
-    invoiceNumber: s.invoiceNumber,
-    paymentMethod: s.paymentMethod,
-  }));
+  const salesMapped = salesAsTransactions.map((s: any) => {
+    const productNames = s.items?.map((i: any) => i.serviceName).join(", ") || s.invoiceNumber;
+    return {
+      id: `sale-${s.id}`,
+      description: productNames,
+      subtitle: s.invoiceNumber,
+      customerName: s.customerName,
+      amount: Number(s.total),
+      type: "income" as const,
+      category: s.status === "refunded" ? "refund" : "sale",
+      transactionDate: s.createdAt,
+      transaction_date: s.createdAt,
+      accountNumber: null,
+      _source: "sale" as const,
+      status: s.status,
+      invoiceNumber: s.invoiceNumber,
+      paymentMethod: s.paymentMethod,
+    };
+  });
 
   // Combine bank + sales for display
   const displayTransactions =
@@ -445,6 +450,9 @@ export default function Transactions() {
                 >
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-normal text-black truncate">{tx.description}</p>
+                    {tx._source === "sale" && tx.subtitle && (
+                      <p className="text-[11px] text-neutral-400 mt-0.5">{tx.subtitle} · {tx.customerName || "General"}</p>
+                    )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
