@@ -127,6 +127,12 @@ export default function Reports() {
     value: Number(p.total),
   }));
 
+  // Income vs Expense data for pie chart
+  const incomeExpenseData = [
+    { name: "Ingresos", value: Number(monthSales), color: "#22c55e" },
+    { name: "Gastos", value: Number(monthExpenses), color: "#ef4444" },
+  ].filter((d) => d.value > 0);
+
   // Period filter options
   const periodOptions = [
     { key: "today", label: "Hoy" },
@@ -337,21 +343,22 @@ export default function Reports() {
                 <div className="space-y-4">
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5">
-                      <p className="text-xs text-neutral-400 mb-3">Composicion de ingresos</p>
+                      <p className="text-xs text-neutral-400 mb-3">Ingresos y Gastos</p>
                       <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={[{ name: "Ventas", value: incomeData.breakdown.salesRevenue }, { name: "Banco", value: incomeData.breakdown.bankRevenue }]}
+                            <Pie data={incomeExpenseData}
                               dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={3}>
-                              <Cell fill="#22c55e" /><Cell fill="#86efac" />
+                              {incomeExpenseData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                             </Pie>
                             <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 8, border: "1px solid #e5e5e5", fontSize: 12 }} />
                           </PieChart>
                         </ResponsiveContainer>
                       </div>
                       <div className="flex justify-center gap-4 mt-2">
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-green-500" /><span className="text-[10px] text-neutral-500">Ventas</span></div>
-                        <div className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm bg-green-300" /><span className="text-[10px] text-neutral-500">Banco</span></div>
+                        {incomeExpenseData.map((entry) => (
+                          <div key={entry.name} className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: entry.color }} /><span className="text-[10px] text-neutral-500">{entry.name}</span></div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
