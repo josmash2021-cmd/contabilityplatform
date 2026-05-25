@@ -118,7 +118,7 @@ function YearSelector({ value, onChange }: { value: string; onChange: (y: string
   const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[64px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
+      <SelectTrigger className="h-8 w-[80px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black px-2">
         <SelectValue />
       </SelectTrigger>
       <SelectContent className="bg-white border-neutral-200">
