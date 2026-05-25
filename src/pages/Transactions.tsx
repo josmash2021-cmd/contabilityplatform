@@ -185,8 +185,11 @@ export default function Transactions() {
     "love's travel","pilot truck","ta truck","ambest","maverik","quiktrip"];
   const isGas = (t: any) => {
     const n = (t.description || "").toLowerCase();
-    // Only check gas brands — no generic category matching
-    for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
+    // Use word-boundary matching to avoid false positives like "arco" inside "alarcon"
+    for (const b of GAS_BRANDS) {
+      const regex = new RegExp(`\\b${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
+      if (regex.test(n)) return true;
+    }
     return false;
   };
 
