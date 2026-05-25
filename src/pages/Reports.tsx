@@ -40,6 +40,8 @@ export default function Reports() {
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
   const [selectedBankAccount, setSelectedBankAccount] = useState<string>("");
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
+  const [periodFilter, setPeriodFilter] = useState<string>("month");
+  const [paymentFilter, setPaymentFilter] = useState<string>("all");
 
   const incomeQuery = trpc.reports.incomeStatement.useQuery({});
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
@@ -97,6 +99,14 @@ export default function Reports() {
   const netIncome = Number(incomeData?.netIncome ?? 0);
   const margin = monthSales > 0 ? (netIncome / monthSales) * 100 : 0;
 
+  // KPI values based on period filter
+  const todaySales = Number(salesStats?.today?.total ?? 0);
+  const todayTransactions = Number(salesStats?.today?.count ?? 0);
+  const yearSales = Number(incomeData?.totalRevenue ?? 0);
+
+  const kpiRevenue = periodFilter === "today" ? todaySales : periodFilter === "week" ? weekSales : periodFilter === "year" ? yearSales : monthSales;
+  const kpiLabel = periodFilter === "today" ? "Ingresos Hoy" : periodFilter === "week" ? "Ingresos Sem." : periodFilter === "year" ? "Ingresos Año" : "Ingresos Mes";
+
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
   const months = [
     { value: 1, label: "Enero" }, { value: 2, label: "Febrero" }, { value: 3, label: "Marzo" },
@@ -118,6 +128,32 @@ export default function Reports() {
     value: Number(p.total),
   }));
 
+  // Filter payment breakdown by payment method
+  const filteredPaymentBreakdown = paymentFilter === "all"
+    ? paymentBreakdown
+    : paymentBreakdown.filter((p) => p.method === paymentFilter);
+
+  const filteredPieData = filteredPaymentBreakdown.map((p) => ({
+    name: PAYMENT_LABELS[p.method] || p.method,
+    value: Number(p.total),
+  }));
+
+  // Period filter options
+  const periodOptions = [
+    { key: "today", label: "Hoy" },
+    { key: "week", label: "Semana" },
+    { key: "month", label: "Mes" },
+    { key: "year", label: "Año" },
+  ];
+
+  // Payment method filter options
+  const paymentOptions = [
+    { key: "all", label: "Todos" },
+    { key: "cash", label: "Efectivo" },
+    { key: "zelle", label: "Zelle" },
+    { key: "card", label: "Tarjeta" },
+  ];
+
   return (
     <div className="p-6 lg:p-10 space-y-6 bg-white min-h-screen max-w-7xl mx-auto">
       {/* Header */}
@@ -126,15 +162,35 @@ export default function Reports() {
           <h1 className="text-2xl font-semibold text-black">Reportes Financieros</h1>
           <p className="text-neutral-400 text-sm mt-1">Estados contables y analisis de tu negocio</p>
         </div>
+
+        {/* Period Filter Carousel */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-1 bg-gray-100 rounded-xl p-1 mt-4" style={{ scrollbarWidth: "none" }}>
+          <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
+          {periodOptions.map((f) => (
+            <button key={f.key} onClick={() => setPeriodFilter(f.key)} className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-5 ${periodFilter === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
+
+        {/* Payment Method Filter Carousel */}
+        <div className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-1 bg-gray-100 rounded-xl p-1 mt-2" style={{ scrollbarWidth: "none" }}>
+          <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
+          {paymentOptions.map((f) => (
+            <button key={f.key} onClick={() => setPaymentFilter(f.key)} className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-5 ${paymentFilter === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
+              {f.label}
+            </button>
+          ))}
+        </div>
       </AnimatedPage>
 
       {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Ingresos Sem.", value: formatCurrency(weekSales), icon: Receipt, color: "bg-green-50 text-green-600" },
-          { label: "Ingresos Mes", value: formatCurrency(monthSales), icon: TrendingUp, color: "bg-green-50 text-green-600" },
+          { label: kpiLabel, value: formatCurrency(kpiRevenue), icon: Receipt, color: "bg-green-50 text-green-600" },
           { label: "Gastos Mes", value: formatCurrency(monthExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
           { label: "Utilidad", value: formatCurrency(netIncome), icon: DollarSign, color: margin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
+          { label: periodFilter === "today" ? "Ventas Hoy" : "Ventas Mes", value: String(periodFilter === "today" ? todayTransactions : (monthlyData?.totalSalesCount ?? 0)), icon: TrendingUp, color: "bg-green-50 text-green-600" },
         ].map((s, i) => (
           <AnimatedCard key={s.label} delay={i * 80}>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
@@ -337,8 +393,8 @@ export default function Reports() {
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5 space-y-3">
                       <p className="text-xs text-neutral-400">Resumen de pagos</p>
-                      {pieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">Sin datos</p>}
-                      {pieData.map((p, i) => (
+                      {filteredPieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">Sin datos</p>}
+                      {filteredPieData.map((p, i) => (
                         <div key={p.name} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <div className="w-2 h-2 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
