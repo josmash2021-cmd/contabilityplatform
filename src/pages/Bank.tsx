@@ -581,70 +581,81 @@ export default function Bank() {
             </Card>
           </AnimatedCard>
 
-          {/* ACCOUNTING AGENT: Monthly Trends */}
+          {/* ACCOUNTING AGENT: Monthly Trends — Professional Bar Chart */}
           {yearTrends?.monthly && (
             <AnimatedCard delay={220}>
               <Card className="border-neutral-200 rounded-xl shadow-none">
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                    <BarChart3 className="w-4 h-4 text-blue-500" /> Tendencias Mensuales — Año {selectedYear}
-                  </CardTitle>
+                <CardHeader className="pb-1">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
+                      <BarChart3 className="w-4 h-4 text-blue-500" /> Tendencia Mensual — {selectedYear}
+                    </CardTitle>
+                    <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-emerald-400" />
+                        <span className="text-[10px] text-neutral-400">Ingreso</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <div className="w-2 h-2 rounded-full bg-red-400" />
+                        <span className="text-[10px] text-neutral-400">Gasto</span>
+                      </div>
+                    </div>
+                  </div>
                 </CardHeader>
                 <CardContent className="pt-0">
-                  <div className="space-y-1.5">
-                    {yearTrends.monthly.map((m: any) => {
+                  {/* Mini Bar Chart — 12 months */}
+                  <div className="flex items-end gap-[3px] h-28 mt-3 px-1">
+                    {(() => {
                       const maxVal = Math.max(
                         ...yearTrends.monthly.map((x: any) => Math.max(parseFloat(x.income), parseFloat(x.expense))),
                         1
                       );
-                      const incPct = (parseFloat(m.income) / maxVal) * 100;
-                      const expPct = (parseFloat(m.expense) / maxVal) * 100;
-                      return (
-                        <div key={m.month} className="flex items-center gap-3 py-1">
-                          <span className="text-[11px] text-neutral-500 w-8 text-right shrink-0">{m.month}</span>
-                          <div className="flex-1 flex flex-col gap-0.5">
-                            {parseFloat(m.income) > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <div className="h-1.5 rounded-full bg-emerald-400" style={{ width: `${Math.max(incPct, 2)}%` }} />
-                                <span className="text-[10px] text-emerald-600 font-medium">{formatCurrency(parseFloat(m.income))}</span>
-                              </div>
-                            )}
-                            {parseFloat(m.expense) > 0 && (
-                              <div className="flex items-center gap-1.5">
-                                <div className="h-1.5 rounded-full bg-red-400" style={{ width: `${Math.max(expPct, 2)}%` }} />
-                                <span className="text-[10px] text-red-600 font-medium">{formatCurrency(parseFloat(m.expense))}</span>
-                              </div>
-                            )}
-                            {parseFloat(m.income) === 0 && parseFloat(m.expense) === 0 && (
-                              <div className="h-1.5 rounded-full bg-neutral-100 w-2" />
-                            )}
+                      return yearTrends.monthly.map((m: any) => {
+                        const inc = parseFloat(m.income);
+                        const exp = parseFloat(m.expense);
+                        const hasData = inc > 0 || exp > 0;
+                        const incH = Math.min((inc / maxVal) * 100, 100);
+                        const expH = Math.min((exp / maxVal) * 100, 100);
+                        return (
+                          <div key={m.month} className="flex-1 flex flex-col items-center gap-1 group cursor-default">
+                            {/* Value on hover */}
+                            <div className="opacity-0 group-hover:opacity-100 transition-opacity absolute -mt-8 bg-black text-white text-[9px] font-medium px-1.5 py-0.5 rounded z-10 whitespace-nowrap pointer-events-none">
+                              {m.month}: +{formatCurrency(inc)} / -{formatCurrency(exp)}
+                            </div>
+                            {/* Bars container */}
+                            <div className="w-full flex flex-col-reverse items-center gap-[1px]" style={{ height: `${Math.max(incH + expH, hasData ? 4 : 2)}%`, minHeight: hasData ? 20 : 8 }}>
+                              {exp > 0 && (
+                                <div className="w-full rounded-t-sm bg-red-300/80 group-hover:bg-red-400 transition-colors" style={{ height: `${(expH / (incH + expH)) * 100}%`, minHeight: 4 }} />
+                              )}
+                              {inc > 0 && (
+                                <div className="w-full rounded-b-sm bg-emerald-300/80 group-hover:bg-emerald-400 transition-colors" style={{ height: `${(incH / (incH + expH)) * 100}%`, minHeight: 4 }} />
+                              )}
+                              {!hasData && <div className="w-full h-full rounded-sm bg-neutral-100" />}
+                            </div>
+                            {/* Month label */}
+                            <span className="text-[9px] text-neutral-400 font-medium leading-none">{m.month}</span>
                           </div>
-                          <span className="text-[10px] text-neutral-400 w-6 text-right shrink-0">{m.count}</span>
-                        </div>
-                      );
-                    })}
+                        );
+                      });
+                    })()}
                   </div>
-                  {/* Averages & Growth */}
-                  <div className="flex items-center gap-4 mt-3 pt-2 border-t border-neutral-100">
-                    <div className="flex items-center gap-1.5">
-                      <TrendingUp className="w-3 h-3 text-emerald-500" />
-                      <span className="text-[10px] text-neutral-500">Prom. Ingreso:</span>
-                      <span className="text-[10px] font-semibold text-emerald-600">{formatCurrency(yearTrends.avgIncome)}</span>
+
+                  {/* KPI Summary Row */}
+                  <div className="grid grid-cols-3 gap-3 mt-4 pt-3 border-t border-neutral-100">
+                    <div className="text-center">
+                      <p className="text-[10px] text-neutral-400 uppercase tracking-wider">Prom. Ingreso</p>
+                      <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatCurrency(yearTrends.avgIncome)}</p>
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <TrendingDown className="w-3 h-3 text-red-500" />
-                      <span className="text-[10px] text-neutral-500">Prom. Gasto:</span>
-                      <span className="text-[10px] font-semibold text-red-600">{formatCurrency(yearTrends.avgExpense)}</span>
+                    <div className="text-center border-x border-neutral-100">
+                      <p className="text-[10px] text-neutral-400 uppercase tracking-wider">Prom. Gasto</p>
+                      <p className="text-sm font-bold text-red-600 mt-0.5">{formatCurrency(yearTrends.avgExpense)}</p>
                     </div>
-                    {yearTrends.growthRate !== 0 && (
-                      <div className="flex items-center gap-1.5">
-                        <BarChart3 className="w-3 h-3 text-blue-500" />
-                        <span className="text-[10px] text-neutral-500">Crecimiento:</span>
-                        <span className={`text-[10px] font-semibold ${yearTrends.growthRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                          {yearTrends.growthRate > 0 ? "+" : ""}{yearTrends.growthRate}%
-                        </span>
-                      </div>
-                    )}
+                    <div className="text-center">
+                      <p className="text-[10px] text-neutral-400 uppercase tracking-wider">Crecimiento</p>
+                      <p className={`text-sm font-bold mt-0.5 ${yearTrends.growthRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                        {yearTrends.growthRate > 0 ? "+" : ""}{yearTrends.growthRate}%
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
