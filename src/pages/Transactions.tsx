@@ -444,7 +444,7 @@ export default function Transactions() {
                   className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
                 >
                   <div className="min-w-0 flex-1">
-                    <p className="text-sm font-bold text-black truncate">{tx.description}</p>
+                    <p className="text-sm font-normal text-black truncate">{tx.description}</p>
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
@@ -452,7 +452,7 @@ export default function Transactions() {
                       </span>
                     </div>
                   </div>
-                  <span className={`text-sm font-bold shrink-0 ml-3 ${
+                  <span className={`text-sm font-medium shrink-0 ml-3 ${
                     tx._source === "sale"
                       ? (tx.status === "refunded" ? "text-orange-600" : "text-blue-600")
                       : tx.type === "income" ? "text-emerald-600" : "text-rose-600"
