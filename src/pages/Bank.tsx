@@ -218,27 +218,8 @@ export default function Bank() {
     onError: (err: { message: string }) => { setSyncing(false); toast.error(err.message); },
   });
 
-  // Accounting Agent: Auto-sync full year on page load (runs once)
-  const syncYearMutation = trpc.bank.syncYearTransactions.useMutation({
-    onSuccess: (data) => {
-      setSyncing(false);
-      if (data.success && data.totalAdded > 0) {
-        toast.success(`Agente Contable: ${data.totalAdded} transacciones sincronizadas en ${data.monthsSynced} meses del año ${selectedYear}`);
-        handleSuccess();
-      }
-    },
-    onError: () => { setSyncing(false); },
-  });
-
-  // Auto-sync year when bank connected and account selected
-  const hasAutoSyncedYear = useRef(false);
-  useEffect(() => {
-    if (hasBankConnected && accountIdNum && !hasAutoSyncedYear.current && !syncing) {
-      hasAutoSyncedYear.current = true;
-      setSyncing(true);
-      syncYearMutation.mutate({ year: parseInt(selectedYear), accountId: accountIdNum });
-    }
-  }, [hasBankConnected, accountIdNum, selectedYear, syncing, syncYearMutation]);
+  // Note: Auto-sync removed to prevent race conditions with queries.
+  // Users can sync manually with the sync button.
 
 
 
