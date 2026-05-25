@@ -177,18 +177,45 @@ export default function POS() {
         </AnimatedPage>
       </div>
 
-      {/* Mobile Cart Button */}
+      {/* Mobile Bottom Button: toggles cart when closed, opens payment when cart is open */}
       {cart.length > 0 && (
-        <button 
-          onClick={() => setShowCart(!showCart)}
-          className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium">{cart.length} items</span>
-            <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>
-          </div>
-          <ChevronUp className={`w-5 h-5 transition-transform duration-300 ${showCart ? "rotate-180" : ""}`} />
-        </button>
+        <Dialog open={showPayment} onOpenChange={setShowPayment}>
+          <DialogTrigger asChild>
+            <button 
+              onClick={() => {
+                if (!showCart) setShowCart(true);
+              }}
+              className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50 active:scale-[0.98] transition-transform"
+            >
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">{showCart ? "Cobrar" : `${cart.length} items`}</span>
+                <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>
+              </div>
+              {showCart ? (
+                <ChevronUp className="w-5 h-5" />
+              ) : (
+                <ChevronUp className={`w-5 h-5 transition-transform duration-300 ${showCart ? "rotate-180" : ""}`} />
+              )}
+            </button>
+          </DialogTrigger>
+          <DialogContent className="bg-white border-neutral-200 max-w-sm mx-4">
+            <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
+            <PaymentDialog 
+              activePayment={activePayment} 
+              setActivePayment={setActivePayment} 
+              total={total} 
+              handleCheckout={handleCheckout} 
+              createSalePending={createSale.isPending}
+              showZellePanel={showZellePanel}
+              setShowZellePanel={setShowZellePanel}
+              companyZelleEmail={companyZelleEmail}
+              hasCompanyZelle={hasCompanyZelle}
+              copiedZelle={copiedZelle}
+              setCopiedZelle={setCopiedZelle}
+              handleZelleConfirm={handleZelleConfirm}
+            />
+          </DialogContent>
+        </Dialog>
       )}
 
       {/* Cart Panel - Mobile: slide up, Desktop: sidebar */}
@@ -238,28 +265,6 @@ export default function POS() {
             </div>
           )}
           <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium text-base">Total</span><span className="text-xl font-bold text-black">{formatCurrency(total)}</span></div>
-          <Dialog open={showPayment} onOpenChange={setShowPayment}>
-            <DialogTrigger asChild>
-              <Button className="w-full bg-black hover:bg-neutral-800 text-white h-12 text-base font-medium rounded-xl" disabled={cart.length === 0}>Cobrar {formatCurrency(total)}</Button>
-            </DialogTrigger>
-            <DialogContent className="bg-white border-neutral-200 max-w-sm mx-4">
-              <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
-              <PaymentDialog 
-                activePayment={activePayment} 
-                setActivePayment={setActivePayment} 
-                total={total} 
-                handleCheckout={handleCheckout} 
-                createSalePending={createSale.isPending}
-                showZellePanel={showZellePanel}
-                setShowZellePanel={setShowZellePanel}
-                companyZelleEmail={companyZelleEmail}
-                hasCompanyZelle={hasCompanyZelle}
-                copiedZelle={copiedZelle}
-                setCopiedZelle={setCopiedZelle}
-                handleZelleConfirm={handleZelleConfirm}
-              />
-            </DialogContent>
-          </Dialog>
         </div>
       </div>
 
