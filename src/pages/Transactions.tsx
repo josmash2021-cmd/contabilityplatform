@@ -253,51 +253,28 @@ export default function Transactions() {
   const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
   const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
 
-  // ─── Count transactions per filter to show/hide buttons dynamically ───
-  const hasIncome = allBankTransactions.some((t: any) => t.type === "income");
-  const hasExpense = allBankTransactions.some((t: any) => t.type === "expense");
-  const hasZelleIn = allBankTransactions.some((t: any) => isZelleRecibido(t));
-  const hasZelleOut = allBankTransactions.some((t: any) => isZelleEnviado(t));
-  const hasCashDep = allBankTransactions.some((t: any) => isCashDeposit(t));
-  const hasCashWit = allBankTransactions.some((t: any) => isCashWithdrawal(t));
-  const hasGas = allBankTransactions.some((t: any) => isGas(t));
-  const hasP2PData = allBankTransactions.some((t: any) => isP2P(t));
-  const hasVentas = salesMapped.length > 0;
-  const hasDevoluciones = allSales.some((s: any) => s.status === "refunded");
-  const hasAnyData = allBankTransactions.length > 0 || salesMapped.length > 0;
-
-  // Build dynamic filter list — only show filters that have data
-  const allPossibleFilters = [
-    { key: "all", label: "Todos", visible: hasAnyData },
-    { key: "income", label: "Ingresos", visible: hasIncome },
-    { key: "expense", label: "Gastos", visible: hasExpense },
-    { key: "ventas", label: "Ventas", visible: hasVentas },
-    { key: "devoluciones", label: "Devoluciones", visible: hasDevoluciones },
-    { key: "zelle_in", label: "Zelle Recibidos", visible: hasZelleIn },
-    { key: "zelle_out", label: "Zelle Enviados", visible: hasZelleOut },
-    { key: "cash_deposit", label: "Dep. Efectivo", visible: hasCashDep },
-    { key: "cash_withdrawal", label: "Ret. Efectivo", visible: hasCashWit },
-    { key: "gasolina", label: "Gasolina", visible: hasGas },
-    { key: "p2p", label: "P2P", visible: hasP2PData },
+  // Static filter buttons — always show (no dynamic hiding)
+  const bankFilters = [
+    { key: "all", label: "Todos" },
+    { key: "income", label: "Ingresos" },
+    { key: "expense", label: "Gastos" },
+    { key: "ventas", label: "Ventas" },
+    { key: "devoluciones", label: "Devoluciones" },
+    { key: "zelle_in", label: "Zelle Recibidos" },
+    { key: "zelle_out", label: "Zelle Enviados" },
+    { key: "cash_deposit", label: "Dep. Efectivo" },
+    { key: "cash_withdrawal", label: "Ret. Efectivo" },
+    { key: "gasolina", label: "Gasolina" },
+    { key: "p2p", label: "P2P" },
   ];
 
-  // Show only visible filters; when no bank, only show non-bank ones
-  const filterButtons = allPossibleFilters.filter((f: any) => {
-    if (!f.visible) return false;
-    if (!hasBankConnected) {
-      // Without bank: only show all, ventas, devoluciones
-      return ["all", "ventas", "devoluciones"].includes(f.key);
-    }
-    return true;
-  });
+  const nonBankFilters = [
+    { key: "all", label: "Todos" },
+    { key: "ventas", label: "Ventas" },
+    { key: "devoluciones", label: "Devoluciones" },
+  ];
 
-  // Auto-switch to a valid filter if current filter is not visible
-  useEffect(() => {
-    const currentFilterVisible = filterButtons.some((f: any) => f.key === filterType);
-    if (!currentFilterVisible && filterButtons.length > 0) {
-      setFilterType(filterButtons[0].key);
-    }
-  }, [hasBankConnected, filterButtons, filterType]);
+  const filterButtons = hasBankConnected ? bankFilters : nonBankFilters;
 
   const filterTitle =
     filterType === "income" ? "Ingresos" :
