@@ -15,7 +15,8 @@ import {
   RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
   Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
-  CheckCircle2, PiggyBank, Loader2, X, Check
+  CheckCircle2, PiggyBank, Loader2, X, Check,
+  BarChart3, AlertTriangle, ShieldAlert
 } from "lucide-react";
 
 /* helpers */
@@ -176,6 +177,14 @@ export default function Bank() {
   const { data: yearData } = trpc.bank.getYearData.useQuery(
     { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
+  // Accounting Agent: Yearly trends
+  const { data: yearTrends } = trpc.bank.getYearTrends.useQuery(
+    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
+  );
+  // Accounting Agent: Anomaly detection
+  const { data: anomaliesData } = trpc.bank.getAnomalies.useQuery(
+    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
+  );
   // DEBUG: Log month selection
   useEffect(() => {
     console.log("[DEBUG] selectedMonth:", selectedMonth, "selectedYear:", selectedYear, "accountIdNum:", accountIdNum, "monthData count:", monthData?.count ?? "no data", "loading:", loadingMonth);
@@ -217,6 +226,28 @@ export default function Bank() {
     },
     onError: (err: { message: string }) => { setSyncing(false); toast.error(err.message); },
   });
+
+  // Accounting Agent: Auto-sync full year on page load (runs once)
+  const syncYearMutation = trpc.bank.syncYearTransactions.useMutation({
+    onSuccess: (data) => {
+      setSyncing(false);
+      if (data.success && data.totalAdded > 0) {
+        toast.success(`Agente Contable: ${data.totalAdded} transacciones sincronizadas en ${data.monthsSynced} meses del año ${selectedYear}`);
+        handleSuccess();
+      }
+    },
+    onError: () => { setSyncing(false); },
+  });
+
+  // Auto-sync year when bank connected and account selected
+  const hasAutoSyncedYear = useRef(false);
+  useEffect(() => {
+    if (hasBankConnected && accountIdNum && !hasAutoSyncedYear.current && !syncing) {
+      hasAutoSyncedYear.current = true;
+      setSyncing(true);
+      syncYearMutation.mutate({ year: parseInt(selectedYear), accountId: accountIdNum });
+    }
+  }, [hasBankConnected, accountIdNum, selectedYear, syncing, syncYearMutation]);
 
 
 
@@ -549,6 +580,118 @@ export default function Bank() {
               </CardContent>
             </Card>
           </AnimatedCard>
+
+          {/* ACCOUNTING AGENT: Monthly Trends */}
+          {yearTrends?.monthly && (
+            <AnimatedCard delay={220}>
+              <Card className="border-neutral-200 rounded-xl shadow-none">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
+                    <BarChart3 className="w-4 h-4 text-blue-500" /> Tendencias Mensuales — Año {selectedYear}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-1.5">
+                    {yearTrends.monthly.map((m: any) => {
+                      const maxVal = Math.max(
+                        ...yearTrends.monthly.map((x: any) => Math.max(parseFloat(x.income), parseFloat(x.expense))),
+                        1
+                      );
+                      const incPct = (parseFloat(m.income) / maxVal) * 100;
+                      const expPct = (parseFloat(m.expense) / maxVal) * 100;
+                      return (
+                        <div key={m.month} className="flex items-center gap-3 py-1">
+                          <span className="text-[11px] text-neutral-500 w-8 text-right shrink-0">{m.month}</span>
+                          <div className="flex-1 flex flex-col gap-0.5">
+                            {parseFloat(m.income) > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <div className="h-1.5 rounded-full bg-emerald-400" style={{ width: `${Math.max(incPct, 2)}%` }} />
+                                <span className="text-[10px] text-emerald-600 font-medium">{formatCurrency(parseFloat(m.income))}</span>
+                              </div>
+                            )}
+                            {parseFloat(m.expense) > 0 && (
+                              <div className="flex items-center gap-1.5">
+                                <div className="h-1.5 rounded-full bg-red-400" style={{ width: `${Math.max(expPct, 2)}%` }} />
+                                <span className="text-[10px] text-red-600 font-medium">{formatCurrency(parseFloat(m.expense))}</span>
+                              </div>
+                            )}
+                            {parseFloat(m.income) === 0 && parseFloat(m.expense) === 0 && (
+                              <div className="h-1.5 rounded-full bg-neutral-100 w-2" />
+                            )}
+                          </div>
+                          <span className="text-[10px] text-neutral-400 w-6 text-right shrink-0">{m.count}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  {/* Averages & Growth */}
+                  <div className="flex items-center gap-4 mt-3 pt-2 border-t border-neutral-100">
+                    <div className="flex items-center gap-1.5">
+                      <TrendingUp className="w-3 h-3 text-emerald-500" />
+                      <span className="text-[10px] text-neutral-500">Prom. Ingreso:</span>
+                      <span className="text-[10px] font-semibold text-emerald-600">{formatCurrency(yearTrends.avgIncome)}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <TrendingDown className="w-3 h-3 text-red-500" />
+                      <span className="text-[10px] text-neutral-500">Prom. Gasto:</span>
+                      <span className="text-[10px] font-semibold text-red-600">{formatCurrency(yearTrends.avgExpense)}</span>
+                    </div>
+                    {yearTrends.growthRate !== 0 && (
+                      <div className="flex items-center gap-1.5">
+                        <BarChart3 className="w-3 h-3 text-blue-500" />
+                        <span className="text-[10px] text-neutral-500">Crecimiento:</span>
+                        <span className={`text-[10px] font-semibold ${yearTrends.growthRate >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                          {yearTrends.growthRate > 0 ? "+" : ""}{yearTrends.growthRate}%
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </AnimatedCard>
+          )}
+
+          {/* ACCOUNTING AGENT: Anomaly Detection */}
+          {anomaliesData?.anomalies && anomaliesData.anomalies.length > 0 && (
+            <AnimatedCard delay={240}>
+              <Card className="border-amber-200 rounded-xl shadow-none bg-amber-50/30">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-amber-500" /> Alertas del Agente Contable
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="space-y-2">
+                    {anomaliesData.anomalies.slice(0, 5).map((a: any, i: number) => (
+                      <div key={i} className={`flex items-start gap-2.5 py-2 px-3 rounded-lg ${
+                        a.severity === "high" ? "bg-red-50 border border-red-100" :
+                        a.severity === "medium" ? "bg-amber-50 border border-amber-100" :
+                        "bg-blue-50 border border-blue-100"
+                      }`}>
+                        {a.severity === "high" ? (
+                          <AlertTriangle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                        ) : a.severity === "medium" ? (
+                          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
+                        )}
+                        <div className="min-w-0">
+                          <p className={`text-xs font-medium ${
+                            a.severity === "high" ? "text-red-700" :
+                            a.severity === "medium" ? "text-amber-700" :
+                            "text-blue-700"
+                          }`}>{a.description}</p>
+                          {a.type === "large_expense" && a.transaction && (
+                            <p className="text-[10px] text-neutral-500 mt-0.5">{a.transaction.description} — {a.transaction.transactionDate ? new Date(a.transaction.transactionDate).toLocaleDateString("es") : ""}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            </AnimatedCard>
+          )}
 
           {/* Transactions List */}
           <AnimatedCard delay={260}>

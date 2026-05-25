@@ -569,6 +569,11 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
   }
 }
 
+// ─── HELPER: Format currency for anomaly descriptions ───
+function formatCurrencyVal(val: number): string {
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val);
+}
+
 // ─── HELPER: Check if user has an active bank connection ───
 async function hasActiveBank(userId: number): Promise<boolean> {
   const db = getDb();
@@ -661,6 +666,32 @@ export const bankRouter = createRouter({
     .mutation(async ({ input, ctx }) => doSyncTransactions(ctx, input?.year, input?.month, input?.accountId, "manual")),
 
   autoSync: authedQuery.mutation(async ({ ctx }) => doSyncTransactions(ctx, undefined, undefined, undefined, "auto")),
+
+  // ─── SYNC FULL YEAR (Accounting Agent) ───
+  syncYearTransactions: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).mutation(async ({ input, ctx }) => {
+    if (!ctx.user) return { success: false, error: "No autenticado" };
+    if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay banco conectado" };
+    const { year, accountId } = input;
+    const results = [];
+    let totalAdded = 0;
+    let totalTransactions = 0;
+
+    // Sync each month of the year (Jan-Dec)
+    for (let month = 1; month <= 12; month++) {
+      const result = await doSyncTransactions(ctx, year, month, accountId, "auto");
+      results.push({ month, ...result });
+      if (result.added) totalAdded += result.added;
+      if (result.total) totalTransactions += result.total;
+    }
+
+    return {
+      success: true,
+      totalAdded,
+      totalTransactions,
+      monthsSynced: results.filter((r: any) => r.added > 0).length,
+      details: results,
+    };
+  }),
 
   getSyncLogs: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
@@ -775,6 +806,142 @@ export const bankRouter = createRouter({
       expense: exp.toFixed(2),
       transactionCount: txs.length,
     };
+  }),
+
+  // ─── ACCOUNTING AGENT: YEARLY TRENDS ───
+  getYearTrends: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
+    if (!ctx.user) return { monthly: [], topIncome: [], topExpense: [], avgIncome: "0", avgExpense: "0", growthRate: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { monthly: [], topIncome: [], topExpense: [], avgIncome: "0", avgExpense: "0", growthRate: 0 };
+    const db = getDb();
+    const { year, accountId } = input;
+    const startStr = `${year}-01-01`;
+    const endStr = `${year}-12-31`;
+
+    const conditions = [
+      eq(bankTransactions.userId, ctx.user.id),
+      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+    ];
+    if (accountId) conditions.push(eq(bankTransactions.bankAccountId, accountId));
+
+    const txs = await db.select().from(bankTransactions).where(and(...conditions));
+
+    // Monthly aggregation
+    const monthly: any[] = [];
+    const monthNames = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+    for (let m = 1; m <= 12; m++) {
+      const monthTxs = txs.filter((t: any) => {
+        const d = new Date(t.transactionDate);
+        return d.getMonth() + 1 === m;
+      });
+      let inc = 0, exp = 0;
+      monthTxs.forEach((t: any) => {
+        const amt = parseFloat(t.amount ?? "0");
+        if (amt <= 0) return;
+        const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+        if (plaidAmt !== null) {
+          if (plaidAmt < 0) inc += amt; else exp += amt;
+        } else {
+          if (t.type === "income") inc += amt; else exp += amt;
+        }
+      });
+      monthly.push({ month: monthNames[m - 1], monthNum: m, income: inc.toFixed(2), expense: exp.toFixed(2), net: (inc - exp).toFixed(2), count: monthTxs.length });
+    }
+
+    // Top income categories
+    const incomeMap = new Map<string, number>();
+    const expenseMap = new Map<string, number>();
+    txs.forEach((t: any) => {
+      const amt = parseFloat(t.amount ?? "0");
+      if (amt <= 0) return;
+      const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+      const isIncome = plaidAmt !== null ? plaidAmt < 0 : t.type === "income";
+      const map = isIncome ? incomeMap : expenseMap;
+      const key = t.category || "other";
+      map.set(key, (map.get(key) || 0) + amt);
+    });
+
+    const topIncome = Array.from(incomeMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, total]) => ({ category: cat, total: total.toFixed(2) }));
+    const topExpense = Array.from(expenseMap.entries()).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([cat, total]) => ({ category: cat, total: total.toFixed(2) }));
+
+    // Averages (non-zero months only)
+    const nonZeroIncome = monthly.filter((m: any) => parseFloat(m.income) > 0);
+    const nonZeroExpense = monthly.filter((m: any) => parseFloat(m.expense) > 0);
+    const avgIncome = nonZeroIncome.length > 0 ? (nonZeroIncome.reduce((s: number, m: any) => s + parseFloat(m.income), 0) / nonZeroIncome.length).toFixed(2) : "0";
+    const avgExpense = nonZeroExpense.length > 0 ? (nonZeroExpense.reduce((s: number, m: any) => s + parseFloat(m.expense), 0) / nonZeroExpense.length).toFixed(2) : "0";
+
+    // Growth rate: compare first half vs second half
+    const firstHalf = monthly.slice(0, 6).reduce((s: number, m: any) => s + parseFloat(m.net), 0);
+    const secondHalf = monthly.slice(6, 12).reduce((s: number, m: any) => s + parseFloat(m.net), 0);
+    const growthRate = firstHalf !== 0 ? ((secondHalf - firstHalf) / Math.abs(firstHalf) * 100).toFixed(1) : "0";
+
+    return { monthly, topIncome, topExpense, avgIncome, avgExpense, growthRate: Number(growthRate) };
+  }),
+
+  // ─── ACCOUNTING AGENT: ANOMALY DETECTION ───
+  getAnomalies: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
+    if (!ctx.user) return { anomalies: [] };
+    if (!await hasActiveBank(ctx.user.id)) return { anomalies: [] };
+    const db = getDb();
+    const { year, accountId } = input;
+    const startStr = `${year}-01-01`;
+    const endStr = `${year}-12-31`;
+
+    const conditions = [
+      eq(bankTransactions.userId, ctx.user.id),
+      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+    ];
+    if (accountId) conditions.push(eq(bankTransactions.bankAccountId, accountId));
+
+    const txs = await db.select().from(bankTransactions).where(and(...conditions));
+
+    const anomalies: any[] = [];
+
+    // 1. Unusually large expenses (2x average expense)
+    const expenses = txs.filter((t: any) => {
+      const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+      return plaidAmt !== null ? plaidAmt > 0 : t.type === "expense";
+    }).map((t: any) => parseFloat(t.amount ?? "0"));
+    if (expenses.length > 0) {
+      const avg = expenses.reduce((a: number, b: number) => a + b, 0) / expenses.length;
+      txs.forEach((t: any) => {
+        const amt = parseFloat(t.amount ?? "0");
+        const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+        if (plaidAmt !== null ? plaidAmt > 0 : t.type === "expense") {
+          if (amt > avg * 2 && amt > 50) {
+            anomalies.push({ type: "large_expense", severity: amt > avg * 4 ? "high" : "medium", description: `Gasto de ${formatCurrencyVal(amt)} es ${(amt / avg).toFixed(1)}x el promedio`, transaction: t });
+          }
+        }
+      });
+    }
+
+    // 2. Duplicate transactions (same merchant, same amount, same day)
+    const dupMap = new Map<string, number>();
+    txs.forEach((t: any) => {
+      const key = `${t.merchantName || t.description}-${t.amount}-${t.transactionDate}`;
+      dupMap.set(key, (dupMap.get(key) || 0) + 1);
+    });
+    dupMap.forEach((count, key) => {
+      if (count > 1) {
+        const [merchant] = key.split("-");
+        anomalies.push({ type: "duplicate", severity: "medium", description: `${count} transacciones duplicadas de "${merchant}"`, merchant });
+      }
+    });
+
+    // 3. Unusual merchant (first time seeing this merchant this year)
+    const merchantCounts = new Map<string, number>();
+    txs.forEach((t: any) => {
+      const m = t.merchantName || t.description;
+      if (m) merchantCounts.set(m, (merchantCounts.get(m) || 0) + 1);
+    });
+    merchantCounts.forEach((count, merchant) => {
+      if (count === 1 && merchant.length > 3) {
+        anomalies.push({ type: "new_merchant", severity: "low", description: `Primer pago a "${merchant}" este año`, merchant });
+      }
+    });
+
+    return { anomalies: anomalies.slice(0, 20) };
   }),
 
   // ─── LIVE BALANCE ───
