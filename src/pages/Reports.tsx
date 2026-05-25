@@ -128,21 +128,21 @@ export default function Reports() {
         </div>
       </AnimatedPage>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
-          { label: "Ingresos Semana", value: formatCurrency(weekSales), icon: Receipt, color: "bg-green-50 text-green-600" },
+          { label: "Ingresos Sem.", value: formatCurrency(weekSales), icon: Receipt, color: "bg-green-50 text-green-600" },
           { label: "Ingresos Mes", value: formatCurrency(monthSales), icon: TrendingUp, color: "bg-green-50 text-green-600" },
           { label: "Gastos Mes", value: formatCurrency(monthExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-          { label: "Utilidad Neta", value: formatCurrency(netIncome), icon: DollarSign, color: margin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
+          { label: "Utilidad", value: formatCurrency(netIncome), icon: DollarSign, color: margin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
         ].map((s, i) => (
           <AnimatedCard key={s.label} delay={i * 80}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardContent className="p-4 flex items-center gap-3">
-                <div className={`p-2.5 rounded-lg ${s.color}`}><s.icon className="w-4 h-4" /></div>
-                <div>
-                  <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{s.label}</p>
-                  <p className="text-lg font-semibold text-black">{s.value}</p>
+            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
+              <CardContent className="p-3 flex items-center gap-2.5 h-full">
+                <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
+                  <p className="text-base font-semibold text-black truncate">{s.value}</p>
                 </div>
               </CardContent>
             </Card>
@@ -179,20 +179,20 @@ export default function Reports() {
             </div>
           </AnimatedPage>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {[
               { label: "Total Ventas", value: formatCurrency(totalMonthlySales), icon: TrendingUp, color: "bg-green-50 text-green-600" },
               { label: "Gastos", value: formatCurrency(totalMonthlyExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-              { label: "Utilidad Neta", value: formatCurrency(monthlyNetIncome), icon: DollarSign, color: monthlyNetIncome >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
+              { label: "Utilidad", value: formatCurrency(monthlyNetIncome), icon: DollarSign, color: monthlyNetIncome >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
               { label: "Promedio Diario", value: formatCurrency(avgDaily), icon: Receipt, color: "bg-green-50 text-green-600" },
             ].map((s, i) => (
               <AnimatedCard key={s.label} delay={100 + i * 60}>
-                <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                  <CardContent className="p-4 flex items-center gap-3">
-                    <div className={`p-2.5 rounded-lg ${s.color}`}><s.icon className="w-4 h-4" /></div>
-                    <div>
-                      <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{s.label}</p>
-                      <p className="text-lg font-semibold text-black">{s.value}</p>
+                <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
+                  <CardContent className="p-3 flex items-center gap-2.5 h-full">
+                    <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
+                      <p className="text-base font-semibold text-black truncate">{s.value}</p>
                     </div>
                   </CardContent>
                 </Card>
@@ -458,7 +458,7 @@ export default function Reports() {
           </AnimatedPage>
 
           {bankStats && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: "Balance", value: formatCurrency(Number(bankStats.income.total) - Number(bankStats.expense)), icon: Landmark, color: "bg-green-50 text-green-600" },
                 { label: "Ingresos", value: formatCurrency(bankStats.income.total), icon: TrendingUp, color: "bg-green-50 text-green-600" },
@@ -466,12 +466,12 @@ export default function Reports() {
                 { label: "Transacciones", value: String(bankStats.count), icon: Receipt, color: "bg-neutral-50 text-neutral-600" },
               ].map((s, i) => (
                 <AnimatedCard key={s.label} delay={i * 60}>
-                  <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                    <CardContent className="p-4 flex items-center gap-3">
-                      <div className={`p-2.5 rounded-lg ${s.color}`}><s.icon className="w-4 h-4" /></div>
-                      <div>
-                        <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{s.label}</p>
-                        <p className="text-lg font-semibold text-black">{s.value}</p>
+                  <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
+                    <CardContent className="p-3 flex items-center gap-2.5 h-full">
+                      <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
+                        <p className="text-base font-semibold text-black truncate">{s.value}</p>
                       </div>
                     </CardContent>
                   </Card>
