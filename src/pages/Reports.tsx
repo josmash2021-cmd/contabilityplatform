@@ -190,8 +190,7 @@ export default function Reports() {
           {[
             { key: "monthly", label: "Ventas del Mes" },
             { key: "income", label: "Ingresos y Gastos" },
-            { key: "balance", label: "Lo que Tengo y Debo" },
-            { key: "bank", label: "Mi Banco" },
+            { key: "bank", label: "Banco" },
             { key: "journal", label: "Movimientos Detallados" },
           ].map((t) => (
             <button
@@ -370,94 +369,6 @@ export default function Reports() {
                           <span className="text-xs font-medium text-black">{formatCurrency(p.value)}</span>
                         </div>
                       ))}
-                    </CardContent>
-                  </Card>
-                </div>
-              </AnimatedCard>
-            </div>
-          )}
-        </TabsContent>
-
-        {/* BALANCE GENERAL */}
-        <TabsContent value="balance" className="mt-6">
-          {balanceData && (
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-              <AnimatedCard delay={100} className="lg:col-span-2">
-                <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Lo que Tengo y Debo</CardTitle></CardHeader>
-                  <CardContent className="p-5 space-y-5">
-                    <div>
-                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Activos</p>
-                      <div className="space-y-1.5">
-                        {balanceData.assets.map((a) => (
-                          <div key={a.code} className="flex justify-between text-sm"><span className="text-neutral-600">{a.code} - {a.name}</span><span className="font-medium text-black">{formatCurrency(a.balance)}</span></div>
-                        ))}
-                        {balanceData.assets.length === 0 && <p className="text-xs text-neutral-400">Sin cuentas de activo</p>}
-                        <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Activos</span><span className="text-green-600">{formatCurrency(balanceData.totalAssets)}</span></div>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div>
-                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Pasivos</p>
-                      <div className="space-y-1.5">
-                        {balanceData.liabilities.map((l) => (
-                          <div key={l.code} className="flex justify-between text-sm"><span className="text-neutral-600">{l.code} - {l.name}</span><span className="font-medium text-black">{formatCurrency(l.balance)}</span></div>
-                        ))}
-                        {balanceData.liabilities.length === 0 && <p className="text-xs text-neutral-400">Sin cuentas de pasivo</p>}
-                        <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Pasivos</span><span className="text-red-500">{formatCurrency(balanceData.totalLiabilities)}</span></div>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div>
-                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Patrimonio</p>
-                      <div className="space-y-1.5">
-                        {balanceData.equity.map((e) => (
-                          <div key={e.code} className="flex justify-between text-sm"><span className="text-neutral-600">{e.code} - {e.name}</span><span className="font-medium text-black">{formatCurrency(e.balance)}</span></div>
-                        ))}
-                        {balanceData.equity.length === 0 && <p className="text-xs text-neutral-400">Sin cuentas de patrimonio</p>}
-                        <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Patrimonio</span><span className="text-blue-600">{formatCurrency(balanceData.totalEquity)}</span></div>
-                      </div>
-                    </div>
-                    <Separator />
-                    <div className="flex justify-between items-center bg-neutral-50 rounded-lg p-3">
-                      <span className="text-xs font-medium text-neutral-500">Verificacion: Activos = Pasivos + Patrimonio</span>
-                      <Badge variant="outline" className={`text-[10px] ${Math.abs(balanceData.totalAssets - balanceData.totalLiabilitiesAndEquity) < 0.01 ? "text-emerald-600 border-emerald-200" : "text-red-600 border-red-200"}`}>
-                        {Math.abs(balanceData.totalAssets - balanceData.totalLiabilitiesAndEquity) < 0.01 ? "Cuadrado" : "Descuadrado"}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </AnimatedCard>
-
-              <AnimatedCard delay={200}>
-                <div className="space-y-4">
-                  <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                    <CardContent className="p-5 space-y-4">
-                      <p className="text-xs text-neutral-400">Composicion del balance</p>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1"><span className="text-neutral-600">Activos</span><span className="font-medium text-black">{formatCurrency(balanceData.totalAssets)}</span></div>
-                        <div className="w-full bg-neutral-100 rounded-full h-2"><div className="bg-emerald-500 h-2 rounded-full" style={{ width: "100%" }} /></div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1"><span className="text-neutral-600">Pasivos</span><span className="font-medium text-black">{formatCurrency(balanceData.totalLiabilities)}</span></div>
-                        <div className="w-full bg-neutral-100 rounded-full h-2"><div className="bg-red-400 h-2 rounded-full" style={{ width: `${balanceData.totalAssets > 0 ? (balanceData.totalLiabilities / balanceData.totalAssets) * 100 : 0}%` }} /></div>
-                      </div>
-                      <div>
-                        <div className="flex justify-between text-xs mb-1"><span className="text-neutral-600">Patrimonio</span><span className="font-medium text-black">{formatCurrency(balanceData.totalEquity)}</span></div>
-                        <div className="w-full bg-neutral-100 rounded-full h-2"><div className="bg-blue-500 h-2 rounded-full" style={{ width: `${balanceData.totalAssets > 0 ? (balanceData.totalEquity / balanceData.totalAssets) * 100 : 0}%` }} /></div>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                    <CardContent className="p-5 space-y-3">
-                      <p className="text-xs text-neutral-400">Estadisticas rapidas</p>
-                      <div className="flex justify-between text-sm"><span className="text-neutral-600">Ratio Deuda/Patrimonio</span><span className="font-medium text-black">{balanceData.totalEquity > 0 ? (balanceData.totalLiabilities / balanceData.totalEquity).toFixed(2) : "N/A"}</span></div>
-                      <div className="flex justify-between text-sm"><span className="text-neutral-600">Ratio Deuda/Activos</span><span className="font-medium text-black">{balanceData.totalAssets > 0 ? ((balanceData.totalLiabilities / balanceData.totalAssets) * 100).toFixed(1) : "0"}%</span></div>
-                      <div className="flex justify-between text-sm"><span className="text-neutral-600">Patrimonio/Activos</span><span className="font-medium text-black">{balanceData.totalAssets > 0 ? ((balanceData.totalEquity / balanceData.totalAssets) * 100).toFixed(1) : "0"}%</span></div>
                     </CardContent>
                   </Card>
                 </div>
