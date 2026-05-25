@@ -341,61 +341,6 @@ export default function POS() {
   );
 }
 
-// Particle Background Component
-function ParticleBackground() {
-  const canvasRef = React.useRef<HTMLCanvasElement>(null);
-  React.useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    let w = canvas.width = canvas.offsetWidth;
-    let h = canvas.height = canvas.offsetHeight;
-    const particles: { x: number; y: number; r: number; dx: number; dy: number; alpha: number }[] = [];
-    for (let i = 0; i < 60; i++) {
-      particles.push({
-        x: Math.random() * w,
-        y: Math.random() * h,
-        r: Math.random() * 2 + 0.5,
-        dx: (Math.random() - 0.5) * 0.5,
-        dy: (Math.random() - 0.5) * 0.5,
-        alpha: Math.random() * 0.5 + 0.2,
-      });
-    }
-    let animId: number;
-    function draw() {
-      if (!ctx || !canvas) return;
-      ctx.clearRect(0, 0, w, h);
-      particles.forEach((p) => {
-        p.x += p.dx;
-        p.y += p.dy;
-        if (p.x < 0) p.x = w;
-        if (p.x > w) p.x = 0;
-        if (p.y < 0) p.y = h;
-        if (p.y > h) p.y = 0;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(0, 0, 0, ${p.alpha})`;
-        ctx.fill();
-        // Glow effect
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
-        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
-        grad.addColorStop(0, `rgba(0, 0, 0, ${p.alpha * 0.3})`);
-        grad.addColorStop(1, "rgba(0, 0, 0, 0)");
-        ctx.fillStyle = grad;
-        ctx.fill();
-      });
-      animId = requestAnimationFrame(draw);
-    }
-    draw();
-    const handleResize = () => { w = canvas.width = canvas.offsetWidth; h = canvas.height = canvas.offsetHeight; };
-    window.addEventListener("resize", handleResize);
-    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", handleResize); };
-  }, []);
-  return <canvas ref={canvasRef} className="absolute top-[56px] left-0 right-0 h-[70px] pointer-events-none z-0" />;
-}
-
 // Extracted Payment Dialog Component
 function PaymentDialog({ 
   activePayment, setActivePayment, total, handleCheckout, createSalePending,
@@ -404,9 +349,6 @@ function PaymentDialog({
 }: any) {
   return (
     <div className="relative flex flex-col h-full">
-      {/* Particle Background */}
-      <ParticleBackground />
-      
       {/* Payment Method Selection */}
       <div className="relative z-10 flex-shrink-0 pt-4">
         <div className="grid grid-cols-3 gap-3">
