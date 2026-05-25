@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -341,6 +341,61 @@ export default function POS() {
   );
 }
 
+// Particle Background Component
+function ParticleBackground() {
+  const canvasRef = React.useRef<HTMLCanvasElement>(null);
+  React.useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let w = canvas.width = canvas.offsetWidth;
+    let h = canvas.height = canvas.offsetHeight;
+    const particles: { x: number; y: number; r: number; dx: number; dy: number; alpha: number }[] = [];
+    for (let i = 0; i < 60; i++) {
+      particles.push({
+        x: Math.random() * w,
+        y: Math.random() * h,
+        r: Math.random() * 2 + 0.5,
+        dx: (Math.random() - 0.5) * 0.5,
+        dy: (Math.random() - 0.5) * 0.5,
+        alpha: Math.random() * 0.5 + 0.2,
+      });
+    }
+    let animId: number;
+    function draw() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, w, h);
+      particles.forEach((p) => {
+        p.x += p.dx;
+        p.y += p.dy;
+        if (p.x < 0) p.x = w;
+        if (p.x > w) p.x = 0;
+        if (p.y < 0) p.y = h;
+        if (p.y > h) p.y = 0;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(0, 0, 0, ${p.alpha})`;
+        ctx.fill();
+        // Glow effect
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r * 4, 0, Math.PI * 2);
+        const grad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.r * 4);
+        grad.addColorStop(0, `rgba(0, 0, 0, ${p.alpha * 0.3})`);
+        grad.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = grad;
+        ctx.fill();
+      });
+      animId = requestAnimationFrame(draw);
+    }
+    draw();
+    const handleResize = () => { w = canvas.width = canvas.offsetWidth; h = canvas.height = canvas.offsetHeight; };
+    window.addEventListener("resize", handleResize);
+    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", handleResize); };
+  }, []);
+  return <canvas ref={canvasRef} className="absolute inset-0 w-full h-full pointer-events-none" />;
+}
+
 // Extracted Payment Dialog Component
 function PaymentDialog({ 
   activePayment, setActivePayment, total, handleCheckout, createSalePending,
@@ -348,80 +403,88 @@ function PaymentDialog({
   copiedZelle, setCopiedZelle, handleZelleConfirm
 }: any) {
   return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-3 gap-2">
-        {PAYMENT_METHODS.map((m) => {
-          const Icon = m.icon;
-          return (
-            <button
-              key={m.id}
-              onClick={() => setActivePayment(m.id)}
-              className={`flex flex-col items-center gap-1 p-3 rounded-lg border text-xs transition-[border-color,background-color] duration-200 ease-out-expo ${activePayment === m.id ? "border-black bg-neutral-50" : "border-neutral-200 hover:border-neutral-300"}`}
-            >
-              <Icon className="w-5 h-5 text-neutral-600" />
-              <span className="text-neutral-600">{m.label}</span>
-            </button>
-          );
-        })}
+    <div className="relative flex flex-col h-full">
+      {/* Particle Background */}
+      <ParticleBackground />
+      
+      {/* Payment Method Selection */}
+      <div className="relative z-10 flex-shrink-0 pt-4">
+        <div className="grid grid-cols-3 gap-3">
+          {PAYMENT_METHODS.map((m) => {
+            const Icon = m.icon;
+            return (
+              <button
+                key={m.id}
+                onClick={() => { setActivePayment(m.id); setShowZellePanel(false); }}
+                className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 text-sm font-medium transition-all duration-200 ${activePayment === m.id ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"}`}
+              >
+                <Icon className={`w-6 h-6 ${activePayment === m.id ? "text-white" : "text-neutral-500"}`} />
+                {m.label}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {activePayment === "cash" && (
-        <div className="space-y-4">
-          <div className="text-center py-6 bg-neutral-50 rounded-lg space-y-2">
-            <Banknote className="w-8 h-8 text-neutral-400 mx-auto" />
-            <p className="text-xs text-neutral-400">Pago en efectivo</p>
-            <p className="text-2xl font-medium text-black">{formatCurrency(total)}</p>
+      {/* Amount Display - Centered */}
+      <div className="relative z-10 flex-1 flex flex-col items-center justify-center min-h-0">
+        {activePayment === "cash" && (
+          <div className="text-center space-y-3">
+            <Banknote className="w-12 h-12 text-neutral-300 mx-auto" />
+            <p className="text-sm text-neutral-400">Pago en efectivo</p>
+            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
           </div>
-          <Button onClick={handleCheckout} disabled={createSalePending} className="w-full bg-black hover:bg-neutral-800 text-white h-10">
-            {createSalePending ? "Procesando..." : <><Check className="w-4 h-4 mr-1" /> Cobrar en Efectivo</>}
-          </Button>
-        </div>
-      )}
+        )}
 
-      {activePayment === "zelle" && (
-        <div className="space-y-4">
-          {!showZellePanel ? (
-            <div className="text-center py-4 bg-neutral-50 rounded-lg space-y-3">
-              <Smartphone className="w-8 h-8 text-neutral-400 mx-auto" />
-              <p className="text-xs text-neutral-400">Cobro via Zelle</p>
-              <p className="text-2xl font-medium text-black">{formatCurrency(total)}</p>
-              <Button onClick={() => setShowZellePanel(true)} className="bg-black hover:bg-neutral-800 text-white h-9 text-xs">
-                <Smartphone className="w-3.5 h-3.5 mr-1.5" /> Mostrar datos de Zelle
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <div className="text-center py-4 bg-neutral-50 rounded-lg space-y-3">
-                <Smartphone className="w-8 h-8 text-neutral-400 mx-auto" />
-                <p className="text-xs text-neutral-400">Enviar Zelle a:</p>
-                <div className="bg-white border border-neutral-200 rounded-lg p-3 mx-4">
-                  <p className="text-sm font-medium text-black">{companyZelleEmail}</p>
-                </div>
-                <p className="text-2xl font-medium text-black">{formatCurrency(total)}</p>
-              </div>
-              <div className="flex gap-2">
-                <Button onClick={() => setShowZellePanel(false)} variant="outline" className="flex-1 border-neutral-200 h-10">Volver</Button>
-                <Button onClick={handleZelleConfirm} disabled={createSalePending || !hasCompanyZelle} className="flex-1 bg-black hover:bg-neutral-800 text-white h-10">
-                  {createSalePending ? "Procesando..." : <><Check className="w-4 h-4 mr-1" /> Confirmar Pago</>}
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {activePayment === "card" && (
-        <div className="space-y-4">
-          <div className="text-center py-6 bg-neutral-50 rounded-lg space-y-2">
-            <Receipt className="w-8 h-8 text-neutral-400 mx-auto" />
-            <p className="text-xs text-neutral-400">Pago con tarjeta</p>
-            <p className="text-2xl font-medium text-black">{formatCurrency(total)}</p>
+        {activePayment === "zelle" && !showZellePanel && (
+          <div className="text-center space-y-4">
+            <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
+            <p className="text-sm text-neutral-400">Cobro via Zelle</p>
+            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
           </div>
-          <Button onClick={handleCheckout} disabled={createSalePending} className="w-full bg-black hover:bg-neutral-800 text-white h-10">
-            {createSalePending ? "Procesando..." : <><Check className="w-4 h-4 mr-1" /> Cobrar con Tarjeta</>}
+        )}
+
+        {activePayment === "zelle" && showZellePanel && (
+          <div className="text-center space-y-4 w-full">
+            <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
+            <p className="text-sm text-neutral-400">Enviar Zelle a:</p>
+            <div className="bg-white border border-neutral-200 rounded-xl p-4 mx-8">
+              <p className="text-lg font-semibold text-black">{companyZelleEmail}</p>
+            </div>
+            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
+          </div>
+        )}
+
+        {activePayment === "card" && (
+          <div className="text-center space-y-3">
+            <Receipt className="w-12 h-12 text-neutral-300 mx-auto" />
+            <p className="text-sm text-neutral-400">Pago con tarjeta</p>
+            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
+          </div>
+        )}
+      </div>
+
+      {/* Action Button - Bottom */}
+      <div className="relative z-10 flex-shrink-0 pb-6 pt-4">
+        {activePayment === "zelle" && !showZellePanel && (
+          <Button onClick={() => setShowZellePanel(true)} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
+            <Smartphone className="w-5 h-5 mr-2" /> Mostrar datos de Zelle
           </Button>
-        </div>
-      )}
+        )}
+        {activePayment === "zelle" && showZellePanel && (
+          <div className="flex gap-3">
+            <Button onClick={() => setShowZellePanel(false)} variant="outline" className="flex-1 border-neutral-200 h-14 text-base rounded-xl">Volver</Button>
+            <Button onClick={handleZelleConfirm} disabled={createSalePending || !hasCompanyZelle} className="flex-1 bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
+              {createSalePending ? "Procesando..." : <><Check className="w-5 h-5 mr-1" /> Confirmar</>}
+            </Button>
+          </div>
+        )}
+        {activePayment !== "zelle" && (
+          <Button onClick={handleCheckout} disabled={createSalePending} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
+            {createSalePending ? "Procesando..." : <><Check className="w-5 h-5 mr-2" /> {activePayment === "cash" ? "Cobrar en Efectivo" : "Cobrar con Tarjeta"}</>}
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
