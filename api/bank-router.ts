@@ -735,6 +735,48 @@ export const bankRouter = createRouter({
     };
   }),
 
+  // ─── GET YEAR DATA (annual summary for selected account) ───
+  getYearData: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
+    if (!ctx.user) return { income: "0", expense: "0", transactionCount: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { income: "0", expense: "0", transactionCount: 0 };
+    const db = getDb();
+    const { year, accountId } = input;
+    const startStr = `${year}-01-01`;
+    const endStr = `${year}-12-31`;
+
+    const conditions = [
+      eq(bankTransactions.userId, ctx.user.id),
+      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+    ];
+    if (accountId) {
+      conditions.push(eq(bankTransactions.bankAccountId, accountId));
+    }
+
+    const txs = await db.select().from(bankTransactions)
+      .where(and(...conditions));
+
+    let inc = 0, exp = 0;
+    for (const t of txs) {
+      const amt = parseFloat(t.amount ?? "0");
+      if (amt <= 0) continue;
+      const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+      if (plaidAmt !== null) {
+        if (plaidAmt < 0) inc += amt;
+        else exp += amt;
+      } else {
+        if (t.type === "income") inc += amt;
+        else exp += amt;
+      }
+    }
+
+    return {
+      income: inc.toFixed(2),
+      expense: exp.toFixed(2),
+      transactionCount: txs.length,
+    };
+  }),
+
   // ─── LIVE BALANCE ───
   getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
     if (!ctx.user) return { balance: "0", accountCount: 0 };

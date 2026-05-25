@@ -172,6 +172,10 @@ export default function Bank() {
   const { data: monthData, isLoading: loadingMonth } = trpc.bank.getMonthData.useQuery(
     { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
+  // Annual summary for the resumen del año card
+  const { data: yearData } = trpc.bank.getYearData.useQuery(
+    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
+  );
   // DEBUG: Log month selection
   useEffect(() => {
     console.log("[DEBUG] selectedMonth:", selectedMonth, "selectedYear:", selectedYear, "accountIdNum:", accountIdNum, "monthData count:", monthData?.count ?? "no data", "loading:", loadingMonth);
@@ -675,15 +679,15 @@ export default function Bank() {
               <CardContent className="pt-0 space-y-4">
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-neutral-500">Ingresos</span>
-                  <span className="text-sm font-bold text-emerald-600">{formatCurrency(monthIncome)}</span>
+                  <span className="text-sm font-bold text-emerald-600">{formatCurrency(yearData?.income ?? monthIncome)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-neutral-500">Gastos</span>
-                  <span className="text-sm font-bold text-red-600">{formatCurrency(monthExpense)}</span>
+                  <span className="text-sm font-bold text-red-600">{formatCurrency(yearData?.expense ?? monthExpense)}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-sm text-neutral-500">Transacciones</span>
-                  <span className="text-sm text-black font-medium">{(monthData?.transactions ?? []).length}</span>
+                  <span className="text-sm text-black font-medium">{yearData?.transactionCount ?? (monthData?.transactions ?? []).length}</span>
                 </div>
                 <div className="pt-2 border-t border-neutral-100">
                   <div className="flex justify-between items-center">
