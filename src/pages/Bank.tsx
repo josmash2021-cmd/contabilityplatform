@@ -734,7 +734,7 @@ export default function Bank() {
                   </div>
                 ) : (
                   <div className="space-y-1">
-                    {(monthData?.transactions ?? []).slice(0, 8).map((tx: any) => (
+                    {(monthData?.transactions ?? []).slice(0, 3).map((tx: any) => (
                       <div key={tx.id} className="flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150">
                         <div className="flex items-center gap-3">
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
@@ -762,13 +762,13 @@ export default function Bank() {
                         </div>
                       </div>
                     ))}
-                    {(monthData?.transactions ?? []).length > 8 && (
+                    {(monthData?.transactions ?? []).length > 3 && (
                       <Button
                         variant="ghost"
-                        onClick={() => navigate(`/bank/transactions?month=${selectedMonth}&year=${selectedYear}`)}
+                        onClick={() => navigate(`/transactions`)}
                         className="w-full mt-2 h-10 text-sm text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg border border-dashed border-neutral-200 font-normal"
                       >
-                        Ver todas las transacciones <ChevronRight className="w-4 h-4 ml-1" />
+                        Mostrar mas <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     )}
                   </div>
