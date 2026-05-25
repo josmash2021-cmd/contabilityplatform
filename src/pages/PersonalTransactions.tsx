@@ -292,8 +292,12 @@ export default function PersonalTransactions() {
       </div>
       )}
 
-      {/* Quick filter buttons — same design as Subscriptions */}
-      <div className="flex flex-wrap bg-gray-100 rounded-xl p-1 mb-4 gap-1">
+      {/* Quick filter buttons — horizontal scroll carousel */}
+      <div
+        className="flex bg-gray-100 rounded-xl p-1 mb-4 gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+      >
+        <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
         {([
           { key: "all", label: "Todos" },
           { key: "income", label: "Ingresos" },
@@ -305,7 +309,7 @@ export default function PersonalTransactions() {
           { key: "compras", label: "Compras" },
           { key: "gasolina", label: "Gasolina" },
         ] as const).map((f) => (
-          <button key={f.key} onClick={() => setFilterType(f.key)} className={`flex-1 min-w-[70px] py-1.5 text-xs font-medium rounded-full transition-colors px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
+          <button key={f.key} onClick={() => setFilterType(f.key)} className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
             {f.label}
           </button>
         ))}
