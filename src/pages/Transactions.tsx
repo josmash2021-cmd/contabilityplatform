@@ -381,7 +381,7 @@ export default function Transactions() {
           <button
             key={f.key}
             onClick={() => setFilterType(f.key)}
-            className={`flex-1 min-w-[70px] py-1.5 text-xs font-medium rounded-full transition-colors px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
+            className={`py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
           >
             {f.label}
           </button>
