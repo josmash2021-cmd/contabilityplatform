@@ -434,65 +434,37 @@ export default function Transactions() {
               </p>
             </div>
           ) : (
-            displayTransactions.map((tx: any) => (
-              <div
-                key={tx.id}
-                className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
-              >
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                    tx._source === "sale"
-                      ? (tx.status === "refunded" ? "bg-orange-100" : "bg-blue-100")
-                      : isP2P(tx) ? "bg-purple-100"
-                      : tx.type === "income" ? "bg-emerald-100" : "bg-rose-100"
-                  }`}>
-                    {tx._source === "sale" ? (
-                      tx.status === "refunded" ? (
-                        <RotateCcw className="w-4 h-4 text-orange-600" />
-                      ) : (
-                        <Receipt className="w-4 h-4 text-blue-600" />
-                      )
-                    ) : isP2P(tx) ? (
-                      <ArrowLeftRight className="w-4 h-4 text-purple-600" />
-                    ) : tx.type === "income" ? (
-                      <ArrowUpRight className="w-4 h-4 text-emerald-600" />
-                    ) : (
-                      <ArrowDownRight className="w-4 h-4 text-rose-600" />
-                    )}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-black truncate">{tx.description}</p>
-                    <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                      <span className="capitalize">{getCategoryLabel(tx.category ?? "")}</span>
-                      <span>·</span>
-                      <span>{tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}</span>
-                      {tx._source === "sale" && tx.paymentMethod && (
-                        <>
-                          <span>·</span>
-                          <span className="text-neutral-400">{tx.paymentMethod}</span>
-                        </>
-                      )}
-                      {tx.accountNumber && (
-                        <>
-                          <span>·</span>
-                          <span className="text-neutral-400">{tx.accountNumber}</span>
-                        </>
-                      )}
+            displayTransactions.map((tx: any) => {
+              const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
+              const dateStr = txDate ? txDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
+              const timeStr = txDate ? txDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              return (
+                <div
+                  key={tx.id}
+                  className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-bold text-black truncate">{tx.description}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
+                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
+                        {tx._source === "sale" ? (tx.paymentMethod || "Venta") : getCategoryLabel(tx.category ?? "")}
+                      </span>
                     </div>
                   </div>
+                  <span className={`text-sm font-bold shrink-0 ml-3 ${
+                    tx._source === "sale"
+                      ? (tx.status === "refunded" ? "text-orange-600" : "text-blue-600")
+                      : tx.type === "income" ? "text-emerald-600" : "text-rose-600"
+                  }`}>
+                    {tx._source === "sale"
+                      ? (tx.status === "refunded" ? "-" : "+") + formatCurrency(tx.amount)
+                      : (tx.type === "income" ? "+" : "-") + formatCurrency(tx.amount)
+                    }
+                  </span>
                 </div>
-                <span className={`text-sm font-semibold shrink-0 ml-3 ${
-                  tx._source === "sale"
-                    ? (tx.status === "refunded" ? "text-orange-700" : "text-blue-700")
-                    : tx.type === "income" ? "text-emerald-700" : "text-rose-700"
-                }`}>
-                  {tx._source === "sale"
-                    ? (tx.status === "refunded" ? "-" : "+") + formatCurrency(tx.amount)
-                    : (tx.type === "income" ? "+" : "-") + formatCurrency(tx.amount)
-                  }
-                </span>
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       )}
