@@ -213,11 +213,11 @@ export default function Reports() {
           style={{ scrollbarWidth: "none" }}
         >
           {[
-            { key: "monthly", label: "Pagos por Mes" },
-            { key: "income", label: "Estado de Resultados" },
-            { key: "balance", label: "Balance General" },
-            { key: "bank", label: "Contabilidad Bancaria" },
-            { key: "journal", label: "Asientos Contables" },
+            { key: "monthly", label: "Ventas del Mes" },
+            { key: "income", label: "Ganancias y Perdidas" },
+            { key: "balance", label: "Lo que Tengo y Debo" },
+            { key: "bank", label: "Mi Banco" },
+            { key: "journal", label: "Movimientos Detallados" },
           ].map((t) => (
             <button
               key={t.key}
@@ -324,7 +324,7 @@ export default function Reports() {
               <AnimatedCard delay={100} className="lg:col-span-2">
                 <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-black">Estado de Resultados</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-black">Ganancias y Perdidas</CardTitle>
                     <p className="text-[11px] text-neutral-400">{incomeData.period.start} - {incomeData.period.end}</p>
                   </CardHeader>
                   <CardContent className="p-5 space-y-4">
@@ -409,7 +409,7 @@ export default function Reports() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               <AnimatedCard delay={100} className="lg:col-span-2">
                 <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Balance General</CardTitle></CardHeader>
+                  <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Lo que Tengo y Debo</CardTitle></CardHeader>
                   <CardContent className="p-5 space-y-5">
                     <div>
                       <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Activos</p>
@@ -586,7 +586,7 @@ export default function Reports() {
           <AnimatedPage>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-black">Asientos Contables</CardTitle>
+                <CardTitle className="text-sm font-semibold text-black">Movimientos Detallados</CardTitle>
                 <p className="text-[11px] text-neutral-400">{journalData ? `${journalData.length} registros` : "Cargando..."}</p>
               </CardHeader>
               <CardContent className="p-5">
