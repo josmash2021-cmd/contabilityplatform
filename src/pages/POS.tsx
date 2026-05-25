@@ -198,7 +198,7 @@ export default function POS() {
               )}
             </button>
           </DialogTrigger>
-          <DialogContent className="bg-white border-neutral-200 max-w-sm mx-4">
+          <DialogContent className="bg-white border-neutral-200 sm:max-w-sm sm:mx-4 sm:rounded-xl sm:h-auto sm:w-auto w-full h-full max-w-none mx-0 rounded-none border-0 flex flex-col justify-center p-6">
             <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
             <PaymentDialog 
               activePayment={activePayment} 
