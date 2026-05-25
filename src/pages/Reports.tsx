@@ -206,15 +206,28 @@ export default function Reports() {
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* Tabs — Horizontal Scroll Carousel */}
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="bg-neutral-50 border border-neutral-200 rounded-xl p-1 flex-wrap h-auto gap-1">
-          <TabsTrigger value="monthly" className="text-xs data-[state=active]:bg-black data-[state=active]:text-white rounded-lg px-4 py-2 transition-colors duration-150">Pagos por Mes</TabsTrigger>
-          <TabsTrigger value="income" className="text-xs data-[state=active]:bg-black data-[state=active]:text-white rounded-lg px-4 py-2 transition-colors duration-150">Estado de Resultados</TabsTrigger>
-          <TabsTrigger value="balance" className="text-xs data-[state=active]:bg-black data-[state=active]:text-white rounded-lg px-4 py-2 transition-colors duration-150">Balance General</TabsTrigger>
-          <TabsTrigger value="bank" className="text-xs data-[state=active]:bg-black data-[state=active]:text-white rounded-lg px-4 py-2 transition-colors duration-150">Contabilidad Bancaria</TabsTrigger>
-          <TabsTrigger value="journal" className="text-xs data-[state=active]:bg-black data-[state=active]:text-white rounded-lg px-4 py-2 transition-colors duration-150">Movimientos</TabsTrigger>
-        </TabsList>
+        <div
+          className="flex overflow-x-auto snap-x snap-mandatory scrollbar-hide gap-1 bg-neutral-50 border border-neutral-200 rounded-xl p-1"
+          style={{ scrollbarWidth: "none" }}
+        >
+          {[
+            { key: "monthly", label: "Pagos por Mes" },
+            { key: "income", label: "Estado de Resultados" },
+            { key: "balance", label: "Balance General" },
+            { key: "bank", label: "Contabilidad Bancaria" },
+            { key: "journal", label: "Asientos Contables" },
+          ].map((t) => (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`snap-start flex-shrink-0 text-xs rounded-lg px-4 py-2 transition-colors duration-150 ${tab === t.key ? "bg-black text-white" : "text-neutral-600 hover:text-black"}`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
 
         {/* PAGOS POR MES */}
         <TabsContent value="monthly" className="mt-6 space-y-4">
