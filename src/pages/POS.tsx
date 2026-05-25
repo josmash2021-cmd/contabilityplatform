@@ -198,7 +198,7 @@ export default function POS() {
               )}
             </button>
           </DialogTrigger>
-          <DialogContent className="bg-white border-neutral-200 sm:max-w-sm sm:mx-4 sm:rounded-xl sm:h-auto sm:w-auto w-full h-full max-w-none mx-0 rounded-none border-0 flex flex-col justify-center p-6">
+          <DialogContent className="bg-white border-neutral-200 sm:max-w-sm sm:mx-4 sm:rounded-xl sm:h-auto sm:w-auto w-full h-[100dvh] max-w-none mx-0 rounded-none border-0 flex flex-col justify-center p-6 !m-0 !p-6" style={{ minHeight: '100dvh', position: 'fixed', top: 0, left: 0, right: 0, bottom: 0 }}>
             <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
             <PaymentDialog 
               activePayment={activePayment} 
