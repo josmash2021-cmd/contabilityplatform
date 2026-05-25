@@ -8,7 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
 import {
-  ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
+  ArrowUpRight, ArrowDownRight, ArrowLeftRight, RefreshCw, Landmark,
   ChevronDown, TrendingUp, TrendingDown, Wallet,
   Fuel, Receipt, RotateCcw,
 } from "lucide-react";
@@ -163,6 +163,12 @@ export default function Transactions() {
     const n = (t.description || "").toLowerCase();
     return t.category === "refund" || n.includes("refund") || n.includes("devolucion") || n.includes("reembolso");
   };
+  // P2P: Cash App, Square, Clover, Venmo, PayPal, Facebook Pay
+  const P2P_KEYWORDS = ["paypal","cash app","venmo","square","clover","facebook pay"];
+  const isP2P = (t: any) => {
+    const n = (t.description || "").toLowerCase();
+    return t.category === "transfer" || P2P_KEYWORDS.some(k => n.includes(k));
+  };
 
   const GAS_BRANDS = [
     "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
@@ -193,6 +199,7 @@ export default function Transactions() {
     filterType === "cash_deposit" ? allBankTransactions.filter((t: any) => isCashDeposit(t)) :
     filterType === "cash_withdrawal" ? allBankTransactions.filter((t: any) => isCashWithdrawal(t)) :
     filterType === "gasolina" ? allBankTransactions.filter((t: any) => isGas(t)) :
+    filterType === "p2p" ? allBankTransactions.filter((t: any) => isP2P(t)) :
     allBankTransactions;
 
   // ─── Sales data (ALWAYS available, no bank needed) ───
@@ -247,6 +254,7 @@ export default function Transactions() {
     { key: "cash_deposit", label: "Dep. Efectivo" },
     { key: "cash_withdrawal", label: "Ret. Efectivo" },
     { key: "gasolina", label: "Gasolina" },
+    { key: "p2p", label: "P2P" },
   ];
 
   const nonBankFilters = [
@@ -260,7 +268,7 @@ export default function Transactions() {
   // Auto-switch to a valid filter if bank disconnected
   useEffect(() => {
     if (!hasBankConnected) {
-      const bankOnlyFilters = ["income", "expense", "zelle_in", "zelle_out", "cash_deposit", "cash_withdrawal", "gasolina"];
+      const bankOnlyFilters = ["income", "expense", "zelle_in", "zelle_out", "cash_deposit", "cash_withdrawal", "gasolina", "p2p"];
       if (bankOnlyFilters.includes(filterType)) {
         setFilterType("all");
       }
@@ -277,6 +285,7 @@ export default function Transactions() {
     filterType === "cash_deposit" ? "Depósitos de Efectivo" :
     filterType === "cash_withdrawal" ? "Retiros de Efectivo" :
     filterType === "gasolina" ? "Gasolina" :
+    filterType === "p2p" ? "P2P (Cash App, Venmo, Square, Clover, PayPal)" :
     "Transacciones";
 
   const isLoading = isLoadingBank || isLoadingSales;
@@ -434,6 +443,7 @@ export default function Transactions() {
                   <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
                     tx._source === "sale"
                       ? (tx.status === "refunded" ? "bg-orange-100" : "bg-blue-100")
+                      : isP2P(tx) ? "bg-purple-100"
                       : tx.type === "income" ? "bg-emerald-100" : "bg-rose-100"
                   }`}>
                     {tx._source === "sale" ? (
@@ -442,6 +452,8 @@ export default function Transactions() {
                       ) : (
                         <Receipt className="w-4 h-4 text-blue-600" />
                       )
+                    ) : isP2P(tx) ? (
+                      <ArrowLeftRight className="w-4 h-4 text-purple-600" />
                     ) : tx.type === "income" ? (
                       <ArrowUpRight className="w-4 h-4 text-emerald-600" />
                     ) : (
@@ -496,7 +508,8 @@ function getCategoryLabel(cat: string): string {
     cash_deposit: "Dep. Efectivo",
     cash_withdrawal: "Retiro ATM",
     subscription: "Suscripcion",
-    transfer: "Transferencia",
+    transfer: "P2P",
+    p2p: "P2P",
     business_expense: "Negocio",
     gasolina: "Gasolina",
     home_expense: "Hogar",
