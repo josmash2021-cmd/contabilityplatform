@@ -293,7 +293,7 @@ export default function PersonalTransactions() {
       )}
 
       {/* Quick filter buttons — same design as Subscriptions */}
-      <div className="flex bg-gray-100 rounded-full p-1 mb-4 overflow-x-auto gap-1">
+      <div className="flex flex-wrap bg-gray-100 rounded-xl p-1 mb-4 gap-1">
         {([
           { key: "all", label: "Todos" },
           { key: "income", label: "Ingresos" },
@@ -305,7 +305,7 @@ export default function PersonalTransactions() {
           { key: "compras", label: "Compras" },
           { key: "gasolina", label: "Gasolina" },
         ] as const).map((f) => (
-          <button key={f.key} onClick={() => setFilterType(f.key)} className={`flex-1 py-1.5 text-xs font-medium rounded-full transition-colors whitespace-nowrap px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
+          <button key={f.key} onClick={() => setFilterType(f.key)} className={`flex-1 min-w-[70px] py-1.5 text-xs font-medium rounded-full transition-colors px-3 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
             {f.label}
           </button>
         ))}
