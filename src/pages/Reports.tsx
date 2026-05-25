@@ -581,69 +581,43 @@ export default function Reports() {
           </div>
         </TabsContent>
 
-        {/* MOVIMIENTOS */}
+        {/* MOVIMIENTOS DETALLADOS — Sales List */}
         <TabsContent value="journal" className="mt-6">
           <AnimatedPage>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold text-black">Movimientos Detallados</CardTitle>
-                <p className="text-[11px] text-neutral-400">{journalData ? `${journalData.length} registros` : "Cargando..."}</p>
+                <p className="text-[11px] text-neutral-400">{monthlyData?.recentSales ? `${monthlyData.recentSales.length} ventas` : "Cargando..."}</p>
               </CardHeader>
               <CardContent className="p-5">
-                {journalData && journalData.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="border-neutral-200">
-                          <TableHead className="text-[11px] text-neutral-400 uppercase tracking-wide">N</TableHead>
-                          <TableHead className="text-[11px] text-neutral-400 uppercase tracking-wide">Fecha</TableHead>
-                          <TableHead className="text-[11px] text-neutral-400 uppercase tracking-wide">Descripcion</TableHead>
-                          <TableHead className="text-[11px] text-neutral-400 uppercase tracking-wide text-right">Debito</TableHead>
-                          <TableHead className="text-[11px] text-neutral-400 uppercase tracking-wide text-right">Credito</TableHead>
-                          <TableHead className="w-10" />
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {journalData.map((entry) => (
-                          <>
-                            <TableRow key={entry.id} className="border-neutral-100 cursor-pointer hover:bg-neutral-50/50 transition-colors duration-150" onClick={() => setExpandedEntry(expandedEntry === entry.id ? null : entry.id)}>
-                              <TableCell className="text-sm font-medium text-black">{entry.entryNumber}</TableCell>
-                              <TableCell className="text-xs text-neutral-500">{new Date(entry.date).toLocaleDateString("es")}</TableCell>
-                              <TableCell className="text-sm text-neutral-600 max-w-xs truncate">{entry.description}</TableCell>
-                              <TableCell className="text-sm text-right font-medium text-black">{formatCurrency(entry.debitTotal)}</TableCell>
-                              <TableCell className="text-sm text-right font-medium text-black">{formatCurrency(entry.creditTotal)}</TableCell>
-                              <TableCell>{expandedEntry === entry.id ? <ChevronUp className="w-4 h-4 text-neutral-400" /> : <ChevronDown className="w-4 h-4 text-neutral-400" />}</TableCell>
-                            </TableRow>
-                            {expandedEntry === entry.id && (
-                              <TableRow className="border-0 bg-neutral-50/50">
-                                <TableCell colSpan={6} className="p-0">
-                                  <div className="px-4 py-3 space-y-2">
-                                    <p className="text-[11px] text-neutral-400 uppercase tracking-wide">Lineas del asiento</p>
-                                    {entry.lines.map((line: any, idx: number) => (
-                                      <div key={idx} className="flex justify-between items-center text-sm py-1 border-b border-neutral-100 last:border-0">
-                                        <div className="flex items-center gap-2">
-                                          <span className="text-xs font-mono text-neutral-400">{line.accountCode}</span>
-                                          <span className="text-neutral-600">{line.accountName}</span>
-                                          {line.description && <span className="text-[10px] text-neutral-400">- {line.description}</span>}
-                                        </div>
-                                        <div className="flex gap-4">
-                                          {Number(line.debit) > 0 && <span className="text-green-600 font-medium w-20 text-right">{formatCurrency(line.debit)}</span>}
-                                          {Number(line.credit) > 0 && <span className="text-red-500 font-medium w-20 text-right">{formatCurrency(line.credit)}</span>}
-                                          {Number(line.debit) === 0 && Number(line.credit) === 0 && <span className="text-neutral-300 w-20 text-right">-</span>}
-                                        </div>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </TableCell>
-                              </TableRow>
-                            )}
-                          </>
-                        ))}
-                      </TableBody>
-                    </Table>
+                {monthlyData?.recentSales && monthlyData.recentSales.length > 0 ? (
+                  <div className="space-y-0">
+                    {monthlyData.recentSales.map((sale: any) => {
+                      const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || sale.invoiceNumber;
+                      const saleDate = sale.createdAt ? new Date(sale.createdAt) : null;
+                      const dateStr = saleDate ? saleDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
+                      const timeStr = saleDate ? saleDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                      const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+                      return (
+                        <div key={sale.id} className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-normal text-black truncate">{productNames}</p>
+                            <div className="flex items-center gap-2 mt-1">
+                              <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
+                              <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">{paymentLabel}</span>
+                            </div>
+                          </div>
+                          <span className="text-sm font-medium shrink-0 ml-3 text-blue-600">+{formatCurrency(sale.total)}</span>
+                        </div>
+                      );
+                    })}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-400 text-center py-8">No hay asientos contables</p>
+                  <div className="text-center py-8">
+                    <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+                    <p className="text-sm text-neutral-400">No hay ventas este mes</p>
+                    <p className="text-xs text-neutral-400 mt-1">Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar</p>
+                  </div>
                 )}
               </CardContent>
             </Card>
