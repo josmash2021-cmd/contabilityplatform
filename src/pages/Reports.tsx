@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
-/** Account dropdown — uses fixed positioning to escape overflow:hidden containers */
+/** Account dropdown — simple absolute positioning, parent must NOT have overflow:hidden */
 function AccountDropdown({
   accounts,
   selectedId,
@@ -33,47 +33,21 @@ function AccountDropdown({
   onChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [menuPos, setMenuPos] = useState({ top: 0, left: 0, width: 0 });
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
-      if (
-        menuRef.current && !menuRef.current.contains(e.target as Node) &&
-        buttonRef.current && !buttonRef.current.contains(e.target as Node)
-      ) {
-        setOpen(false);
-      }
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    function handleEsc(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
-    }
-    if (open) {
-      document.addEventListener("mousedown", handleClickOutside);
-      document.addEventListener("keydown", handleEsc);
-      // Calculate position
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        setMenuPos({
-          top: rect.bottom + window.scrollY + 4,
-          left: rect.left + window.scrollX,
-          width: Math.max(rect.width, 280),
-        });
-      }
-    }
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-      document.removeEventListener("keydown", handleEsc);
-    };
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
   const selected = accounts.find((a) => String(a.id) === selectedId);
 
   return (
-    <>
+    <div ref={ref} className="relative">
       <button
-        ref={buttonRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 h-10 px-3 border border-neutral-200 rounded-xl bg-white text-sm hover:border-neutral-300 transition-colors w-full"
       >
@@ -82,11 +56,7 @@ function AccountDropdown({
         <ChevronDown className={`w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
-        <div
-          ref={menuRef}
-          className="fixed bg-white border border-neutral-200 rounded-xl shadow-xl z-[9999] py-1 max-h-[300px] overflow-y-auto"
-          style={{ top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-        >
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[280px] bg-white border border-neutral-200 rounded-xl shadow-lg z-50 py-1">
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -106,7 +76,7 @@ function AccountDropdown({
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -575,6 +545,17 @@ export default function Reports() {
 
         {/* CONTABILIDAD BANCARIA */}
         <TabsContent value="bank" className="mt-6 space-y-4">
+          {/* Account selector OUTSIDE AnimatedPage to avoid overflow:hidden clipping */}
+          {hasBankConnected && allBankAccounts.length > 0 && (
+            <div className="w-full max-w-xs">
+              <AccountDropdown
+                accounts={allBankAccounts}
+                selectedId={effectiveBankId}
+                onChange={setSelectedBankAccount}
+              />
+            </div>
+          )}
+
           <AnimatedPage>
             {!hasBankConnected ? (
               /* No bank connected state */
@@ -585,22 +566,12 @@ export default function Reports() {
                   Conectar Banco
                 </Link>
               </div>
-            ) : (
-              /* Bank connected — show account selector (same style as Transactions) */
-              <div className="w-full max-w-xs">
-                {plaidAccountsQuery.isLoading || dbAccountsQuery.isLoading ? (
-                  <span className="text-xs text-neutral-400">Cargando cuentas...</span>
-                ) : allBankAccounts.length === 0 ? (
-                  <span className="text-xs text-neutral-400">Sin cuentas disponibles</span>
-                ) : (
-                  <AccountDropdown
-                    accounts={allBankAccounts}
-                    selectedId={effectiveBankId}
-                    onChange={setSelectedBankAccount}
-                  />
-                )}
+            ) : allBankAccounts.length === 0 ? (
+              /* Loading accounts */
+              <div className="py-4">
+                <span className="text-xs text-neutral-400">Cargando cuentas...</span>
               </div>
-            )}
+            ) : null}
           </AnimatedPage>
 
           {hasBankConnected && monthBankData && (
