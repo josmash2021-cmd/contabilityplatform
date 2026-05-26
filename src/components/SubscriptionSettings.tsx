@@ -119,28 +119,35 @@ export default function SubscriptionSettings() {
   const forceSyncMut = trpc.subscription.forceSync.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
+      // Always refetch status after forceSync
+      utils.subscription.status.refetch();
       if (data.found) {
         toast.success(data.message || "Suscripcion verificada");
-        utils.subscription.status.invalidate();
       } else {
         console.log("[forceSync]", data.message);
       }
     },
     onError: (err) => {
       setSyncing(false);
-      console.error("[forceSync] error:", err.message);
+      toast.error(err.message || "Error al verificar");
     },
   });
 
-  // Auto-sync on mount if coming from Stripe
+  // Auto-sync on mount — always try to sync from Stripe
   useEffect(() => {
+    // If we have URL param from Stripe, clean it
     const params = new URLSearchParams(window.location.search);
     if (params.get("subscription") === "success") {
-      setSyncing(true);
-      forceSyncMut.mutate();
-      // Clean URL
       window.history.replaceState({}, "", window.location.pathname);
     }
+    // Always try to sync on mount (for users who paid but webhook failed)
+    const timer = setTimeout(() => {
+      if (!status?.active) {
+        setSyncing(true);
+        forceSyncMut.mutate();
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
   }, []);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
