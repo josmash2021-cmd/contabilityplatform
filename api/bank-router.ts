@@ -594,6 +594,59 @@ async function hasActiveBank(userId: number): Promise<boolean> {
 // ROUTER
 // ═══════════════════════════════════════════════════════════
 
+/** Simple CSV parser — splits by lines and commas, handles quoted values */
+function parseCSV(text: string): string[][] {
+  const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim());
+  return lines.map((line) => {
+    const result: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        result.push(current.trim());
+        current = "";
+      } else {
+        current += char;
+      }
+    }
+    result.push(current.trim());
+    return result;
+  });
+}
+
+/** Detect Wells Fargo CSV format and parse transactions */
+function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: number; description: string; balance?: number }> {
+  if (rows.length < 2) return [];
+  const headers = rows[0].map((h) => h.toLowerCase().trim());
+  // Wells Fargo format: Date,Amount,Star,CheckNumber,Description,Balance
+  const dateIdx = headers.findIndex((h) => h.includes("date"));
+  const amountIdx = headers.findIndex((h) => h.includes("amount"));
+  const descIdx = headers.findIndex((h) => h.includes("description"));
+  const balanceIdx = headers.findIndex((h) => h.includes("balance"));
+  if (dateIdx === -1 || amountIdx === -1) return [];
+
+  const txs: Array<{ date: string; amount: number; description: string; balance?: number }> = [];
+  for (let i = 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (row.length < Math.max(dateIdx, amountIdx, descIdx) + 1) continue;
+    const dateStr = row[dateIdx];
+    const amountStr = row[amountIdx].replace(/[$,]/g, "");
+    const desc = descIdx >= 0 ? row[descIdx] : "";
+    const balStr = balanceIdx >= 0 ? row[balanceIdx].replace(/[$,]/g, "") : "";
+    if (!dateStr || !amountStr) continue;
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount)) continue;
+    // Parse date MM/DD/YYYY → YYYY-MM-DD
+    const parts = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+    const isoDate = parts ? `${parts[3]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}` : dateStr;
+    txs.push({ date: isoDate, amount: Math.abs(amount), description: desc, balance: balStr ? parseFloat(balStr) : undefined });
+  }
+  return txs;
+}
+
 export const bankRouter = createRouter({
   createLinkToken: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { linkToken: null };
@@ -1544,6 +1597,95 @@ export const bankRouter = createRouter({
       return { error: err.message || "Unknown error", code: err.response?.data?.error_code };
     }
   }),
+
+  // ─── IMPORT BANK STATEMENT (CSV) ───
+  importBankStatement: authedQuery
+    .input(z.object({ csv: z.string(), accountId: z.number().optional(), format: z.enum(["wells_fargo", "auto"]).optional() }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user) return { success: false, error: "No autenticado", added: 0 };
+      const userId = ctx.user.id;
+      const db = getDb();
+      const format = input.format ?? "auto";
+
+      // Parse CSV
+      const rows = parseCSV(input.csv);
+      if (rows.length < 2) return { success: false, error: "CSV vacio o invalido", added: 0 };
+
+      let txs: Array<{ date: string; amount: number; description: string; balance?: number }> = [];
+      if (format === "wells_fargo" || format === "auto") {
+        txs = parseWellsFargoCSV(rows);
+      }
+      if (txs.length === 0) return { success: false, error: "No se encontraron transacciones en el CSV. Asegurate que sea un estado de cuenta de Wells Fargo.", added: 0 };
+
+      // Get target account
+      let targetAccountId: number | null = input.accountId ?? null;
+      if (!targetAccountId) {
+        const accs = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+        if (accs.length > 0) targetAccountId = accs[0].id;
+      }
+      if (!targetAccountId) return { success: false, error: "No hay cuenta bancaria seleccionada", added: 0 };
+
+      const targetAcc = await db.select().from(bankAccounts).where(eq(bankAccounts.id, targetAccountId));
+      const bankName = targetAcc[0]?.bankName ?? "Banco";
+      const accountNumber = targetAcc[0]?.accountNumber ?? "";
+
+      // Get existing transaction keys to avoid duplicates
+      const existing = await db.select({ plaidTransactionId: bankTransactions.plaidTransactionId, reference: bankTransactions.reference, description: bankTransactions.description, amount: bankTransactions.amount, transactionDate: bankTransactions.transactionDate })
+        .from(bankTransactions).where(eq(bankTransactions.userId, userId));
+      const existingSet = new Set<string>();
+      for (const e of existing) {
+        const key = `${e.description}|${e.amount}|${e.transactionDate ? new Date(e.transactionDate).toISOString().split("T")[0] : ""}`;
+        existingSet.add(key);
+      }
+
+      let added = 0;
+      let skipped = 0;
+      let latestBalance: number | undefined;
+
+      for (const tx of txs) {
+        const key = `${tx.description}|${String(tx.amount.toFixed(2))}|${tx.date}`;
+        if (existingSet.has(key)) { skipped++; continue; }
+
+        const { type, category } = determineTypeAndCategory(
+          tx.amount,
+          [],
+          tx.description
+        );
+
+        try {
+          await db.insert(bankTransactions).values({
+            userId,
+            bankAccountId: targetAccountId,
+            bankName,
+            accountNumber,
+            transactionDate: new Date(tx.date),
+            description: tx.description,
+            amount: String(tx.amount.toFixed(2)),
+            plaidAmount: String(tx.amount.toFixed(2)),
+            type,
+            category: category as any,
+            syncStatus: "imported",
+            lastSyncedAt: new Date(),
+            reference: `csv-${tx.date}-${added}`,
+            isReconciled: false,
+            importedFrom: "csv",
+          });
+          added++;
+          if (tx.balance != null) latestBalance = tx.balance;
+        } catch (e: any) {
+          console.error("[import] Insert error:", e.message);
+        }
+      }
+
+      // Update account balance with latest from CSV
+      if (latestBalance != null) {
+        try {
+          await db.update(bankAccounts).set({ currentBalance: String(latestBalance.toFixed(2)), lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, targetAccountId));
+        } catch { /* ignore */ }
+      }
+
+      return { success: true, added, skipped, total: txs.length, latestBalance: latestBalance != null ? String(latestBalance.toFixed(2)) : null };
+    }),
 
   // ─── DISCONNECT BANK ───
   disconnect: authedQuery.mutation(async ({ ctx }) => {

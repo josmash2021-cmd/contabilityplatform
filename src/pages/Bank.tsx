@@ -285,6 +285,9 @@ export default function Bank() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasBankConnected, account]);
 
+  const importMutation = trpc.bank.importBankStatement.useMutation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
@@ -375,6 +378,25 @@ export default function Bank() {
   const handleSyncHistorical = () => {
     setSyncing(true);
     syncHistoricalMutation.mutate();
+  };
+
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = await file.text();
+    try {
+      const result = await importMutation.mutateAsync({ csv: text, accountId: accountIdNum, format: "auto" });
+      if (result.success) {
+        toast.success(`${result.added} transacciones importadas${result.latestBalance ? `. Balance: $${result.latestBalance}` : ""}`);
+        utils.bank.getLiveBalance.invalidate();
+        utils.bank.getMonthData.invalidate();
+      } else {
+        toast.error(result.error || "Error al importar");
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Error al importar CSV");
+    }
+    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
   const goToCategory = (category: string) => {
@@ -507,6 +529,10 @@ export default function Bank() {
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
             <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            </Button>
+            <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
+            <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title="Importar estado de cuenta CSV">
+              <Landmark className="w-3 h-3 mr-1" /> Importar CSV
             </Button>
             {account && (
               confirmDisconnect ? (
