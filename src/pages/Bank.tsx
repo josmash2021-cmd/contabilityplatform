@@ -154,15 +154,21 @@ function PlaidLinkButton({ onSuccess, onStart, onExchangeStart }: { onSuccess: (
 }
 
 /* Selectors */
-function MonthSelector({ value, onChange }: { value: string; onChange: (m: string) => void }) {
-  const months = [
+function MonthSelector({ value, onChange, selectedYear }: { value: string; onChange: (m: string) => void; selectedYear: string }) {
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+  const currentYear = now.getFullYear();
+  const allMonths = [
     { value: "1", label: "Enero" }, { value: "2", label: "Febrero" }, { value: "3", label: "Marzo" },
     { value: "4", label: "Abril" }, { value: "5", label: "Mayo" }, { value: "6", label: "Junio" },
     { value: "7", label: "Julio" }, { value: "8", label: "Agosto" }, { value: "9", label: "Septiembre" },
     { value: "10", label: "Octubre" }, { value: "11", label: "Noviembre" }, { value: "12", label: "Diciembre" },
   ];
+  // Only filter future months when selected year is current year
+  const maxMonth = parseInt(selectedYear) === currentYear ? currentMonth : 12;
+  const months = allMonths.filter((m) => parseInt(m.value) <= maxMonth);
   return (
-    <Select value={value} onValueChange={(val) => { console.log("[DEBUG] MonthSelector onValueChange:", val); onChange(val); }}>
+    <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-8 w-[90px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
         <SelectValue placeholder="Mes" />
       </SelectTrigger>
@@ -175,7 +181,7 @@ function MonthSelector({ value, onChange }: { value: string; onChange: (m: strin
 
 function YearSelector({ value, onChange }: { value: string; onChange: (y: string) => void }) {
   const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 5 }, (_, i) => currentYear - i);
+  const years = Array.from({ length: 2 }, (_, i) => currentYear - i);
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-8 w-[80px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black px-2">
@@ -456,7 +462,7 @@ export default function Bank() {
               </p>
             )}
           </div>
-          {/* Row 1: Account + Month + Year */}
+          {/* Single row: Account + Month + Year + Sync + Disconnect */}
           <div className="flex items-center gap-1.5 flex-wrap">
             {allAccounts && allAccounts.length > 0 && (
               <AccountDropdown
@@ -465,12 +471,8 @@ export default function Bank() {
                 onChange={(id) => setSelectedAccountId(id)}
               />
             )}
-            <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
+            <MonthSelector value={selectedMonth} onChange={setSelectedMonth} selectedYear={selectedYear} />
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
-          </div>
-
-          {/* Row 2: Sync + Disconnect */}
-          <div className="flex items-center gap-1.5">
             <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             </Button>
