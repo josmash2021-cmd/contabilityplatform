@@ -341,7 +341,7 @@ export default function SubscriptionSettings() {
 
                 {/* Plan name */}
                 <div>
-                  <h4 className="text-sm font-medium text-black">Upgrade a: Anual</h4>
+                  <h4 className="text-sm font-medium text-black">Upgrade a: Anual elite suscripcion</h4>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
