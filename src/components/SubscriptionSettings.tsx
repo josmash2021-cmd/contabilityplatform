@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,39 @@ export default function SubscriptionSettings() {
   const utils = trpc.useUtils();
   const { data: status, isLoading: statusLoading } = trpc.subscription.status.useQuery();
   const { data: payments } = trpc.subscription.payments.useQuery();
+  const verifyQuery = trpc.subscription.verify.useQuery(undefined, {
+    enabled: false, // Only call manually
+  });
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+
+  // Verify subscription on mount (for returning from Stripe checkout)
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const subscriptionStatus = urlParams.get("subscription");
+    if (subscriptionStatus === "success") {
+      // Call verify to sync with Stripe
+      verifyQuery.refetch().then(() => {
+        utils.subscription.status.invalidate();
+        utils.subscription.payments.invalidate();
+        // Clean URL
+        window.history.replaceState({}, "", window.location.pathname);
+      });
+    }
+  }, []);
+
+  // Periodic verification every 10 seconds when no active subscription
+  useEffect(() => {
+    if (status?.active) return;
+    const interval = setInterval(() => {
+      verifyQuery.refetch().then((result) => {
+        if (result.data?.active) {
+          utils.subscription.status.invalidate();
+          utils.subscription.payments.invalidate();
+        }
+      });
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [status?.active]);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {

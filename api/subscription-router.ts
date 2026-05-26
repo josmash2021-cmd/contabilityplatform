@@ -201,6 +201,59 @@ export const subscriptionRouter = createRouter({
     return { success: true };
   }),
 
+  // ── Verify subscription with Stripe (called on return from checkout) ──
+  verify: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { active: false, plan: null };
+    const db = getDb();
+
+    // Get user's subscription from DB
+    const subs = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, ctx.user.id))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+    const sub = subs[0];
+    if (!sub?.stripeSubscriptionId) return { active: false, plan: null };
+
+    // Verify directly with Stripe
+    try {
+      const stripe = getStripe();
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+
+      const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
+      const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
+                   stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : sub.plan;
+
+      // Update DB with fresh data
+      await db.update(subscriptions).set({
+        status: stripeSub.status,
+        plan: plan as "monthly" | "annual",
+        currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : sub.currentPeriodEnd,
+        currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : sub.currentPeriodStart,
+        cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+        updatedAt: new Date(),
+      }).where(eq(subscriptions.id, sub.id));
+
+      return {
+        active: isActive,
+        plan: plan,
+        status: stripeSub.status,
+        currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000).toISOString() : null,
+        cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+      };
+    } catch (err: any) {
+      console.error("[verify] Stripe error:", err.message);
+      // Return DB state as fallback
+      const isActive = sub.status === "active" || sub.status === "trialing";
+      return {
+        active: isActive,
+        plan: sub.plan,
+        status: sub.status,
+        currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || null,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      };
+    }
+  }),
+
   // ── Upgrade subscription (monthly → annual) ──
   upgrade: authedQuery
     .input(z.object({ from: z.enum(["monthly"]), to: z.enum(["annual"]) }))
