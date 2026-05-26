@@ -708,17 +708,12 @@ export const subscriptionRouter = createRouter({
           return { success: false, error: "Tu suscripcion mensual no esta activa" };
         }
 
-        // Calculate the difference to pay: $800 - $1 = $799
+        // Get annual price and calculate difference: $800 - $1 already paid = $799
         const annualPriceId = await getOrCreatePrice(stripe, "annual");
-        const preview = await stripe.invoices.retrieveUpcoming({
-          customer: sub.stripeCustomerId,
-          subscription: sub.stripeSubscriptionId,
-          subscription_items: [{
-            id: stripeSub.items.data[0].id,
-            price: annualPriceId,
-          }],
-        });
-        const amountDue = preview.amount_due;
+        const annualPrice = await stripe.prices.retrieve(annualPriceId);
+        const annualAmount = (annualPrice.unit_amount || 80000); // $800 in cents
+        const monthlyAmount = 100; // $1 in cents (already paid)
+        const amountDue = annualAmount - monthlyAmount; // $79900 cents = $799
 
         // Create a Stripe Checkout Session for the upgrade difference
         // User pays via Stripe Checkout (supports Link, Apple Pay, Google Pay)
