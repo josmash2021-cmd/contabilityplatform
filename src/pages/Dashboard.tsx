@@ -3,7 +3,7 @@ import { formatCurrency, formatDateShort, formatTimeLocal, getUserTimezoneShort 
 import { Link } from "react-router";
 import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock, Globe } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
-import { useEffect } from "react";
+import { useState, useEffect } from "react";
 
 // Hook to detect user's location for timezone verification
 function useUserLocation() {
