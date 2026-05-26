@@ -223,8 +223,8 @@ export default function SubscriptionSettings() {
 
           {/* Crown icon */}
           <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
-              <Crown className="w-4 h-4 text-yellow-500" />
+            <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
+              <Crown className="w-4 h-4 text-gray-400" />
             </div>
           </div>
 

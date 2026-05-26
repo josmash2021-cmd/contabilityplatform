@@ -131,7 +131,7 @@ function PersonalSettings() {
           <Card className="border-neutral-200 rounded-lg shadow-none">
             <CardHeader className="pb-2">
               <CardTitle className="text-black text-sm font-normal flex items-center gap-2">
-                <Crown className="w-4 h-4 text-neutral-400" /> Suscripcion
+                <Crown className="w-4 h-4 text-yellow-500" /> Suscripcion
               </CardTitle>
             </CardHeader>
             <CardContent>
@@ -212,7 +212,7 @@ function BusinessSettings() {
         </AnimatedCard>
         <AnimatedCard delay={320} className="lg:col-span-2">
           <Card className="border-neutral-200 rounded-lg shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><Crown className="w-4 h-4 text-neutral-400" /> Suscripcion</CardTitle></CardHeader>
+            <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><Crown className="w-4 h-4 text-yellow-500" /> Suscripcion</CardTitle></CardHeader>
             <CardContent><div className="border-t border-neutral-100 pt-4"><SubscriptionSettings /></div></CardContent>
           </Card>
         </AnimatedCard>
