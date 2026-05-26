@@ -18,7 +18,7 @@ import {
   CheckCircle2, PiggyBank, Loader2, X, Check,
 } from "lucide-react";
 
-/** Account dropdown — same as Reports page */
+/** Account dropdown — uses fixed positioning to render OVER all content */
 function AccountDropdown({
   accounts,
   selectedId,
@@ -29,23 +29,36 @@ function AccountDropdown({
   onChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    function handle(e: MouseEvent) {
+      const t = e.target as Node;
+      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
+      setOpen(false);
     }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    if (open) document.addEventListener("mousedown", handle);
+    return () => document.removeEventListener("mousedown", handle);
   }, [open]);
 
   const selected = accounts.find((a) => String(a.id) === selectedId);
 
+  // Calculate menu position based on button
+  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
+  useEffect(() => {
+    if (open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 220) });
+    }
+  }, [open]);
+
   return (
-    <div ref={ref} className="relative w-52">
+    <>
       <button
+        ref={btnRef}
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-full"
+        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-52"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
         <span className="truncate flex-1 text-left">
@@ -54,7 +67,11 @@ function AccountDropdown({
         <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-full min-w-[220px] bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+        <div
+          ref={menuRef}
+          className="fixed bg-white border border-neutral-200 rounded-lg shadow-2xl py-1 max-h-[300px] overflow-y-auto"
+          style={{ top: pos.top, left: pos.left, width: pos.width, zIndex: 99999 }}
+        >
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -74,7 +91,7 @@ function AccountDropdown({
           ))}
         </div>
       )}
-    </div>
+    </>
   );
 }
 
