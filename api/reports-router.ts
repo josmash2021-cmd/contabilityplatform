@@ -50,7 +50,7 @@ export const reportsRouter = createRouter({
       // REVENUE from bank transactions (deposits, zelle received)
       const bankIncResult = await db.execute(sql.raw(`
         SELECT COALESCE(SUM(amount), 0) as total
-        FROM bank_transactions
+        FROM bankTransactions
         WHERE userId = ${userId}
           AND type = 'income'
           AND DATE(${tzExprBank}) >= '${startDate}'
@@ -71,7 +71,7 @@ export const reportsRouter = createRouter({
       // EXPENSES from bank transactions
       const bankExpResult = await db.execute(sql.raw(`
         SELECT COALESCE(SUM(amount), 0) as total
-        FROM bank_transactions
+        FROM bankTransactions
         WHERE userId = ${userId}
           AND type = 'expense'
           AND DATE(${tzExprBank}) >= '${startDate}'
