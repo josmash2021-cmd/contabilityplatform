@@ -24,6 +24,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import Onboarding from "@/pages/Onboarding";
 import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
+import AdminUsers from "@/pages/AdminUsers";
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -54,6 +55,9 @@ export default function App() {
 
       {/* Setup - no auth required, run once */}
       <Route path="/setup" element={<Setup />} />
+
+      {/* Admin - list users */}
+      <Route path="/admin/users" element={<AdminUsers />} />
 
       {/* Protected routes with ModeProvider */}
       <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>
