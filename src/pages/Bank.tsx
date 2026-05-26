@@ -233,12 +233,14 @@ export default function Bank() {
   const account = plaidAccounts.find((a: any) => String(a.id) === selectedAccountId) || plaidAccounts[0] || null;
   const accountIdNum = account?.id ? Number(account.id) : undefined;
 
-  const { data: liveBalanceData, isLoading: loadingBalance } = trpc.bank.getLiveBalance.useQuery(
-    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1 }
+  const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
+    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 30000 }
   );
-  const { data: monthData, isLoading: loadingMonth } = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
+  const monthDataQuery = trpc.bank.getMonthData.useQuery(
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 30000 }
   );
+  const { data: liveBalanceData, isLoading: loadingBalance } = liveBalanceQuery;
+  const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
   // Annual summary for the resumen del año card
   const { data: yearData } = trpc.bank.getYearData.useQuery(
     { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
@@ -257,20 +259,21 @@ export default function Bank() {
   // Debug query
   const debugQuery = trpc.bank.debug.useQuery(undefined, { retry: false, enabled: false });
 
-  // Auto-sync on mount + polling every 30 seconds for live data
+  // Auto-sync on mount then refetch every 30 seconds
   useEffect(() => {
     if (!hasBankConnected || !accountIdNum) return;
 
-    const doSync = async () => {
+    const doRefresh = async () => {
       try {
         await syncMutation.mutateAsync({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum });
-        utils.bank.getLiveBalance.invalidate();
-        utils.bank.getMonthData.invalidate();
-      } catch { /* silent fail */ }
+      } catch { /* silent fail on sync, still refetch balance */ }
+      // Always refetch balance from Plaid (live)
+      liveBalanceQuery.refetch();
+      monthDataQuery.refetch();
     };
 
-    doSync(); // Initial
-    const interval = setInterval(doSync, 30000); // Every 30s
+    doRefresh(); // Initial
+    const interval = setInterval(doRefresh, 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hasBankConnected, accountIdNum]);

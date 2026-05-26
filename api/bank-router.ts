@@ -1052,42 +1052,41 @@ export const bankRouter = createRouter({
   // ─── LIVE BALANCE ───
   getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
     if (!ctx.user) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
-    if (!await hasActiveBank(ctx.user.id)) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
     const db = getDb();
 
-    // Step 1: Get Plaid access token
-    let userAccounts: any[] = [];
-    try {
-      userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    } catch { return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 }; }
+    // Get user accounts
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    if (userAccounts.length === 0) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
 
     const primaryAccount = userAccounts[0];
-    if (!primaryAccount?.plaidAccessToken) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
+    if (!primaryAccount?.plaidAccessToken) {
+      // No Plaid token — return DB balance
+      const totalBal = userAccounts.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
+      return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: userAccounts[0]?.bankName ?? "Banco", accountCount: userAccounts.length };
+    }
 
-    // Step 2: Fetch REAL balance from Plaid
-    let freshBalances = new Map<string, string>();
+    // Fetch REAL balance from Plaid
     try {
       const client = await initPlaid();
       if (!client) throw new Error("Plaid not initialized");
+
       const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
+      const freshBalances = new Map<string, string>();
+
       for (const plaidAcc of accountsRes.data.accounts || []) {
-        const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
+        // Use available if present, otherwise current. Handle null/undefined correctly.
+        let bal: string | null = null;
+        if (plaidAcc.balances?.available != null && !isNaN(plaidAcc.balances.available)) {
+          bal = String(plaidAcc.balances.available);
+        } else if (plaidAcc.balances?.current != null && !isNaN(plaidAcc.balances.current)) {
+          bal = String(plaidAcc.balances.current);
+        }
         if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
       }
-      console.log(`[getLiveBalance] Fetched ${freshBalances.size} balances from Plaid`);
-    } catch (plaidErr: any) {
-      console.error("[getLiveBalance] Plaid error:", plaidErr.message || plaidErr);
-      // Return DB balance as fallback but mark it
-      const acc = input?.accountId
-        ? await db.select({ currentBalance: bankAccounts.currentBalance, bankName: bankAccounts.bankName }).from(bankAccounts).where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id)))
-        : await db.select({ currentBalance: bankAccounts.currentBalance, bankName: bankAccounts.bankName }).from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-      const totalBal = Array.isArray(acc) ? acc.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0) : parseFloat(acc[0]?.currentBalance ?? "0");
-      return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: (Array.isArray(acc) ? acc[0]?.bankName : acc[0]?.bankName) ?? "Banco", accountCount: Array.isArray(acc) ? acc.length : 1 };
-    }
 
-    // Step 3: Update DB with fresh balances
-    let resultBalance = "0";
-    try {
+      console.log(`[getLiveBalance] Plaid returned ${freshBalances.size} balances:`, Array.from(freshBalances.entries()));
+
+      // Update DB with fresh balances
       for (const dbAccount of userAccounts) {
         if (!dbAccount.plaidAccountId) continue;
         const freshBal = freshBalances.get(dbAccount.plaidAccountId);
@@ -1096,13 +1095,14 @@ export const bankRouter = createRouter({
         }
       }
 
-      // Return the requested account's balance
+      // Calculate result
+      let resultBalance = "0";
       if (input?.accountId) {
         const targetAcc = userAccounts.find((a: any) => a.id === input.accountId);
         const plaidId = targetAcc?.plaidAccountId;
-        resultBalance = plaidId ? (freshBalances.get(plaidId) ?? targetAcc?.currentBalance ?? "0") : (targetAcc?.currentBalance ?? "0");
+        const freshBal = plaidId ? freshBalances.get(plaidId) : null;
+        resultBalance = freshBal ?? targetAcc?.currentBalance ?? "0";
       } else {
-        // Sum all account balances
         let total = 0;
         for (const a of userAccounts) {
           const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
@@ -1110,11 +1110,16 @@ export const bankRouter = createRouter({
         }
         resultBalance = String(total.toFixed(2));
       }
-    } catch (dbErr: any) {
-      console.error("[getLiveBalance] DB update error:", dbErr.message);
-    }
 
-    return { balance: resultBalance, liveBalance: resultBalance, bookBalance: resultBalance, bankName: primaryAccount.bankName ?? "Banco", accountCount: userAccounts.length };
+      console.log(`[getLiveBalance] Returning balance: ${resultBalance}`);
+      return { balance: resultBalance, liveBalance: resultBalance, bookBalance: resultBalance, bankName: primaryAccount.bankName ?? "Banco", accountCount: userAccounts.length };
+
+    } catch (plaidErr: any) {
+      console.error("[getLiveBalance] Plaid error:", plaidErr?.message || plaidErr);
+      // Return DB balance as fallback
+      const totalBal = userAccounts.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
+      return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: userAccounts[0]?.bankName ?? "Banco", accountCount: userAccounts.length };
+    }
   }),
 
   // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS ───
