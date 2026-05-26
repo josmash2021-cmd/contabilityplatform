@@ -370,30 +370,20 @@ export const subscriptionRouter = createRouter({
       const customer = await stripe.customers.retrieve(customerId) as any;
       const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
 
+      // Create subscription — Stripe will auto-charge using default payment method.
+      // If charge succeeds: status = "active". If charge fails: status = "incomplete".
+      // Either way, the subscription is NOT in "past_due" state anymore.
       const newSub = await stripe.subscriptions.create({
         customer: customerId,
         items: [{ price: monthlyPriceId }],
         default_payment_method: defaultPaymentMethod || undefined,
-        payment_behavior: "default_incomplete",
-        expand: ["latest_invoice.payment_intent"],
+        collection_method: "charge_automatically",
+        expand: ["latest_invoice"],
       }) as any;
-
-      // If there's an immediate payment required, confirm it
-      const paymentIntent = newSub.latest_invoice?.payment_intent;
-      if (paymentIntent && paymentIntent.status === "requires_confirmation") {
-        try {
-          await stripe.paymentIntents.confirm(paymentIntent.id, {
-            payment_method: defaultPaymentMethod,
-            off_session: true,
-          });
-        } catch (e: any) {
-          console.log("[restoreMonthly] Payment confirmation error:", e.message);
-          // Even if payment fails, we created the subscription — it'll be in incomplete status
-        }
-      }
 
       // Refresh the subscription to get final status
       const finalSub = await stripe.subscriptions.retrieve(newSub.id) as any;
+      console.log("[restoreMonthly] New subscription status:", finalSub.status);
 
       // Step 4: Delete the old broken subscription record from DB
       await db.delete(subscriptions).where(eq(subscriptions.id, sub.id));
