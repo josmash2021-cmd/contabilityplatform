@@ -70,7 +70,7 @@ export default function Dashboard() {
   });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
-  const [showDebug, setShowDebug] = useState(false);
+  const [showDebug, setShowDebug] = useState(true);
 
   const safeData = data || {
     todaySales: { total: "0", count: 0 },

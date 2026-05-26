@@ -81,9 +81,16 @@ export const dashboardRouter = createRouter({
       const mStart = input?.monthStart;
       const now = input?.now;
 
+      // DEBUG LOGGING
+      console.log("[DASHBOARD SUMMARY] userId:", userId);
+      console.log("[DASHBOARD SUMMARY] input received:", JSON.stringify(input));
+      console.log("[DASHBOARD SUMMARY] tStart:", tStart, "-> as Date:", tStart ? new Date(tStart).toISOString() : null);
+      console.log("[DASHBOARD SUMMARY] tEnd:", tEnd, "-> as Date:", tEnd ? new Date(tEnd).toISOString() : null);
+
       // ─── Sales aggregates using frontend-provided UTC timestamps ───
-      const todaySalesAgg = tStart && tEnd
-        ? await db.select({
+      let todaySalesAgg;
+      if (tStart && tEnd) {
+        todaySalesAgg = await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
@@ -91,11 +98,16 @@ export const dashboardRouter = createRouter({
                 gte(sales.createdAt, new Date(tStart)),
                 lte(sales.createdAt, new Date(tEnd)),
                 eq(sales.status, "completed"))
-          )
-        : [{ total: "0", count: 0 }];
+          );
+        console.log("[DASHBOARD SUMMARY] todaySalesAgg:", JSON.stringify(todaySalesAgg));
+      } else {
+        console.log("[DASHBOARD SUMMARY] NO tStart/tEnd, returning 0");
+        todaySalesAgg = [{ total: "0", count: 0 }];
+      }
 
-      const weekSalesAgg = wStart && now
-        ? await db.select({
+      let weekSalesAgg;
+      if (wStart && now) {
+        weekSalesAgg = await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
@@ -103,11 +115,16 @@ export const dashboardRouter = createRouter({
                 gte(sales.createdAt, new Date(wStart)),
                 lte(sales.createdAt, new Date(now)),
                 eq(sales.status, "completed"))
-          )
-        : [{ total: "0", count: 0 }];
+          );
+        console.log("[DASHBOARD SUMMARY] weekSalesAgg:", JSON.stringify(weekSalesAgg));
+      } else {
+        console.log("[DASHBOARD SUMMARY] NO wStart/now, week=0");
+        weekSalesAgg = [{ total: "0", count: 0 }];
+      }
 
-      const monthSalesAgg = mStart && now
-        ? await db.select({
+      let monthSalesAgg;
+      if (mStart && now) {
+        monthSalesAgg = await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
@@ -115,8 +132,12 @@ export const dashboardRouter = createRouter({
                 gte(sales.createdAt, new Date(mStart)),
                 lte(sales.createdAt, new Date(now)),
                 eq(sales.status, "completed"))
-          )
-        : [{ total: "0", count: 0 }];
+          );
+        console.log("[DASHBOARD SUMMARY] monthSalesAgg:", JSON.stringify(monthSalesAgg));
+      } else {
+        console.log("[DASHBOARD SUMMARY] NO mStart/now, month=0");
+        monthSalesAgg = [{ total: "0", count: 0 }];
+      }
 
       // Payment breakdown (today)
       const paymentBreakdownRaw = tStart && tEnd
@@ -232,7 +253,7 @@ export const dashboardRouter = createRouter({
         // Table may not exist, ignore
       }
 
-      return {
+      const result = {
         todaySales: { total: todaySalesAgg[0]?.total ?? "0", count: todaySalesAgg[0]?.count ?? 0 },
         weekSales: { total: weekSalesAgg[0]?.total ?? "0", count: weekSalesAgg[0]?.count ?? 0 },
         monthSales: { total: monthSalesAgg[0]?.total ?? "0", count: monthSalesAgg[0]?.count ?? 0 },
@@ -246,6 +267,8 @@ export const dashboardRouter = createRouter({
         accountBalances,
         customerCount,
       };
+      console.log("[DASHBOARD SUMMARY] RETURNING:", JSON.stringify(result.todaySales));
+      return result;
     }),
 
   monthly: authedQuery
