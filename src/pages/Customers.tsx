@@ -239,7 +239,7 @@ function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => voi
 
       <button onClick={() => setExpanded(!expanded)} className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500 hover:text-black transition-colors duration-150">
         <ShoppingBag className="w-3.5 h-3.5" />
-        {expanded ? "Ocultar historial" : "Ver compras"}
+        {expanded ? "Ocultar historial" : "Ver historial"}
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
 
