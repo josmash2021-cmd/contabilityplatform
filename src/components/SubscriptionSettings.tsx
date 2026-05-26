@@ -172,6 +172,16 @@ export default function SubscriptionSettings() {
   });
 
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+
+  const upgradeMut = trpc.subscription.upgrade.useMutation({
+    onSuccess: (data) => {
+      utils.subscription.status.invalidate();
+      utils.subscription.payments.invalidate();
+      toast.success(data.message || "Upgrade completado");
+    },
+    onError: (err) => toast.error(err.message),
+  });
 
   if (statusLoading) {
     return (
@@ -186,16 +196,6 @@ export default function SubscriptionSettings() {
     const currentPlan = status.plan === "monthly" ? PLAN_MONTHLY : PLAN_ANNUAL;
     const otherPlan = status.plan === "monthly" ? PLAN_ANNUAL : PLAN_MONTHLY;
     const isMonthly = status.plan === "monthly";
-    const [showUpgrade, setShowUpgrade] = useState(false);
-
-    const upgradeMut = trpc.subscription.upgrade.useMutation({
-      onSuccess: (data) => {
-        utils.subscription.status.invalidate();
-        utils.subscription.payments.invalidate();
-        toast.success(data.message || "Upgrade completado");
-      },
-      onError: (err) => toast.error(err.message),
-    });
 
     return (
       <div className="space-y-6">
