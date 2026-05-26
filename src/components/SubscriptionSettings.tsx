@@ -214,65 +214,79 @@ export default function SubscriptionSettings() {
           </div>
         )}
 
-        {/* Current Plan Card */}
-        <div className="border-2 border-emerald-200 bg-white rounded-lg p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-transparent flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent"><Crown className="w-4 h-4 text-yellow-500" /></div>
-              </div>
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-medium text-black">Suscripcion actual: {isMonthly ? "Mensual" : "Anual"}</h3>
-                  <Badge variant="outline" className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">Activo</Badge>
-                </div>
-                <p className="text-xs text-neutral-500 mt-0.5">
-                  {status.currentPeriodEnd
-                    ? `Vence el ${new Date(status.currentPeriodEnd).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`
-                    : "Acceso completo activo"}
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-lg font-medium text-black">{currentPlan.price}</p>
-              <p className="text-[10px] text-neutral-400">{currentPlan.period}</p>
+        {/* Current Plan Card — Same design as plan cards */}
+        <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+          {/* Active badge */}
+          <div className="absolute -top-2.5 right-4">
+            <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">Activo</Badge>
+          </div>
+
+          {/* Crown icon */}
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
+              <Crown className="w-4 h-4 text-yellow-500" />
             </div>
           </div>
 
+          {/* Plan name */}
+          <div>
+            <h4 className="text-sm font-medium text-black">{isMonthly ? "Mensual" : "Anual"}</h4>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-2xl font-medium text-black">{currentPlan.price}</span>
+              <span className="text-xs text-neutral-400 line-through">{currentPlan.originalPrice}</span>
+              <span className="text-xs text-neutral-400">{currentPlan.period}</span>
+            </div>
+            <p className="text-[11px] text-neutral-400 mt-1">
+              {status.currentPeriodEnd
+                ? `Vence el ${new Date(status.currentPeriodEnd).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`
+                : currentPlan.description}
+            </p>
+          </div>
+
+          {/* Features list */}
+          <ul className="space-y-1.5">
+            {currentPlan.features.map((f) => (
+              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                {f}
+              </li>
+            ))}
+          </ul>
+
+          {/* Cancel warning */}
           {status.cancelAtPeriodEnd && (
             <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
               <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-xs text-amber-800">
                 Tu plan se cancelara automaticamente al final del periodo actual.
-                Seguiras teniendo acceso hasta esa fecha.
               </p>
             </div>
           )}
 
-          {/* Manage billing & cancel */}
+          {/* Action buttons */}
           {!status.cancelAtPeriodEnd && (
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 pt-1">
               <Button
                 variant="outline"
                 onClick={() => portalMut.mutate()}
                 disabled={portalMut.isPending}
-                className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-8"
+                className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-8 flex-1"
               >
                 {portalMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <ExternalLink className="w-3 h-3 mr-1" />}
-                Gestionar tarjeta y facturacion
+                Gestionar tarjeta
               </Button>
 
               {!confirmCancel ? (
                 <Button
                   variant="outline"
                   onClick={() => setConfirmCancel(true)}
-                  className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8"
+                  className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 flex-1"
                 >
-                  Cancelar Plan
+                  Cancelar
                 </Button>
               ) : (
                 <div className="space-y-2 w-full">
-                  <p className="text-xs text-neutral-500">¿Seguro? Tu acceso sigue hasta el final del periodo pagado.</p>
+                  <p className="text-xs text-neutral-500">¿Seguro? Tu acceso sigue hasta el final del periodo.</p>
                   <div className="flex gap-2">
                     <Button
                       variant="outline"
@@ -286,7 +300,7 @@ export default function SubscriptionSettings() {
                       disabled={cancelMut.isPending}
                       className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
                     >
-                      {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar cancelacion"}
+                      {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
                     </Button>
                   </div>
                 </div>
