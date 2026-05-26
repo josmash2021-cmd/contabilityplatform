@@ -212,7 +212,7 @@ export const salesRouter = createRouter({
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
-      return db.select({
+      const saleRows = await db.select({
         id: sales.id,
         invoiceNumber: sales.invoiceNumber,
         total: sales.total,
@@ -222,6 +222,30 @@ export const salesRouter = createRouter({
       }).from(sales).where(
         and(eq(sales.customerId, input.customerId), eq(sales.createdBy, userId))
       ).orderBy(desc(sales.createdAt));
+
+      // Fetch items for each sale
+      const saleIds = saleRows.map((s) => s.id);
+      if (saleIds.length === 0) return [];
+
+      const items = await db.select({
+        saleId: saleServices.saleId,
+        serviceName: saleServices.serviceName,
+        quantity: saleServices.quantity,
+        unitPrice: saleServices.unitPrice,
+      }).from(saleServices).where(sql`${saleServices.saleId} IN (${saleIds.join(",")})`);
+
+      // Group items by sale
+      const itemsBySale = new Map<number, typeof items>();
+      for (const item of items) {
+        const arr = itemsBySale.get(item.saleId) ?? [];
+        arr.push(item);
+        itemsBySale.set(item.saleId, arr);
+      }
+
+      return saleRows.map((s) => ({
+        ...s,
+        items: itemsBySale.get(s.id) ?? [],
+      }));
     }),
 
   stats: authedQuery

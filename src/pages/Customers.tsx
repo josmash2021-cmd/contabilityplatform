@@ -247,19 +247,25 @@ function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => voi
         <div className="mt-3 pt-3 border-t border-neutral-100">
           {purchaseHistory === undefined ? (<p className="text-xs text-neutral-400">Cargando...</p>) :
             purchaseHistory.length === 0 ? (<p className="text-xs text-neutral-400">Sin compras registradas</p>) : (
-              <div className="space-y-2">
-                {purchaseHistory.map((sale: typeof purchaseHistory[0]) => (
-                  <div key={sale.id} className="flex items-center justify-between py-2 px-3 bg-neutral-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium text-black">{sale.invoiceNumber}</span>
-                      <span className="text-[10px] text-neutral-400">{new Date(sale.createdAt).toLocaleDateString("es-ES")}</span>
+              <div>
+                {purchaseHistory.map((sale: any) => {
+                  const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || "Sin productos";
+                  const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
+                  const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                  const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+                  return (
+                    <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-xs font-medium text-black truncate">{productNames}</p>
+                        <div className="flex items-center gap-2 mt-0.5">
+                          <span className="text-[10px] text-neutral-500">{dateStr} &middot; {timeStr}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500">{paymentLabel}</span>
+                        </div>
+                      </div>
+                      <span className="text-xs font-semibold text-black ml-3 shrink-0">{formatCurrency(sale.total)}</span>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="flex items-center gap-1 text-[10px] text-neutral-500"><Wallet className="w-3 h-3" />{PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod}</span>
-                      <span className="text-xs font-medium text-black">{formatCurrency(sale.total)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
         </div>
