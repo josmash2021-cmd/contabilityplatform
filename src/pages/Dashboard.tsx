@@ -39,7 +39,16 @@ function useUserLocation() {
 const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Dashboard() {
-  const { data, error } = trpc.dashboard.summary.useQuery();
+  // Calculate timezone offset for backend (e.g., "-04:00" for EDT)
+  const tzOffset = (() => {
+    const now = new Date();
+    const offsetMinutes = now.getTimezoneOffset(); // minutes behind UTC
+    const hours = Math.floor(Math.abs(offsetMinutes) / 60);
+    const mins = Math.abs(offsetMinutes) % 60;
+    const sign = offsetMinutes <= 0 ? "+" : "-"; // getTimezoneOffset: positive = behind UTC
+    return `${sign}${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+  })();
+  const { data, error } = trpc.dashboard.summary.useQuery({ timezone: tzOffset });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
 

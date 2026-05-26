@@ -22,42 +22,44 @@ export const dashboardRouter = createRouter({
     };
   }),
 
-  summary: authedQuery.query(async ({ ctx }) => {
+  summary: authedQuery.input(z.object({ timezone: z.string().optional() }).optional()).query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
+      const tz = input?.timezone ?? "+00:00";
 
-      // Use SQL date functions to match MySQL's timezone handling
-      // DATE(createdAt) compares dates correctly regardless of timezone
+      // Convert user's IANA timezone to MySQL offset (e.g., "America/New_York" -> "-04:00")
+      // If already an offset string like "+00:00" or "-04:00", use directly
+      const tzOffset = tz.match(/^[+-]\d{2}:\d{2}$/) ? tz : "+00:00";
 
-      // ─── Sales aggregates via SQL ───
+      // ─── Sales aggregates via SQL with timezone conversion ───
       const todaySalesAgg = await db.select({
         total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       }).from(sales).where(
-        and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
+        and(eq(sales.createdBy, userId), sql`DATE(CONVERT_TZ(${sales.createdAt}, '+00:00', ${tzOffset})) = CURDATE()`, eq(sales.status, "completed"))
       );
 
       const weekSalesAgg = await db.select({
         total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       }).from(sales).where(
-        and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, eq(sales.status, "completed"))
+        and(eq(sales.createdBy, userId), sql`DATE(CONVERT_TZ(${sales.createdAt}, '+00:00', ${tzOffset})) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, eq(sales.status, "completed"))
       );
 
       const monthSalesAgg = await db.select({
         total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       }).from(sales).where(
-        and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, eq(sales.status, "completed"))
+        and(eq(sales.createdBy, userId), sql`DATE(CONVERT_TZ(${sales.createdAt}, '+00:00', ${tzOffset})) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, eq(sales.status, "completed"))
       );
 
-      // Payment breakdown (today)
+      // Payment breakdown (today) with timezone conversion
       const paymentBreakdownRaw = await db.select({
         method: sales.paymentMethod,
         total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
         count: sql<number>`COUNT(*)`,
       }).from(sales).where(
-        and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
+        and(eq(sales.createdBy, userId), sql`DATE(CONVERT_TZ(${sales.createdAt}, '+00:00', ${tzOffset})) = CURDATE()`, eq(sales.status, "completed"))
       ).groupBy(sales.paymentMethod);
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
