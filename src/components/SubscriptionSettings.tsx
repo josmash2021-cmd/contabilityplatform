@@ -110,6 +110,9 @@ export default function SubscriptionSettings() {
   );
   const { data: payments } = trpc.subscription.payments.useQuery();
 
+  // Detect declined/failed payments (past_due = user tried to pay but card was declined)
+  const hasDeclinedPayment = status?.status === "past_due" || status?.status === "unpaid";
+
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
 
@@ -446,9 +449,22 @@ export default function SubscriptionSettings() {
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
   return (
     <div className="space-y-6">
+      {/* Declined payment warning */}
+      {hasDeclinedPayment && (
+        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-sm text-red-700 font-medium">Pago declinado</p>
+          <p className="text-xs text-red-600 mt-1">
+            Tu tarjeta fue declinada al procesar el pago. Tu suscripcion no esta activa.
+            Por favor actualiza tu metodo de pago o elige un plan nuevo.
+          </p>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-400">
-          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+          {hasDeclinedPayment
+            ? "Elige un plan para activar tu suscripcion."
+            : "Configura tu plan para desbloquear el acceso completo a Accounting Platform."}
         </p>
         {/* Force sync button for users who already paid */}
         <Button

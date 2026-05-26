@@ -123,7 +123,7 @@ export const subscriptionRouter = createRouter({
             customer: foundCustomer.id, status: "all", limit: 5,
           });
           const stripeSub = stripeSubsList.data.find((s: any) =>
-            s.status === "active" || s.status === "trialing" || s.status === "past_due"
+            s.status === "active" || s.status === "trialing"
           ) || stripeSubsList.data[0];
 
           if (stripeSub) {
@@ -166,7 +166,7 @@ export const subscriptionRouter = createRouter({
       try {
         const stripe = getStripe();
         const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-        const isActive = stripeSub.status === "active" || stripeSub.status === "trialing" || stripeSub.status === "past_due";
+        const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
         const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
                      stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : sub.plan;
 
@@ -192,7 +192,7 @@ export const subscriptionRouter = createRouter({
       }
     }
 
-    const isActive = sub.status === "active" || sub.status === "trialing" || sub.status === "past_due";
+    const isActive = sub.status === "active" || sub.status === "trialing";
     return {
       active: isActive,
       plan: sub.plan,
@@ -235,7 +235,7 @@ export const subscriptionRouter = createRouter({
 
       // Find active/trialing subscription
       const activeSub = stripeSubsList.data.find((s: any) =>
-        s.status === "active" || s.status === "trialing" || s.status === "past_due"
+        s.status === "active" || s.status === "trialing"
       );
 
       if (!activeSub) {
@@ -433,7 +433,7 @@ export const subscriptionRouter = createRouter({
         });
 
         const stripeSub = stripeSubsList.data.find((s: any) =>
-          s.status === "active" || s.status === "trialing" || s.status === "past_due"
+          s.status === "active" || s.status === "trialing"
         ) || stripeSubsList.data[0];
 
         if (!stripeSub) return { active: false, plan: null };
@@ -475,7 +475,7 @@ export const subscriptionRouter = createRouter({
     // Step 3: Verify with Stripe
     try {
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-      const isActive = stripeSub.status === "active" || stripeSub.status === "trialing" || stripeSub.status === "past_due";
+      const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
 
       // Determine plan from actual Stripe price
       const priceId = stripeSub.items?.data?.[0]?.price?.id;
@@ -500,7 +500,7 @@ export const subscriptionRouter = createRouter({
       return { active: isActive, plan, status: stripeSub.status };
     } catch (err: any) {
       // Fallback to DB state
-      const isActive = sub.status === "active" || sub.status === "trialing" || sub.status === "past_due";
+      const isActive = sub.status === "active" || sub.status === "trialing";
       return { active: isActive, plan: sub.plan, status: sub.status };
     }
   }),
