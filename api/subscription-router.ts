@@ -534,49 +534,66 @@ export const subscriptionRouter = createRouter({
         // Get annual price ID
         const annualPriceId = await getOrCreatePrice(stripe, "annual");
 
-        // Update subscription: change from monthly to annual
-        const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-          items: [{
+        // Step 1: Preview the proration WITHOUT changing the subscription
+        const preview = await stripe.invoices.retrieveUpcoming({
+          customer: sub.stripeCustomerId,
+          subscription: sub.stripeSubscriptionId,
+          subscription_items: [{
             id: stripeSub.items.data[0].id,
             price: annualPriceId,
           }],
-          proration_behavior: "create_prorations",
-          payment_behavior: "error_if_incomplete",
         });
 
-        // Pay any pending invoice immediately
-        if (updatedSub.latest_invoice) {
-          try {
-            const invoice = await stripe.invoices.pay(updatedSub.latest_invoice as string);
-            if (invoice.status !== "paid") {
-              return { success: false, error: "Tarjeta declinada. No se pudo procesar el cobro. Verifica tu metodo de pago." };
-            }
-          } catch (invErr: any) {
-            if (invErr.code === "card_declined") {
-              return { success: false, error: "Tarjeta declinada. Por favor verifica tu metodo de pago e intenta de nuevo." };
-            }
-            return { success: false, error: "Error al procesar el pago: " + (invErr.message || "Intenta de nuevo") };
-          }
+        const amountDue = preview.amount_due;
+        console.log(`[upgrade] Preview: amount_due=${amountDue}`);
+
+        // Step 2: Create a separate payment intent for the upgrade amount
+        // This way if payment fails, the original subscription is untouched
+        const paymentIntent = await stripe.paymentIntents.create({
+          amount: amountDue,
+          currency: "usd",
+          customer: sub.stripeCustomerId,
+          description: "Upgrade a plan Anual - AI Aethel Accountant",
+          confirm: true,
+          payment_method: stripeSub.default_payment_method,
+          error_on_requires_action: true,
+        });
+
+        // Step 3: If payment succeeded, update the subscription
+        if (paymentIntent.status === "succeeded") {
+          const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+            items: [{
+              id: stripeSub.items.data[0].id,
+              price: annualPriceId,
+            }],
+            proration_behavior: "always_invoice",
+            billing_cycle_anchor: "now",
+          });
+
+          // Update DB
+          await db.update(subscriptions).set({
+            plan: "annual",
+            status: updatedSub.status,
+            currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+            updatedAt: new Date(),
+          }).where(eq(subscriptions.id, sub.id));
+
+          return {
+            success: true,
+            plan: "annual",
+            message: "Suscripcion aplicada con exito. Ahora tienes el plan Anual.",
+          };
+        } else {
+          // Payment did not succeed — monthly subscription remains untouched
+          return { success: false, error: "El pago no pudo completarse. Tu suscripcion mensual sigue activa. Intenta de nuevo mas tarde." };
         }
-
-        // Update DB
-        await db.update(subscriptions).set({
-          plan: "annual",
-          status: updatedSub.status,
-          currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
-          updatedAt: new Date(),
-        }).where(eq(subscriptions.id, sub.id));
-
-        return {
-          success: true,
-          plan: "annual",
-          message: "Suscripcion aplicada con exito. Ahora tienes el plan Anual.",
-        };
       } catch (err: any) {
-        if (err.code === "card_declined") {
-          return { success: false, error: "Tarjeta declinada. Por favor verifica tu metodo de pago e intenta de nuevo." };
+        console.error("[upgrade] Error:", err.message, err.code);
+        // If ANY error occurs, the monthly subscription is untouched
+        if (err.code === "card_declined" || err.decline_code) {
+          return { success: false, error: "Tarjeta declinada. Tu suscripcion mensual sigue activa. Por favor verifica tu metodo de pago e intenta de nuevo." };
         }
-        return { success: false, error: err.message || "Error al procesar el upgrade" };
+        return { success: false, error: (err.message || "Error al procesar el upgrade") + ". Tu suscripcion mensual sigue activa." };
       }
     }),
 

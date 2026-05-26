@@ -207,9 +207,19 @@ export default function SubscriptionSettings() {
     onSuccess: (data) => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
-      toast.success(data.message || "Upgrade completado");
+      if (data.success) {
+        setUpgradeSuccess(true);
+        setShowUpgrade(false);
+        toast.success("✓ " + data.message);
+      } else {
+        // Upgrade failed but monthly subscription is still active
+        toast.error(data.error || "El upgrade no pudo completarse", { duration: 5000 });
+      }
     },
-    onError: (err) => toast.error(err.message),
+    onError: (err) => {
+      // Upgrade failed but monthly subscription is still active
+      toast.error(err.message + " Tu suscripcion mensual sigue activa.", { duration: 5000 });
+    },
   });
 
   if (statusLoading) {
@@ -460,22 +470,9 @@ export default function SubscriptionSettings() {
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
   return (
     <div className="space-y-6">
-      {/* Declined payment warning */}
-      {hasDeclinedPayment && (
-        <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-sm text-red-700 font-medium">Pago declinado</p>
-          <p className="text-xs text-red-600 mt-1">
-            Tu tarjeta fue declinada al procesar el pago. Tu suscripcion no esta activa.
-            Por favor actualiza tu metodo de pago o elige un plan nuevo.
-          </p>
-        </div>
-      )}
-
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-400">
-          {hasDeclinedPayment
-            ? "Elige un plan para activar tu suscripcion."
-            : "Configura tu plan para desbloquear el acceso completo a Accounting Platform."}
+          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
         </p>
         {/* Force sync button for users who already paid */}
         <Button
