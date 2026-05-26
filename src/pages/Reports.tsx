@@ -20,6 +20,7 @@ import {
   RefreshCw, AlertTriangle, Wallet, CreditCard, Activity,
   Landmark, ChevronDown, ChevronUp, Link2, Unlink,
 } from "lucide-react";
+import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 /** Account dropdown — same style as Transactions page */
 function AccountDropdown({
@@ -78,7 +79,6 @@ function AccountDropdown({
     </div>
   );
 }
-import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const PAYMENT_LABELS: Record<string, string> = {
   cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto", transfer: "Transferencia", other: "Otro",
