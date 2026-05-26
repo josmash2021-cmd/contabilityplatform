@@ -23,29 +23,24 @@ export const dashboardRouter = createRouter({
   }),
 
   summary: authedQuery.input(z.object({
-      todayDate: z.string().optional(),
+      todayStart: z.string().optional(),
+      todayEnd: z.string().optional(),
       weekStart: z.string().optional(),
       monthStart: z.string().optional(),
+      now: z.string().optional(),
     }).optional()).query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
 
-      // Frontend sends dates in user's local timezone as YYYY-MM-DD strings
-      // These are already the correct dates for the user's timezone
-      const todayDate = input?.todayDate;
-      const weekStart = input?.weekStart;
-      const monthStart = input?.monthStart;
+      // Frontend sends ISO timestamps (UTC) that represent the user's local day boundaries
+      const todayStart = input?.todayStart ? new Date(input.todayStart) : null;
+      const todayEnd = input?.todayEnd ? new Date(input.todayEnd) : null;
+      const weekS = input?.weekStart ? new Date(input.weekStart) : null;
+      const monthS = input?.monthStart ? new Date(input.monthStart) : null;
+      const now = input?.now ? new Date(input.now) : new Date();
 
-      // ─── Sales aggregates using frontend-provided dates ───
-      // Filter sales where createdAt (UTC) falls within the user's local day
-      // We calculate the UTC range from the local date
-      const todayStart = todayDate ? new Date(`${todayDate}T00:00:00.000Z`) : null;
-      const todayEnd = todayDate ? new Date(`${todayDate}T23:59:59.999Z`) : null;
-      const weekS = weekStart ? new Date(`${weekStart}T00:00:00.000Z`) : null;
-      const monthS = monthStart ? new Date(`${monthStart}T00:00:00.000Z`) : null;
-      const now = new Date();
-
-      const todaySalesAgg = todayDate
+      // ─── Sales aggregates using frontend-provided UTC timestamps ───
+      const todaySalesAgg = todayStart && todayEnd
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
@@ -57,9 +52,14 @@ export const dashboardRouter = createRouter({
               sql`${sales.createdAt} <= ${todayEnd}`,
             )
           )
-        : [{ total: "0", count: 0 }];
+        : await db.select({
+            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          }).from(sales).where(
+            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
+          );
 
-      const weekSalesAgg = weekStart
+      const weekSalesAgg = weekS
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
@@ -71,9 +71,14 @@ export const dashboardRouter = createRouter({
               sql`${sales.createdAt} <= ${now}`,
             )
           )
-        : [{ total: "0", count: 0 }];
+        : await db.select({
+            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          }).from(sales).where(
+            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, eq(sales.status, "completed"))
+          );
 
-      const monthSalesAgg = monthStart
+      const monthSalesAgg = monthS
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
@@ -85,10 +90,15 @@ export const dashboardRouter = createRouter({
               sql`${sales.createdAt} <= ${now}`,
             )
           )
-        : [{ total: "0", count: 0 }];
+        : await db.select({
+            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          }).from(sales).where(
+            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, eq(sales.status, "completed"))
+          );
 
       // Payment breakdown (today)
-      const paymentBreakdownRaw = todayDate
+      const paymentBreakdownRaw = todayStart && todayEnd
         ? await db.select({
             method: sales.paymentMethod,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
@@ -101,7 +111,13 @@ export const dashboardRouter = createRouter({
               sql`${sales.createdAt} <= ${todayEnd}`,
             )
           ).groupBy(sales.paymentMethod)
-        : [];
+        : await db.select({
+            method: sales.paymentMethod,
+            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          }).from(sales).where(
+            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
+          ).groupBy(sales.paymentMethod);
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
         method: p.method,
