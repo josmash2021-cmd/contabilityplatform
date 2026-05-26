@@ -234,53 +234,127 @@ export const subscriptionRouter = createRouter({
       }
     }
 
-    const sub = subs[0];
+    let sub = subs[0];
     if (!sub) return { active: false, plan: null, status: "no_subscription", currentPeriodEnd: null };
 
-    // Step 3: Verify with Stripe
-    if (sub.stripeSubscriptionId) {
-      try {
-        const stripe = getStripe();
-        const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-        let status = stripeSub.status;
-        let plan: "monthly" | "annual" = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
-                     stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : sub.plan;
-        let currentPeriodEnd = stripeSub.current_period_end;
-        let currentPeriodStart = stripeSub.current_period_start;
-        let cancelAtPeriodEnd = stripeSub.cancel_at_period_end;
-        let subId = sub.stripeSubscriptionId;
+    // Step 3: Verify with Stripe — ALWAYS check ALL subscriptions for this customer
+    try {
+      const stripe = getStripe();
 
-        // If subscription is broken (past_due/unpaid/incomplete), auto-recover it
-        if (status === "past_due" || status === "unpaid" || status === "incomplete") {
-          console.log(`[status] Subscription ${subId} is ${status} — auto-recovering...`);
-          const recovered = await recoverSubscription(db, stripe, userId);
-          if (recovered.success && recovered.finalSub) {
-            status = recovered.finalSub.status;
-            subId = recovered.finalSub.id;
-            currentPeriodEnd = recovered.finalSub.current_period_end;
-            currentPeriodStart = recovered.finalSub.current_period_start;
-            cancelAtPeriodEnd = recovered.finalSub.cancel_at_period_end;
-            plan = "monthly"; // Always monthly after recovery
-            console.log(`[status] Recovered! New status: ${status}, new sub: ${subId}`);
-          } else {
-            console.log("[status] Recovery failed:", recovered.error);
-          }
+      // Get the customer ID (from DB or search)
+      let customerId = sub.stripeCustomerId;
+      if (!customerId) {
+        // Search for customer by email
+        if (ctx.user.email) {
+          const byEmail = await stripe.customers.search({
+            query: `email:'${ctx.user.email}'`,
+          });
+          if (byEmail.data.length > 0) customerId = byEmail.data[0].id;
+        }
+        if (!customerId) {
+          const allCusts = await stripe.customers.list({ limit: 100 });
+          const found = allCusts.data.find((c: any) =>
+            c.metadata?.platformUserId === String(userId) || c.email === ctx.user?.email
+          );
+          if (found) customerId = found.id;
+        }
+      }
+
+      if (customerId) {
+        // List ALL subscriptions for this customer — not just the one in DB
+        const stripeSubsList = await stripe.subscriptions.list({
+          customer: customerId,
+          status: "all",
+          limit: 10,
+        });
+
+        // Find the BEST subscription: active/trialing first, then newest
+        const allSubs = stripeSubsList.data;
+        let bestSub = allSubs.find((s: any) =>
+          s.status === "active" || s.status === "trialing"
+        );
+
+        // If no active sub found, check if the DB sub is still valid
+        if (!bestSub && sub.stripeSubscriptionId) {
+          const dbSubInStripe = allSubs.find((s: any) => s.id === sub.stripeSubscriptionId);
+          if (dbSubInStripe) bestSub = dbSubInStripe;
         }
 
-        const isActive = status === "active" || status === "trialing";
+        // If still no sub found but there are subs, take the newest
+        if (!bestSub && allSubs.length > 0) {
+          bestSub = allSubs[0]; // Stripe returns newest first
+        }
 
-        return {
-          active: isActive,
-          plan: plan,
-          status: status,
-          currentPeriodEnd: currentPeriodEnd ? new Date(currentPeriodEnd * 1000).toISOString() : null,
-          cancelAtPeriodEnd: cancelAtPeriodEnd,
-        };
-      } catch {
-        // Stripe check failed, fallback to DB
+        if (bestSub) {
+          const priceId = bestSub.items?.data?.[0]?.price?.id;
+          let plan: "monthly" | "annual" = sub.plan;
+          if (priceId) {
+            try {
+              const priceData = await stripe.prices.retrieve(priceId);
+              plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+            } catch { /* keep existing plan */ }
+          }
+
+          // If the best sub is different from what's in DB, update DB
+          if (bestSub.id !== sub.stripeSubscriptionId) {
+            console.log(`[status] Found better subscription ${bestSub.status}: ${bestSub.id} (was ${sub.stripeSubscriptionId})`);
+            // Delete old records for this user and insert the correct one
+            await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+            await db.insert(subscriptions).values({
+              userId,
+              stripeCustomerId: customerId,
+              stripeSubscriptionId: bestSub.id,
+              plan,
+              status: bestSub.status,
+              currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : new Date(),
+              currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : new Date(),
+              cancelAtPeriodEnd: bestSub.cancel_at_period_end || false,
+            });
+          } else {
+            // Same sub, just update it
+            await db.update(subscriptions).set({
+              status: bestSub.status,
+              plan,
+              currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : sub.currentPeriodEnd,
+              currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : sub.currentPeriodStart,
+              cancelAtPeriodEnd: bestSub.cancel_at_period_end,
+              updatedAt: new Date(),
+            }).where(eq(subscriptions.id, sub.id));
+          }
+
+          const isActive = bestSub.status === "active" || bestSub.status === "trialing";
+
+          // If broken (past_due/unpaid/incomplete), auto-recover
+          if (!isActive && (bestSub.status === "past_due" || bestSub.status === "unpaid" || bestSub.status === "incomplete")) {
+            console.log(`[status] Subscription ${bestSub.id} is ${bestSub.status} — auto-recovering...`);
+            const recovered = await recoverSubscription(db, stripe, userId);
+            if (recovered.success && recovered.finalSub) {
+              const recStatus = recovered.finalSub.status;
+              const recActive = recStatus === "active" || recStatus === "trialing";
+              return {
+                active: recActive,
+                plan: "monthly" as const,
+                status: recStatus,
+                currentPeriodEnd: recovered.finalSub.current_period_end ? new Date(recovered.finalSub.current_period_end * 1000).toISOString() : null,
+                cancelAtPeriodEnd: recovered.finalSub.cancel_at_period_end,
+              };
+            }
+          }
+
+          return {
+            active: isActive,
+            plan: plan,
+            status: bestSub.status,
+            currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000).toISOString() : null,
+            cancelAtPeriodEnd: bestSub.cancel_at_period_end,
+          };
+        }
       }
+    } catch (err: any) {
+      console.error("[status] Stripe verification error:", err.message);
     }
 
+    // Fallback to DB state
     const isActive = sub.status === "active" || sub.status === "trialing";
     return {
       active: isActive,
