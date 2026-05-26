@@ -251,6 +251,89 @@ if (env.isProduction) {
   console.log("[bg-sync] Background balance sync scheduled every 5 minutes");
 }
 
+// ── DEBUG: Check raw Plaid balance for logged-in user ──
+// Visit this URL while logged into the app to see what Plaid reports from your bank
+app.get("/api/debug-balance", async (c) => {
+  try {
+    // Try to get auth token from header first, then cookie
+    let token = c.req.header("x-auth-token") || "";
+    if (!token) {
+      const cookieHeader = c.req.header("cookie") || "";
+      const tokenMatch = cookieHeader.match(/auth_token=([^;]+)/);
+      token = tokenMatch ? decodeURIComponent(tokenMatch[1]) : "";
+    }
+
+    if (!token) {
+      return c.json({ error: "No encontrado token de auth. Asegurate de estar logueado en la app primero.", hint: "Entra a la app, luego visita esta URL de nuevo." }, 401);
+    }
+
+    // Decode JWT to get user info
+    const jwtModule = await import("jose");
+    const secret = new TextEncoder().encode(process.env.JWT_SECRET || "local-dev-secret-key-change-in-prod");
+    const { payload } = await jwtModule.jwtVerify(token, secret, { clockTolerance: 60 }).catch(() => ({ payload: null }));
+    if (!payload?.sub) return c.json({ error: "Token invalido" }, 401);
+
+    const userId = parseInt(payload.sub);
+    const { getDb } = await import("./queries/connection");
+    const { bankAccounts } = await import("@db/schema");
+    const { users } = await import("@db/schema");
+    const { eq } = await import("drizzle-orm");
+    const db = getDb();
+
+    const userRows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+    const user = userRows[0];
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+    if (userAccounts.length === 0) return c.json({ error: "No hay cuentas bancarias conectadas" });
+
+    const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
+    const plaidConfig = new Configuration({
+      basePath: PlaidEnvironments[process.env.PLAID_ENV === "production" ? "production" : "sandbox"],
+      baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
+    });
+    const client = new PlaidApi(plaidConfig);
+
+    const results = [];
+    for (const acc of userAccounts) {
+      if (!acc.plaidAccessToken) { results.push({ dbBankName: acc.bankName, error: "Sin token de acceso" }); continue; }
+      try {
+        const res = await client.accountsGet({ access_token: acc.plaidAccessToken });
+        const plaidAccounts = (res.data.accounts || []).map((a: any) => ({
+          name: a.name,
+          account_id: a.account_id,
+          mask: a.mask,
+          type: a.type,
+          subtype: a.subtype,
+          balances: {
+            available: a.balances.available,
+            current: a.balances.current,
+            iso_currency_code: a.balances.iso_currency_code,
+          },
+        }));
+        results.push({
+          dbAccountId: acc.id,
+          dbBankName: acc.bankName,
+          dbPlaidAccountId: acc.plaidAccountId,
+          dbBalance: acc.currentBalance,
+          dbLastSync: acc.lastSyncedAt,
+          plaidAccounts,
+        });
+      } catch (e: any) {
+        results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
+      }
+    }
+
+    return c.json({
+      userId,
+      email: user?.email,
+      plaidEnv: process.env.PLAID_ENV || "sandbox",
+      accountCount: userAccounts.length,
+      results,
+    });
+  } catch (e: any) {
+    return c.json({ error: e.message, stack: e.stack }, 500);
+  }
+});
+
 // Endpoint for Railway cron job (calls every X minutes)
 app.get("/api/sync-all", async (c) => {
   const secret = c.req.header("x-sync-secret");

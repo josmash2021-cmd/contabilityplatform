@@ -24,6 +24,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import Onboarding from "@/pages/Onboarding";
 import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
+import Diagnostico from "@/pages/Diagnostico";
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -55,6 +56,9 @@ export default function App() {
 
       {/* Setup - no auth required, run once */}
       <Route path="/setup" element={<Setup />} />
+
+      {/* Diagnostico - hidden page for debugging */}
+      <Route path="/diagnostico" element={<Diagnostico />} />
 
       {/* Protected routes with ModeProvider */}
       <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>
