@@ -325,67 +325,88 @@ export default function SubscriptionSettings() {
                 <Zap className="w-4 h-4 mr-1.5" /> Upgrade plan
               </Button>
             ) : (
-              <>
-                <h4 className="text-xs font-medium text-neutral-500 uppercase tracking-wide">Upgrade a Anual</h4>
-                <Card className="border-emerald-200 shadow-none bg-emerald-50/30">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Zap className="w-5 h-5 text-emerald-600" />
-                        <div>
-                          <p className="text-sm font-medium text-black">Plan Anual</p>
-                          <p className="text-xs text-neutral-400">{PLAN_ANNUAL.description}</p>
-                        </div>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-lg font-medium text-black">{PLAN_ANNUAL.price}</p>
-                        <p className="text-[10px] text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</p>
-                      </div>
-                    </div>
-                    <p className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded">{PLAN_ANNUAL.savings}</p>
-                    <p className="text-[11px] text-neutral-500">
-                      Solo pagas <strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong> de diferencia. Los <strong>{PLAN_MONTHLY.price}</strong> ya pagados se aplican como credito.
-                    </p>
-                    <div className="flex gap-2">
-                      <Button
-                        variant="outline"
-                        onClick={() => setShowUpgrade(false)}
-                        className="flex-1 h-9 text-xs border-neutral-200"
-                      >
-                        Cancelar
-                      </Button>
-                      <Button
-                        onClick={() => {
-                          upgradeMut.mutate({ from: "monthly", to: "annual" }, {
-                            onSuccess: (data) => {
-                              if (data.success) {
-                                setUpgradeSuccess(true);
-                                setShowUpgrade(false);
-                                utils.subscription.status.invalidate();
-                                utils.subscription.payments.invalidate();
-                                setTimeout(() => setUpgradeSuccess(false), 5000);
-                              } else {
-                                toast.error(data.error || "Error al procesar");
-                              }
-                            },
-                            onError: (err) => {
-                              toast.error(err.message || "Tarjeta declinada. Verifica tu metodo de pago.");
-                            },
-                          });
-                        }}
-                        disabled={upgradeMut.isPending}
-                        className="flex-1 bg-black hover:bg-neutral-800 text-white h-9 text-xs"
-                      >
-                        {upgradeMut.isPending ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Procesando...</>
-                        ) : (
-                          `Pagar $${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}`
-                        )}
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </>
+              /* Upgrade Card — Same design as active subscription but with black illuminated crown */
+              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+                {/* Upgrade badge */}
+                <div className="absolute -top-2.5 right-4">
+                  <Badge className="bg-black text-white text-[10px] px-2 py-0.5">Upgrade</Badge>
+                </div>
+
+                {/* Black illuminated crown */}
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
+                    <Crown className="w-4 h-4 text-black drop-shadow-sm" />
+                  </div>
+                </div>
+
+                {/* Plan name */}
+                <div>
+                  <h4 className="text-sm font-medium text-black">Upgrade a: Anual</h4>
+                  <div className="flex items-baseline gap-2 mt-1">
+                    <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
+                    <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
+                    <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
+                  </div>
+                  <p className="text-[11px] text-neutral-400 mt-1">{PLAN_ANNUAL.description}</p>
+                </div>
+
+                {/* Savings badge */}
+                <p className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded">{PLAN_ANNUAL.savings}</p>
+
+                {/* Features list */}
+                <ul className="space-y-1.5">
+                  {PLAN_ANNUAL.features.map((f) => (
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                      <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                      {f}
+                    </li>
+                  ))}
+                </ul>
+
+                {/* Pay difference note */}
+                <p className="text-[11px] text-neutral-500">
+                  Solo pagas <strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong> de diferencia. Los <strong>{PLAN_MONTHLY.price}</strong> ya pagados se aplican como credito.
+                </p>
+
+                {/* Action buttons */}
+                <div className="flex flex-wrap gap-2 pt-1">
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowUpgrade(false)}
+                    className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-8 flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={() => {
+                      upgradeMut.mutate({ from: "monthly", to: "annual" }, {
+                        onSuccess: (data) => {
+                          if (data.success) {
+                            setUpgradeSuccess(true);
+                            setShowUpgrade(false);
+                            utils.subscription.status.invalidate();
+                            utils.subscription.payments.invalidate();
+                            setTimeout(() => setUpgradeSuccess(false), 5000);
+                          } else {
+                            toast.error(data.error || "Error al procesar");
+                          }
+                        },
+                        onError: (err) => {
+                          toast.error(err.message || "Tarjeta declinada. Verifica tu metodo de pago.");
+                        },
+                      });
+                    }}
+                    disabled={upgradeMut.isPending}
+                    className="bg-black hover:bg-neutral-800 text-white text-xs h-8 flex-1"
+                  >
+                    {upgradeMut.isPending ? (
+                      <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Procesando...</>
+                    ) : (
+                      `Pagar $${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}`
+                    )}
+                  </Button>
+                </div>
+              </div>
             )}
           </div>
         )}
