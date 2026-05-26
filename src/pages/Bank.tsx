@@ -456,7 +456,7 @@ export default function Bank() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
             {allAccounts && allAccounts.length > 0 && (
               <AccountDropdown
                 accounts={allAccounts}
@@ -464,22 +464,20 @@ export default function Bank() {
                 onChange={(id) => setSelectedAccountId(id)}
               />
             )}
-            <div className="flex items-center gap-1.5">
-              <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
-              <YearSelector value={selectedYear} onChange={setSelectedYear} />
-              <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0" title="Sincronizar mes actual">
-                <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-              </Button>
-            </div>
+            <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
+            <YearSelector value={selectedYear} onChange={setSelectedYear} />
+            <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
+              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            </Button>
             {account && (
               confirmDisconnect ? (
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1 shrink-0">
                   <span className="text-xs text-red-600 mr-1">Seguro?</span>
                   <Button onClick={() => setConfirmDisconnect(false)} variant="outline" className="h-7 px-2 text-xs border-neutral-200">No</Button>
                   <Button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white">Si</Button>
                 </div>
               ) : (
-                <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-8 px-2 rounded-lg text-xs">
+                <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-8 px-2 rounded-lg text-xs shrink-0">
                   <LogOut className="w-3 h-3 mr-1" /> Desconectar
                 </Button>
               )
