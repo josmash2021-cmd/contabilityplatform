@@ -39,16 +39,22 @@ function useUserLocation() {
 const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Dashboard() {
-  // Calculate timezone offset for backend (e.g., "-04:00" for EDT)
-  const tzOffset = (() => {
-    const now = new Date();
-    const offsetMinutes = now.getTimezoneOffset(); // minutes behind UTC
-    const hours = Math.floor(Math.abs(offsetMinutes) / 60);
-    const mins = Math.abs(offsetMinutes) % 60;
-    const sign = offsetMinutes <= 0 ? "+" : "-"; // getTimezoneOffset: positive = behind UTC
-    return `${sign}${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
-  })();
-  const { data, error } = trpc.dashboard.summary.useQuery({ timezone: tzOffset });
+  // Calculate date range in user's local timezone
+  // We send YYYY-MM-DD strings for the backend to filter correctly
+  const localNow = new Date();
+  const todayDateStr = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, "0")}-${String(localNow.getDate()).padStart(2, "0")}`;
+  // Week start = 6 days ago (for a 7-day window including today)
+  const weekStartDate = new Date(localNow);
+  weekStartDate.setDate(weekStartDate.getDate() - 6);
+  const weekStartStr = `${weekStartDate.getFullYear()}-${String(weekStartDate.getMonth() + 1).padStart(2, "0")}-${String(weekStartDate.getDate()).padStart(2, "0")}`;
+  // Month start = 1st of current month
+  const monthStartStr = `${localNow.getFullYear()}-${String(localNow.getMonth() + 1).padStart(2, "0")}-01`;
+
+  const { data, error } = trpc.dashboard.summary.useQuery({
+    todayDate: todayDateStr,
+    weekStart: weekStartStr,
+    monthStart: monthStartStr,
+  });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
 
