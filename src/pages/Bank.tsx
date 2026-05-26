@@ -15,7 +15,7 @@ import {
   RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
   Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
-  CheckCircle2, PiggyBank, Loader2, X, Check, Bug,
+  CheckCircle2, PiggyBank, Loader2, X, Check,
 } from "lucide-react";
 
 /** Account dropdown — pushes content down when open (part of document flow) */
@@ -216,7 +216,6 @@ export default function Bank() {
     try { if (id) localStorage.setItem("bank_selected_account_id", id); else localStorage.removeItem("bank_selected_account_id"); } catch { /* ignore */ }
   };
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [showDebug, setShowDebug] = useState(false);
   const [confirmDeleteTx, setConfirmDeleteTx] = useState<number | null>(null);
   const [showDiagnosis, setShowDiagnosis] = useState(false);
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
@@ -260,9 +259,6 @@ export default function Bank() {
   );
 
   const handleSuccess = useCallback(() => { utils.invalidate(); }, [utils]);
-
-  // Debug query
-  const debugQuery = trpc.bank.debug.useQuery(undefined, { retry: false, enabled: false });
 
   // Auto-sync on mount then refetch every 30 seconds
   useEffect(() => {
@@ -547,9 +543,6 @@ export default function Bank() {
                 </Button>
               )
             )}
-            <Button onClick={() => { setShowDebug(!showDebug); if (!showDebug) debugQuery.refetch(); }} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200">
-              <Bug className="w-3 h-3 mr-1" /> Debug
-            </Button>
           </div>
         </div>
       </AnimatedPage>
@@ -829,44 +822,6 @@ export default function Bank() {
           </AnimatedCard>
         </div>
 
-        {/* DEBUG PANEL */}
-        {showDebug && (
-          <AnimatedCard delay={300}>
-            <Card className="border-neutral-200 rounded-xl shadow-none">
-              <CardContent className="p-4">
-                <p className="text-xs font-semibold text-neutral-500 mb-2">Debug Plaid</p>
-                {debugQuery.isLoading && <p className="text-xs text-neutral-400">Cargando...</p>}
-                {debugQuery.error && <p className="text-xs text-red-500">{debugQuery.error.message}</p>}
-                {debugQuery.data && (
-                  <div className="space-y-2 text-[10px] font-mono text-neutral-600 overflow-auto max-h-[400px]">
-                    {(debugQuery.data as any).error && (
-                      <p className="text-red-500 font-semibold">Error: {(debugQuery.data as any).error}</p>
-                    )}
-                    {(debugQuery.data as any).plaidAccounts && (
-                      <div>
-                        <p className="font-semibold text-neutral-800">Cuentas en Plaid ({(debugQuery.data as any).plaidAccounts.length}):</p>
-                        {(debugQuery.data as any).plaidAccounts.map((a: any, i: number) => (
-                          <p key={i}>• {a.name} (.{a.mask}) - Avail: {a.balances.available ?? "N/A"} - Current: {a.balances.current ?? "N/A"}</p>
-                        ))}
-                      </div>
-                    )}
-                    {(debugQuery.data as any).dbAccounts && (
-                      <div>
-                        <p className="font-semibold text-neutral-800 mt-2">Cuentas en DB ({(debugQuery.data as any).dbAccounts.length}):</p>
-                        {(debugQuery.data as any).dbAccounts.map((a: any, i: number) => (
-                          <p key={i}>• ID:{a.id} Plaid:{a.plaidAccountId} - {a.bankName} - Balance:{a.currentBalance}</p>
-                        ))}
-                      </div>
-                    )}
-                    {(debugQuery.data as any).plaidTxCount !== undefined && (
-                      <p className="mt-2">Transacciones este mes en Plaid: {(debugQuery.data as any).plaidTxCount}</p>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-        )}
       </div>
     </div>
   );
