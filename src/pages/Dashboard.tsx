@@ -3,7 +3,7 @@ import { formatCurrency, formatDateShort, formatTimeLocal, getUserTimezoneShort 
 import { Link } from "react-router";
 import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock, Globe } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 
 // Hook to detect user's location for timezone verification
 function useUserLocation() {
@@ -39,38 +39,26 @@ function useUserLocation() {
 const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Dashboard() {
-  // Calculate UTC timestamps for "today" in user's local timezone
-  // The backend stores dates in UTC, so we send exact UTC boundaries
+  // Build local date strings (YYYY-MM-DD) and timezone offset for backend
   const now = new Date();
   const y = now.getFullYear();
-  const m = now.getMonth(); // 0-indexed
+  const m = now.getMonth();
   const d = now.getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
 
-  // Create local dates and convert to UTC ISO strings
-  // new Date(y, m, d, h, min, s) creates a LOCAL date, toISOString() converts to UTC
-  const todayStart = new Date(y, m, d, 0, 0, 0).toISOString();
-  const todayEnd = new Date(y, m, d, 23, 59, 59, 999).toISOString();
-  const weekStart = new Date(y, m, d - 6, 0, 0, 0).toISOString();
-  const monthStart = new Date(y, m, 1, 0, 0, 0).toISOString();
+  const todayDate = `${y}-${pad(m + 1)}-${pad(d)}`;
+  const weekStartDate = `${y}-${pad(m + 1)}-${pad(d - 6)}`;
+  const monthStartDate = `${y}-${pad(m + 1)}-01`;
+  const tzOffsetHours = now.getTimezoneOffset() / -60; // -4 for EDT, +1 for CET, etc.
 
   const { data, error } = trpc.dashboard.summary.useQuery({
-    todayStart,
-    todayEnd,
-    weekStart,
-    monthStart,
-    now: now.toISOString(),
-  });
-  // Debug query to trace timezone issues
-  const { data: debugData } = trpc.dashboard.debug.useQuery({
-    todayStart,
-    todayEnd,
-    weekStart,
-    monthStart,
-    now: now.toISOString(),
+    todayDate,
+    weekStartDate,
+    monthStartDate,
+    tzOffsetHours,
   });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
-  const [showDebug, setShowDebug] = useState(true);
 
   const safeData = data || {
     todaySales: { total: "0", count: 0 },
@@ -249,48 +237,6 @@ export default function Dashboard() {
         </AnimatedCard>
       </div>
 
-      {/* Debug Panel - temporary for diagnostics */}
-      <div className="border border-dashed border-neutral-300 rounded-lg p-4 bg-neutral-50">
-        <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-neutral-500 font-medium flex items-center gap-1">
-          {showDebug ? "Ocultar" : "Mostrar"} debug info
-        </button>
-        {showDebug && debugData && (
-          <div className="mt-3 space-y-2 text-[10px] text-neutral-600 font-mono overflow-auto">
-            <div className="bg-white p-2 rounded border border-neutral-200">
-              <p className="font-semibold text-neutral-800">Tu dispositivo:</p>
-              <p>Hora local: {new Date().toString()}</p>
-              <p>Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
-              <p>Offset: {new Date().getTimezoneOffset()} min ({new Date().getTimezoneOffset() / -60}h)</p>
-            </div>
-            <div className="bg-white p-2 rounded border border-neutral-200">
-              <p className="font-semibold text-neutral-800">Enviado al backend:</p>
-              <p>todayStart: {todayStart}</p>
-              <p>todayEnd: {todayEnd}</p>
-              <p>weekStart: {weekStart}</p>
-              <p>monthStart: {monthStart}</p>
-              <p>now: {now.toISOString()}</p>
-            </div>
-            <div className="bg-white p-2 rounded border border-neutral-200">
-              <p className="font-semibold text-neutral-800">Servidor DB:</p>
-              <p>CURDATE: {debugData.dbServerDates?.curdate ?? "N/A"}</p>
-              <p>NOW: {debugData.dbServerDates?.now ?? "N/A"}</p>
-              <p>UTC: {debugData.dbServerDates?.utc ?? "N/A"}</p>
-            </div>
-            <div className="bg-white p-2 rounded border border-neutral-200">
-              <p className="font-semibold text-neutral-800">Tus ventas en DB ({debugData.allUserSales?.length ?? 0}):</p>
-              {(debugData.allUserSales ?? []).map((s: any, i: number) => (
-                <p key={i}>#{s.id}: ${s.total} | {s.createdAt} | status={s.status} | method={s.paymentMethod}</p>
-              ))}
-            </div>
-            <div className="bg-white p-2 rounded border border-neutral-200">
-              <p className="font-semibold text-neutral-800">Filtradas como "hoy" ({debugData.filteredSalesToday?.length ?? 0}):</p>
-              {(debugData.filteredSalesToday ?? []).map((s: any, i: number) => (
-                <p key={i}>#{s.id}: ${s.total} | {s.createdAt}</p>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }

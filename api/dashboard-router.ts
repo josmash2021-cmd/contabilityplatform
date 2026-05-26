@@ -5,58 +5,24 @@ import { sql, desc, and, eq, gte, lte, count } from "drizzle-orm";
 import { z } from "zod";
 
 export const dashboardRouter = createRouter({
-  debug: authedQuery
-    .input(z.object({
-      todayStart: z.string().optional(),
-      todayEnd: z.string().optional(),
-      weekStart: z.string().optional(),
-      monthStart: z.string().optional(),
-      now: z.string().optional(),
-    }).optional())
-    .query(async ({ ctx, input }) => {
+  debug: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const userId = ctx.user.id;
-    
-    // Get raw counts and recent sales
-    const totalSales = await db.select({ count: sql<number>`COUNT(*)` }).from(sales);
     const allUserSales = await db.select({ 
       id: sales.id, total: sales.total, createdAt: sales.createdAt, 
       status: sales.status, createdBy: sales.createdBy,
       paymentMethod: sales.paymentMethod,
     }).from(sales).where(eq(sales.createdBy, userId)).orderBy(desc(sales.createdAt)).limit(20);
-    const curDate = await db.select({ curdate: sql<string>`CURDATE()`, now: sql<string>`NOW()`, utc: sql<string>`UTC_TIMESTAMP()` }).from(sales).limit(1);
-
-    // Test the timestamp filtering
-    const tStart = input?.todayStart;
-    const tEnd = input?.todayEnd;
-    let filteredSales: any[] = [];
-    if (tStart && tEnd) {
-      filteredSales = await db.select({
-        id: sales.id, total: sales.total, createdAt: sales.createdAt,
-      }).from(sales).where(
-        and(eq(sales.createdBy, userId),
-            gte(sales.createdAt, new Date(tStart)),
-            lte(sales.createdAt, new Date(tEnd)),
-            eq(sales.status, "completed"))
-      ).orderBy(desc(sales.createdAt));
-    }
-
+    const curDate = await db.select({ 
+      curdate: sql<string>`CURDATE()`, 
+      now: sql<string>`NOW()`, 
+      utc: sql<string>`UTC_TIMESTAMP()`,
+      tzTest: sql<string>`DATE(NOW() + INTERVAL -4 HOUR)`,
+    }).from(sales).limit(1);
     return {
       currentUserId: userId,
-      totalSalesCount: totalSales[0]?.count ?? 0,
-      inputReceived: input ?? null,
-      parsedDates: tStart ? {
-        todayStart: tStart,
-        todayStartAsDate: new Date(tStart).toISOString(),
-        todayEnd: tEnd,
-        todayEndAsDate: tEnd ? new Date(tEnd).toISOString() : null,
-      } : null,
       dbServerDates: curDate[0] ?? null,
       allUserSales: allUserSales.map(s => ({
-        ...s,
-        createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
-      })),
-      filteredSalesToday: filteredSales.map(s => ({
         ...s,
         createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
       })),
@@ -64,79 +30,73 @@ export const dashboardRouter = createRouter({
   }),
 
   summary: authedQuery.input(z.object({
-      todayStart: z.string().optional(),
-      todayEnd: z.string().optional(),
-      weekStart: z.string().optional(),
-      monthStart: z.string().optional(),
-      now: z.string().optional(),
+      todayDate: z.string().optional(),     // "2026-05-26" (local date)
+      weekStartDate: z.string().optional(), // "2026-05-20" (local date, 7 days ago)
+      monthStartDate: z.string().optional(),// "2026-05-01" (local date, 1st of month)
+      tzOffsetHours: z.number().optional(), // -4 for EDT, +1 for CET, etc.
     }).optional()).query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
 
-      // Frontend sends ISO timestamps that are the UTC boundaries of the user's local day
-      // For EDT (UTC-4): todayStart = "2026-05-26T04:00:00.000Z" (midnight EDT = 4am UTC)
-      const tStart = input?.todayStart;
-      const tEnd = input?.todayEnd;
-      const wStart = input?.weekStart;
-      const mStart = input?.monthStart;
-      const now = input?.now;
+      const todayDate = input?.todayDate;
+      const weekStartDate = input?.weekStartDate;
+      const monthStartDate = input?.monthStartDate;
+      const tzOff = input?.tzOffsetHours ?? 0;
+      // MySQL INTERVAL needs the sign: -4 becomes INTERVAL -4 HOUR
+      const tzSign = tzOff >= 0 ? "+" : "";
 
-      // DEBUG LOGGING
-      console.log("[DASHBOARD SUMMARY] userId:", userId);
-      console.log("[DASHBOARD SUMMARY] input received:", JSON.stringify(input));
-      console.log("[DASHBOARD SUMMARY] tStart:", tStart, "-> as Date:", tStart ? new Date(tStart).toISOString() : null);
-      console.log("[DASHBOARD SUMMARY] tEnd:", tEnd, "-> as Date:", tEnd ? new Date(tEnd).toISOString() : null);
+      // Helper: returns SQL fragment "DATE(col + INTERVAL -4 HOUR)"
+      const dateTz = (col: any) => sql.raw(`DATE(${col.name} + INTERVAL ${tzSign}${tzOff} HOUR)`);
 
-      // ─── Sales aggregates using RAW SQL with string timestamps ───
-      // Drizzle's gte/lte with new Date() may fail silently, use sql`` directly
-      const todaySalesAgg = (tStart && tEnd)
+      // ─── TODAY ───
+      const todaySalesAgg = todayDate
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql`
-            ${sales.createdBy} = ${userId}
-            AND ${sales.createdAt} >= ${tStart}
-            AND ${sales.createdAt} <= ${tEnd}
-            AND ${sales.status} = 'completed'
-          `)
+          }).from(sales).where(sql.raw(`
+            ${sales.createdBy.name} = ${userId}
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) = '${todayDate}'
+            AND ${sales.status.name} = 'completed'
+          `))
         : [{ total: "0", count: 0 }];
 
-      const weekSalesAgg = (wStart && now)
+      // ─── WEEK ───
+      const weekSalesAgg = (weekStartDate && todayDate)
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql`
-            ${sales.createdBy} = ${userId}
-            AND ${sales.createdAt} >= ${wStart}
-            AND ${sales.createdAt} <= ${now}
-            AND ${sales.status} = 'completed'
-          `)
+          }).from(sales).where(sql.raw(`
+            ${sales.createdBy.name} = ${userId}
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${weekStartDate}'
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
+            AND ${sales.status.name} = 'completed'
+          `))
         : [{ total: "0", count: 0 }];
 
-      const monthSalesAgg = (mStart && now)
+      // ─── MONTH ───
+      const monthSalesAgg = (monthStartDate && todayDate)
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql`
-            ${sales.createdBy} = ${userId}
-            AND ${sales.createdAt} >= ${mStart}
-            AND ${sales.createdAt} <= ${now}
-            AND ${sales.status} = 'completed'
-          `)
+          }).from(sales).where(sql.raw(`
+            ${sales.createdBy.name} = ${userId}
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${monthStartDate}'
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
+            AND ${sales.status.name} = 'completed'
+          `))
         : [{ total: "0", count: 0 }];
 
-      // Payment breakdown (today)
-      const paymentBreakdownRaw = (tStart && tEnd)
+      // ─── Payment breakdown (today) ───
+      const paymentBreakdownRaw = todayDate
         ? await db.select({
             method: sales.paymentMethod,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql`
-            ${sales.createdBy} = ${userId}
-            AND ${sales.createdAt} >= ${tStart}
-            AND ${sales.createdAt} <= ${tEnd}
-            AND ${sales.status} = 'completed'
-          `).groupBy(sales.paymentMethod)
+          }).from(sales).where(sql.raw(`
+            ${sales.createdBy.name} = ${userId}
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) = '${todayDate}'
+            AND ${sales.status.name} = 'completed'
+          `)).groupBy(sales.paymentMethod)
         : [];
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
@@ -145,23 +105,22 @@ export const dashboardRouter = createRouter({
         count: p.count,
       }));
 
-      // Daily sales (last 7 days)
-      const dailySalesRaw = (wStart && now)
+      // ─── Daily sales (last 7 days) ───
+      const dailySalesRaw = (weekStartDate && todayDate)
         ? await db.select({
-            date: sql<string>`DATE(${sales.createdAt})`,
+            date: sql<string>`DATE(${sales.createdAt} + INTERVAL ${tzSign}${tzOff} HOUR)`,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql`
-            ${sales.createdBy} = ${userId}
-            AND ${sales.createdAt} >= ${wStart}
-            AND ${sales.createdAt} <= ${now}
-            AND ${sales.status} = 'completed'
-          `).groupBy(sql`DATE(${sales.createdAt})`)
+          }).from(sales).where(sql.raw(`
+            ${sales.createdBy.name} = ${userId}
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${weekStartDate}'
+            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
+            AND ${sales.status.name} = 'completed'
+          `)).groupBy(sql.raw(`DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR)`))
         : [];
 
       const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map(d => [d.date, d]));
       const dailySales: Array<{ date: string; dayName: string; total: string; count: number }> = [];
-      // Build 7 day labels using LOCAL dates (not UTC) to match user's timezone
       const localNow = new Date();
       for (let i = 6; i >= 0; i--) {
         const d = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate() - i);
