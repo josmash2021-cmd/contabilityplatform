@@ -239,16 +239,16 @@ export default function Bank() {
   const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : undefined;
 
   const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
-    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 30000 }
+    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
   );
   const monthDataQuery = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 30000 }
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
   );
   const { data: liveBalanceData, isLoading: loadingBalance } = liveBalanceQuery;
   const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
   // Annual summary for the resumen del año card
   const { data: yearData } = trpc.bank.getYearData.useQuery(
-    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum }
+    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account }
   );
   // DEBUG: Log month selection
   useEffect(() => {
@@ -266,11 +266,13 @@ export default function Bank() {
 
   // Auto-sync on mount then refetch every 30 seconds
   useEffect(() => {
-    if (!hasBankConnected || !accountIdNum) return;
+    if (!hasBankConnected || !account) return;
 
     const doRefresh = async () => {
       try {
-        await syncMutation.mutateAsync({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum });
+        const syncInput: any = { year: parseInt(selectedYear), month: parseInt(selectedMonth) };
+        if (accountIdNum) syncInput.accountId = accountIdNum;
+        await syncMutation.mutateAsync(syncInput);
       } catch { /* silent fail on sync, still refetch balance */ }
       // Always refetch balance from Plaid (live)
       liveBalanceQuery.refetch();
@@ -281,7 +283,7 @@ export default function Bank() {
     const interval = setInterval(doRefresh, 30000);
     return () => clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasBankConnected, accountIdNum]);
+  }, [hasBankConnected, account]);
 
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
