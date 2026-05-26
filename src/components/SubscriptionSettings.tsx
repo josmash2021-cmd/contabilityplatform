@@ -228,9 +228,19 @@ export default function SubscriptionSettings() {
             </div>
           </div>
 
-          {/* Plan name — No price, show "Suscripcion actual: Premium / mes" */}
+          {/* Plan name */}
           <div>
             <h4 className="text-sm font-medium text-black">Suscripcion actual: Premium {currentPlan.period}</h4>
+            {isMonthly && (
+              <>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">$80</span>
+                  <span className="text-xs text-neutral-400 line-through">$120</span>
+                  <span className="text-xs text-neutral-400">/mes</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 font-medium mt-1">Ahorras $40</p>
+              </>
+            )}
             <p className="text-[11px] text-neutral-400 mt-1">
               {status.currentPeriodEnd
                 ? `Vence el ${new Date(status.currentPeriodEnd).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`
