@@ -645,7 +645,9 @@ export const bankRouter = createRouter({
   listAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
     try {
-      return await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.createdAt));
+      const all = await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.createdAt));
+      // Only return active accounts (same filter as checkConnection)
+      return all.filter((a: any) => a.plaidAccessToken && a.isActive);
     } catch (err) {
       console.error("[listAccounts] error:", err);
       return [];
