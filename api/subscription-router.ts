@@ -78,31 +78,82 @@ export const subscriptionRouter = createRouter({
   status: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null, status: "no_user", currentPeriodEnd: null };
     const db = getDb();
+    const userId = ctx.user.id;
 
-    const subs = await db.select().from(subscriptions)
-      .where(eq(subscriptions.userId, ctx.user.id))
+    // Step 1: Check DB
+    let subs = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
+
+    // Step 2: If no subscription in DB, search Stripe
+    if (subs.length === 0) {
+      try {
+        const stripe = getStripe();
+        const customers = await stripe.customers.search({
+          query: `metadata['platformUserId']:'${userId}'`,
+        });
+        if (customers.data.length > 0) {
+          const customer = customers.data[0];
+          const stripeSubs = await stripe.subscriptions.list({
+            customer: customer.id, status: "all", limit: 1,
+          });
+          if (stripeSubs.data.length > 0) {
+            const stripeSub = stripeSubs.data[0] as any;
+            const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
+                         stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : "monthly";
+            // Insert into DB
+            await db.insert(subscriptions).values({
+              userId,
+              stripeCustomerId: customer.id,
+              stripeSubscriptionId: stripeSub.id,
+              plan: plan as "monthly" | "annual",
+              status: stripeSub.status,
+              currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
+              currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
+              cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
+            });
+            // Re-fetch
+            subs = await db.select().from(subscriptions)
+              .where(eq(subscriptions.userId, userId))
+              .orderBy(desc(subscriptions.createdAt))
+              .limit(1);
+          }
+        }
+      } catch (err: any) {
+        console.error("[status] Stripe search error:", err.message);
+      }
+    }
 
     const sub = subs[0];
     if (!sub) return { active: false, plan: null, status: "no_subscription", currentPeriodEnd: null };
 
-    // Check if Stripe subscription is still valid (monthly or annual)
+    // Step 3: Verify with Stripe
     if (sub.stripeSubscriptionId) {
       try {
         const stripe = getStripe();
         const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-        if (stripeSub.status === "active" || stripeSub.status === "trialing") {
-          return {
-            active: true,
-            plan: sub.plan,
-            status: stripeSub.status,
-            currentPeriodEnd: stripeSub.current_period_end
-              ? new Date(stripeSub.current_period_end * 1000).toISOString()
-              : sub.currentPeriodEnd?.toISOString() || null,
-            cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
-          };
-        }
+        const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
+        const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
+                     stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : sub.plan;
+
+        // Update DB
+        await db.update(subscriptions).set({
+          status: stripeSub.status,
+          plan: plan as "monthly" | "annual",
+          currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : sub.currentPeriodEnd,
+          currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : sub.currentPeriodStart,
+          cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+          updatedAt: new Date(),
+        }).where(eq(subscriptions.id, sub.id));
+
+        return {
+          active: isActive,
+          plan: plan,
+          status: stripeSub.status,
+          currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000).toISOString() : null,
+          cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
+        };
       } catch {
         // Stripe check failed, fallback to DB
       }
@@ -205,18 +256,66 @@ export const subscriptionRouter = createRouter({
   verify: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null };
     const db = getDb();
+    const userId = ctx.user.id;
 
-    // Get user's subscription from DB
+    // Step 1: Check DB first
     const subs = await db.select().from(subscriptions)
-      .where(eq(subscriptions.userId, ctx.user.id))
+      .where(eq(subscriptions.userId, userId))
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
-    const sub = subs[0];
-    if (!sub?.stripeSubscriptionId) return { active: false, plan: null };
+    let sub = subs[0];
 
-    // Verify directly with Stripe
+    const stripe = getStripe();
+
+    // Step 2: If no subscription in DB, search Stripe by customer
+    if (!sub) {
+      try {
+        // Search for customer by user ID in metadata
+        const customers = await stripe.customers.search({
+          query: `metadata['platformUserId']:'${userId}'`,
+        });
+        if (customers.data.length === 0) return { active: false, plan: null };
+
+        const customer = customers.data[0];
+
+        // List subscriptions for this customer
+        const stripeSubs = await stripe.subscriptions.list({
+          customer: customer.id,
+          status: "all",
+          limit: 1,
+        });
+        if (stripeSubs.data.length === 0) return { active: false, plan: null };
+
+        const stripeSub = stripeSubs.data[0] as any;
+        const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
+                     stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : "monthly";
+
+        // Create subscription in DB
+        await db.insert(subscriptions).values({
+          userId,
+          stripeCustomerId: customer.id,
+          stripeSubscriptionId: stripeSub.id,
+          plan: plan as "monthly" | "annual",
+          status: stripeSub.status,
+          currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
+          currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
+          cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
+        });
+
+        // Re-fetch
+        const newSubs = await db.select().from(subscriptions)
+          .where(eq(subscriptions.userId, userId))
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(1);
+        sub = newSubs[0];
+      } catch (err: any) {
+        console.error("[verify] Search Stripe error:", err.message);
+        return { active: false, plan: null };
+      }
+    }
+
+    // Step 3: Verify with Stripe using subscription ID
     try {
-      const stripe = getStripe();
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
 
       const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
@@ -241,7 +340,7 @@ export const subscriptionRouter = createRouter({
         cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
       };
     } catch (err: any) {
-      console.error("[verify] Stripe error:", err.message);
+      console.error("[verify] Stripe retrieve error:", err.message);
       // Return DB state as fallback
       const isActive = sub.status === "active" || sub.status === "trialing";
       return {
