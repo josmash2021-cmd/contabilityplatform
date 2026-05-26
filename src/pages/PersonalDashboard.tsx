@@ -144,6 +144,8 @@ export default function PersonalDashboard() {
 
   // ─── Accounts from DB ───
   const { data: dbAccounts, isLoading: accountsLoading } = trpc.bank.listAccounts.useQuery(undefined, {
+    refetchInterval: 30000, // Live balance refresh every 30s
+    refetchIntervalInBackground: true,
     onSuccess: (data) => {
       if (data && data.length > 0 && !hasAutoSelected.current && !selectedAccountId) {
         hasAutoSelected.current = true;
@@ -155,9 +157,9 @@ export default function PersonalDashboard() {
   const dbAccountsList = dbAccounts ?? [];
 
   // ─── ALL ACCOUNTS DIRECTLY FROM PLAID (for dropdown) ───
-  // This returns ALL bank accounts regardless of transactions
   const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
     staleTime: 60000,
+    refetchInterval: 30000,
   });
 
   // ─── Month data (filtered by selected account for display) ───
@@ -165,6 +167,9 @@ export default function PersonalDashboard() {
     year: parseInt(selectedYear),
     month: parseInt(selectedMonth),
     accountId: selectedAccountId ? parseInt(selectedAccountId) : undefined,
+  }, {
+    refetchInterval: 30000, // Live balance refresh every 30s
+    refetchIntervalInBackground: true,
   });
 
   const transactions = monthData?.transactions ?? [];
@@ -196,6 +201,16 @@ export default function PersonalDashboard() {
     onError: (err) => toast.error(err.message),
   });
   useEffect(() => { refreshMutation.mutate(); }, []);
+
+  // ─── Auto-sync with Plaid every 60s for live balance ───
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (!refreshMutation.isPending) {
+        refreshMutation.mutate();
+      }
+    }, 60000);
+    return () => clearInterval(interval);
+  }, [refreshMutation.isPending]);
 
   // ─── Disconnect ───
   const disconnectMut = trpc.bank.disconnect.useMutation({
@@ -286,6 +301,10 @@ export default function PersonalDashboard() {
                   <Landmark className="w-4 h-4 text-neutral-400" />
                   <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? "Banco"}</span>
                   {accounts[0]?.id === activeAccount?.id && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
+                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                    En vivo
+                  </span>
                 </div>
                 <p className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(balance)}</p>
                 <p className="text-[11px] text-neutral-400 mt-0.5">{balance >= 0 ? "Balance disponible" : "Sobregiro / Balance negativo"}</p>
