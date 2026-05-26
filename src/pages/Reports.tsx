@@ -147,11 +147,11 @@ export default function Reports() {
   const accountIdNum = effectiveBankId ? Number(effectiveBankId) : undefined;
 
   // Bank-dependent queries (use effectiveBankId for auto-select)
-  const bankStatsQuery = trpc.bank.stats.useQuery(
-    { accountId: accountIdNum },
+  const bankMonthQuery = trpc.bank.getMonthData.useQuery(
+    { year: selectedYear, month: selectedMonth, accountId: accountIdNum },
     { enabled: !!accountIdNum }
   );
-  const reconQuery = trpc.reconciliation.status.useQuery(
+  const bankBalanceQuery = trpc.bank.getLiveBalance.useQuery(
     { accountId: accountIdNum },
     { enabled: !!accountIdNum }
   );
@@ -190,8 +190,29 @@ export default function Reports() {
   const journalData = journalQuery.data;
   const salesStats = salesQuery.data;
   const monthlyData = monthlyQuery.data;
-  const bankStats = bankStatsQuery.data;
-  const reconData = reconQuery.data;
+  // Build bank stats from getMonthData + getLiveBalance
+  const monthBankData = bankMonthQuery.data;
+  const balanceData_ = bankBalanceQuery.data;
+  const bankTxs = monthBankData?.transactions ?? [];
+  const bankIncome = Number(monthBankData?.income ?? 0);
+  const bankExpense = Number(monthBankData?.expense ?? 0);
+  const bankBalance = Number(balanceData_?.liveBalance ?? monthBankData?.liveBalance ?? 0);
+  const bankTxCount = bankTxs.length;
+  // Group transactions by category
+  const categoryMap = new Map<string, { category: string; type: string; total: number; count: number }>();
+  for (const t of bankTxs) {
+    const cat = t.category || "other";
+    const type = t.type || "expense";
+    const amt = parseFloat(t.amount ?? "0");
+    const existing = categoryMap.get(cat);
+    if (existing) {
+      existing.total += amt;
+      existing.count += 1;
+    } else {
+      categoryMap.set(cat, { category: cat, type, total: amt, count: 1 });
+    }
+  }
+  const bankCategories = Array.from(categoryMap.values()).sort((a, b) => b.total - a.total);
 
   const weekSales = Number(salesStats?.week.total ?? 0);
   const monthSales = Number(incomeData?.totalRevenue ?? 0);
@@ -552,14 +573,14 @@ export default function Reports() {
             )}
           </AnimatedPage>
 
-          {hasBankConnected && bankStats && (
+          {hasBankConnected && monthBankData && (
             <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
-                { label: "Balance", value: formatCurrency(Number(bankStats.income.total) - Number(bankStats.expense)), icon: Landmark, color: "bg-green-50 text-green-600" },
-                { label: "Ingresos", value: formatCurrency(bankStats.income.total), icon: TrendingUp, color: "bg-green-50 text-green-600" },
-                { label: "Gastos", value: formatCurrency(bankStats.expense), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-                { label: "Transacciones", value: String(bankStats.count), icon: Receipt, color: "bg-neutral-50 text-neutral-600" },
+                { label: "Balance", value: formatCurrency(bankBalance), icon: Landmark, color: "bg-green-50 text-green-600" },
+                { label: "Ingresos", value: formatCurrency(bankIncome), icon: TrendingUp, color: "bg-green-50 text-green-600" },
+                { label: "Gastos", value: formatCurrency(bankExpense), icon: TrendingDown, color: "bg-red-50 text-red-500" },
+                { label: "Transacciones", value: String(bankTxCount), icon: Receipt, color: "bg-neutral-50 text-neutral-600" },
               ].map((s, i) => (
                 <AnimatedCard key={s.label} delay={i * 60}>
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
@@ -580,9 +601,9 @@ export default function Reports() {
               <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Categorias</CardTitle></CardHeader>
                 <CardContent className="p-5">
-                  {bankStats && bankStats.byCategory.length > 0 ? (
+                  {bankCategories.length > 0 ? (
                     <div className="space-y-2">
-                      {bankStats.byCategory.map((cat: any) => (
+                      {bankCategories.map((cat: any) => (
                         <div key={cat.category} className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0">
                           <div className="flex items-center gap-2">
                             <Badge variant="outline" className={`text-[10px] ${cat.type === "income" ? "text-green-600 border-green-200" : "text-red-500 border-red-200"}`}>{cat.type === "income" ? "Ingreso" : "Gasto"}</Badge>
@@ -606,22 +627,17 @@ export default function Reports() {
               <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Conciliacion</CardTitle></CardHeader>
                 <CardContent className="p-5 space-y-4">
-                  {!reconData ? (<p className="text-sm text-neutral-400 text-center py-4">Selecciona una cuenta</p>) :
-                    !reconData.connected ? (
-                      <div className="flex flex-col items-center gap-2 py-4"><Unlink className="w-8 h-8 text-neutral-300" /><p className="text-xs text-neutral-400">Cuenta no conectada a Plaid</p></div>
-                    ) : (
-                      <>
-                        <div className="flex items-center gap-2"><Link2 className="w-4 h-4 text-green-500" /><span className="text-xs text-neutral-600">Conectado a Plaid</span></div>
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Plaid</span><span className="font-medium text-black">{formatCurrency(reconData.plaidBalance ?? 0)}</span></div>
-                          <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Libros</span><span className="font-medium text-black">{formatCurrency(reconData.bookBalance ?? 0)}</span></div>
-                          <div className="flex justify-between text-sm"><span className="text-neutral-600">Diferencia</span><span className="font-medium text-black">{formatCurrency(reconData.difference ?? 0)}</span></div>
-                        </div>
-                        <div className="pt-2">
-                          <Badge className={`text-[10px] ${reconData.reconciled ? "bg-green-50 text-green-600 border-green-200" : "bg-amber-50 text-amber-600 border-amber-200"}`}>{reconData.reconciled ? "Conciliado" : "Pendiente"}</Badge>
-                        </div>
-                      </>
-                    )}
+                  {balanceData_ ? (
+                    <>
+                      <div className="flex items-center gap-2"><Link2 className="w-4 h-4 text-green-500" /><span className="text-xs text-neutral-600">Conectado a Plaid</span></div>
+                      <div className="space-y-2">
+                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Banco</span><span className="font-medium text-black">{formatCurrency(balanceData_.liveBalance ?? 0)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Libros</span><span className="font-medium text-black">{formatCurrency(balanceData_.bookBalance ?? 0)}</span></div>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex flex-col items-center gap-2 py-4"><Unlink className="w-8 h-8 text-neutral-300" /><p className="text-xs text-neutral-400">Cargando datos de conciliacion...</p></div>
+                  )}
                 </CardContent>
               </Card>
             </AnimatedCard>
