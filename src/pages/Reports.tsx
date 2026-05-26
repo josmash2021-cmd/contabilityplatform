@@ -67,6 +67,7 @@ export default function Reports() {
   const journalQuery = trpc.reports.journalEntries.useQuery({ limit: 100 });
   const salesQuery = trpc.sales.stats.useQuery(dateInputs);
   const monthlyQuery = trpc.dashboard.monthly.useQuery({ year: selectedYear, month: selectedMonth });
+  const bankConnectionQuery = trpc.bank.checkConnection.useQuery();
   const bankAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
 
   const accountId = selectedBankAccount ? Number(selectedBankAccount) : undefined;
@@ -108,6 +109,7 @@ export default function Reports() {
   const journalData = journalQuery.data;
   const salesStats = salesQuery.data;
   const monthlyData = monthlyQuery.data;
+  const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
   const allBankAccounts = bankAccountsQuery.data ?? [];
   const bankStats = bankStatsQuery.data;
   const reconData = reconQuery.data;
@@ -444,18 +446,31 @@ export default function Reports() {
         {/* CONTABILIDAD BANCARIA */}
         <TabsContent value="bank" className="mt-6 space-y-4">
           <AnimatedPage>
-            <div className="flex gap-3 items-center">
-              <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
-                <SelectTrigger className="w-64 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Seleccionar cuenta bancaria" /></SelectTrigger>
-                <SelectContent>
-                  {allBankAccounts.map((acc: typeof allBankAccounts[0]) => (<SelectItem key={acc.id} value={String(acc.id)} className="text-xs">{acc.accountType} - {acc.accountNumber}</SelectItem>))}
-                </SelectContent>
-              </Select>
-              {allBankAccounts.length === 0 && <span className="text-xs text-neutral-400">No hay cuentas bancarias conectadas</span>}
-            </div>
+            {!hasBankConnected ? (
+              /* No bank connected state */
+              <div className="flex flex-col items-center gap-3 py-8 border border-dashed border-neutral-200 rounded-xl bg-neutral-50">
+                <Landmark className="w-10 h-10 text-neutral-300" />
+                <p className="text-sm text-neutral-500">No hay cuenta bancaria conectada</p>
+                <Link to="/bank" className="text-xs bg-black text-white px-4 py-2 rounded-full hover:bg-neutral-800 transition-colors">
+                  Conectar Banco
+                </Link>
+              </div>
+            ) : (
+              /* Bank connected — show account selector */
+              <div className="flex gap-3 items-center">
+                <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
+                  <SelectTrigger className="w-64 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Seleccionar cuenta bancaria" /></SelectTrigger>
+                  <SelectContent>
+                    {allBankAccounts.map((acc: typeof allBankAccounts[0]) => (<SelectItem key={acc.id} value={String(acc.id)} className="text-xs">{acc.accountType} - {acc.accountNumber}</SelectItem>))}
+                  </SelectContent>
+                </Select>
+                {allBankAccounts.length === 0 && <span className="text-xs text-neutral-400">Cargando cuentas...</span>}
+              </div>
+            )}
           </AnimatedPage>
 
-          {bankStats && (
+          {hasBankConnected && bankStats && (
+            <>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
               {[
                 { label: "Balance", value: formatCurrency(Number(bankStats.income.total) - Number(bankStats.expense)), icon: Landmark, color: "bg-green-50 text-green-600" },
@@ -476,9 +491,8 @@ export default function Reports() {
                 </AnimatedCard>
               ))}
             </div>
-          )}
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
             <AnimatedCard delay={200} className="lg:col-span-2">
               <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                 <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Categorias</CardTitle></CardHeader>
@@ -529,6 +543,8 @@ export default function Reports() {
               </Card>
             </AnimatedCard>
           </div>
+          </>
+          )}
         </TabsContent>
 
         {/* MOVIMIENTOS DETALLADOS — Sales List */}

@@ -644,7 +644,12 @@ export const bankRouter = createRouter({
 
   listAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
-    return getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.createdAt));
+    try {
+      return await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.createdAt));
+    } catch (err) {
+      console.error("[listAccounts] error:", err);
+      return [];
+    }
   }),
 
   getAccount: authedQuery.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
