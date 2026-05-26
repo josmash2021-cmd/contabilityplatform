@@ -117,13 +117,6 @@ export default function Reports() {
   const [periodFilter, setPeriodFilter] = useState<string>("month");
   const [activePieSlice, setActivePieSlice] = useState<string | null>(null);
 
-  // Auto-select first bank account when accounts load
-  useEffect(() => {
-    if (allBankAccounts.length > 0 && !selectedBankAccount) {
-      setSelectedBankAccount(String(allBankAccounts[0].id));
-    }
-  }, [allBankAccounts, selectedBankAccount]);
-
   // Local date + timezone inputs — stable with useMemo to prevent infinite re-fetching
   const dateInputs = useMemo(() => getLocalDateInputs(), []);
 
@@ -136,13 +129,34 @@ export default function Reports() {
   const plaidAccountsQuery = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
   const dbAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
 
-  const accountId = selectedBankAccount ? Number(selectedBankAccount) : undefined;
-  const bankStatsQuery = trpc.bank.stats.useQuery({ accountId }, { enabled: !!accountId });
-  const reconQuery = trpc.reconciliation.status.useQuery({ accountId }, { enabled: !!accountId });
-
   const utils = trpc.useUtils();
 
-  // Only block on core queries — don't block if optional queries (bank, journal) are loading
+  // ── Derived data (computed after all hooks) ──
+  const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
+  const plaidAccounts = plaidAccountsQuery.data?.accounts ?? [];
+  const dbAccounts = dbAccountsQuery.data ?? [];
+  const allBankAccounts = plaidAccounts.length > 0
+    ? plaidAccounts.map((pa: any) => {
+        const dbMatch = dbAccounts.find((db: any) => db.plaidAccountId === pa.plaidAccountId);
+        return dbMatch ? { ...pa, id: dbMatch.id, currentBalance: dbMatch.currentBalance } : pa;
+      })
+    : dbAccounts;
+
+  // Auto-select first bank account
+  const effectiveBankId = selectedBankAccount || (allBankAccounts[0] ? String(allBankAccounts[0].id) : "");
+  const accountIdNum = effectiveBankId ? Number(effectiveBankId) : undefined;
+
+  // Bank-dependent queries (use effectiveBankId for auto-select)
+  const bankStatsQuery = trpc.bank.stats.useQuery(
+    { accountId: accountIdNum },
+    { enabled: !!accountIdNum }
+  );
+  const reconQuery = trpc.reconciliation.status.useQuery(
+    { accountId: accountIdNum },
+    { enabled: !!accountIdNum }
+  );
+
+  // Only block on core queries
   const isLoading = incomeQuery.isLoading && salesQuery.isLoading;
   const hasError = incomeQuery.error && salesQuery.error;
 
@@ -176,16 +190,6 @@ export default function Reports() {
   const journalData = journalQuery.data;
   const salesStats = salesQuery.data;
   const monthlyData = monthlyQuery.data;
-  const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
-  // Merge Plaid accounts (real-time data) with DB accounts (correct IDs for queries)
-  const plaidAccounts = plaidAccountsQuery.data?.accounts ?? [];
-  const dbAccounts = dbAccountsQuery.data ?? [];
-  const allBankAccounts = plaidAccounts.length > 0
-    ? plaidAccounts.map((pa: any) => {
-        const dbMatch = dbAccounts.find((db: any) => db.plaidAccountId === pa.plaidAccountId);
-        return dbMatch ? { ...pa, id: dbMatch.id, currentBalance: dbMatch.currentBalance } : pa;
-      })
-    : dbAccounts;
   const bankStats = bankStatsQuery.data;
   const reconData = reconQuery.data;
 
@@ -540,7 +544,7 @@ export default function Reports() {
                 ) : (
                   <AccountDropdown
                     accounts={allBankAccounts}
-                    selectedId={selectedBankAccount}
+                    selectedId={effectiveBankId}
                     onChange={setSelectedBankAccount}
                   />
                 )}
@@ -592,7 +596,7 @@ export default function Reports() {
                       ))}
                     </div>
                   ) : (
-                    <p className="text-sm text-neutral-400 text-center py-8">{selectedBankAccount ? "Sin transacciones para esta cuenta" : "Selecciona una cuenta para ver categorias"}</p>
+                    <p className="text-sm text-neutral-400 text-center py-8">{effectiveBankId ? "Sin transacciones para esta cuenta" : "Selecciona una cuenta para ver categorias"}</p>
                   )}
                 </CardContent>
               </Card>
