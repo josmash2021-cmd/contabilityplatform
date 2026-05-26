@@ -257,6 +257,24 @@ export default function Bank() {
   // Debug query
   const debugQuery = trpc.bank.debug.useQuery(undefined, { retry: false, enabled: false });
 
+  // Auto-sync on mount + polling every 30 seconds for live data
+  useEffect(() => {
+    if (!hasBankConnected || !accountIdNum) return;
+
+    const doSync = async () => {
+      try {
+        await syncMutation.mutateAsync({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum });
+        utils.bank.getLiveBalance.invalidate();
+        utils.bank.getMonthData.invalidate();
+      } catch { /* silent fail */ }
+    };
+
+    doSync(); // Initial
+    const interval = setInterval(doSync, 30000); // Every 30s
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasBankConnected, accountIdNum]);
+
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
