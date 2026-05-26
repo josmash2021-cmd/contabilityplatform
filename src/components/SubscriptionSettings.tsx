@@ -215,11 +215,11 @@ export default function SubscriptionSettings() {
         )}
 
         {/* Current Plan Card */}
-        <div className="border-2 border-emerald-200 bg-emerald-50/50 rounded-lg p-5 space-y-4">
+        <div className="border-2 border-emerald-200 bg-white rounded-lg p-5 space-y-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500 shadow-sm"><Crown className="w-4 h-4 text-amber-800 drop-shadow-sm" /></div>
+              <div className="w-10 h-10 rounded-lg bg-transparent flex items-center justify-center">
+                <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent"><Crown className="w-4 h-4 text-yellow-500" /></div>
               </div>
               <div>
                 <div className="flex items-center gap-2">
