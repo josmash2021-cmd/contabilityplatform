@@ -18,6 +18,66 @@ import {
   CheckCircle2, PiggyBank, Loader2, X, Check,
 } from "lucide-react";
 
+/** Account dropdown — same as Reports page */
+function AccountDropdown({
+  accounts,
+  selectedId,
+  onChange,
+}: {
+  accounts: any[];
+  selectedId: string | null;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const selected = accounts.find((a) => String(a.id) === selectedId);
+
+  return (
+    <div ref={ref} className="relative w-52">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-full"
+      >
+        <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+        <span className="truncate flex-1 text-left">
+          {selected ? `${selected.bankName || selected.accountType} ${selected.accountNumber ? `(${selected.accountNumber})` : ""}` : "Seleccionar cuenta"}
+        </span>
+        <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[220px] bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+          {accounts.map((acc: any) => (
+            <button
+              key={acc.id}
+              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
+              className={`w-full text-left px-2.5 py-2 text-xs flex items-center justify-between transition-colors ${
+                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
+                <span className="truncate">{acc.bankName || acc.accountType}</span>
+              </div>
+              <span className={`text-[10px] font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* helpers */
 function getMonthRangeLabel(month: number, year: number): string {
   const now = new Date();
@@ -398,14 +458,11 @@ export default function Bank() {
           </div>
           <div className="flex items-center gap-1.5 flex-wrap">
             {allAccounts && allAccounts.length > 0 && (
-              <select value={selectedAccountId || String(account?.id) || ""} onChange={(e) => setSelectedAccountId(e.target.value)}
-                className="border border-neutral-200 rounded-lg text-xs px-2 py-1.5 h-8 bg-white focus:outline-none focus:ring-1 focus:ring-black">
-                {allAccounts.map((acc: typeof allAccounts[0]) => (
-                  <option key={acc.id} value={String(acc.id)}>
-                    {acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""}
-                  </option>
-                ))}
-              </select>
+              <AccountDropdown
+                accounts={allAccounts}
+                selectedId={selectedAccountId || String(account?.id) || ""}
+                onChange={(id) => setSelectedAccountId(id)}
+              />
             )}
             <div className="flex items-center gap-1.5">
               <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
