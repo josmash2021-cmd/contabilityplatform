@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { subscriptions, subscriptionPayments, users } from "@db/schema";
+import { subscriptions, subscriptionPayments } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 
@@ -845,41 +845,4 @@ export const subscriptionRouter = createRouter({
     return { url: portalSession.url };
   }),
 
-  // ── ADMIN: List all users with subscription info ──
-  // NOTE: Temporary public endpoint for admin review
-  listUsers: publicQuery.query(async () => {
-    const db = getDb();
-
-    // Get all users
-    const allUsers = await db.select({
-      id: users.id,
-      email: users.email,
-      name: users.name,
-      role: users.role,
-      modePreference: users.modePreference,
-      createdAt: users.createdAt,
-      lastSignInAt: users.lastSignInAt,
-    }).from(users).orderBy(desc(users.createdAt));
-
-    // Get all subscriptions
-    const allSubs = await db.select().from(subscriptions);
-
-    // Merge
-    const result = allUsers.map(u => {
-      const userSubs = allSubs.filter(s => s.userId === u.id);
-      const latestSub = userSubs.sort((a, b) =>
-        (b.createdAt?.getTime() || 0) - (a.createdAt?.getTime() || 0)
-      )[0];
-      return {
-        ...u,
-        hasSubscription: !!latestSub,
-        subscriptionPlan: latestSub?.plan || null,
-        subscriptionStatus: latestSub?.status || null,
-        stripeCustomerId: latestSub?.stripeCustomerId?.slice(0, 12) || null,
-        stripeSubscriptionId: latestSub?.stripeSubscriptionId?.slice(0, 12) || null,
-      };
-    });
-
-    return result;
-  }),
 });
