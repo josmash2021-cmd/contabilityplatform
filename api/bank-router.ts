@@ -1481,14 +1481,71 @@ export const bankRouter = createRouter({
     } catch { return { fixed: 0 }; }
   }),
 
+  // ─── DEBUG: Raw Plaid data ───
+  debug: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No autenticado" };
+    const db = getDb();
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    if (userAccounts.length === 0) return { error: "No hay cuentas" };
+    const primary = userAccounts[0];
+    if (!primary?.plaidAccessToken) return { error: "Sin token" };
+
+    try {
+      const client = await initPlaid();
+      if (!client) return { error: "Plaid no inicializado" };
+
+      // Raw accounts from Plaid
+      const accountsRes = await client.accountsGet({ access_token: primary.plaidAccessToken });
+      const plaidAccounts = (accountsRes.data.accounts || []).map((a: any) => ({
+        account_id: a.account_id,
+        name: a.name,
+        mask: a.mask,
+        type: a.type,
+        subtype: a.subtype,
+        balances: {
+          available: a.balances?.available,
+          current: a.balances?.current,
+          iso_currency_code: a.balances?.iso_currency_code,
+        },
+      }));
+
+      // Raw recent transactions from Plaid
+      const now = new Date();
+      const startDate = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, "0")}-01`;
+      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const txRes = await client.transactionsGet({
+        access_token: primary.plaidAccessToken,
+        start_date: startDate,
+        end_date: endDate,
+        options: { count: 100, include_personal_finance_category: true },
+      });
+      const plaidTxs = (txRes.data.transactions || []).map((t: any) => ({
+        transaction_id: t.transaction_id,
+        account_id: t.account_id,
+        name: t.name,
+        amount: t.amount,
+        date: t.date,
+        category: t.personal_finance_category?.primary || t.category?.[0],
+      }));
+
+      return {
+        dbAccounts: userAccounts.map((a: any) => ({ id: a.id, plaidAccountId: a.plaidAccountId, bankName: a.bankName, accountType: a.accountType, currentBalance: a.currentBalance })),
+        plaidAccounts,
+        plaidTxCount: plaidTxs.length,
+        plaidTxs: plaidTxs.slice(0, 20),
+        dateRange: { startDate, endDate },
+      };
+    } catch (err: any) {
+      return { error: err.message || "Unknown error", code: err.response?.data?.error_code };
+    }
+  }),
+
   // ─── DISCONNECT BANK ───
   disconnect: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
     const db = getDb();
     try {
-      // Delete all bank accounts for this user
       await db.delete(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-      // Delete all transactions for this user
       await db.delete(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
       return { success: true, message: "Banco desconectado" };
     } catch (err: any) {
