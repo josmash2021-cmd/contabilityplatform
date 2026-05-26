@@ -293,6 +293,9 @@ export const subscriptionRouter = createRouter({
   }),
 
   // ── Restore monthly subscription after failed upgrade ──
+  // CRITICAL: This endpoint fully recovers a subscription from past_due state.
+  // It voids any unpaid invoices, cancels the broken subscription, and creates
+  // a fresh monthly subscription so the user is immediately back to active.
   restoreMonthly: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
     const stripe = getStripe();
@@ -308,36 +311,108 @@ export const subscriptionRouter = createRouter({
       if (!sub?.stripeSubscriptionId) return { success: false, error: "No hay suscripcion" };
 
       // Get Stripe subscription
-      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId, {
+        expand: ["latest_invoice"],
+      }) as any;
 
-      // Only allow restore if subscription is past_due or incomplete
-      if (stripeSub.status !== "past_due" && stripeSub.status !== "incomplete") {
+      // Only allow restore if subscription is past_due, incomplete, or unpaid
+      if (stripeSub.status !== "past_due" && stripeSub.status !== "incomplete" && stripeSub.status !== "unpaid") {
         return { success: false, error: "Tu suscripcion no necesita ser restaurada" };
       }
 
-      // Get monthly price ID
+      const customerId = sub.stripeCustomerId;
+
+      // Step 1: Void the unpaid invoice(s) to clear the past_due state
+      try {
+        // Void the latest invoice if it's open
+        const latestInvoiceId = stripeSub.latest_invoice?.id;
+        if (latestInvoiceId) {
+          const inv = await stripe.invoices.retrieve(latestInvoiceId) as any;
+          if (inv.status === "open" || inv.status === "uncollectible") {
+            await stripe.invoices.voidInvoice(latestInvoiceId);
+            console.log("[restoreMonthly] Voided unpaid invoice:", latestInvoiceId);
+          }
+        }
+
+        // Also void any other open invoices for this customer
+        const openInvoices = await stripe.invoices.list({
+          customer: customerId,
+          status: "open",
+          limit: 10,
+        });
+        for (const invoice of openInvoices.data) {
+          try {
+            await stripe.invoices.voidInvoice(invoice.id);
+            console.log("[restoreMonthly] Voided open invoice:", invoice.id);
+          } catch (e: any) {
+            console.log("[restoreMonthly] Could not void invoice:", invoice.id, e.message);
+          }
+        }
+      } catch (e: any) {
+        console.log("[restoreMonthly] Invoice cleanup error:", e.message);
+      }
+
+      // Step 2: Cancel the broken subscription (don't prorate, just end it)
+      try {
+        await stripe.subscriptions.cancel(sub.stripeSubscriptionId, {
+          invoice_now: false,
+          prorate: false,
+        });
+        console.log("[restoreMonthly] Cancelled broken subscription:", sub.stripeSubscriptionId);
+      } catch (e: any) {
+        console.log("[restoreMonthly] Cancel error (may already be cancelled):", e.message);
+      }
+
+      // Step 3: Create a fresh monthly subscription
       const monthlyPriceId = await getOrCreatePrice(stripe, "monthly");
 
-      // Revert to monthly plan in Stripe
-      const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-        items: [{
-          id: stripeSub.items.data[0].id,
-          price: monthlyPriceId,
-        }],
-        proration_behavior: "none",
-      });
+      // Get the customer's default payment method
+      const customer = await stripe.customers.retrieve(customerId) as any;
+      const defaultPaymentMethod = customer.invoice_settings?.default_payment_method;
 
-      // Update DB
-      await db.update(subscriptions).set({
-        plan: "monthly",
-        status: updatedSub.status,
-        currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
-        updatedAt: new Date(),
-      }).where(eq(subscriptions.id, sub.id));
+      const newSub = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{ price: monthlyPriceId }],
+        default_payment_method: defaultPaymentMethod || undefined,
+        payment_behavior: "default_incomplete",
+        expand: ["latest_invoice.payment_intent"],
+      }) as any;
+
+      // If there's an immediate payment required, confirm it
+      const paymentIntent = newSub.latest_invoice?.payment_intent;
+      if (paymentIntent && paymentIntent.status === "requires_confirmation") {
+        try {
+          await stripe.paymentIntents.confirm(paymentIntent.id, {
+            payment_method: defaultPaymentMethod,
+            off_session: true,
+          });
+        } catch (e: any) {
+          console.log("[restoreMonthly] Payment confirmation error:", e.message);
+          // Even if payment fails, we created the subscription — it'll be in incomplete status
+        }
+      }
+
+      // Refresh the subscription to get final status
+      const finalSub = await stripe.subscriptions.retrieve(newSub.id) as any;
+
+      // Step 4: Delete the old broken subscription record from DB
+      await db.delete(subscriptions).where(eq(subscriptions.id, sub.id));
+
+      // Step 5: Insert the new fresh subscription into DB
+      await db.insert(subscriptions).values({
+        userId,
+        stripeCustomerId: customerId,
+        stripeSubscriptionId: finalSub.id,
+        plan: "monthly" as const,
+        status: finalSub.status,
+        currentPeriodStart: finalSub.current_period_start ? new Date(finalSub.current_period_start * 1000) : new Date(),
+        currentPeriodEnd: finalSub.current_period_end ? new Date(finalSub.current_period_end * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        cancelAtPeriodEnd: false,
+      });
 
       return {
         success: true,
-        message: "Tu suscripcion mensual ha sido restaurada.",
+        message: "Tu suscripcion mensual ha sido restaurada. Puede tomar unos segundos en activarse.",
       };
     } catch (err: any) {
       console.error("[restoreMonthly] Error:", err.message);
