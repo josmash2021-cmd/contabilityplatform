@@ -2,7 +2,7 @@ import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { z } from "zod";
 import { getDb } from "./queries/connection";
 import { bankAccounts, bankTransactions, accounts, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules } from "@db/schema";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, count } from "drizzle-orm";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -1723,6 +1723,44 @@ export const bankRouter = createRouter({
     } catch (err: any) {
       return { success: false, error: err.message || "Error al desconectar" };
     }
+  }),
+
+  // ── DEBUG: Show transaction counts per account to diagnose missing transactions ──
+  debugTransactions: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const userId = ctx.user.id;
+
+    // Get all accounts
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+
+    // Get transaction counts per account
+    const txCounts = await db.select({
+      bankAccountId: bankTransactions.bankAccountId,
+      count: count(),
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .groupBy(bankTransactions.bankAccountId);
+
+    // Get total transactions
+    const allTxs = await db.select({
+      id: bankTransactions.id,
+      description: bankTransactions.description,
+      amount: bankTransactions.amount,
+      transactionDate: bankTransactions.transactionDate,
+      bankAccountId: bankTransactions.bankAccountId,
+      plaidTransactionId: bankTransactions.plaidTransactionId,
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .orderBy(desc(bankTransactions.transactionDate))
+      .limit(20);
+
+    return {
+      accounts: userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,12) })),
+      transactionCounts: txCounts,
+      totalTransactions: txCounts.reduce((s: number, t: any) => s + (t.count || 0), 0),
+      recentTransactions: allTxs,
+    };
   }),
 
   // ── DEBUG: Raw Plaid balance data for this user ──
