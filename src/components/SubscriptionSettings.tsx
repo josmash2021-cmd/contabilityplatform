@@ -18,11 +18,14 @@ const BUSINESS_MONTHLY = {
   description: "Facturado mensualmente. Cancela cuando quieras.",
   badge: "New Plan",
   features: [
-    "Todo el poder de la plataforma",
-    "Marketing con IA para tus clientes",
+    "Agente de contabilidad AI personalizado",
+    "Contabilidad completa del negocio",
+    "Manejo y almacenamiento de clientes",
+    "Seguimiento de clientes integrado",
+    "Contabilidad bancaria conectada",
+    "Soporte prioritario 24/7",
     "Pagos y registros simplificados",
     "Finanzas organizadas automaticamente",
-    "Soporte dedicado 24/7",
   ],
 };
 
@@ -38,12 +41,13 @@ const BUSINESS_ANNUAL = {
   badge: "Mejor valor",
   features: [
     "Todo lo incluido en el plan Mensual",
+    "Agente de contabilidad AI ilimitado",
     "Clientes ilimitados en tu base de datos",
     "Hasta 3 usuarios (tu + empleados)",
     "Reportes contables exportables (PDF / Excel)",
     "Recordatorios automaticos a clientes",
     "Backups diarios automaticos",
-    "Soporte prioritario",
+    "Soporte prioritario VIP",
   ],
   highlighted: true,
 };
@@ -59,6 +63,7 @@ const PERSONAL_MONTHLY = {
   description: "Facturado mensualmente. Cancela cuando quieras.",
   badge: "Oferta",
   features: [
+    "Agente de contabilidad AI personal",
     "Toda tu contabilidad personal organizada",
     "Seguimiento de ingresos y gastos",
     "Metas de ahorro con IA",
