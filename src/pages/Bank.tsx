@@ -18,7 +18,7 @@ import {
   CheckCircle2, PiggyBank, Loader2, X, Check,
 } from "lucide-react";
 
-/** Account dropdown — uses fixed positioning to render OVER all content */
+/** Account dropdown — simple absolute with high z-index */
 function AccountDropdown({
   accounts,
   selectedId,
@@ -29,34 +29,21 @@ function AccountDropdown({
   onChange: (id: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const btnRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
+  const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    function handle(e: MouseEvent) {
-      const t = e.target as Node;
-      if (menuRef.current?.contains(t) || btnRef.current?.contains(t)) return;
-      setOpen(false);
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
     }
-    if (open) document.addEventListener("mousedown", handle);
-    return () => document.removeEventListener("mousedown", handle);
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
   const selected = accounts.find((a) => String(a.id) === selectedId);
 
-  // Calculate menu position based on button
-  const [pos, setPos] = useState({ top: 0, left: 0, width: 0 });
-  useEffect(() => {
-    if (open && btnRef.current) {
-      const r = btnRef.current.getBoundingClientRect();
-      setPos({ top: r.bottom + 4, left: r.left, width: Math.max(r.width, 220) });
-    }
-  }, [open]);
-
   return (
-    <>
+    <div ref={ref} className="relative z-[100]">
       <button
-        ref={btnRef}
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-52"
       >
@@ -67,22 +54,18 @@ function AccountDropdown({
         <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
-        <div
-          ref={menuRef}
-          className="fixed bg-white border border-neutral-200 rounded-lg shadow-2xl py-1 max-h-[300px] overflow-y-auto"
-          style={{ top: pos.top, left: pos.left, width: pos.width, zIndex: 99999 }}
-        >
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[260px] bg-white border border-neutral-200 rounded-lg shadow-xl z-[9999] py-1">
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
               onClick={() => { onChange(String(acc.id)); setOpen(false); }}
-              className={`w-full text-left px-2.5 py-2 text-xs flex items-center justify-between transition-colors ${
+              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
                 String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
               }`}
             >
               <div className="flex items-center gap-2 min-w-0">
                 <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate">{acc.bankName || acc.accountType}</span>
+                <span className="truncate">{acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""}</span>
               </div>
               <span className={`text-[10px] font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
                 {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
@@ -91,7 +74,7 @@ function AccountDropdown({
           ))}
         </div>
       )}
-    </>
+    </div>
   );
 }
 
@@ -473,7 +456,7 @@ export default function Bank() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 flex-wrap relative z-[90]">
             {allAccounts && allAccounts.length > 0 && (
               <AccountDropdown
                 accounts={allAccounts}
