@@ -134,7 +134,7 @@ export default function Reports() {
   const totalExp = Number(incomeData?.totalExpenses ?? 0);
   const pie3Data = [
     { name: "Ventas", value: salesRevenue, color: "#22c55e" },
-    { name: "Ingresos Bancarios", value: bankRevenue, color: "#3b82f6" },
+    { name: "Ingresos Bancarios", value: bankRevenue, color: "#86efac" },
     { name: "Gastos", value: totalExp, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
