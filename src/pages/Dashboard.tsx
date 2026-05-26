@@ -60,8 +60,17 @@ export default function Dashboard() {
     monthStart,
     now: now.toISOString(),
   });
+  // Debug query to trace timezone issues
+  const { data: debugData } = trpc.dashboard.debug.useQuery({
+    todayStart,
+    todayEnd,
+    weekStart,
+    monthStart,
+    now: now.toISOString(),
+  });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
+  const [showDebug, setShowDebug] = useState(false);
 
   const safeData = data || {
     todaySales: { total: "0", count: 0 },
@@ -238,6 +247,49 @@ export default function Dashboard() {
             }) : <p className="text-sm text-neutral-400 text-center py-8">No hay ventas aun. Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar.</p>}
           </div>
         </AnimatedCard>
+      </div>
+
+      {/* Debug Panel - temporary for diagnostics */}
+      <div className="border border-dashed border-neutral-300 rounded-lg p-4 bg-neutral-50">
+        <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-neutral-500 font-medium flex items-center gap-1">
+          {showDebug ? "Ocultar" : "Mostrar"} debug info
+        </button>
+        {showDebug && debugData && (
+          <div className="mt-3 space-y-2 text-[10px] text-neutral-600 font-mono overflow-auto">
+            <div className="bg-white p-2 rounded border border-neutral-200">
+              <p className="font-semibold text-neutral-800">Tu dispositivo:</p>
+              <p>Hora local: {new Date().toString()}</p>
+              <p>Timezone: {Intl.DateTimeFormat().resolvedOptions().timeZone}</p>
+              <p>Offset: {new Date().getTimezoneOffset()} min ({new Date().getTimezoneOffset() / -60}h)</p>
+            </div>
+            <div className="bg-white p-2 rounded border border-neutral-200">
+              <p className="font-semibold text-neutral-800">Enviado al backend:</p>
+              <p>todayStart: {todayStart}</p>
+              <p>todayEnd: {todayEnd}</p>
+              <p>weekStart: {weekStart}</p>
+              <p>monthStart: {monthStart}</p>
+              <p>now: {now.toISOString()}</p>
+            </div>
+            <div className="bg-white p-2 rounded border border-neutral-200">
+              <p className="font-semibold text-neutral-800">Servidor DB:</p>
+              <p>CURDATE: {debugData.dbServerDates?.curdate ?? "N/A"}</p>
+              <p>NOW: {debugData.dbServerDates?.now ?? "N/A"}</p>
+              <p>UTC: {debugData.dbServerDates?.utc ?? "N/A"}</p>
+            </div>
+            <div className="bg-white p-2 rounded border border-neutral-200">
+              <p className="font-semibold text-neutral-800">Tus ventas en DB ({debugData.allUserSales?.length ?? 0}):</p>
+              {(debugData.allUserSales ?? []).map((s: any, i: number) => (
+                <p key={i}>#{s.id}: ${s.total} | {s.createdAt} | status={s.status} | method={s.paymentMethod}</p>
+              ))}
+            </div>
+            <div className="bg-white p-2 rounded border border-neutral-200">
+              <p className="font-semibold text-neutral-800">Filtradas como "hoy" ({debugData.filteredSalesToday?.length ?? 0}):</p>
+              {(debugData.filteredSalesToday ?? []).map((s: any, i: number) => (
+                <p key={i}>#{s.id}: ${s.total} | {s.createdAt}</p>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

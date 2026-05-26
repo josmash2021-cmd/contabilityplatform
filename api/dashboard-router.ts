@@ -5,20 +5,61 @@ import { sql, desc, and, eq, gte, lte, count } from "drizzle-orm";
 import { z } from "zod";
 
 export const dashboardRouter = createRouter({
-  debug: authedQuery.query(async ({ ctx }) => {
+  debug: authedQuery
+    .input(z.object({
+      todayStart: z.string().optional(),
+      todayEnd: z.string().optional(),
+      weekStart: z.string().optional(),
+      monthStart: z.string().optional(),
+      now: z.string().optional(),
+    }).optional())
+    .query(async ({ ctx, input }) => {
     const db = getDb();
     const userId = ctx.user.id;
     
     // Get raw counts and recent sales
     const totalSales = await db.select({ count: sql<number>`COUNT(*)` }).from(sales);
-    const recentSalesRaw = await db.select({ id: sales.id, total: sales.total, createdAt: sales.createdAt, status: sales.status, createdBy: sales.createdBy }).from(sales).orderBy(desc(sales.createdAt)).limit(5);
-    const curDate = await db.select({ curdate: sql<string>`CURDATE()`, now: sql<string>`NOW()` }).from(sales).limit(1);
+    const allUserSales = await db.select({ 
+      id: sales.id, total: sales.total, createdAt: sales.createdAt, 
+      status: sales.status, createdBy: sales.createdBy,
+      paymentMethod: sales.paymentMethod,
+    }).from(sales).where(eq(sales.createdBy, userId)).orderBy(desc(sales.createdAt)).limit(20);
+    const curDate = await db.select({ curdate: sql<string>`CURDATE()`, now: sql<string>`NOW()`, utc: sql<string>`UTC_TIMESTAMP()` }).from(sales).limit(1);
+
+    // Test the timestamp filtering
+    const tStart = input?.todayStart;
+    const tEnd = input?.todayEnd;
+    let filteredSales: any[] = [];
+    if (tStart && tEnd) {
+      filteredSales = await db.select({
+        id: sales.id, total: sales.total, createdAt: sales.createdAt,
+      }).from(sales).where(
+        and(eq(sales.createdBy, userId),
+            gte(sales.createdAt, new Date(tStart)),
+            lte(sales.createdAt, new Date(tEnd)),
+            eq(sales.status, "completed"))
+      ).orderBy(desc(sales.createdAt));
+    }
 
     return {
       currentUserId: userId,
       totalSalesCount: totalSales[0]?.count ?? 0,
-      recentSales: recentSalesRaw,
-      dbDate: curDate[0] ?? null,
+      inputReceived: input ?? null,
+      parsedDates: tStart ? {
+        todayStart: tStart,
+        todayStartAsDate: new Date(tStart).toISOString(),
+        todayEnd: tEnd,
+        todayEndAsDate: tEnd ? new Date(tEnd).toISOString() : null,
+      } : null,
+      dbServerDates: curDate[0] ?? null,
+      allUserSales: allUserSales.map(s => ({
+        ...s,
+        createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+      })),
+      filteredSalesToday: filteredSales.map(s => ({
+        ...s,
+        createdAt: s.createdAt instanceof Date ? s.createdAt.toISOString() : s.createdAt,
+      })),
     };
   }),
 
@@ -97,20 +138,31 @@ export const dashboardRouter = createRouter({
         count: p.count,
       }));
 
-      // Daily sales (last 7 days) via SQL
-      const dailySalesRaw = await db.select({
-        date: sql<string>`DATE(${sales.createdAt})`,
-        total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-        count: sql<number>`COUNT(*)`,
-      }).from(sales).where(
-        and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, eq(sales.status, "completed"))
-      ).groupBy(sql`DATE(${sales.createdAt})`);
+      // Daily sales (last 7 days) using frontend-provided weekStart for timezone accuracy
+      const dailySalesRaw = wStart && now
+        ? await db.select({
+            date: sql<string>`DATE(${sales.createdAt})`,
+            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
+            count: sql<number>`COUNT(*)`,
+          }).from(sales).where(
+            and(eq(sales.createdBy, userId),
+                gte(sales.createdAt, new Date(wStart)),
+                lte(sales.createdAt, new Date(now)),
+                eq(sales.status, "completed"))
+          ).groupBy(sql`DATE(${sales.createdAt})`)
+        : [];
 
       const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map(d => [d.date, d]));
       const dailySales: Array<{ date: string; dayName: string; total: string; count: number }> = [];
+      // Build 7 day labels using LOCAL dates (not UTC) to match user's timezone
+      const localNow = new Date();
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(); d.setDate(d.getDate() - i);
-        const dayStr = d.toISOString().split("T")[0];
+        const d = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate() - i);
+        // Format as YYYY-MM-DD using LOCAL components (not toISOString which gives UTC)
+        const yyyy = d.getFullYear();
+        const mm = String(d.getMonth() + 1).padStart(2, "0");
+        const dd = String(d.getDate()).padStart(2, "0");
+        const dayStr = `${yyyy}-${mm}-${dd}`;
         const row = dailySalesMap.get(dayStr);
         dailySales.push({
           date: dayStr,
