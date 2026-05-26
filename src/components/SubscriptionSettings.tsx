@@ -219,7 +219,7 @@ export default function SubscriptionSettings() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <div className="w-8 h-8 rounded-full border-2 border-yellow-400 flex items-center justify-center bg-yellow-50"><Crown className="w-4 h-4 text-yellow-600" /></div>
+                <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-gradient-to-br from-yellow-300 via-yellow-400 to-amber-500 shadow-sm"><Crown className="w-4 h-4 text-amber-800 drop-shadow-sm" /></div>
               </div>
               <div>
                 <div className="flex items-center gap-2">
