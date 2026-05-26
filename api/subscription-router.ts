@@ -559,6 +559,9 @@ export const subscriptionRouter = createRouter({
   }),
 
   // ── Upgrade subscription (monthly → annual) ──
+  // CRITICAL: This endpoint NEVER touches the existing monthly subscription
+  // unless the payment succeeds. If payment fails, the monthly sub stays exactly
+  // as it was — no past_due, no broken state.
   upgrade: authedQuery
     .input(z.object({ from: z.enum(["monthly"]), to: z.enum(["annual"]) }))
     .mutation(async ({ input, ctx }) => {
@@ -601,7 +604,8 @@ export const subscriptionRouter = createRouter({
         console.log(`[upgrade] Preview: amount_due=${amountDue}`);
 
         // Step 2: Create a separate payment intent for the upgrade amount
-        // This way if payment fails, the original subscription is untouched
+        // We charge this FIRST before touching the subscription.
+        // If this fails, the original monthly subscription is completely untouched.
         const paymentIntent = await stripe.paymentIntents.create({
           amount: amountDue,
           currency: "usd",
@@ -610,16 +614,20 @@ export const subscriptionRouter = createRouter({
           confirm: true,
           payment_method: stripeSub.default_payment_method,
           error_on_requires_action: true,
+          off_session: true,
         });
 
-        // Step 3: If payment succeeded, update the subscription
+        // Step 3: ONLY if payment succeeded, update the subscription to annual
+        // We use proration_behavior: "none" because we ALREADY charged the upgrade
+        // amount via the separate payment intent above. This prevents Stripe from
+        // generating an additional invoice that could fail and leave us in past_due.
         if (paymentIntent.status === "succeeded") {
           const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
             items: [{
               id: stripeSub.items.data[0].id,
               price: annualPriceId,
             }],
-            proration_behavior: "always_invoice",
+            proration_behavior: "none", // KEY: no extra invoice since we already charged
             billing_cycle_anchor: "now",
           });
 
@@ -637,12 +645,13 @@ export const subscriptionRouter = createRouter({
             message: "Suscripcion aplicada con exito. Ahora tienes el plan Anual.",
           };
         } else {
-          // Payment did not succeed — monthly subscription remains untouched
+          // Payment did not succeed — monthly subscription was NEVER touched
           return { success: false, error: "El pago no pudo completarse. Tu suscripcion mensual sigue activa. Intenta de nuevo mas tarde." };
         }
       } catch (err: any) {
         console.error("[upgrade] Error:", err.message, err.code);
-        // If ANY error occurs, the monthly subscription is untouched
+        // If ANY error occurs, the monthly subscription was NEVER modified.
+        // It remains exactly as it was before the upgrade attempt.
         if (err.code === "card_declined" || err.decline_code) {
           return { success: false, error: "Tarjeta declinada. Tu suscripcion mensual sigue activa. Por favor verifica tu metodo de pago e intenta de nuevo." };
         }

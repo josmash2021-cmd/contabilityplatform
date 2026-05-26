@@ -2,11 +2,13 @@ import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router";
+import { useSubscriptionAgent } from "@/hooks/useSubscriptionAgent";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+
 import { toast } from "sonner";
-import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, CalendarDays, RefreshCw } from "lucide-react";
+import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap } from "lucide-react";
 
 // Business plans (original)
 const BUSINESS_MONTHLY = {
@@ -114,68 +116,22 @@ export default function SubscriptionSettings() {
   );
   const { data: payments } = trpc.subscription.payments.useQuery();
 
-  // Detect declined/failed payments (past_due = user tried to pay but card was declined)
-  const hasDeclinedPayment = status?.status === "past_due" || status?.status === "unpaid";
+  // Subscription Recovery Agent — auto-detects lost subs and auto-reverts failed upgrades
+  useSubscriptionAgent();
 
   const [selectedPlan, setSelectedPlan] = useState<string | null>(renewParam);
-  const [syncing, setSyncing] = useState(false);
 
   // Pre-select plan from URL ?renew= parameter (from expired overlay)
   useEffect(() => {
     if (renewParam) {
       setSelectedPlan(renewParam);
     }
-  }, [renewParam]);
-
-  // Force sync when returning from Stripe payment
-  const debugQuery = trpc.subscription.debug.useQuery(undefined, { enabled: false });
-  const paymentStatusQuery = trpc.subscription.paymentStatus.useQuery(undefined, { enabled: status?.active === true });
-
-  const restoreMonthlyMut = trpc.subscription.restoreMonthly.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success("✓ " + data.message);
-        utils.subscription.status.invalidate();
-      } else {
-        toast.error(data.error || "No se pudo restaurar");
-      }
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const forceSyncMut = trpc.subscription.forceSync.useMutation({
-    onSuccess: (data) => {
-      setSyncing(false);
-      // Always refetch status after forceSync
-      utils.subscription.status.refetch();
-      if (data.found) {
-        toast.success(data.message || "Suscripcion verificada");
-      } else {
-        console.log("[forceSync]", data.message);
-      }
-    },
-    onError: (err) => {
-      setSyncing(false);
-      toast.error(err.message || "Error al verificar");
-    },
-  });
-
-  // Auto-sync on mount — always try to sync from Stripe
-  useEffect(() => {
-    // If we have URL param from Stripe, clean it
+    // Clean URL param from Stripe redirect
     const params = new URLSearchParams(window.location.search);
     if (params.get("subscription") === "success") {
       window.history.replaceState({}, "", window.location.pathname);
     }
-    // Always try to sync on mount (for users who paid but webhook failed)
-    const timer = setTimeout(() => {
-      if (!status?.active) {
-        setSyncing(true);
-        forceSyncMut.mutate();
-      }
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
+  }, [renewParam]);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
@@ -339,23 +295,6 @@ export default function SubscriptionSettings() {
           )}
         </div>
 
-        {/* Payment past_due warning */}
-        {status?.status === "past_due" && (
-          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-xs text-red-700">
-              <strong>Pago pendiente.</strong> El cobro de tu suscripcion no pudo procesarse. Por favor actualiza tu metodo de pago haciendo clic en "Gestionar tarjeta y facturacion".
-            </p>
-            {paymentStatusQuery.data && !(paymentStatusQuery.data as any).error && (
-              <div className="mt-2 text-[10px] text-red-600">
-                <p>Estado del pago: {(paymentStatusQuery.data as any).paymentStatus || "Desconocido"}</p>
-                {(paymentStatusQuery.data as any).failureMessage && (
-                  <p>Error: {(paymentStatusQuery.data as any).failureMessage}</p>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* No downgrade message — Only for annual subscribers */}
         {!isMonthly && (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
@@ -482,80 +421,9 @@ export default function SubscriptionSettings() {
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
   return (
     <div className="space-y-6">
-      {/* Restore monthly for users with past_due annual (failed upgrade) */}
-      {status?.status === "past_due" && (
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
-          <p className="text-sm text-amber-800 font-medium">Upgrade a anual fallido</p>
-          <p className="text-xs text-amber-700">
-            El cobro del upgrade fue declinado. Restaura tu suscripcion mensual activa.
-          </p>
-          <Button
-            onClick={() => restoreMonthlyMut.mutate()}
-            disabled={restoreMonthlyMut.isPending}
-            className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-xs"
-          >
-            {restoreMonthlyMut.isPending ? (
-              <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Restaurando...</>
-            ) : (
-              "Restaurar mi suscripcion mensual"
-            )}
-          </Button>
-        </div>
-      )}
-
-      <div className="flex items-center justify-between">
-        <p className="text-xs text-neutral-400">
-          {status?.status === "past_due"
-            ? "O elige un plan nuevo para continuar."
-            : "Configura tu plan para desbloquear el acceso completo a Accounting Platform."}
-        </p>
-        {/* Force sync button for users who already paid */}
-        <Button
-          onClick={() => { setSyncing(true); forceSyncMut.mutate(); }}
-          disabled={syncing}
-          variant="outline"
-          className="text-xs h-7 px-2 border-neutral-200"
-        >
-          {syncing ? (
-            <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Verificando...</>
-          ) : (
-            <><RefreshCw className="w-3 h-3 mr-1" /> Verificar mi suscripcion</>
-          )}
-        </Button>
-        <Button
-          onClick={() => debugQuery.refetch()}
-          variant="ghost"
-          className="text-xs h-7 px-2 text-neutral-400"
-        >
-          Debug
-        </Button>
-      </div>
-
-      {/* Debug panel */}
-      {debugQuery.data && (
-        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] font-mono text-neutral-600 overflow-auto max-h-[300px]">
-          <p className="font-semibold text-neutral-800 mb-1">Debug Info:</p>
-          <p>userId: {(debugQuery.data as any).userId} (type: {(debugQuery.data as any).userIdType})</p>
-          <p>email: {(debugQuery.data as any).userEmail}</p>
-          <p className="mt-1">DB subs: {(debugQuery.data as any).dbSubs?.length ?? 0}</p>
-          {(debugQuery.data as any).dbSubs?.map((s: any, i: number) => (
-            <p key={i} className="ml-2">- {s.plan} | {s.status} | sub:{s.stripeSubId?.slice(0,8)} | cust:{s.stripeCustId?.slice(0,8)}</p>
-          ))}
-          <p className="mt-1">Stripe found: {(debugQuery.data as any).stripeFound ? "YES" : "NO"}</p>
-          {(debugQuery.data as any).stripeFound && (
-            <>
-              <p>cust: {(debugQuery.data as any).stripeCustomerId?.slice(0,12)}</p>
-              <p>subs: {(debugQuery.data as any).stripeSubs?.length}</p>
-              {(debugQuery.data as any).stripeSubs?.map((s: any, i: number) => (
-                <p key={i} className="ml-2">- {s.status} | ${s.plan} | {s.id?.slice(0,12)}</p>
-              ))}
-            </>
-          )}
-          {(debugQuery.data as any).stripeError && (
-            <p className="text-red-500">Stripe error: {(debugQuery.data as any).stripeError}</p>
-          )}
-        </div>
-      )}
+      <p className="text-xs text-neutral-400">
+        Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+      </p>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Monthly */}
