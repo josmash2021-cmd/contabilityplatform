@@ -49,6 +49,19 @@ function AccountDropdown({
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+          {/* Option to show ALL accounts */}
+          <button
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
+              !selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            <div className="flex items-center gap-2 min-w-0">
+              <Landmark className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+              <span>Todas las cuentas</span>
+            </div>
+          </button>
+          <div className="border-t border-neutral-100 my-1" />
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -137,6 +150,11 @@ export default function PersonalTransactions() {
   const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
 
   // Use SAME endpoint as Dashboard - bank.getMonthData
+  // First get ALL transactions (no account filter) to show count
+  const { data: allMonthData } = trpc.bank.getMonthData.useQuery({
+    year: parseInt(year),
+    month: parseInt(month),
+  });
   const { data: monthData, isLoading } = trpc.bank.getMonthData.useQuery({
     year: parseInt(year),
     month: parseInt(month),
@@ -185,6 +203,7 @@ export default function PersonalTransactions() {
   }, [year, month, effectiveAccountId]);
 
   const allTransactions = monthData?.transactions ?? [];
+  const totalAllAccounts = allMonthData?.transactions?.length ?? 0;
   const GAS_BRANDS = [
     "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
     "wawa","valero","citgo","phillips 66","circle k","costco gas","walmart gas",
@@ -241,7 +260,18 @@ export default function PersonalTransactions() {
           <h1 className="text-lg font-semibold text-black">
             {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "compras" ? "Compras" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
           </h1>
-          <p className="text-xs text-neutral-500">{allTransactions.length} registros · {monthData?.monthName ?? ""}</p>
+          <p className="text-xs text-neutral-500">
+            {allTransactions.length} de {totalAllAccounts} registros
+            {effectiveAccountId && totalAllAccounts > allTransactions.length && (
+              <button
+                onClick={() => setSelectedAccountId("")}
+                className="ml-2 text-emerald-600 hover:text-emerald-700 underline"
+              >
+                Ver todas las cuentas
+              </button>
+            )}
+            {" · "}{monthData?.monthName ?? ""}
+          </p>
         </div>
       </div>
 
