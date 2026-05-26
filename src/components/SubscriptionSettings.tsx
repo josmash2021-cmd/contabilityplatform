@@ -114,6 +114,8 @@ export default function SubscriptionSettings() {
   const [syncing, setSyncing] = useState(false);
 
   // Force sync when returning from Stripe payment
+  const debugQuery = trpc.subscription.debug.useQuery(undefined, { enabled: false });
+
   const forceSyncMut = trpc.subscription.forceSync.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
@@ -436,7 +438,40 @@ export default function SubscriptionSettings() {
             <><RefreshCw className="w-3 h-3 mr-1" /> Verificar mi suscripcion</>
           )}
         </Button>
+        <Button
+          onClick={() => debugQuery.refetch()}
+          variant="ghost"
+          className="text-xs h-7 px-2 text-neutral-400"
+        >
+          Debug
+        </Button>
       </div>
+
+      {/* Debug panel */}
+      {debugQuery.data && (
+        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg text-[10px] font-mono text-neutral-600 overflow-auto max-h-[300px]">
+          <p className="font-semibold text-neutral-800 mb-1">Debug Info:</p>
+          <p>userId: {(debugQuery.data as any).userId} (type: {(debugQuery.data as any).userIdType})</p>
+          <p>email: {(debugQuery.data as any).userEmail}</p>
+          <p className="mt-1">DB subs: {(debugQuery.data as any).dbSubs?.length ?? 0}</p>
+          {(debugQuery.data as any).dbSubs?.map((s: any, i: number) => (
+            <p key={i} className="ml-2">- {s.plan} | {s.status} | sub:{s.stripeSubId?.slice(0,8)} | cust:{s.stripeCustId?.slice(0,8)}</p>
+          ))}
+          <p className="mt-1">Stripe found: {(debugQuery.data as any).stripeFound ? "YES" : "NO"}</p>
+          {(debugQuery.data as any).stripeFound && (
+            <>
+              <p>cust: {(debugQuery.data as any).stripeCustomerId?.slice(0,12)}</p>
+              <p>subs: {(debugQuery.data as any).stripeSubs?.length}</p>
+              {(debugQuery.data as any).stripeSubs?.map((s: any, i: number) => (
+                <p key={i} className="ml-2">- {s.status} | ${s.plan} | {s.id?.slice(0,12)}</p>
+              ))}
+            </>
+          )}
+          {(debugQuery.data as any).stripeError && (
+            <p className="text-red-500">Stripe error: {(debugQuery.data as any).stripeError}</p>
+          )}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Monthly */}

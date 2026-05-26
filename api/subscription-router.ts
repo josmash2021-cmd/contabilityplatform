@@ -580,6 +580,68 @@ export const subscriptionRouter = createRouter({
       }
     }),
 
+  // ── DEBUG: Show raw DB + Stripe data for this user ──
+  debug: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const stripe = getStripe();
+    const userId = Number(ctx.user.id);
+    const userEmail = ctx.user.email;
+
+    // 1. DB contents
+    const dbSubs = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, userId));
+    const dbPayments = await db.select().from(subscriptionPayments)
+      .where(eq(subscriptionPayments.userId, userId));
+
+    // 2. Search Stripe by all methods
+    let stripeCustomer: any = null;
+    let stripeSubs: any = [];
+    try {
+      const allCusts = await stripe.customers.list({ limit: 100 });
+      stripeCustomer = allCusts.data.find((c: any) =>
+        c.metadata?.platformUserId === String(userId) ||
+        (userEmail && c.email === userEmail)
+      );
+
+      if (stripeCustomer) {
+        const subsList = await stripe.subscriptions.list({
+          customer: stripeCustomer.id,
+          status: "all",
+          limit: 5,
+        });
+        stripeSubs = subsList.data.map((s: any) => ({
+          id: s.id,
+          status: s.status,
+          plan: s.items?.data?.[0]?.price?.unit_amount,
+          metadata: s.metadata,
+        }));
+      }
+    } catch (err: any) {
+      return {
+        userId,
+        userIdType: typeof userId,
+        userEmail,
+        dbSubs,
+        dbPayments,
+        stripeError: err.message,
+      };
+    }
+
+    return {
+      userId,
+      userIdType: typeof userId,
+      userEmail,
+      dbSubs: dbSubs.map((s: any) => ({ id: s.id, plan: s.plan, status: s.status, stripeSubId: s.stripeSubscriptionId, stripeCustId: s.stripeCustomerId })),
+      dbPayments: dbPayments.map((p: any) => ({ id: p.id, plan: p.plan, amount: p.amount, status: p.status })),
+      stripeFound: !!stripeCustomer,
+      stripeCustomerId: stripeCustomer?.id,
+      stripeCustomerEmail: stripeCustomer?.email,
+      stripeCustomerMeta: stripeCustomer?.metadata,
+      stripeSubs,
+    };
+  }),
+
   // ── Create Stripe Customer Portal session ──
   createPortalSession: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
