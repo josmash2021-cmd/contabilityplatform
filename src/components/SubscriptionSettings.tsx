@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
+import { useSubscriptionAgent } from "@/hooks/useSubscriptionAgent";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,41 +102,20 @@ export default function SubscriptionSettings() {
   const PLAN_ANNUAL = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
 
   const utils = trpc.useUtils();
-  const { data: status, isLoading: statusLoading } = trpc.subscription.status.useQuery();
+  const { data: status, isLoading: statusLoading, refetch: refetchStatus } = trpc.subscription.status.useQuery();
   const { data: payments } = trpc.subscription.payments.useQuery();
-  const verifyQuery = trpc.subscription.verify.useQuery(undefined, {
-    enabled: false, // Only call manually
-  });
+
+  // Subscription Sync Agent — auto-detects lost subscriptions
+  const agent = useSubscriptionAgent();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
-  // Verify subscription on mount (for returning from Stripe checkout)
+  // Agent auto-refreshes status when it finds a subscription
   useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const subscriptionStatus = urlParams.get("subscription");
-    if (subscriptionStatus === "success") {
-      // Call verify to sync with Stripe
-      verifyQuery.refetch().then(() => {
-        utils.subscription.status.invalidate();
-        utils.subscription.payments.invalidate();
-        // Clean URL
-        window.history.replaceState({}, "", window.location.pathname);
-      });
+    if (agent.hasSubscription) {
+      refetchStatus();
+      utils.subscription.payments.invalidate();
     }
-  }, []);
-
-  // Periodic verification every 10 seconds when no active subscription
-  useEffect(() => {
-    if (status?.active) return;
-    const interval = setInterval(() => {
-      verifyQuery.refetch().then((result) => {
-        if (result.data?.active) {
-          utils.subscription.status.invalidate();
-          utils.subscription.payments.invalidate();
-        }
-      });
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [status?.active]);
+  }, [agent.hasSubscription]);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {

@@ -252,11 +252,12 @@ export const subscriptionRouter = createRouter({
     return { success: true };
   }),
 
-  // ── Verify subscription with Stripe (called on return from checkout) ──
+  // ── Verify subscription — Agent finds lost subscriptions ──
   verify: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null };
     const db = getDb();
     const userId = ctx.user.id;
+    const stripe = getStripe();
 
     // Step 1: Check DB first
     const subs = await db.select().from(subscriptions)
@@ -265,35 +266,66 @@ export const subscriptionRouter = createRouter({
       .limit(1);
     let sub = subs[0];
 
-    const stripe = getStripe();
-
-    // Step 2: If no subscription in DB, search Stripe by customer
+    // Step 2: If no subscription in DB, search Stripe aggressively
     if (!sub) {
       try {
-        // Search for customer by user ID in metadata
-        const customers = await stripe.customers.search({
-          query: `metadata['platformUserId']:'${userId}'`,
-        });
-        if (customers.data.length === 0) return { active: false, plan: null };
+        let foundCustomer: any = null;
 
-        const customer = customers.data[0];
+        // Method 1: Search by metadata userId
+        try {
+          const byMeta = await stripe.customers.search({
+            query: `metadata['platformUserId']:'${userId}'`,
+          });
+          if (byMeta.data.length > 0) foundCustomer = byMeta.data[0];
+        } catch { /* ignore */ }
 
-        // List subscriptions for this customer
-        const stripeSubs = await stripe.subscriptions.list({
-          customer: customer.id,
+        // Method 2: Search by email
+        if (!foundCustomer && ctx.user.email) {
+          try {
+            const byEmail = await stripe.customers.search({
+              query: `email:'${ctx.user.email}'`,
+            });
+            if (byEmail.data.length > 0) foundCustomer = byEmail.data[0];
+          } catch { /* ignore */ }
+        }
+
+        // Method 3: List all and filter
+        if (!foundCustomer) {
+          const allCusts = await stripe.customers.list({ limit: 100 });
+          foundCustomer = allCusts.data.find((c: any) =>
+            c.metadata?.platformUserId === String(userId) || c.email === ctx.user?.email
+          );
+        }
+
+        if (!foundCustomer) return { active: false, plan: null };
+
+        // Find active subscription for this customer
+        const stripeSubsList = await stripe.subscriptions.list({
+          customer: foundCustomer.id,
           status: "all",
-          limit: 1,
+          limit: 5,
         });
-        if (stripeSubs.data.length === 0) return { active: false, plan: null };
 
-        const stripeSub = stripeSubs.data[0] as any;
-        const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
-                     stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : "monthly";
+        const stripeSub = stripeSubsList.data.find((s: any) =>
+          s.status === "active" || s.status === "trialing"
+        ) || stripeSubsList.data[0];
 
-        // Create subscription in DB
+        if (!stripeSub) return { active: false, plan: null };
+
+        // Determine plan
+        const priceId = stripeSub.items?.data?.[0]?.price?.id;
+        let plan = "monthly";
+        if (priceId) {
+          try {
+            const priceData = await stripe.prices.retrieve(priceId);
+            plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+          } catch { /* default monthly */ }
+        }
+
+        // Create subscription record in DB
         await db.insert(subscriptions).values({
           userId,
-          stripeCustomerId: customer.id,
+          stripeCustomerId: foundCustomer.id,
           stripeSubscriptionId: stripeSub.id,
           plan: plan as "monthly" | "annual",
           status: stripeSub.status,
@@ -309,20 +341,27 @@ export const subscriptionRouter = createRouter({
           .limit(1);
         sub = newSubs[0];
       } catch (err: any) {
-        console.error("[verify] Search Stripe error:", err.message);
+        console.error("[verify] Agent search error:", err.message);
         return { active: false, plan: null };
       }
     }
 
-    // Step 3: Verify with Stripe using subscription ID
+    // Step 3: Verify with Stripe
     try {
       const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-
       const isActive = stripeSub.status === "active" || stripeSub.status === "trialing";
-      const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
-                   stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : sub.plan;
 
-      // Update DB with fresh data
+      // Determine plan from actual Stripe price
+      const priceId = stripeSub.items?.data?.[0]?.price?.id;
+      let plan = sub.plan;
+      if (priceId) {
+        try {
+          const priceData = await stripe.prices.retrieve(priceId);
+          plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+        } catch { /* keep existing plan */ }
+      }
+
+      // Update DB
       await db.update(subscriptions).set({
         status: stripeSub.status,
         plan: plan as "monthly" | "annual",
@@ -332,24 +371,11 @@ export const subscriptionRouter = createRouter({
         updatedAt: new Date(),
       }).where(eq(subscriptions.id, sub.id));
 
-      return {
-        active: isActive,
-        plan: plan,
-        status: stripeSub.status,
-        currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000).toISOString() : null,
-        cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
-      };
+      return { active: isActive, plan, status: stripeSub.status };
     } catch (err: any) {
-      console.error("[verify] Stripe retrieve error:", err.message);
-      // Return DB state as fallback
+      // Fallback to DB state
       const isActive = sub.status === "active" || sub.status === "trialing";
-      return {
-        active: isActive,
-        plan: sub.plan,
-        status: sub.status,
-        currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || null,
-        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
-      };
+      return { active: isActive, plan: sub.plan, status: sub.status };
     }
   }),
 
