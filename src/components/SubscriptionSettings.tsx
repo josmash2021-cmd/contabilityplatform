@@ -109,6 +109,14 @@ export default function SubscriptionSettings() {
   const agent = useSubscriptionAgent();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
 
+  // Force refresh on mount — agent will search Stripe
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      refetchStatus();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   // Agent auto-refreshes status when it finds a subscription
   useEffect(() => {
     if (agent.hasSubscription) {

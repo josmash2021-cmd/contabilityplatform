@@ -26,9 +26,9 @@ export function useSubscriptionAgent() {
     // If already active, nothing to do
     if (statusQuery.data?.active) return;
 
-    // If verify found a subscription, refresh status
+    // If verify found a subscription, refresh status immediately
     if (verifyQuery.data?.active) {
-      utils.subscription.status.invalidate();
+      utils.subscription.status.refetch();
       utils.subscription.payments.invalidate();
       attempts.current = 0;
       return;
@@ -38,9 +38,6 @@ export function useSubscriptionAgent() {
     if (verifyQuery.isSuccess && !verifyQuery.data?.active) {
       attempts.current++;
     }
-
-    // If we've tried many times and still nothing, the user truly has no subscription
-    // (not a sync issue, they genuinely haven't paid)
   }, [verifyQuery.data, verifyQuery.isSuccess, statusQuery.data?.active]);
 
   return {

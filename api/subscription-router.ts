@@ -86,26 +86,59 @@ export const subscriptionRouter = createRouter({
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
-    // Step 2: If no subscription in DB, search Stripe
+    // Step 2: If no subscription in DB, search Stripe aggressively
     if (subs.length === 0) {
       try {
         const stripe = getStripe();
-        const customers = await stripe.customers.search({
-          query: `metadata['platformUserId']:'${userId}'`,
-        });
-        if (customers.data.length > 0) {
-          const customer = customers.data[0];
-          const stripeSubs = await stripe.subscriptions.list({
-            customer: customer.id, status: "all", limit: 1,
+        let foundCustomer: any = null;
+
+        // Method 1: Search by metadata userId
+        try {
+          const byMeta = await stripe.customers.search({
+            query: `metadata['platformUserId']:'${userId}'`,
           });
-          if (stripeSubs.data.length > 0) {
-            const stripeSub = stripeSubs.data[0] as any;
-            const plan = stripeSub.items?.data?.[0]?.price?.unit_amount === 100 ? "monthly" :
-                         stripeSub.items?.data?.[0]?.price?.unit_amount === 80000 ? "annual" : "monthly";
+          if (byMeta.data.length > 0) foundCustomer = byMeta.data[0];
+        } catch { /* search not available */ }
+
+        // Method 2: Search by email
+        if (!foundCustomer && ctx.user.email) {
+          try {
+            const byEmail = await stripe.customers.search({
+              query: `email:'${ctx.user.email}'`,
+            });
+            if (byEmail.data.length > 0) foundCustomer = byEmail.data[0];
+          } catch { /* ignore */ }
+        }
+
+        // Method 3: List all and filter
+        if (!foundCustomer) {
+          const allCusts = await stripe.customers.list({ limit: 100 });
+          foundCustomer = allCusts.data.find((c: any) =>
+            c.metadata?.platformUserId === String(userId) || c.email === ctx.user?.email
+          );
+        }
+
+        if (foundCustomer) {
+          const stripeSubsList = await stripe.subscriptions.list({
+            customer: foundCustomer.id, status: "all", limit: 5,
+          });
+          const stripeSub = stripeSubsList.data.find((s: any) =>
+            s.status === "active" || s.status === "trialing"
+          ) || stripeSubsList.data[0];
+
+          if (stripeSub) {
+            const priceId = stripeSub.items?.data?.[0]?.price?.id;
+            let plan = "monthly";
+            if (priceId) {
+              try {
+                const priceData = await stripe.prices.retrieve(priceId);
+                plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+              } catch { /* default monthly */ }
+            }
             // Insert into DB
             await db.insert(subscriptions).values({
               userId,
-              stripeCustomerId: customer.id,
+              stripeCustomerId: foundCustomer.id,
               stripeSubscriptionId: stripeSub.id,
               plan: plan as "monthly" | "annual",
               status: stripeSub.status,
