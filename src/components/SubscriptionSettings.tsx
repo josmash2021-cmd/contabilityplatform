@@ -131,6 +131,18 @@ export default function SubscriptionSettings() {
   const debugQuery = trpc.subscription.debug.useQuery(undefined, { enabled: false });
   const paymentStatusQuery = trpc.subscription.paymentStatus.useQuery(undefined, { enabled: status?.active === true });
 
+  const restoreMonthlyMut = trpc.subscription.restoreMonthly.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success("✓ " + data.message);
+        utils.subscription.status.invalidate();
+      } else {
+        toast.error(data.error || "No se pudo restaurar");
+      }
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
   const forceSyncMut = trpc.subscription.forceSync.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
@@ -470,9 +482,32 @@ export default function SubscriptionSettings() {
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
   return (
     <div className="space-y-6">
+      {/* Restore monthly for users with past_due annual (failed upgrade) */}
+      {status?.status === "past_due" && (
+        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-2">
+          <p className="text-sm text-amber-800 font-medium">Upgrade a anual fallido</p>
+          <p className="text-xs text-amber-700">
+            El cobro del upgrade fue declinado. Restaura tu suscripcion mensual activa.
+          </p>
+          <Button
+            onClick={() => restoreMonthlyMut.mutate()}
+            disabled={restoreMonthlyMut.isPending}
+            className="bg-amber-600 hover:bg-amber-700 text-white h-8 text-xs"
+          >
+            {restoreMonthlyMut.isPending ? (
+              <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Restaurando...</>
+            ) : (
+              "Restaurar mi suscripcion mensual"
+            )}
+          </Button>
+        </div>
+      )}
+
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-400">
-          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+          {status?.status === "past_due"
+            ? "O elige un plan nuevo para continuar."
+            : "Configura tu plan para desbloquear el acceso completo a Accounting Platform."}
         </p>
         {/* Force sync button for users who already paid */}
         <Button

@@ -292,6 +292,59 @@ export const subscriptionRouter = createRouter({
     }
   }),
 
+  // ── Restore monthly subscription after failed upgrade ──
+  restoreMonthly: authedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    const stripe = getStripe();
+    const userId = Number(ctx.user.id);
+
+    try {
+      // Get current subscription
+      const subs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+      const sub = subs[0];
+      if (!sub?.stripeSubscriptionId) return { success: false, error: "No hay suscripcion" };
+
+      // Get Stripe subscription
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+
+      // Only allow restore if subscription is past_due or incomplete
+      if (stripeSub.status !== "past_due" && stripeSub.status !== "incomplete") {
+        return { success: false, error: "Tu suscripcion no necesita ser restaurada" };
+      }
+
+      // Get monthly price ID
+      const monthlyPriceId = await getOrCreatePrice(stripe, "monthly");
+
+      // Revert to monthly plan in Stripe
+      const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [{
+          id: stripeSub.items.data[0].id,
+          price: monthlyPriceId,
+        }],
+        proration_behavior: "none",
+      });
+
+      // Update DB
+      await db.update(subscriptions).set({
+        plan: "monthly",
+        status: updatedSub.status,
+        currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+        updatedAt: new Date(),
+      }).where(eq(subscriptions.id, sub.id));
+
+      return {
+        success: true,
+        message: "Tu suscripcion mensual ha sido restaurada.",
+      };
+    } catch (err: any) {
+      console.error("[restoreMonthly] Error:", err.message);
+      return { success: false, error: err.message || "Error al restaurar" };
+    }
+  }),
+
   // ── Create checkout session ──
   createCheckoutSession: authedQuery
     .input(z.object({ plan: z.enum(["monthly", "annual"]) }))
