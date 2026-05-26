@@ -224,50 +224,81 @@ export const salesRouter = createRouter({
       ).orderBy(desc(sales.createdAt));
     }),
 
-  stats: authedQuery.query(async ({ ctx }) => {
-    const db = getDb();
-    const userId = ctx.user?.id ?? null;
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    const weekAgo = new Date(today); weekAgo.setDate(weekAgo.getDate() - 7);
-    const monthAgo = new Date(today); monthAgo.setMonth(monthAgo.getMonth() - 1);
+  stats: authedQuery
+    .input(z.object({
+      todayDate: z.string().optional(),     // "2026-05-25" (local date)
+      weekStartDate: z.string().optional(), // "2026-05-19" (local date)
+      monthStartDate: z.string().optional(),// "2026-05-01" (local date)
+      tzOffsetHours: z.number().optional(), // -4 for EDT
+    }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      const userId = ctx.user?.id ?? null;
 
-    const todayCond = userId
-      ? and(eq(sales.createdBy, userId), gte(sales.createdAt, today), eq(sales.status, "completed"))
-      : and(gte(sales.createdAt, today), eq(sales.status, "completed"));
-    const weekCond = userId
-      ? and(eq(sales.createdBy, userId), gte(sales.createdAt, weekAgo), eq(sales.status, "completed"))
-      : and(gte(sales.createdAt, weekAgo), eq(sales.status, "completed"));
-    const monthCond = userId
-      ? and(eq(sales.createdBy, userId), gte(sales.createdAt, monthAgo), eq(sales.status, "completed"))
-      : and(gte(sales.createdAt, monthAgo), eq(sales.status, "completed"));
+      const todayDate = input?.todayDate;
+      const weekStartDate = input?.weekStartDate;
+      const monthStartDate = input?.monthStartDate;
+      const tzOff = input?.tzOffsetHours ?? 0;
+      const tzExpr = `DATE_ADD(createdAt, INTERVAL ${tzOff} HOUR)`;
 
-    const todaySales = await db.select({
-      total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(sales).where(todayCond);
-    const weekSales = await db.select({
-      total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(sales).where(weekCond);
-    const monthSales = await db.select({
-      total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(sales).where(monthCond);
+      // Helper: normalize db.execute result
+      const getRows = (r: any): any[] => {
+        if (Array.isArray(r) && r.length === 2 && Array.isArray(r[1]) && r[1][0]?.name !== undefined) return r[0];
+        return Array.isArray(r) ? r : [];
+      };
 
-    const payCond = userId
-      ? and(eq(sales.createdBy, userId), gte(sales.createdAt, weekAgo))
-      : gte(sales.createdAt, weekAgo);
-    const paymentBreakdown = await db.select({
-      method: sales.paymentMethod,
-      total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-      count: sql<number>`COUNT(*)`,
-    }).from(sales).where(payCond).groupBy(sales.paymentMethod);
+      // ─── TODAY ───
+      const todayResult = (todayDate && userId)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) = '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
 
-    return {
-      today: { total: todaySales[0]?.total ?? "0", count: todaySales[0]?.count ?? 0 },
-      week: { total: weekSales[0]?.total ?? "0", count: weekSales[0]?.count ?? 0 },
-      month: { total: monthSales[0]?.total ?? "0", count: monthSales[0]?.count ?? 0 },
-      paymentBreakdown,
-    };
-  }),
+      // ─── WEEK ───
+      const weekResult = (weekStartDate && todayDate && userId)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${weekStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
+
+      // ─── MONTH ───
+      const monthResult = (monthStartDate && todayDate && userId)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${monthStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
+
+      // ─── Payment breakdown (week) ───
+      const paymentResult = (weekStartDate && todayDate && userId)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT paymentMethod as method, COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${weekStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+            GROUP BY paymentMethod
+          `)))
+        : [];
+
+      return {
+        today: { total: todayResult[0]?.total ?? "0", count: todayResult[0]?.count ?? 0 },
+        week: { total: weekResult[0]?.total ?? "0", count: weekResult[0]?.count ?? 0 },
+        month: { total: monthResult[0]?.total ?? "0", count: monthResult[0]?.count ?? 0 },
+        paymentBreakdown: paymentResult as Array<{ method: string; total: string; count: number }>,
+      };
+    }),
 });

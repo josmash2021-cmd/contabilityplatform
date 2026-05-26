@@ -11,53 +11,80 @@ export const reportsRouter = createRouter({
     .input(z.object({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
+      tzOffsetHours: z.number().optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
-      const endDate = input?.endDate ? new Date(input.endDate) : new Date();
-      const startDate = input?.startDate
-        ? new Date(input.startDate)
-        : new Date(endDate.getFullYear(), endDate.getMonth(), 1);
+      const tzOff = input?.tzOffsetHours ?? 0;
+      const tzExprSales = `DATE_ADD(createdAt, INTERVAL ${tzOff} HOUR)`;
+      const tzExprBank = `DATE_ADD(transactionDate, INTERVAL ${tzOff} HOUR)`;
+      const tzExprExp = `DATE_ADD(date, INTERVAL ${tzOff} HOUR)`;
+
+      const todayLocal = new Date();
+      const y = todayLocal.getFullYear();
+      const m = todayLocal.getMonth();
+      const d = todayLocal.getDate();
+      const pad = (n: number) => String(n).padStart(2, "0");
+
+      const endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(d)}`;
+      const startDate = input?.startDate || `${y}-${pad(m + 1)}-01`;
+
+      // Helper: normalize db.execute result
+      const getRows = (r: any): any[] => {
+        if (Array.isArray(r) && r.length === 2 && Array.isArray(r[1]) && r[1][0]?.name !== undefined) return r[0];
+        return Array.isArray(r) ? r : [];
+      };
 
       // REVENUE from sales (POS/ventas)
-      const revenueResult = await db.select({
-        total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-      }).from(sales).where(
-        and(eq(sales.createdBy, userId), gte(sales.createdAt, startDate), lte(sales.createdAt, endDate), eq(sales.status, "completed"))
-      );
-      const salesRevenue = Number(revenueResult[0]?.total ?? 0);
+      const revResult = await db.execute(sql.raw(`
+        SELECT COALESCE(SUM(total), 0) as total
+        FROM sales
+        WHERE createdBy = ${userId}
+          AND DATE(${tzExprSales}) >= '${startDate}'
+          AND DATE(${tzExprSales}) <= '${endDate}'
+          AND status = 'completed'
+      `));
+      const salesRevenue = Number(getRows(revResult)[0]?.total ?? 0);
 
       // REVENUE from bank transactions (deposits, zelle received)
-      const bankIncomeResult = await db.select({
-        total: sql<string>`COALESCE(SUM(${bankTransactions.amount}), 0)`,
-      }).from(bankTransactions).where(
-        and(eq(bankTransactions.userId, userId), eq(bankTransactions.type, "income"), gte(bankTransactions.transactionDate, startDate), lte(bankTransactions.transactionDate, endDate))
-      );
-      const bankRevenue = Number(bankIncomeResult[0]?.total ?? 0);
+      const bankIncResult = await db.execute(sql.raw(`
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM bank_transactions
+        WHERE userId = ${userId}
+          AND type = 'income'
+          AND DATE(${tzExprBank}) >= '${startDate}'
+          AND DATE(${tzExprBank}) <= '${endDate}'
+      `));
+      const bankRevenue = Number(getRows(bankIncResult)[0]?.total ?? 0);
 
       // EXPENSES from expenses table (operativos)
-      const expenseResult = await db.select({
-        total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`,
-      }).from(expenses).where(
-        and(eq(expenses.createdBy, userId), gte(expenses.date, startDate), lte(expenses.date, endDate))
-      );
-      const operExpenses = Number(expenseResult[0]?.total ?? 0);
+      const expResult = await db.execute(sql.raw(`
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM expenses
+        WHERE createdBy = ${userId}
+          AND DATE(${tzExprExp}) >= '${startDate}'
+          AND DATE(${tzExprExp}) <= '${endDate}'
+      `));
+      const operExpenses = Number(getRows(expResult)[0]?.total ?? 0);
 
-      // EXPENSES from bank transactions (zelle sent, withdrawals, subscriptions)
-      const bankExpenseResult = await db.select({
-        total: sql<string>`COALESCE(SUM(${bankTransactions.amount}), 0)`,
-      }).from(bankTransactions).where(
-        and(eq(bankTransactions.userId, userId), eq(bankTransactions.type, "expense"), gte(bankTransactions.transactionDate, startDate), lte(bankTransactions.transactionDate, endDate))
-      );
-      const bankExpenses = Number(bankExpenseResult[0]?.total ?? 0);
+      // EXPENSES from bank transactions
+      const bankExpResult = await db.execute(sql.raw(`
+        SELECT COALESCE(SUM(amount), 0) as total
+        FROM bank_transactions
+        WHERE userId = ${userId}
+          AND type = 'expense'
+          AND DATE(${tzExprBank}) >= '${startDate}'
+          AND DATE(${tzExprBank}) <= '${endDate}'
+      `));
+      const bankExpenses = Number(getRows(bankExpResult)[0]?.total ?? 0);
 
       const totalRevenue = salesRevenue + bankRevenue;
       const totalExpenses = operExpenses + bankExpenses;
       const netIncome = totalRevenue - totalExpenses;
 
       return {
-        period: { start: startDate.toISOString().split("T")[0], end: endDate.toISOString().split("T")[0] },
+        period: { start: startDate, end: endDate },
         totalRevenue,
         totalExpenses,
         netIncome,

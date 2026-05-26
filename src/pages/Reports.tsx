@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,6 +35,21 @@ const CATEGORY_LABELS: Record<string, string> = {
   home_expense: "Gastos del Hogar", shopping: "Compras", cash_income: "Efectivo Recibido", other: "Otros",
 };
 
+// Build local date strings + timezone offset for backend queries
+function getLocalDateInputs() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const d = now.getDate();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return {
+    todayDate: `${y}-${pad(m + 1)}-${pad(d)}`,
+    weekStartDate: `${y}-${pad(m + 1)}-${pad(d - 6)}`,
+    monthStartDate: `${y}-${pad(m + 1)}-01`,
+    tzOffsetHours: now.getTimezoneOffset() / -60,
+  };
+}
+
 export default function Reports() {
   const [tab, setTab] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
@@ -43,10 +59,13 @@ export default function Reports() {
   const [periodFilter, setPeriodFilter] = useState<string>("month");
   const [activePieSlice, setActivePieSlice] = useState<string | null>(null);
 
-  const incomeQuery = trpc.reports.incomeStatement.useQuery({});
+  // Local date + timezone inputs (synced with Dashboard)
+  const dateInputs = getLocalDateInputs();
+
+  const incomeQuery = trpc.reports.incomeStatement.useQuery({ tzOffsetHours: dateInputs.tzOffsetHours });
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
   const journalQuery = trpc.reports.journalEntries.useQuery({ limit: 100 });
-  const salesQuery = trpc.sales.stats.useQuery();
+  const salesQuery = trpc.sales.stats.useQuery(dateInputs);
   const monthlyQuery = trpc.dashboard.monthly.useQuery({ year: selectedYear, month: selectedMonth });
   const bankAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
 
