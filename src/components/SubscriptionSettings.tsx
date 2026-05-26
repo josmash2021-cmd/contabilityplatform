@@ -119,6 +119,36 @@ export default function SubscriptionSettings() {
   // Subscription Recovery Agent — auto-detects lost subs and auto-reverts failed upgrades
   useSubscriptionAgent();
 
+  // Handle returning from Stripe Checkout upgrade
+  const completeUpgradeMut = trpc.subscription.completeUpgrade.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        setUpgradeSuccess(true);
+        utils.subscription.status.invalidate();
+        utils.subscription.payments.invalidate();
+        // Clean URL
+        window.history.replaceState({}, "", window.location.pathname);
+      } else {
+        toast.error(data.error || "El upgrade no pudo completarse");
+      }
+    },
+    onError: (err) => {
+      toast.error(err.message || "Error al completar el upgrade");
+    },
+  });
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("upgrade") === "success") {
+      // Coming back from Stripe Checkout after payment — complete the upgrade
+      completeUpgradeMut.mutate();
+    } else if (params.get("upgrade") === "cancelled") {
+      // User cancelled at Stripe
+      window.history.replaceState({}, "", window.location.pathname);
+      toast.error("Pago cancelado. Tu suscripcion mensual sigue activa.");
+    }
+  }, []);
+
   const [selectedPlan, setSelectedPlan] = useState<string | null>(renewParam);
 
   // Pre-select plan from URL ?renew= parameter (from expired overlay)
@@ -391,18 +421,15 @@ export default function SubscriptionSettings() {
                     onClick={() => {
                       upgradeMut.mutate({ from: "monthly", to: "annual" }, {
                         onSuccess: (data) => {
-                          if (data.success) {
-                            setUpgradeSuccess(true);
-                            setShowUpgrade(false);
-                            utils.subscription.status.invalidate();
-                            utils.subscription.payments.invalidate();
-                            setTimeout(() => setUpgradeSuccess(false), 5000);
+                          if (data.success && data.url) {
+                            // Redirect to Stripe Checkout (supports Apple Pay, Link, etc.)
+                            window.location.href = data.url;
                           } else {
                             toast.error(data.error || "Error al procesar");
                           }
                         },
                         onError: (err) => {
-                          toast.error(err.message || "Tarjeta declinada. Verifica tu metodo de pago.");
+                          toast.error(err.message || "Error al procesar el upgrade");
                         },
                       });
                     }}

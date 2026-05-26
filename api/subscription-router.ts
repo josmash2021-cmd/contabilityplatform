@@ -682,17 +682,16 @@ export const subscriptionRouter = createRouter({
     }
   }),
 
-  // ── Upgrade subscription (monthly → annual) ──
-  // CRITICAL: This endpoint NEVER touches the existing monthly subscription
-  // unless the payment succeeds. If payment fails, the monthly sub stays exactly
-  // as it was — no past_due, no broken state.
+  // ── Upgrade subscription (monthly → annual) via Stripe Checkout ──
+  // Instead of charging directly (which fails with Apple Pay/3D Secure),
+  // we redirect the user to Stripe Checkout where they can pay with
+  // Link, Apple Pay, Google Pay, or any saved card.
   upgrade: authedQuery
     .input(z.object({ from: z.enum(["monthly"]), to: z.enum(["annual"]) }))
     .mutation(async ({ input, ctx }) => {
       const stripe = getStripe();
       const db = getDb();
 
-      // Get current subscription
       const userId = Number(ctx.user.id);
       const subs = await db.select().from(subscriptions)
         .where(eq(subscriptions.userId, userId))
@@ -701,8 +700,6 @@ export const subscriptionRouter = createRouter({
       const sub = subs[0];
       if (!sub) return { success: false, error: "No tienes una suscripcion activa" };
       if (sub.plan !== "monthly") return { success: false, error: "Solo puedes hacer upgrade desde el plan mensual" };
-
-      // Get Stripe subscription
       if (!sub.stripeSubscriptionId) return { success: false, error: "No se encontro la suscripcion en Stripe" };
 
       try {
@@ -711,10 +708,8 @@ export const subscriptionRouter = createRouter({
           return { success: false, error: "Tu suscripcion mensual no esta activa" };
         }
 
-        // Get annual price ID
+        // Calculate the difference to pay: $800 - $1 = $799
         const annualPriceId = await getOrCreatePrice(stripe, "annual");
-
-        // Step 1: Preview the proration WITHOUT changing the subscription
         const preview = await stripe.invoices.retrieveUpcoming({
           customer: sub.stripeCustomerId,
           subscription: sub.stripeSubscriptionId,
@@ -723,65 +718,103 @@ export const subscriptionRouter = createRouter({
             price: annualPriceId,
           }],
         });
-
         const amountDue = preview.amount_due;
-        console.log(`[upgrade] Preview: amount_due=${amountDue}`);
 
-        // Step 2: Create a separate payment intent for the upgrade amount
-        // We charge this FIRST before touching the subscription.
-        // If this fails, the original monthly subscription is completely untouched.
-        const paymentIntent = await stripe.paymentIntents.create({
-          amount: amountDue,
-          currency: "usd",
+        // Create a Stripe Checkout Session for the upgrade difference
+        // User pays via Stripe Checkout (supports Link, Apple Pay, Google Pay)
+        const appUrl = getAppUrl();
+        const session = await stripe.checkout.sessions.create({
           customer: sub.stripeCustomerId,
-          description: "Upgrade a plan Anual - AI Aethel Accountant",
-          confirm: true,
-          payment_method: stripeSub.default_payment_method,
-          error_on_requires_action: true,
-          off_session: true,
+          mode: "payment",
+          line_items: [{
+            price_data: {
+              currency: "usd",
+              unit_amount: amountDue,
+              product_data: {
+                name: "Upgrade a Plan Anual - AI Aethel Accountant",
+                description: `Pago de diferencia para upgrade a plan anual. Incluye todo lo del plan mensual + beneficios anuales.`,
+              },
+            },
+            quantity: 1,
+          }],
+          success_url: `${appUrl}/settings?upgrade=success`,
+          cancel_url: `${appUrl}/settings?upgrade=cancelled`,
+          metadata: {
+            platformUserId: String(userId),
+            type: "upgrade",
+            subscriptionId: sub.stripeSubscriptionId,
+            annualPriceId: annualPriceId,
+            originalPlan: "monthly",
+            amount: String(amountDue),
+          },
         });
 
-        // Step 3: ONLY if payment succeeded, update the subscription to annual
-        // We use proration_behavior: "none" because we ALREADY charged the upgrade
-        // amount via the separate payment intent above. This prevents Stripe from
-        // generating an additional invoice that could fail and leave us in past_due.
-        if (paymentIntent.status === "succeeded") {
-          const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-            items: [{
-              id: stripeSub.items.data[0].id,
-              price: annualPriceId,
-            }],
-            proration_behavior: "none", // KEY: no extra invoice since we already charged
-            billing_cycle_anchor: "now",
-          });
-
-          // Update DB
-          await db.update(subscriptions).set({
-            plan: "annual",
-            status: updatedSub.status,
-            currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
-            updatedAt: new Date(),
-          }).where(eq(subscriptions.id, sub.id));
-
-          return {
-            success: true,
-            plan: "annual",
-            message: "Suscripcion aplicada con exito. Ahora tienes el plan Anual.",
-          };
-        } else {
-          // Payment did not succeed — monthly subscription was NEVER touched
-          return { success: false, error: "El pago no pudo completarse. Tu suscripcion mensual sigue activa. Intenta de nuevo mas tarde." };
-        }
+        return { success: true, url: session.url, amountDue: amountDue / 100 };
       } catch (err: any) {
         console.error("[upgrade] Error:", err.message, err.code);
-        // If ANY error occurs, the monthly subscription was NEVER modified.
-        // It remains exactly as it was before the upgrade attempt.
-        if (err.code === "card_declined" || err.decline_code) {
-          return { success: false, error: "Tarjeta declinada. Tu suscripcion mensual sigue activa. Por favor verifica tu metodo de pago e intenta de nuevo." };
-        }
         return { success: false, error: (err.message || "Error al procesar el upgrade") + ". Tu suscripcion mensual sigue activa." };
       }
     }),
+
+  // ── Complete upgrade after Stripe Checkout payment ──
+  completeUpgrade: authedQuery.mutation(async ({ ctx }) => {
+    const stripe = getStripe();
+    const db = getDb();
+    const userId = Number(ctx.user.id);
+
+    try {
+      // Find the most recent checkout session for this user
+      const sessions = await stripe.checkout.sessions.list({
+        limit: 5,
+      });
+
+      // Find our upgrade session
+      const upgradeSession = sessions.data.find((s: any) =>
+        s.metadata?.platformUserId === String(userId) &&
+        s.metadata?.type === "upgrade" &&
+        s.payment_status === "paid"
+      );
+
+      if (!upgradeSession) {
+        return { success: false, error: "No se encontro un pago de upgrade completado" };
+      }
+
+      const subscriptionId = upgradeSession.metadata?.subscriptionId;
+      const annualPriceId = upgradeSession.metadata?.annualPriceId;
+
+      if (!subscriptionId || !annualPriceId) {
+        return { success: false, error: "Datos de upgrade incompletos" };
+      }
+
+      // Update the subscription to annual
+      const updatedSub = await stripe.subscriptions.update(subscriptionId, {
+        items: [{
+          price: annualPriceId,
+        }],
+        proration_behavior: "none",
+        billing_cycle_anchor: "now",
+      });
+
+      // Update DB
+      const subs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+      if (subs[0]) {
+        await db.update(subscriptions).set({
+          plan: "annual",
+          status: updatedSub.status,
+          currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+          updatedAt: new Date(),
+        }).where(eq(subscriptions.id, subs[0].id));
+      }
+
+      return { success: true, message: "Upgrade completado. Ahora tienes el plan Anual." };
+    } catch (err: any) {
+      console.error("[completeUpgrade] Error:", err.message);
+      return { success: false, error: err.message || "Error al completar el upgrade" };
+    }
+  }),
 
   // ── Get payment status from Stripe ──
   paymentStatus: authedQuery.query(async ({ ctx }) => {
