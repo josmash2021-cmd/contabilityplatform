@@ -1,7 +1,7 @@
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales, saleServices, expenses, accounts, bankTransactions, bankAccounts, journalEntries, journalEntryLines, customers } from "@db/schema";
-import { sql, desc, and, eq, gte, count } from "drizzle-orm";
+import { sql, desc, and, eq, gte, lte, count } from "drizzle-orm";
 import { z } from "zod";
 
 export const dashboardRouter = createRouter({
@@ -32,92 +32,64 @@ export const dashboardRouter = createRouter({
       const db = getDb();
       const userId = ctx.user.id;
 
-      // Frontend sends ISO timestamps (UTC) that represent the user's local day boundaries
-      const todayStart = input?.todayStart ? new Date(input.todayStart) : null;
-      const todayEnd = input?.todayEnd ? new Date(input.todayEnd) : null;
-      const weekS = input?.weekStart ? new Date(input.weekStart) : null;
-      const monthS = input?.monthStart ? new Date(input.monthStart) : null;
-      const now = input?.now ? new Date(input.now) : new Date();
+      // Frontend sends ISO timestamps that are the UTC boundaries of the user's local day
+      // For EDT (UTC-4): todayStart = "2026-05-26T04:00:00.000Z" (midnight EDT = 4am UTC)
+      const tStart = input?.todayStart;
+      const tEnd = input?.todayEnd;
+      const wStart = input?.weekStart;
+      const mStart = input?.monthStart;
+      const now = input?.now;
 
       // ─── Sales aggregates using frontend-provided UTC timestamps ───
-      const todaySalesAgg = todayStart && todayEnd
+      const todaySalesAgg = tStart && tEnd
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
-            and(
-              eq(sales.createdBy, userId),
-              eq(sales.status, "completed"),
-              sql`${sales.createdAt} >= ${todayStart}`,
-              sql`${sales.createdAt} <= ${todayEnd}`,
-            )
+            and(eq(sales.createdBy, userId),
+                gte(sales.createdAt, new Date(tStart)),
+                lte(sales.createdAt, new Date(tEnd)),
+                eq(sales.status, "completed"))
           )
-        : await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
-          );
+        : [{ total: "0", count: 0 }];
 
-      const weekSalesAgg = weekS
+      const weekSalesAgg = wStart && now
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
-            and(
-              eq(sales.createdBy, userId),
-              eq(sales.status, "completed"),
-              sql`${sales.createdAt} >= ${weekS}`,
-              sql`${sales.createdAt} <= ${now}`,
-            )
+            and(eq(sales.createdBy, userId),
+                gte(sales.createdAt, new Date(wStart)),
+                lte(sales.createdAt, new Date(now)),
+                eq(sales.status, "completed"))
           )
-        : await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`, eq(sales.status, "completed"))
-          );
+        : [{ total: "0", count: 0 }];
 
-      const monthSalesAgg = monthS
+      const monthSalesAgg = mStart && now
         ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
-            and(
-              eq(sales.createdBy, userId),
-              eq(sales.status, "completed"),
-              sql`${sales.createdAt} >= ${monthS}`,
-              sql`${sales.createdAt} <= ${now}`,
-            )
+            and(eq(sales.createdBy, userId),
+                gte(sales.createdAt, new Date(mStart)),
+                lte(sales.createdAt, new Date(now)),
+                eq(sales.status, "completed"))
           )
-        : await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`, eq(sales.status, "completed"))
-          );
+        : [{ total: "0", count: 0 }];
 
       // Payment breakdown (today)
-      const paymentBreakdownRaw = todayStart && todayEnd
+      const paymentBreakdownRaw = tStart && tEnd
         ? await db.select({
             method: sales.paymentMethod,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
           }).from(sales).where(
-            and(
-              eq(sales.createdBy, userId),
-              eq(sales.status, "completed"),
-              sql`${sales.createdAt} >= ${todayStart}`,
-              sql`${sales.createdAt} <= ${todayEnd}`,
-            )
+            and(eq(sales.createdBy, userId),
+                gte(sales.createdAt, new Date(tStart)),
+                lte(sales.createdAt, new Date(tEnd)),
+                eq(sales.status, "completed"))
           ).groupBy(sales.paymentMethod)
-        : await db.select({
-            method: sales.paymentMethod,
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId), sql`DATE(${sales.createdAt}) = CURDATE()`, eq(sales.status, "completed"))
-          ).groupBy(sales.paymentMethod);
+        : [];
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
         method: p.method,

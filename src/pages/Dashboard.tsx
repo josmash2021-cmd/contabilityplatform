@@ -39,40 +39,26 @@ function useUserLocation() {
 const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Dashboard() {
-  // Calculate UTC timestamps from user's local timezone
-  // The server stores dates in UTC, so we need to convert local "today" to UTC range
-  const localNow = new Date();
-  const tzOffsetMs = localNow.getTimezoneOffset() * 60 * 1000; // minutes -> ms (positive = behind UTC)
+  // Calculate UTC timestamps for "today" in user's local timezone
+  // The backend stores dates in UTC, so we send exact UTC boundaries
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth(); // 0-indexed
+  const d = now.getDate();
 
-  // Helper: convert a local date (year, month, date) to UTC timestamp
-  const toUtcTimestamp = (year: number, month: number, date: number, hour: number, min: number, sec: number, ms: number) => {
-    const localDate = new Date(year, month, date, hour, min, sec, ms);
-    return new Date(localDate.getTime() + tzOffsetMs).toISOString();
-  };
-
-  const y = localNow.getFullYear();
-  const m = localNow.getMonth();
-  const d = localNow.getDate();
-
-  // Today range in UTC
-  const todayStartISO = toUtcTimestamp(y, m, d, 0, 0, 0, 0);
-  const todayEndISO = toUtcTimestamp(y, m, d, 23, 59, 59, 999);
-
-  // Week start (6 days ago) in UTC
-  const weekStartLocal = new Date(y, m, d - 6, 0, 0, 0, 0);
-  const weekStartISO = new Date(weekStartLocal.getTime() + tzOffsetMs).toISOString();
-  const nowISO = localNow.toISOString();
-
-  // Month start in UTC
-  const monthStartLocal = new Date(y, m, 1, 0, 0, 0, 0);
-  const monthStartISO = new Date(monthStartLocal.getTime() + tzOffsetMs).toISOString();
+  // Create local dates and convert to UTC ISO strings
+  // new Date(y, m, d, h, min, s) creates a LOCAL date, toISOString() converts to UTC
+  const todayStart = new Date(y, m, d, 0, 0, 0).toISOString();
+  const todayEnd = new Date(y, m, d, 23, 59, 59, 999).toISOString();
+  const weekStart = new Date(y, m, d - 6, 0, 0, 0).toISOString();
+  const monthStart = new Date(y, m, 1, 0, 0, 0).toISOString();
 
   const { data, error } = trpc.dashboard.summary.useQuery({
-    todayStart: todayStartISO,
-    todayEnd: todayEndISO,
-    weekStart: weekStartISO,
-    monthStart: monthStartISO,
-    now: nowISO,
+    todayStart,
+    todayEnd,
+    weekStart,
+    monthStart,
+    now: now.toISOString(),
   });
   const { location } = useUserLocation();
   const tzShort = getUserTimezoneShort();
