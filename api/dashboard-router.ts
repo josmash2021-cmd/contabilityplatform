@@ -87,70 +87,56 @@ export const dashboardRouter = createRouter({
       console.log("[DASHBOARD SUMMARY] tStart:", tStart, "-> as Date:", tStart ? new Date(tStart).toISOString() : null);
       console.log("[DASHBOARD SUMMARY] tEnd:", tEnd, "-> as Date:", tEnd ? new Date(tEnd).toISOString() : null);
 
-      // ─── Sales aggregates using frontend-provided UTC timestamps ───
-      let todaySalesAgg;
-      if (tStart && tEnd) {
-        todaySalesAgg = await db.select({
+      // ─── Sales aggregates using RAW SQL with string timestamps ───
+      // Drizzle's gte/lte with new Date() may fail silently, use sql`` directly
+      const todaySalesAgg = (tStart && tEnd)
+        ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId),
-                gte(sales.createdAt, new Date(tStart)),
-                lte(sales.createdAt, new Date(tEnd)),
-                eq(sales.status, "completed"))
-          );
-        console.log("[DASHBOARD SUMMARY] todaySalesAgg:", JSON.stringify(todaySalesAgg));
-      } else {
-        console.log("[DASHBOARD SUMMARY] NO tStart/tEnd, returning 0");
-        todaySalesAgg = [{ total: "0", count: 0 }];
-      }
+          }).from(sales).where(sql`
+            ${sales.createdBy} = ${userId}
+            AND ${sales.createdAt} >= ${tStart}
+            AND ${sales.createdAt} <= ${tEnd}
+            AND ${sales.status} = 'completed'
+          `)
+        : [{ total: "0", count: 0 }];
 
-      let weekSalesAgg;
-      if (wStart && now) {
-        weekSalesAgg = await db.select({
+      const weekSalesAgg = (wStart && now)
+        ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId),
-                gte(sales.createdAt, new Date(wStart)),
-                lte(sales.createdAt, new Date(now)),
-                eq(sales.status, "completed"))
-          );
-        console.log("[DASHBOARD SUMMARY] weekSalesAgg:", JSON.stringify(weekSalesAgg));
-      } else {
-        console.log("[DASHBOARD SUMMARY] NO wStart/now, week=0");
-        weekSalesAgg = [{ total: "0", count: 0 }];
-      }
+          }).from(sales).where(sql`
+            ${sales.createdBy} = ${userId}
+            AND ${sales.createdAt} >= ${wStart}
+            AND ${sales.createdAt} <= ${now}
+            AND ${sales.status} = 'completed'
+          `)
+        : [{ total: "0", count: 0 }];
 
-      let monthSalesAgg;
-      if (mStart && now) {
-        monthSalesAgg = await db.select({
+      const monthSalesAgg = (mStart && now)
+        ? await db.select({
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId),
-                gte(sales.createdAt, new Date(mStart)),
-                lte(sales.createdAt, new Date(now)),
-                eq(sales.status, "completed"))
-          );
-        console.log("[DASHBOARD SUMMARY] monthSalesAgg:", JSON.stringify(monthSalesAgg));
-      } else {
-        console.log("[DASHBOARD SUMMARY] NO mStart/now, month=0");
-        monthSalesAgg = [{ total: "0", count: 0 }];
-      }
+          }).from(sales).where(sql`
+            ${sales.createdBy} = ${userId}
+            AND ${sales.createdAt} >= ${mStart}
+            AND ${sales.createdAt} <= ${now}
+            AND ${sales.status} = 'completed'
+          `)
+        : [{ total: "0", count: 0 }];
 
       // Payment breakdown (today)
-      const paymentBreakdownRaw = tStart && tEnd
+      const paymentBreakdownRaw = (tStart && tEnd)
         ? await db.select({
             method: sales.paymentMethod,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId),
-                gte(sales.createdAt, new Date(tStart)),
-                lte(sales.createdAt, new Date(tEnd)),
-                eq(sales.status, "completed"))
-          ).groupBy(sales.paymentMethod)
+          }).from(sales).where(sql`
+            ${sales.createdBy} = ${userId}
+            AND ${sales.createdAt} >= ${tStart}
+            AND ${sales.createdAt} <= ${tEnd}
+            AND ${sales.status} = 'completed'
+          `).groupBy(sales.paymentMethod)
         : [];
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
@@ -159,18 +145,18 @@ export const dashboardRouter = createRouter({
         count: p.count,
       }));
 
-      // Daily sales (last 7 days) using frontend-provided weekStart for timezone accuracy
-      const dailySalesRaw = wStart && now
+      // Daily sales (last 7 days)
+      const dailySalesRaw = (wStart && now)
         ? await db.select({
             date: sql<string>`DATE(${sales.createdAt})`,
             total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
             count: sql<number>`COUNT(*)`,
-          }).from(sales).where(
-            and(eq(sales.createdBy, userId),
-                gte(sales.createdAt, new Date(wStart)),
-                lte(sales.createdAt, new Date(now)),
-                eq(sales.status, "completed"))
-          ).groupBy(sql`DATE(${sales.createdAt})`)
+          }).from(sales).where(sql`
+            ${sales.createdBy} = ${userId}
+            AND ${sales.createdAt} >= ${wStart}
+            AND ${sales.createdAt} <= ${now}
+            AND ${sales.status} = 'completed'
+          `).groupBy(sql`DATE(${sales.createdAt})`)
         : [];
 
       const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map(d => [d.date, d]));
@@ -179,7 +165,6 @@ export const dashboardRouter = createRouter({
       const localNow = new Date();
       for (let i = 6; i >= 0; i--) {
         const d = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate() - i);
-        // Format as YYYY-MM-DD using LOCAL components (not toISOString which gives UTC)
         const yyyy = d.getFullYear();
         const mm = String(d.getMonth() + 1).padStart(2, "0");
         const dd = String(d.getDate()).padStart(2, "0");
