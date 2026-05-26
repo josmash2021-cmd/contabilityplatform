@@ -68,7 +68,7 @@ export default function Reports() {
   const salesQuery = trpc.sales.stats.useQuery(dateInputs);
   const monthlyQuery = trpc.dashboard.monthly.useQuery({ year: selectedYear, month: selectedMonth });
   const bankConnectionQuery = trpc.bank.checkConnection.useQuery();
-  const bankAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
+  const plaidAccountsQuery = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
 
   const accountId = selectedBankAccount ? Number(selectedBankAccount) : undefined;
   const bankStatsQuery = trpc.bank.stats.useQuery({ accountId }, { enabled: !!accountId });
@@ -111,7 +111,7 @@ export default function Reports() {
   const salesStats = salesQuery.data;
   const monthlyData = monthlyQuery.data;
   const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
-  const allBankAccounts = bankAccountsQuery.data ?? [];
+  const allBankAccounts = plaidAccountsQuery.data?.accounts ?? [];
   const bankStats = bankStatsQuery.data;
   const reconData = reconQuery.data;
 
@@ -459,7 +459,7 @@ export default function Reports() {
             ) : (
               /* Bank connected — show account selector */
               <div className="flex gap-3 items-center">
-                {bankAccountsQuery.isLoading ? (
+                {plaidAccountsQuery.isLoading ? (
                   <span className="text-xs text-neutral-400">Cargando cuentas...</span>
                 ) : allBankAccounts.length === 0 ? (
                   <span className="text-xs text-neutral-400">Sin cuentas disponibles</span>
