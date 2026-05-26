@@ -215,6 +215,8 @@ export default function PersonalTransactions() {
     "holiday","cumberland farms","royal farms","ritter's","ritters","getgo","get-go",
     "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66"];
   const isGas = (t: any) => {
+    // Exclude Zelle transactions - they should never appear in gas filter
+    if (t.category === "zelle_income" || t.category === "zelle_sent") return false;
     const n = (t.description || "").toLowerCase();
     if (t.category === "gasolina") return true;
     for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
