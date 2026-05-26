@@ -12,12 +12,20 @@ import { join } from "path";
 
 let plaidClient: any = null;
 
+// Detect if running in production (Railway or NODE_ENV=production)
+const isProductionEnv = process.env.PLAID_ENV === "production"
+  || process.env.NODE_ENV === "production"
+  || !!process.env.RAILWAY_ENVIRONMENT
+  || !!process.env.RAILWAY_SERVICE_NAME;
+
 async function initPlaid() {
   if (plaidClient) return plaidClient;
   try {
     const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
+    const env = isProductionEnv ? "production" : "sandbox";
+    console.log(`[Plaid] Using ${env.toUpperCase()} environment (detected production: ${isProductionEnv})`);
     const config = new Configuration({
-      basePath: PlaidEnvironments[process.env.PLAID_ENV === "production" ? "production" : "sandbox"],
+      basePath: PlaidEnvironments[env],
       baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
     });
     plaidClient = new PlaidApi(config);
