@@ -419,11 +419,23 @@ export default function SubscriptionSettings() {
   }
 
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
+  const wasBroken = status?.status === "past_due" || status?.status === "incomplete" || status?.status === "unpaid";
+
   return (
     <div className="space-y-6">
-      <p className="text-xs text-neutral-400">
-        Configura tu plan para desbloquear el acceso completo a Accounting Platform.
-      </p>
+      {wasBroken ? (
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
+          <p className="text-sm text-amber-800 font-medium">Suscripcion interrumpida</p>
+          <p className="text-xs text-amber-700">
+            Tu suscripcion anterior fue cancelada por un problema de pago.
+            Selecciona el plan Mensual y suscribete de nuevo — tu tarjeta sera cobrada automaticamente.
+          </p>
+        </div>
+      ) : (
+        <p className="text-xs text-neutral-400">
+          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+        </p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Monthly */}
