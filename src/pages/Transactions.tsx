@@ -137,6 +137,22 @@ export default function Transactions() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Auto-sync recent transactions on page load
+  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        utils.bank.getMonthData.invalidate();
+        toast.success(`${data.added} transacciones nuevas sincronizadas`);
+      }
+    },
+    onError: () => { /* silent */ },
+  });
+
+  useEffect(() => {
+    const timer = setTimeout(() => syncRecentMutation.mutate(), 2000);
+    return () => clearTimeout(timer);
+  }, []);
+
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
