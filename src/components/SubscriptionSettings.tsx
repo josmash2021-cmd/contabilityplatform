@@ -1,7 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { useSubscriptionAgent } from "@/hooks/useSubscriptionAgent";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -102,28 +101,16 @@ export default function SubscriptionSettings() {
   const PLAN_ANNUAL = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
 
   const utils = trpc.useUtils();
-  const { data: status, isLoading: statusLoading, refetch: refetchStatus } = trpc.subscription.status.useQuery();
+  // KEY FIX: Poll every 5 seconds for subscription status.
+  // When a user pays via Stripe but the webhook hasn't arrived yet,
+  // the status endpoint searches Stripe directly and finds the subscription.
+  const { data: status, isLoading: statusLoading } = trpc.subscription.status.useQuery(
+    undefined,
+    { refetchInterval: 5000, refetchIntervalInBackground: true }
+  );
   const { data: payments } = trpc.subscription.payments.useQuery();
 
-  // Subscription Sync Agent — auto-detects lost subscriptions
-  const agent = useSubscriptionAgent();
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
-
-  // Force refresh on mount — agent will search Stripe
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      refetchStatus();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Agent auto-refreshes status when it finds a subscription
-  useEffect(() => {
-    if (agent.hasSubscription) {
-      refetchStatus();
-      utils.subscription.payments.invalidate();
-    }
-  }, [agent.hasSubscription]);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
