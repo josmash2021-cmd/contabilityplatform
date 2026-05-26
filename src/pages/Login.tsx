@@ -207,7 +207,7 @@ export default function Login() {
                 <Button
                   type="submit"
                   disabled={loginMut.isPending}
-                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
+                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
                 >
                   {loginMut.isPending ? (
                     <Loader2 className="w-4 h-4 animate-spin mr-2" />
@@ -224,7 +224,7 @@ export default function Login() {
             </p>
             <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
               No tienes cuenta?{" "}
-              <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "personal" ? "text-white" : "text-black"}`}>Registrate</Link>
+              <Link to="/register" className="text-white transition-colors duration-300 hover:underline font-medium hover:text-neutral-200">Registrate</Link>
             </p>
           </div>
         </div>
