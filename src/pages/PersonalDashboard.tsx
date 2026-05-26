@@ -301,13 +301,25 @@ export default function PersonalDashboard() {
                   <Landmark className="w-4 h-4 text-neutral-400" />
                   <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? "Banco"}</span>
                   {accounts[0]?.id === activeAccount?.id && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
-                  <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    En vivo
-                  </span>
+                  {monthData?.fromPlaid ? (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      En vivo
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full" title="Sin conexion con el banco">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      Desactualizado
+                    </span>
+                  )}
                 </div>
                 <p className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(balance)}</p>
                 <p className="text-[11px] text-neutral-400 mt-0.5">{balance >= 0 ? "Balance disponible" : "Sobregiro / Balance negativo"}</p>
+                {monthData?.lastSyncedAt && (
+                  <p className="text-[10px] text-neutral-400 mt-0.5">
+                    Actualizado: {new Date(monthData.lastSyncedAt).toLocaleString("es", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                  </p>
+                )}
               </div>
               <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${balance >= 0 ? "bg-emerald-100" : "bg-red-100"}`}>
                 <CircleDollarSign className={`w-6 h-6 ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`} />

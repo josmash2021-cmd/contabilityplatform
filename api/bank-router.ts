@@ -829,17 +829,20 @@ export const bankRouter = createRouter({
 
     // Get LIVE balance from Plaid (not cached DB value)
     let liveBalance = "0";
+    let lastSyncedAt: string | null = null;
+    let plaidSource = false;
     try {
-      // Fetch fresh from Plaid
       const client = await initPlaid();
       if (client && primaryAccount?.plaidAccessToken) {
+        console.log(`[getMonthData] Fetching fresh balance from Plaid for user ${ctx.user.id}, account ${accountId || 'all'}`);
         const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
         const freshBalances = new Map<string, string>();
         for (const plaidAcc of accountsRes.data.accounts || []) {
           const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
           if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
+          console.log(`[getMonthData] Plaid account ${plaidAcc.name} (${plaidAcc.account_id}): available=${plaidAcc.balances.available}, current=${plaidAcc.balances.current}`);
         }
-        // Update DB
+        // Update DB with fresh balances
         for (const dbAccount of userAccounts) {
           if (!dbAccount.plaidAccountId) continue;
           const freshBal = freshBalances.get(dbAccount.plaidAccountId);
@@ -851,6 +854,7 @@ export const bankRouter = createRouter({
         if (accountId) {
           const targetAcc = userAccounts.find((a: any) => a.id === accountId);
           liveBalance = targetAcc?.plaidAccountId ? (freshBalances.get(targetAcc.plaidAccountId) ?? targetAcc?.currentBalance ?? "0") : (targetAcc?.currentBalance ?? "0");
+          console.log(`[getMonthData] Account ${accountId} balance: ${liveBalance} (from Plaid: ${targetAcc?.plaidAccountId ? 'yes' : 'no'})`);
         } else {
           let total = 0;
           for (const a of userAccounts) {
@@ -859,17 +863,27 @@ export const bankRouter = createRouter({
           }
           liveBalance = String(total.toFixed(2));
         }
+        plaidSource = true;
+        lastSyncedAt = new Date().toISOString();
+      } else {
+        console.log(`[getMonthData] Cannot fetch from Plaid: client=${!!client}, token=${!!primaryAccount?.plaidAccessToken}`);
       }
     } catch (plaidErr: any) {
       console.error("[getMonthData] Plaid balance error:", plaidErr.message);
-      // Fallback to DB
+    }
+
+    // If Plaid didn't work, fallback to DB
+    if (!plaidSource) {
+      console.log(`[getMonthData] Using DB fallback for balance`);
       if (accountId) {
-        const acc = await db.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.userId, ctx.user.id)));
+        const acc = await db.select({ currentBalance: bankAccounts.currentBalance, lastSyncedAt: bankAccounts.lastSyncedAt }).from(bankAccounts).where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.userId, ctx.user.id)));
         liveBalance = acc[0]?.currentBalance ? String(parseFloat(acc[0].currentBalance).toFixed(2)) : "0";
+        lastSyncedAt = acc[0]?.lastSyncedAt ? new Date(acc[0].lastSyncedAt).toISOString() : null;
       } else {
-        const allAccs = await db.select({ currentBalance: bankAccounts.currentBalance }).from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+        const allAccs = await db.select({ currentBalance: bankAccounts.currentBalance, lastSyncedAt: bankAccounts.lastSyncedAt }).from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
         const totalBal = allAccs.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
         liveBalance = String(totalBal.toFixed(2));
+        lastSyncedAt = allAccs[0]?.lastSyncedAt ? new Date(allAccs[0].lastSyncedAt).toISOString() : null;
       }
     }
 
@@ -879,6 +893,8 @@ export const bankRouter = createRouter({
       transactions: txs, income: inc.toFixed(2), expense: exp.toFixed(2),
       topExpense: txs.length > 0 ? String(Math.max(...txs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
+      lastSyncedAt,
+      fromPlaid: plaidSource,
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
