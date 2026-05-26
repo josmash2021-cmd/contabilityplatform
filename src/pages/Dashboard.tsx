@@ -1,13 +1,47 @@
 import { trpc } from "@/providers/trpc";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDateShort, formatTimeLocal, getUserTimezoneShort } from "@/lib/utils";
 import { Link } from "react-router";
-import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp } from "lucide-react";
+import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock, Globe } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
+import { useState, useEffect } from "react";
+
+// Hook to detect user's location for timezone verification
+function useUserLocation() {
+  const [location, setLocation] = useState<{ city?: string; region?: string; tz?: string } | null>(null);
+  const [permission, setPermission] = useState<"granted" | "denied" | "prompt">("prompt");
+
+  useEffect(() => {
+    // Try to get timezone info from browser (always available)
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setLocation((prev) => ({ ...prev, tz }));
+
+    // Optionally request geolocation for city/region
+    if ("geolocation" in navigator) {
+      navigator.permissions?.query({ name: "geolocation" as any }).then((result) => {
+        setPermission(result.state as "granted" | "denied" | "prompt");
+        if (result.state === "granted") {
+          navigator.geolocation.getCurrentPosition(
+            () => {}, // success - we mainly care about permission for timezone awareness
+            () => {},
+            { enableHighAccuracy: false, timeout: 5000 }
+          );
+        }
+      }).catch(() => {
+        // permissions API not supported, try direct request
+        navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 5000 });
+      });
+    }
+  }, []);
+
+  return { location, permission };
+}
 
 const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Dashboard() {
   const { data, error } = trpc.dashboard.summary.useQuery();
+  const { location } = useUserLocation();
+  const tzShort = getUserTimezoneShort();
 
   const safeData = data || {
     todaySales: { total: "0", count: 0 },
@@ -30,9 +64,16 @@ export default function Dashboard() {
     <div className="p-8 lg:p-10 space-y-8 bg-white min-h-screen">
       {/* Header */}
       <AnimatedPage>
-        <div>
-          <h1 className="text-2xl font-medium text-black tracking-tight">Inicio</h1>
-          <p className="text-neutral-400 text-sm mt-1">Todo lo que pasa en tu negocio</p>
+        <div className="flex items-start justify-between">
+          <div>
+            <h1 className="text-2xl font-medium text-black tracking-tight">Inicio</h1>
+            <p className="text-neutral-400 text-sm mt-1">Todo lo que pasa en tu negocio</p>
+          </div>
+          {/* Timezone indicator */}
+          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100">
+            <Clock className="w-3.5 h-3.5 text-neutral-400" />
+            <span className="text-[10px] text-neutral-500 font-medium">{tzShort}</span>
+          </div>
         </div>
       </AnimatedPage>
 
@@ -159,9 +200,8 @@ export default function Dashboard() {
             </div>
             {safeData.recentSales?.length ? safeData.recentSales.map((sale: any) => {
               const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || "Sin productos";
-              const saleDate = sale.createdAt ? new Date(sale.createdAt) : null;
-              const dateStr = saleDate ? saleDate.toLocaleDateString("es", { day: "2-digit", month: "short" }) : "";
-              const timeStr = saleDate ? saleDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              const dateStr = sale.createdAt ? formatDateShort(sale.createdAt) : "";
+              const timeStr = sale.createdAt ? formatTimeLocal(sale.createdAt) : "";
               const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
               return (
                 <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
