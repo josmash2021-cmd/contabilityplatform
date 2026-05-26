@@ -18,7 +18,7 @@ import {
   CheckCircle2, PiggyBank, Loader2, X, Check,
 } from "lucide-react";
 
-/** Account dropdown — simple absolute with high z-index */
+/** Account dropdown — pushes content down when open (part of document flow) */
 function AccountDropdown({
   accounts,
   selectedId,
@@ -42,7 +42,7 @@ function AccountDropdown({
   const selected = accounts.find((a) => String(a.id) === selectedId);
 
   return (
-    <div ref={ref} className="relative z-[100]">
+    <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-52"
@@ -54,7 +54,7 @@ function AccountDropdown({
         <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
       {open && (
-        <div className="absolute top-full left-0 mt-1 w-full min-w-[260px] bg-white border border-neutral-200 rounded-lg shadow-xl z-[9999] py-1">
+        <div className="mt-1 w-full min-w-[260px] bg-white border border-neutral-200 rounded-lg shadow-xl py-1">
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -456,7 +456,7 @@ export default function Bank() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 flex-wrap relative z-[90]">
+          <div className="flex items-center gap-1.5 flex-wrap">
             {allAccounts && allAccounts.length > 0 && (
               <AccountDropdown
                 accounts={allAccounts}
