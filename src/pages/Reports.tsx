@@ -41,6 +41,7 @@ export default function Reports() {
   const [selectedBankAccount, setSelectedBankAccount] = useState<string>("");
   const [expandedEntry, setExpandedEntry] = useState<number | null>(null);
   const [periodFilter, setPeriodFilter] = useState<string>("month");
+  const [activePieSlice, setActivePieSlice] = useState<string | null>(null);
 
   const incomeQuery = trpc.reports.incomeStatement.useQuery({});
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
@@ -127,10 +128,14 @@ export default function Reports() {
     value: Number(p.total),
   }));
 
-  // Income vs Expense data for pie chart
-  const incomeExpenseData = [
-    { name: "Ingresos", value: Number(monthSales), color: "#22c55e" },
-    { name: "Gastos", value: Number(monthExpenses), color: "#ef4444" },
+  // 3-segment pie chart: Ventas, Ingresos Bancarios, Gastos
+  const salesRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
+  const bankRevenue = Number(incomeData?.breakdown.bankRevenue ?? 0);
+  const totalExp = Number(incomeData?.totalExpenses ?? 0);
+  const pie3Data = [
+    { name: "Ventas", value: salesRevenue, color: "#22c55e" },
+    { name: "Ingresos Bancarios", value: bankRevenue, color: "#3b82f6" },
+    { name: "Gastos", value: totalExp, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   // Period filter options
@@ -344,20 +349,53 @@ export default function Reports() {
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5">
                       <p className="text-xs text-neutral-400 mb-3">Ingresos y Gastos</p>
-                      <div className="h-48">
+                      <div className="h-48 relative">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
-                            <Pie data={incomeExpenseData}
-                              dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={3}>
-                              {incomeExpenseData.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                            <Pie data={pie3Data}
+                              dataKey="value" nameKey="name" cx="50%" cy="50%" innerRadius={50} outerRadius={70} paddingAngle={3}
+                              isAnimationActive={true}
+                            >
+                              {pie3Data.map((entry, i) => (
+                                <Cell
+                                  key={i}
+                                  fill={entry.color}
+                                  opacity={activePieSlice === null || activePieSlice === entry.name ? 1 : 0.4}
+                                  onClick={() => setActivePieSlice(activePieSlice === entry.name ? null : entry.name)}
+                                  style={{ cursor: "pointer" }}
+                                />
+                              ))}
                             </Pie>
-                            <Tooltip formatter={(value: number) => formatCurrency(value)} contentStyle={{ borderRadius: 8, border: "1px solid #e5e5e5", fontSize: 12 }} />
+                            {/* Disabled floating tooltip */}
                           </PieChart>
                         </ResponsiveContainer>
+                        {/* Center text — shows active slice info */}
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                          <div className="text-center">
+                            {activePieSlice ? (
+                              <>
+                                <p className="text-[10px] text-neutral-400">{activePieSlice}</p>
+                                <p className="text-sm font-semibold text-black">{formatCurrency(pie3Data.find((d) => d.name === activePieSlice)?.value ?? 0)}</p>
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-[10px] text-neutral-400">Total</p>
+                                <p className="text-sm font-semibold text-black">{formatCurrency(pie3Data.reduce((s, d) => s + d.value, 0))}</p>
+                              </>
+                            )}
+                          </div>
+                        </div>
                       </div>
-                      <div className="flex justify-center gap-4 mt-2">
-                        {incomeExpenseData.map((entry) => (
-                          <div key={entry.name} className="flex items-center gap-1.5"><div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: entry.color }} /><span className="text-[10px] text-neutral-500">{entry.name}</span></div>
+                      <div className="flex justify-center gap-3 mt-2 flex-wrap">
+                        {pie3Data.map((entry) => (
+                          <button
+                            key={entry.name}
+                            onClick={() => setActivePieSlice(activePieSlice === entry.name ? null : entry.name)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${activePieSlice === entry.name ? "bg-neutral-100" : ""}`}
+                          >
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
+                            <span className="text-[10px] text-neutral-500">{entry.name}</span>
+                          </button>
                         ))}
                       </div>
                     </CardContent>
