@@ -42,61 +42,65 @@ export const dashboardRouter = createRouter({
       const weekStartDate = input?.weekStartDate;
       const monthStartDate = input?.monthStartDate;
       const tzOff = input?.tzOffsetHours ?? 0;
-      // MySQL INTERVAL needs the sign: -4 becomes INTERVAL -4 HOUR
-      const tzSign = tzOff >= 0 ? "+" : "";
 
-      // Helper: returns SQL fragment "DATE(col + INTERVAL -4 HOUR)"
-      const dateTz = (col: any) => sql.raw(`DATE(${col.name} + INTERVAL ${tzSign}${tzOff} HOUR)`);
+      // Build the timezone-adjusted date expression for MySQL
+      // DATE_ADD handles negative intervals correctly: DATE_ADD(col, INTERVAL -4 HOUR)
+      const tzExpr = `DATE_ADD(createdAt, INTERVAL ${tzOff} HOUR)`;
+
+      // Helper: normalize db.execute result (MySQL2 may return [rows, fields])
+      const getRows = (r: any): any[] => {
+        if (Array.isArray(r) && r.length === 2 && Array.isArray(r[1]) && r[1][0]?.name !== undefined) return r[0];
+        return Array.isArray(r) ? r : [];
+      };
 
       // ─── TODAY ───
-      const todaySalesAgg = todayDate
-        ? await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql.raw(`
-            ${sales.createdBy.name} = ${userId}
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) = '${todayDate}'
-            AND ${sales.status.name} = 'completed'
-          `))
-        : [{ total: "0", count: 0 }];
+      const todayResult = todayDate
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) = '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
+      const todaySalesAgg = todayResult.length ? todayResult : [{ total: "0", count: 0 }];
 
       // ─── WEEK ───
-      const weekSalesAgg = (weekStartDate && todayDate)
-        ? await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql.raw(`
-            ${sales.createdBy.name} = ${userId}
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${weekStartDate}'
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
-            AND ${sales.status.name} = 'completed'
-          `))
-        : [{ total: "0", count: 0 }];
+      const weekResult = (weekStartDate && todayDate)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${weekStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
+      const weekSalesAgg = weekResult.length ? weekResult : [{ total: "0", count: 0 }];
 
       // ─── MONTH ───
-      const monthSalesAgg = (monthStartDate && todayDate)
-        ? await db.select({
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql.raw(`
-            ${sales.createdBy.name} = ${userId}
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${monthStartDate}'
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
-            AND ${sales.status.name} = 'completed'
-          `))
-        : [{ total: "0", count: 0 }];
+      const monthResult = (monthStartDate && todayDate)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${monthStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+              AND status = 'completed'
+          `)))
+        : [];
+      const monthSalesAgg = monthResult.length ? monthResult : [{ total: "0", count: 0 }];
 
       // ─── Payment breakdown (today) ───
       const paymentBreakdownRaw = todayDate
-        ? await db.select({
-            method: sales.paymentMethod,
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql.raw(`
-            ${sales.createdBy.name} = ${userId}
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) = '${todayDate}'
-            AND ${sales.status.name} = 'completed'
-          `)).groupBy(sales.paymentMethod)
+        ? getRows(await db.execute(sql.raw(`
+            SELECT paymentMethod as method, COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) = '${todayDate}'
+              AND status = 'completed'
+            GROUP BY paymentMethod
+          `)))
         : [];
 
       const paymentBreakdown = (paymentBreakdownRaw as Array<{ method: string; total: string; count: number }>).map((p) => ({
@@ -107,19 +111,18 @@ export const dashboardRouter = createRouter({
 
       // ─── Daily sales (last 7 days) ───
       const dailySalesRaw = (weekStartDate && todayDate)
-        ? await db.select({
-            date: sql<string>`DATE(${sales.createdAt} + INTERVAL ${tzSign}${tzOff} HOUR)`,
-            total: sql<string>`COALESCE(SUM(${sales.total}), 0)`,
-            count: sql<number>`COUNT(*)`,
-          }).from(sales).where(sql.raw(`
-            ${sales.createdBy.name} = ${userId}
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) >= '${weekStartDate}'
-            AND DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR) <= '${todayDate}'
-            AND ${sales.status.name} = 'completed'
-          `)).groupBy(sql.raw(`DATE(${sales.createdAt.name} + INTERVAL ${tzSign}${tzOff} HOUR)`))
+        ? getRows(await db.execute(sql.raw(`
+            SELECT DATE(${tzExpr}) as date, COALESCE(SUM(total), 0) as total, COUNT(*) as count
+            FROM sales
+            WHERE createdBy = ${userId}
+              AND DATE(${tzExpr}) >= '${weekStartDate}'
+              AND DATE(${tzExpr}) <= '${todayDate}'
+              AND status = 'completed'
+            GROUP BY DATE(${tzExpr})
+          `)))
         : [];
 
-      const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map(d => [d.date, d]));
+      const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map((d: any) => [d.date, d]));
       const dailySales: Array<{ date: string; dayName: string; total: string; count: number }> = [];
       const localNow = new Date();
       for (let i = 6; i >= 0; i--) {
