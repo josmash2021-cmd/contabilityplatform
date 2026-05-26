@@ -459,13 +459,18 @@ export default function Reports() {
             ) : (
               /* Bank connected — show account selector */
               <div className="flex gap-3 items-center">
-                <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
-                  <SelectTrigger className="w-64 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Seleccionar cuenta bancaria" /></SelectTrigger>
-                  <SelectContent>
-                    {allBankAccounts.map((acc: typeof allBankAccounts[0]) => (<SelectItem key={acc.id} value={String(acc.id)} className="text-xs">{acc.accountType} - {acc.accountNumber}</SelectItem>))}
-                  </SelectContent>
-                </Select>
-                {allBankAccounts.length === 0 && <span className="text-xs text-neutral-400">Cargando cuentas...</span>}
+                {bankAccountsQuery.isLoading ? (
+                  <span className="text-xs text-neutral-400">Cargando cuentas...</span>
+                ) : allBankAccounts.length === 0 ? (
+                  <span className="text-xs text-neutral-400">Sin cuentas disponibles</span>
+                ) : (
+                  <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
+                    <SelectTrigger className="w-64 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Seleccionar cuenta bancaria" /></SelectTrigger>
+                    <SelectContent>
+                      {allBankAccounts.map((acc: typeof allBankAccounts[0]) => (<SelectItem key={acc.id} value={String(acc.id)} className="text-xs">{acc.accountType} - {acc.accountNumber}</SelectItem>))}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
             )}
           </AnimatedPage>
