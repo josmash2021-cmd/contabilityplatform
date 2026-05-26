@@ -201,6 +201,59 @@ export const subscriptionRouter = createRouter({
     return { success: true };
   }),
 
+  // ── Upgrade subscription (monthly → annual) ──
+  upgrade: authedQuery
+    .input(z.object({ from: z.enum(["monthly"]), to: z.enum(["annual"]) }))
+    .mutation(async ({ input, ctx }) => {
+      const stripe = getStripe();
+      const db = getDb();
+
+      // Get current subscription
+      const subs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, ctx.user.id))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+      const sub = subs[0];
+      if (!sub) throw new Error("No tienes una suscripcion activa");
+      if (sub.plan !== "monthly") throw new Error("Solo puedes hacer upgrade desde el plan mensual");
+
+      // Get Stripe subscription
+      if (!sub.stripeSubscriptionId) throw new Error("No se encontro la suscripcion en Stripe");
+
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+      if (stripeSub.status !== "active" && stripeSub.status !== "trialing") {
+        throw new Error("Tu suscripcion mensual no esta activa");
+      }
+
+      // Get annual price ID
+      const annualPriceId = await getOrCreatePrice(stripe, "annual");
+
+      // Update subscription: change from monthly to annual with proration
+      // This creates a proration invoice automatically — Stripe charges the difference
+      const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+        items: [{
+          id: stripeSub.items.data[0].id,
+          price: annualPriceId,
+        }],
+        proration_behavior: "create_prorations",
+        billing_cycle_anchor: "now",
+      });
+
+      // Update DB
+      await db.update(subscriptions).set({
+        plan: "annual",
+        status: updatedSub.status,
+        currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+        updatedAt: new Date(),
+      }).where(eq(subscriptions.id, sub.id));
+
+      return {
+        success: true,
+        plan: "annual",
+        message: "Upgrade completado. Se te cobro la diferencia prorrateada.",
+      };
+    }),
+
   // ── Create Stripe Customer Portal session ──
   createPortalSession: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
