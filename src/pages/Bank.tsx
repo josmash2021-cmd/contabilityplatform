@@ -456,7 +456,8 @@ export default function Bank() {
               </p>
             )}
           </div>
-          <div className="flex items-center gap-1.5 overflow-x-auto scrollbar-hide">
+          {/* Row 1: Account + Month + Year */}
+          <div className="flex items-center gap-1.5 flex-wrap">
             {allAccounts && allAccounts.length > 0 && (
               <AccountDropdown
                 accounts={allAccounts}
@@ -466,6 +467,10 @@ export default function Bank() {
             )}
             <MonthSelector value={selectedMonth} onChange={setSelectedMonth} />
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
+          </div>
+
+          {/* Row 2: Sync + Disconnect */}
+          <div className="flex items-center gap-1.5">
             <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
             </Button>
