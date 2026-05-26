@@ -78,7 +78,7 @@ export const subscriptionRouter = createRouter({
   status: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null, status: "no_user", currentPeriodEnd: null };
     const db = getDb();
-    const userId = ctx.user.id;
+    const userId = Number(ctx.user.id); // Ensure numeric to match webhook
 
     // Step 1: Check DB
     let subs = await db.select().from(subscriptions)
@@ -207,7 +207,7 @@ export const subscriptionRouter = createRouter({
     if (!ctx.user) return { found: false, message: "No autenticado" };
     const db = getDb();
     const stripe = getStripe();
-    const userId = ctx.user.id;
+    const userId = Number(ctx.user.id); // Ensure numeric to match webhook
     const userEmail = ctx.user.email;
 
     try {
@@ -303,8 +303,9 @@ export const subscriptionRouter = createRouter({
       // Create or get Stripe customer
       const db = getDb();
       let stripeCustomerId: string | undefined;
+      const userId = Number(ctx.user.id);
       const existing = await db.select().from(subscriptions)
-        .where(eq(subscriptions.userId, ctx.user.id))
+        .where(eq(subscriptions.userId, userId))
         .orderBy(desc(subscriptions.createdAt))
         .limit(1);
 
@@ -339,8 +340,9 @@ export const subscriptionRouter = createRouter({
   payments: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
     const db = getDb();
+    const userId = Number(ctx.user.id);
     return db.select().from(subscriptionPayments)
-      .where(eq(subscriptionPayments.userId, ctx.user.id))
+      .where(eq(subscriptionPayments.userId, userId))
       .orderBy(desc(subscriptionPayments.paidAt))
       .limit(50);
   }),
@@ -348,8 +350,9 @@ export const subscriptionRouter = createRouter({
   // ── Cancel subscription ──
   cancel: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
+    const userId = Number(ctx.user.id);
     const subs = await db.select().from(subscriptions)
-      .where(eq(subscriptions.userId, ctx.user.id))
+      .where(eq(subscriptions.userId, userId))
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
@@ -379,7 +382,7 @@ export const subscriptionRouter = createRouter({
   verify: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null };
     const db = getDb();
-    const userId = ctx.user.id;
+    const userId = Number(ctx.user.id); // Ensure numeric to match webhook
     const stripe = getStripe();
 
     // Step 1: Check DB first
@@ -510,8 +513,9 @@ export const subscriptionRouter = createRouter({
       const db = getDb();
 
       // Get current subscription
+      const userId = Number(ctx.user.id);
       const subs = await db.select().from(subscriptions)
-        .where(eq(subscriptions.userId, ctx.user.id))
+        .where(eq(subscriptions.userId, userId))
         .orderBy(desc(subscriptions.createdAt))
         .limit(1);
       const sub = subs[0];
@@ -579,8 +583,9 @@ export const subscriptionRouter = createRouter({
   // ── Create Stripe Customer Portal session ──
   createPortalSession: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
+    const userId = Number(ctx.user.id);
     const subs = await db.select().from(subscriptions)
-      .where(eq(subscriptions.userId, ctx.user.id))
+      .where(eq(subscriptions.userId, userId))
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
