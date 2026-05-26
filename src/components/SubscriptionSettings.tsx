@@ -11,10 +11,10 @@ import { Crown, Loader2, Check, AlertTriangle, Receipt, ExternalLink, Zap, Calen
 const BUSINESS_MONTHLY = {
   id: "monthly" as const,
   name: "Mensual",
-  price: "$80",
-  originalPrice: "$120",
+  price: "$1",
+  originalPrice: "$80",
   period: "/mes",
-  fullPrice: 80,
+  fullPrice: 1,
   description: "Facturado mensualmente. Cancela cuando quieras.",
   badge: "New Plan",
   features: [

@@ -20,7 +20,7 @@ function getAppUrl() {
 }
 
 const PLAN_PRICES = {
-  monthly: { amount: 8000, name: "AI AETHEL - Mensual" },
+  monthly: { amount: 100, name: "AI AETHEL - Mensual" },
   annual: { amount: 80000, name: "AI AETHEL - Anual" },
 };
 
