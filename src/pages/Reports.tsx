@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
@@ -20,6 +20,64 @@ import {
   RefreshCw, AlertTriangle, Wallet, CreditCard, Activity,
   Landmark, ChevronDown, ChevronUp, Link2, Unlink,
 } from "lucide-react";
+
+/** Account dropdown — same style as Transactions page */
+function AccountDropdown({
+  accounts,
+  selectedId,
+  onChange,
+}: {
+  accounts: any[];
+  selectedId: string;
+  onChange: (id: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    if (open) document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  const selected = accounts.find((a) => String(a.id) === selectedId);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(!open)}
+        className="flex items-center gap-1.5 h-10 px-3 border border-neutral-200 rounded-xl bg-white text-sm hover:border-neutral-300 transition-colors w-full"
+      >
+        <Landmark className="w-4 h-4 text-neutral-400 shrink-0" />
+        <span className="truncate flex-1 text-left">{selected?.bankName ?? "Seleccionar cuenta"}</span>
+        <ChevronDown className={`w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="absolute top-full left-0 mt-1 w-full min-w-[280px] bg-white border border-neutral-200 rounded-xl shadow-lg z-50 py-1">
+          {accounts.map((acc: any) => (
+            <button
+              key={acc.id}
+              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
+              className={`w-full text-left px-3 py-2.5 text-sm flex items-center justify-between transition-colors ${
+                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <Landmark className="w-4 h-4 text-neutral-400 shrink-0" />
+                <span className="truncate">{acc.bankName} {acc.accountType ? `(${acc.accountType})` : ""}</span>
+              </div>
+              <span className={`text-xs font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 
 const PAYMENT_LABELS: Record<string, string> = {
@@ -59,6 +117,13 @@ export default function Reports() {
   const [periodFilter, setPeriodFilter] = useState<string>("month");
   const [activePieSlice, setActivePieSlice] = useState<string | null>(null);
 
+  // Auto-select first bank account when accounts load
+  useEffect(() => {
+    if (allBankAccounts.length > 0 && !selectedBankAccount) {
+      setSelectedBankAccount(String(allBankAccounts[0].id));
+    }
+  }, [allBankAccounts, selectedBankAccount]);
+
   // Local date + timezone inputs — stable with useMemo to prevent infinite re-fetching
   const dateInputs = useMemo(() => getLocalDateInputs(), []);
 
@@ -69,6 +134,7 @@ export default function Reports() {
   const monthlyQuery = trpc.dashboard.monthly.useQuery({ year: selectedYear, month: selectedMonth });
   const bankConnectionQuery = trpc.bank.checkConnection.useQuery();
   const plaidAccountsQuery = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
+  const dbAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
 
   const accountId = selectedBankAccount ? Number(selectedBankAccount) : undefined;
   const bankStatsQuery = trpc.bank.stats.useQuery({ accountId }, { enabled: !!accountId });
@@ -111,7 +177,15 @@ export default function Reports() {
   const salesStats = salesQuery.data;
   const monthlyData = monthlyQuery.data;
   const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
-  const allBankAccounts = plaidAccountsQuery.data?.accounts ?? [];
+  // Merge Plaid accounts (real-time data) with DB accounts (correct IDs for queries)
+  const plaidAccounts = plaidAccountsQuery.data?.accounts ?? [];
+  const dbAccounts = dbAccountsQuery.data ?? [];
+  const allBankAccounts = plaidAccounts.length > 0
+    ? plaidAccounts.map((pa: any) => {
+        const dbMatch = dbAccounts.find((db: any) => db.plaidAccountId === pa.plaidAccountId);
+        return dbMatch ? { ...pa, id: dbMatch.id, currentBalance: dbMatch.currentBalance } : pa;
+      })
+    : dbAccounts;
   const bankStats = bankStatsQuery.data;
   const reconData = reconQuery.data;
 
@@ -457,19 +531,18 @@ export default function Reports() {
                 </Link>
               </div>
             ) : (
-              /* Bank connected — show account selector */
-              <div className="flex gap-3 items-center">
-                {plaidAccountsQuery.isLoading ? (
+              /* Bank connected — show account selector (same style as Transactions) */
+              <div className="w-full max-w-xs">
+                {plaidAccountsQuery.isLoading || dbAccountsQuery.isLoading ? (
                   <span className="text-xs text-neutral-400">Cargando cuentas...</span>
                 ) : allBankAccounts.length === 0 ? (
                   <span className="text-xs text-neutral-400">Sin cuentas disponibles</span>
                 ) : (
-                  <Select value={selectedBankAccount} onValueChange={setSelectedBankAccount}>
-                    <SelectTrigger className="w-64 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Seleccionar cuenta bancaria" /></SelectTrigger>
-                    <SelectContent>
-                      {allBankAccounts.map((acc: typeof allBankAccounts[0]) => (<SelectItem key={acc.id} value={String(acc.id)} className="text-xs">{acc.accountType} - {acc.accountNumber}</SelectItem>))}
-                    </SelectContent>
-                  </Select>
+                  <AccountDropdown
+                    accounts={allBankAccounts}
+                    selectedId={selectedBankAccount}
+                    onChange={setSelectedBankAccount}
+                  />
                 )}
               </div>
             )}
