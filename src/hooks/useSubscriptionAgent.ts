@@ -35,9 +35,10 @@ export function useSubscriptionAgent() {
     const status = statusQuery.data?.status;
     const plan = statusQuery.data?.plan;
 
-    // If we have an annual plan in past_due state, auto-revert to monthly
-    if (status === "past_due" && plan === "annual" && !restored.current && !restoreMut.isPending) {
-      console.log("[Agent] Detected failed annual upgrade — auto-reverting to monthly...");
+    // If subscription is past_due or unpaid, auto-restore to monthly
+    // This handles both: (1) failed annual upgrades, and (2) monthly subs broken by old upgrade bug
+    if ((status === "past_due" || status === "unpaid") && !restored.current && !restoreMut.isPending) {
+      console.log("[Agent] Detected broken subscription (" + status + "/" + plan + ") — auto-restoring to monthly...");
       restoreMut.mutate();
       return;
     }
