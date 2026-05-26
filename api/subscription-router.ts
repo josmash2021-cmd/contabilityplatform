@@ -580,6 +580,55 @@ export const subscriptionRouter = createRouter({
       }
     }),
 
+  // ── Get payment status from Stripe ──
+  paymentStatus: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const stripe = getStripe();
+    const userId = Number(ctx.user.id);
+
+    try {
+      // Find subscription
+      const subs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+      const sub = subs[0];
+      if (!sub?.stripeSubscriptionId) return { error: "No subscription" };
+
+      // Get subscription from Stripe
+      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+
+      // Get latest invoice
+      let latestInvoice: any = null;
+      if (stripeSub.latest_invoice) {
+        latestInvoice = await stripe.invoices.retrieve(stripeSub.latest_invoice as string);
+      }
+
+      // Get payment intent if exists
+      let paymentIntent: any = null;
+      if (latestInvoice?.payment_intent) {
+        paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent as string);
+      }
+
+      return {
+        subscriptionStatus: stripeSub.status,
+        plan: sub.plan,
+        amountDue: latestInvoice?.amount_due ? (latestInvoice.amount_due / 100).toFixed(2) : null,
+        amountPaid: latestInvoice?.amount_paid ? (latestInvoice.amount_paid / 100).toFixed(2) : null,
+        invoiceStatus: latestInvoice?.status,
+        paymentStatus: paymentIntent?.status,
+        paymentMethod: paymentIntent?.payment_method_types?.[0] || null,
+        chargeStatus: paymentIntent?.charges?.data?.[0]?.status || null,
+        receiptUrl: paymentIntent?.charges?.data?.[0]?.receipt_url || null,
+        failureMessage: paymentIntent?.last_payment_error?.message || null,
+        created: stripeSub.created ? new Date(stripeSub.created * 1000).toISOString() : null,
+      };
+    } catch (err: any) {
+      return { error: err.message };
+    }
+  }),
+
   // ── DEBUG: Show raw DB + Stripe data for this user ──
   debug: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { error: "No auth" };

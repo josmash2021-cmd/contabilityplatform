@@ -115,6 +115,7 @@ export default function SubscriptionSettings() {
 
   // Force sync when returning from Stripe payment
   const debugQuery = trpc.subscription.debug.useQuery(undefined, { enabled: false });
+  const paymentStatusQuery = trpc.subscription.paymentStatus.useQuery(undefined, { enabled: status?.active === true });
 
   const forceSyncMut = trpc.subscription.forceSync.useMutation({
     onSuccess: (data) => {
@@ -301,6 +302,23 @@ export default function SubscriptionSettings() {
             </div>
           )}
         </div>
+
+        {/* Payment past_due warning */}
+        {status?.status === "past_due" && (
+          <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+            <p className="text-xs text-red-700">
+              <strong>Pago pendiente.</strong> El cobro de tu suscripcion no pudo procesarse. Por favor actualiza tu metodo de pago haciendo clic en "Gestionar tarjeta y facturacion".
+            </p>
+            {paymentStatusQuery.data && !(paymentStatusQuery.data as any).error && (
+              <div className="mt-2 text-[10px] text-red-600">
+                <p>Estado del pago: {(paymentStatusQuery.data as any).paymentStatus || "Desconocido"}</p>
+                {(paymentStatusQuery.data as any).failureMessage && (
+                  <p>Error: {(paymentStatusQuery.data as any).failureMessage}</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* No downgrade message — Only for annual subscribers */}
         {!isMonthly && (
