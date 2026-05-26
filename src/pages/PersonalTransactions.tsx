@@ -179,6 +179,16 @@ export default function PersonalTransactions() {
     return () => clearTimeout(timer);
   }, []);
 
+  // Auto-sync recent transactions on page load
+  useEffect(() => {
+    if (hasBankConnected) {
+      const timer = setTimeout(() => {
+        syncRecentMutation.mutate();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasBankConnected]);
+
   // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
@@ -188,6 +198,17 @@ export default function PersonalTransactions() {
       utils.bank.getMonthData.invalidate();
     },
     onError: (err) => toast.error(err.message),
+  });
+
+  // Auto-sync RECENT transactions on page load (last 7 days)
+  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        toast.success(`${data.added} transacciones nuevas encontradas`);
+        utils.bank.getMonthData.invalidate();
+      }
+    },
+    onError: () => { /* silent - recent sync is best effort */ },
   });
 
   // Auto-sync when month changes and no data

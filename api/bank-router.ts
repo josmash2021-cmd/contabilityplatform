@@ -386,7 +386,7 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   ]);
 }
 
-async function doSyncTransactions(ctx: any, year?: number, month?: number, specificAccountId?: number, syncType: "manual" | "auto" | "webhook" | "retry" = "manual") {
+async function doSyncTransactions(ctx: any, year?: number, month?: number, specificAccountId?: number, syncType: "manual" | "auto" | "webhook" | "retry" = "manual", days?: number) {
   if (!ctx.user) return { success: false, error: "No autenticado" };
   const userId = ctx.user.id;
   const db = getDb();
@@ -417,10 +417,20 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     }
 
     const now = new Date();
-    const syncYear = year ?? now.getFullYear();
-    const syncMonth = month ?? (now.getMonth() + 1);
-    const startDate = new Date(syncYear, syncMonth - 1, 1).toISOString().split("T")[0];
-    const endDate = new Date(syncYear, syncMonth, 0).toISOString().split("T")[0];
+    let startDate: string;
+    let endDate: string;
+    if (days && days > 0) {
+      // Sync last N days (for catching recent transactions)
+      const start = new Date(now);
+      start.setDate(start.getDate() - days);
+      startDate = start.toISOString().split("T")[0];
+      endDate = now.toISOString().split("T")[0];
+    } else {
+      const syncYear = year ?? now.getFullYear();
+      const syncMonth = month ?? (now.getMonth() + 1);
+      startDate = new Date(syncYear, syncMonth - 1, 1).toISOString().split("T")[0];
+      endDate = new Date(syncYear, syncMonth, 0).toISOString().split("T")[0];
+    }
     console.log(`[SYNC] Date range: ${startDate} to ${endDate}`);
 
     // Step 3: Fetch ALL transactions from Plaid with pagination (20s timeout per page)
@@ -739,10 +749,24 @@ export const bankRouter = createRouter({
     return { hasBank: false, accountCount: 0, message: allAccounts.length > 0 ? "Cuenta inactiva" : "No hay cuenta" };
   }),
 
-  syncTransactions: authedQuery.input(z.object({ year: z.number().optional(), month: z.number().optional(), accountId: z.number().optional() }).optional())
-    .mutation(async ({ input, ctx }) => doSyncTransactions(ctx, input?.year, input?.month, input?.accountId, "manual")),
+  syncTransactions: authedQuery.input(z.object({ year: z.number().optional(), month: z.number().optional(), accountId: z.number().optional(), days: z.number().optional() }).optional())
+    .mutation(async ({ input, ctx }) => doSyncTransactions(ctx, input?.year, input?.month, input?.accountId, "manual", input?.days)),
 
   autoSync: authedQuery.mutation(async ({ ctx }) => doSyncTransactions(ctx, undefined, undefined, undefined, "auto")),
+
+  // Sync recent transactions (last N days) — used on page load to catch new transactions
+  syncRecent: authedQuery.mutation(async ({ ctx }) => {
+    if (!ctx.user) return { success: false, error: "No autenticado" };
+    if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay banco conectado" };
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth() + 1;
+
+    // Sync current month (which will get last 7 days of transactions)
+    const result = await doSyncTransactions(ctx, year, month, undefined, "auto");
+    return { ...result, message: `Sincronizando transacciones recientes de ${month}/${year}` };
+  }),
 
   // ─── SYNC FULL YEAR (Accounting Agent) ───
   syncYearTransactions: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).mutation(async ({ input, ctx }) => {
