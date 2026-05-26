@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
@@ -59,8 +59,8 @@ export default function Reports() {
   const [periodFilter, setPeriodFilter] = useState<string>("month");
   const [activePieSlice, setActivePieSlice] = useState<string | null>(null);
 
-  // Local date + timezone inputs (synced with Dashboard)
-  const dateInputs = getLocalDateInputs();
+  // Local date + timezone inputs — stable with useMemo to prevent infinite re-fetching
+  const dateInputs = useMemo(() => getLocalDateInputs(), []);
 
   const incomeQuery = trpc.reports.incomeStatement.useQuery({ tzOffsetHours: dateInputs.tzOffsetHours });
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
@@ -76,8 +76,9 @@ export default function Reports() {
 
   const utils = trpc.useUtils();
 
-  const isLoading = incomeQuery.isLoading || balanceQuery.isLoading || salesQuery.isLoading;
-  const hasError = incomeQuery.error || balanceQuery.error || salesQuery.error;
+  // Only block on core queries — don't block if optional queries (bank, journal) are loading
+  const isLoading = incomeQuery.isLoading && salesQuery.isLoading;
+  const hasError = incomeQuery.error && salesQuery.error;
 
   if (isLoading) {
     return (
