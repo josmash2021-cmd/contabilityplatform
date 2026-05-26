@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
+import { useSearchParams } from "react-router";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -101,6 +102,9 @@ export default function SubscriptionSettings() {
   const PLAN_ANNUAL = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
 
   const utils = trpc.useUtils();
+  const [searchParams] = useSearchParams();
+  const renewParam = searchParams.get("renew"); // "monthly" or "annual" from overlay
+
   // KEY FIX: Poll every 5 seconds for subscription status.
   // When a user pays via Stripe but the webhook hasn't arrived yet,
   // the status endpoint searches Stripe directly and finds the subscription.
@@ -113,8 +117,15 @@ export default function SubscriptionSettings() {
   // Detect declined/failed payments (past_due = user tried to pay but card was declined)
   const hasDeclinedPayment = status?.status === "past_due" || status?.status === "unpaid";
 
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [selectedPlan, setSelectedPlan] = useState<string | null>(renewParam);
   const [syncing, setSyncing] = useState(false);
+
+  // Pre-select plan from URL ?renew= parameter (from expired overlay)
+  useEffect(() => {
+    if (renewParam) {
+      setSelectedPlan(renewParam);
+    }
+  }, [renewParam]);
 
   // Force sync when returning from Stripe payment
   const debugQuery = trpc.subscription.debug.useQuery(undefined, { enabled: false });
