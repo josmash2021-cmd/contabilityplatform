@@ -415,22 +415,31 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     const endDate = new Date(syncYear, syncMonth, 0).toISOString().split("T")[0];
     console.log(`[SYNC] Date range: ${startDate} to ${endDate}`);
 
-    // Step 3: Fetch transactions from Plaid (20s timeout)
+    // Step 3: Fetch ALL transactions from Plaid with pagination (20s timeout per page)
     // NOTE: Do NOT pass account_ids - let Plaid return all transactions for the token
-    // Passing invalid account_ids causes INVALID_ACCOUNT_ID error
-    console.log(`[SYNC] Calling Plaid transactionsGet...`);
+    console.log(`[SYNC] Calling Plaid transactionsGet with pagination...`);
     let allTxs: any[] = [];
     try {
-      const res = await withTimeout(
-        client.transactionsGet({
-          access_token: primaryAccount.plaidAccessToken,
-          start_date: startDate, end_date: endDate,
-          options: { include_personal_finance_category: true },
-        }),
-        20000, "Plaid transactionsGet"
-      );
-      allTxs = res.data.transactions || [];
-      console.log(`[SYNC] Plaid returned ${allTxs.length} transactions`);
+      let offset = 0;
+      const count = 500; // Plaid max per page
+      let hasMore = true;
+      while (hasMore && offset < 10000) { // Safety limit: max 20 pages
+        const res = await withTimeout(
+          client.transactionsGet({
+            access_token: primaryAccount.plaidAccessToken,
+            start_date: startDate, end_date: endDate,
+            options: { include_personal_finance_category: true, count, offset },
+          }),
+          20000, `Plaid transactionsGet offset=${offset}`
+        );
+        const txs = res.data.transactions || [];
+        const total = res.data.total_transactions || 0;
+        allTxs = allTxs.concat(txs);
+        console.log(`[SYNC] Page offset=${offset}, got ${txs.length} txs, total=${total}, accumulated=${allTxs.length}`);
+        offset += txs.length;
+        hasMore = txs.length === count && offset < total;
+      }
+      console.log(`[SYNC] Plaid returned ${allTxs.length} total transactions`);
     } catch (plaidErr: any) {
       const errCode = plaidErr.response?.data?.error_code || "";
       const errMsg = plaidErr.response?.data?.error_message || plaidErr.message || "Unknown Plaid error";
@@ -1005,20 +1014,45 @@ export const bankRouter = createRouter({
 
   // ─── LIVE BALANCE ───
   getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
-    if (!ctx.user) return { balance: "0", accountCount: 0 };
-    if (!await hasActiveBank(ctx.user.id)) return { balance: "0", accountCount: 0 };
+    if (!ctx.user) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
     const db = getDb();
     try {
+      // ALWAYS fetch fresh balance from Plaid first
+      let plaidBalance: number | null = null;
+      try {
+        const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+        const primaryAccount = userAccounts[0];
+        if (primaryAccount?.plaidAccessToken) {
+          const client = await initPlaid();
+          if (client) {
+            const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
+            for (const plaidAcc of accountsRes.data.accounts || []) {
+              const dbAccount = userAccounts.find((a: any) => a.plaidAccountId === plaidAcc.account_id);
+              if (dbAccount && plaidAcc.balances) {
+                const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
+                if (bal != null) {
+                  await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
+                }
+              }
+            }
+          }
+        }
+      } catch (plaidErr: any) {
+        console.error("[getLiveBalance] Plaid fetch error:", plaidErr.message);
+        // Continue with DB balance as fallback
+      }
+
       if (input?.accountId) {
         const acc = await db.select({ currentBalance: bankAccounts.currentBalance, bankName: bankAccounts.bankName }).from(bankAccounts).where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id)));
         const bal = acc[0]?.currentBalance ? parseFloat(acc[0].currentBalance) : 0;
-        return { balance: String(bal.toFixed(2)), bankName: acc[0]?.bankName ?? "Banco", accountCount: 1 };
+        return { balance: String(bal.toFixed(2)), liveBalance: String(bal.toFixed(2)), bookBalance: String(bal.toFixed(2)), bankName: acc[0]?.bankName ?? "Banco", accountCount: 1 };
       } else {
         const allAccs = await db.select({ currentBalance: bankAccounts.currentBalance, bankName: bankAccounts.bankName }).from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
         const totalBal = allAccs.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
-        return { balance: String(totalBal.toFixed(2)), bankName: allAccs[0]?.bankName ?? "Banco", accountCount: allAccs.length };
+        return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: allAccs[0]?.bankName ?? "Banco", accountCount: allAccs.length };
       }
-    } catch { return { balance: "0", accountCount: 0 }; }
+    } catch { return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 }; }
   }),
 
   // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS ───
