@@ -162,6 +162,105 @@ app.post("/api/webhooks/stripe", async (c) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════
+// BACKGROUND BALANCE SYNC — runs every 5 minutes
+// Updates all users' bank balances without requiring them to be online
+// ═══════════════════════════════════════════════════════════
+let plaidClient: any = null;
+
+async function initPlaid() {
+  if (plaidClient) return plaidClient;
+  try {
+    const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
+    const config = new Configuration({
+      basePath: PlaidEnvironments[process.env.PLAID_ENV === "production" ? "production" : "sandbox"],
+      baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
+    });
+    plaidClient = new PlaidApi(config);
+    return plaidClient;
+  } catch { return null; }
+}
+
+async function syncAllBalances() {
+  const started = Date.now();
+  try {
+    const client = await initPlaid();
+    if (!client) { console.log("[bg-sync] Plaid not initialized"); return; }
+
+    const { bankAccounts } = await import("@db/schema");
+    const { getDb } = await import("./queries/connection");
+    const { eq } = await import("drizzle-orm");
+    const db = getDb();
+
+    // Get all unique access tokens (one per bank connection)
+    const allAccounts = await db.select().from(bankAccounts);
+    const accessTokenMap = new Map<string, number[]>();
+    for (const acc of allAccounts) {
+      if (!acc.plaidAccessToken) continue;
+      const ids = accessTokenMap.get(acc.plaidAccessToken) || [];
+      ids.push(acc.id);
+      accessTokenMap.set(acc.plaidAccessToken, ids);
+    }
+
+    let updatedCount = 0;
+    let userCount = 0;
+
+    for (const [token, accountIds] of accessTokenMap) {
+      try {
+        const res = await client.accountsGet({ access_token: token });
+        const freshBalances = new Map<string, string>();
+        for (const plaidAcc of res.data.accounts || []) {
+          const bal = plaidAcc.balances.available != null
+            ? String(plaidAcc.balances.available)
+            : plaidAcc.balances.current != null
+              ? String(plaidAcc.balances.current)
+              : null;
+          if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
+        }
+
+        for (const dbAcc of allAccounts) {
+          if (!accountIds.includes(dbAcc.id)) continue;
+          if (!dbAcc.plaidAccountId) continue;
+          const freshBal = freshBalances.get(dbAcc.plaidAccountId);
+          if (freshBal != null && freshBal !== dbAcc.currentBalance) {
+            await db.update(bankAccounts).set({
+              currentBalance: freshBal,
+              lastSyncedAt: new Date(),
+              updatedAt: new Date(),
+            }).where(eq(bankAccounts.id, dbAcc.id));
+            updatedCount++;
+            userCount = new Set([...Array.from(allAccounts).map(a => a.userId)]).size;
+          }
+        }
+      } catch (e: any) {
+        console.log(`[bg-sync] Error syncing token: ${e.message}`);
+      }
+    }
+
+    console.log(`[bg-sync] Completed in ${Date.now() - started}ms. Updated ${updatedCount} accounts for ${userCount} users.`);
+  } catch (e: any) {
+    console.error("[bg-sync] Fatal error:", e.message);
+  }
+}
+
+// Run every 5 minutes in production
+if (env.isProduction) {
+  setInterval(syncAllBalances, 5 * 60 * 1000); // 5 minutes
+  // Also run immediately on startup (after 10s delay to let server init)
+  setTimeout(syncAllBalances, 10000);
+  console.log("[bg-sync] Background balance sync scheduled every 5 minutes");
+}
+
+// Endpoint for Railway cron job (calls every X minutes)
+app.get("/api/sync-all", async (c) => {
+  const secret = c.req.header("x-sync-secret");
+  if (secret !== process.env.SYNC_SECRET) {
+    return c.json({ error: "Unauthorized" }, 401);
+  }
+  syncAllBalances();
+  return c.json({ status: "sync started" });
+});
+
 app.use("/api/trpc/*", async (c) => {
   return fetchRequestHandler({
     endpoint: "/api/trpc",
