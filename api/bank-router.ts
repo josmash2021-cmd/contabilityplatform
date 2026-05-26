@@ -780,6 +780,7 @@ export const bankRouter = createRouter({
 
     // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    console.log(`[getMonthData] User ${ctx.user.id} has ${userAccounts.length} accounts:`, userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,8), currentBal: a.currentBalance, lastSync: a.lastSyncedAt })));
     const primaryAccount = userAccounts[0];
 
     // Build conditions: always filter by user and date range
@@ -1714,5 +1715,47 @@ export const bankRouter = createRouter({
     } catch (err: any) {
       return { success: false, error: err.message || "Error al desconectar" };
     }
+  }),
+
+  // ── DEBUG: Raw Plaid balance data for this user ──
+  debugBalance: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    if (userAccounts.length === 0) return { error: "No accounts" };
+
+    const results = [];
+    for (const acc of userAccounts) {
+      if (!acc.plaidAccessToken) { results.push({ account: acc.bankName, error: "No access token" }); continue; }
+      try {
+        const client = await initPlaid();
+        if (!client) { results.push({ account: acc.bankName, error: "Plaid not initialized" }); continue; }
+        const res = await client.accountsGet({ access_token: acc.plaidAccessToken });
+        const plaidAccounts = (res.data.accounts || []).map((a: any) => ({
+          name: a.name,
+          account_id: a.account_id,
+          mask: a.mask,
+          type: a.type,
+          subtype: a.subtype,
+          balances: {
+            available: a.balances.available,
+            current: a.balances.current,
+            limit: a.balances.limit,
+            iso_currency_code: a.balances.iso_currency_code,
+          },
+        }));
+        results.push({
+          dbAccountId: acc.id,
+          dbBankName: acc.bankName,
+          dbPlaidAccountId: acc.plaidAccountId,
+          dbBalance: acc.currentBalance,
+          dbLastSync: acc.lastSyncedAt,
+          plaidAccounts,
+        });
+      } catch (e: any) {
+        results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
+      }
+    }
+    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
   }),
 });
