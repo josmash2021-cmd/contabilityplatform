@@ -202,6 +202,96 @@ export const subscriptionRouter = createRouter({
     };
   }),
 
+  // ── Force sync: find subscription in Stripe by user email and sync to DB ──
+  forceSync: authedQuery.mutation(async ({ ctx }) => {
+    if (!ctx.user) return { found: false, message: "No autenticado" };
+    const db = getDb();
+    const stripe = getStripe();
+    const userId = ctx.user.id;
+    const userEmail = ctx.user.email;
+
+    try {
+      // Search for customer by userId in metadata
+      const allCustomers = await stripe.customers.list({ limit: 100 });
+      let customer = allCustomers.data.find((c: any) =>
+        c.metadata?.platformUserId === String(userId)
+      );
+
+      // Fallback: search by email
+      if (!customer && userEmail) {
+        customer = allCustomers.data.find((c: any) => c.email === userEmail);
+      }
+
+      if (!customer) return { found: false, message: "No se encontro cliente en Stripe" };
+
+      // List subscriptions
+      const stripeSubsList = await stripe.subscriptions.list({
+        customer: customer.id, status: "all", limit: 10,
+      });
+
+      if (stripeSubsList.data.length === 0) {
+        return { found: false, message: "No se encontraron suscripciones en Stripe" };
+      }
+
+      // Find active/trialing subscription
+      const activeSub = stripeSubsList.data.find((s: any) =>
+        s.status === "active" || s.status === "trialing"
+      );
+
+      if (!activeSub) {
+        return { found: false, message: "No hay suscripcion activa en Stripe" };
+      }
+
+      // Determine plan
+      const priceId = activeSub.items?.data?.[0]?.price?.id;
+      let plan = "monthly";
+      if (priceId) {
+        try {
+          const priceData = await stripe.prices.retrieve(priceId);
+          plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+        } catch { /* default monthly */ }
+      }
+
+      // Upsert into DB
+      const existing = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId)).limit(1);
+
+      if (existing.length > 0) {
+        await db.update(subscriptions).set({
+          stripeCustomerId: customer.id,
+          stripeSubscriptionId: activeSub.id,
+          plan: plan as "monthly" | "annual",
+          status: activeSub.status,
+          currentPeriodStart: activeSub.current_period_start ? new Date(activeSub.current_period_start * 1000) : new Date(),
+          currentPeriodEnd: activeSub.current_period_end ? new Date(activeSub.current_period_end * 1000) : new Date(),
+          cancelAtPeriodEnd: activeSub.cancel_at_period_end || false,
+          updatedAt: new Date(),
+        }).where(eq(subscriptions.id, existing[0].id));
+      } else {
+        await db.insert(subscriptions).values({
+          userId,
+          stripeCustomerId: customer.id,
+          stripeSubscriptionId: activeSub.id,
+          plan: plan as "monthly" | "annual",
+          status: activeSub.status,
+          currentPeriodStart: activeSub.current_period_start ? new Date(activeSub.current_period_start * 1000) : new Date(),
+          currentPeriodEnd: activeSub.current_period_end ? new Date(activeSub.current_period_end * 1000) : new Date(),
+          cancelAtPeriodEnd: activeSub.cancel_at_period_end || false,
+        });
+      }
+
+      return {
+        found: true,
+        plan,
+        status: activeSub.status,
+        message: `Suscripcion ${plan} sincronizada correctamente`,
+      };
+    } catch (err: any) {
+      console.error("[forceSync] Error:", err.message);
+      return { found: false, message: err.message || "Error al sincronizar" };
+    }
+  }),
+
   // ── Create checkout session ──
   createCheckoutSession: authedQuery
     .input(z.object({ plan: z.enum(["monthly", "annual"]) }))

@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, CalendarDays } from "lucide-react";
+import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, CalendarDays, RefreshCw } from "lucide-react";
 
 // Business plans (original)
 const BUSINESS_MONTHLY = {
@@ -111,6 +111,35 @@ export default function SubscriptionSettings() {
   const { data: payments } = trpc.subscription.payments.useQuery();
 
   const [selectedPlan, setSelectedPlan] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+
+  // Force sync when returning from Stripe payment
+  const forceSyncMut = trpc.subscription.forceSync.useMutation({
+    onSuccess: (data) => {
+      setSyncing(false);
+      if (data.found) {
+        toast.success(data.message || "Suscripcion verificada");
+        utils.subscription.status.invalidate();
+      } else {
+        console.log("[forceSync]", data.message);
+      }
+    },
+    onError: (err) => {
+      setSyncing(false);
+      console.error("[forceSync] error:", err.message);
+    },
+  });
+
+  // Auto-sync on mount if coming from Stripe
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("subscription") === "success") {
+      setSyncing(true);
+      forceSyncMut.mutate();
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
@@ -390,9 +419,24 @@ export default function SubscriptionSettings() {
   // ─── NO SUBSCRIPTION — SHOW PLANS ───
   return (
     <div className="space-y-6">
-      <p className="text-xs text-neutral-400">
-        Configura tu plan para desbloquear el acceso completo a Accounting Platform.
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-neutral-400">
+          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+        </p>
+        {/* Force sync button for users who already paid */}
+        <Button
+          onClick={() => { setSyncing(true); forceSyncMut.mutate(); }}
+          disabled={syncing}
+          variant="outline"
+          className="text-xs h-7 px-2 border-neutral-200"
+        >
+          {syncing ? (
+            <><Loader2 className="w-3 h-3 animate-spin mr-1" /> Verificando...</>
+          ) : (
+            <><RefreshCw className="w-3 h-3 mr-1" /> Verificar mi suscripcion</>
+          )}
+        </Button>
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {/* Monthly */}
