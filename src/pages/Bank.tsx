@@ -229,9 +229,14 @@ export default function Bank() {
   // getAllPlaidAccounts - same as Transactions.tsx (this works)
   const { data: plaidAccountsData, isLoading: loadingAccounts } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
+  const dbAccountsList = dbAccounts ?? [];
   const allAccounts = plaidAccounts;
   const account = plaidAccounts.find((a: any) => String(a.id) === selectedAccountId) || plaidAccounts[0] || null;
-  const accountIdNum = account?.id ? Number(account.id) : undefined;
+  // Map plaidAccountId to DB id (numeric) — getLiveBalance & getMonthData need DB id
+  const selectedPlaidId = account?.id ?? null;
+  const dbAccountMatch = selectedPlaidId ? dbAccountsList.find((db: any) => db.plaidAccountId === selectedPlaidId) : null;
+  const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : undefined;
 
   const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
     { accountId: accountIdNum }, { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 30000 }
