@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Crown, Loader2, Check, AlertTriangle, Receipt, ExternalLink, Zap, CalendarDays } from "lucide-react";
+import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, CalendarDays } from "lucide-react";
 
 // Business plans (original)
 const BUSINESS_MONTHLY = {
@@ -173,6 +173,7 @@ export default function SubscriptionSettings() {
 
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
 
   const upgradeMut = trpc.subscription.upgrade.useMutation({
     onSuccess: (data) => {
@@ -199,6 +200,14 @@ export default function SubscriptionSettings() {
 
     return (
       <div className="space-y-6">
+        {/* Success message after upgrade */}
+        {upgradeSuccess && (
+          <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
+            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+            <p className="text-sm text-emerald-700 font-medium">Suscripcion aplicada con exito. Ahora tienes el plan Anual.</p>
+          </div>
+        )}
+
         {/* Current Plan Card */}
         <div className="border-2 border-emerald-200 bg-emerald-50/50 rounded-lg p-5 space-y-4">
           <div className="flex items-center justify-between">
@@ -280,6 +289,15 @@ export default function SubscriptionSettings() {
           )}
         </div>
 
+        {/* No downgrade message — Only for annual subscribers */}
+        {!isMonthly && (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <p className="text-xs text-amber-700">
+              <strong>Plan Anual activo.</strong> No es posible cambiar a mensual. El plan anual no tiene devolucion.
+            </p>
+          </div>
+        )}
+
         {/* Upgrade Section — Only for monthly subscribers */}
         {isMonthly && (
           <div className="space-y-3">
@@ -322,7 +340,24 @@ export default function SubscriptionSettings() {
                         Cancelar
                       </Button>
                       <Button
-                        onClick={() => upgradeMut.mutate({ from: "monthly", to: "annual" })}
+                        onClick={() => {
+                          upgradeMut.mutate({ from: "monthly", to: "annual" }, {
+                            onSuccess: (data) => {
+                              if (data.success) {
+                                setUpgradeSuccess(true);
+                                setShowUpgrade(false);
+                                utils.subscription.status.invalidate();
+                                utils.subscription.payments.invalidate();
+                                setTimeout(() => setUpgradeSuccess(false), 5000);
+                              } else {
+                                toast.error(data.error || "Error al procesar");
+                              }
+                            },
+                            onError: (err) => {
+                              toast.error(err.message || "Tarjeta declinada. Verifica tu metodo de pago.");
+                            },
+                          });
+                        }}
                         disabled={upgradeMut.isPending}
                         className="flex-1 bg-black hover:bg-neutral-800 text-white h-9 text-xs"
                       >

@@ -366,44 +366,65 @@ export const subscriptionRouter = createRouter({
         .orderBy(desc(subscriptions.createdAt))
         .limit(1);
       const sub = subs[0];
-      if (!sub) throw new Error("No tienes una suscripcion activa");
-      if (sub.plan !== "monthly") throw new Error("Solo puedes hacer upgrade desde el plan mensual");
+      if (!sub) return { success: false, error: "No tienes una suscripcion activa" };
+      if (sub.plan !== "monthly") return { success: false, error: "Solo puedes hacer upgrade desde el plan mensual" };
 
       // Get Stripe subscription
-      if (!sub.stripeSubscriptionId) throw new Error("No se encontro la suscripcion en Stripe");
+      if (!sub.stripeSubscriptionId) return { success: false, error: "No se encontro la suscripcion en Stripe" };
 
-      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-      if (stripeSub.status !== "active" && stripeSub.status !== "trialing") {
-        throw new Error("Tu suscripcion mensual no esta activa");
+      try {
+        const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
+        if (stripeSub.status !== "active" && stripeSub.status !== "trialing") {
+          return { success: false, error: "Tu suscripcion mensual no esta activa" };
+        }
+
+        // Get annual price ID
+        const annualPriceId = await getOrCreatePrice(stripe, "annual");
+
+        // Update subscription: change from monthly to annual
+        const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          items: [{
+            id: stripeSub.items.data[0].id,
+            price: annualPriceId,
+          }],
+          proration_behavior: "create_prorations",
+          payment_behavior: "error_if_incomplete",
+        });
+
+        // Pay any pending invoice immediately
+        if (updatedSub.latest_invoice) {
+          try {
+            const invoice = await stripe.invoices.pay(updatedSub.latest_invoice as string);
+            if (invoice.status !== "paid") {
+              return { success: false, error: "Tarjeta declinada. No se pudo procesar el cobro. Verifica tu metodo de pago." };
+            }
+          } catch (invErr: any) {
+            if (invErr.code === "card_declined") {
+              return { success: false, error: "Tarjeta declinada. Por favor verifica tu metodo de pago e intenta de nuevo." };
+            }
+            return { success: false, error: "Error al procesar el pago: " + (invErr.message || "Intenta de nuevo") };
+          }
+        }
+
+        // Update DB
+        await db.update(subscriptions).set({
+          plan: "annual",
+          status: updatedSub.status,
+          currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+          updatedAt: new Date(),
+        }).where(eq(subscriptions.id, sub.id));
+
+        return {
+          success: true,
+          plan: "annual",
+          message: "Suscripcion aplicada con exito. Ahora tienes el plan Anual.",
+        };
+      } catch (err: any) {
+        if (err.code === "card_declined") {
+          return { success: false, error: "Tarjeta declinada. Por favor verifica tu metodo de pago e intenta de nuevo." };
+        }
+        return { success: false, error: err.message || "Error al procesar el upgrade" };
       }
-
-      // Get annual price ID
-      const annualPriceId = await getOrCreatePrice(stripe, "annual");
-
-      // Update subscription: change from monthly to annual with proration
-      // This creates a proration invoice automatically — Stripe charges the difference
-      const updatedSub = await stripe.subscriptions.update(sub.stripeSubscriptionId, {
-        items: [{
-          id: stripeSub.items.data[0].id,
-          price: annualPriceId,
-        }],
-        proration_behavior: "create_prorations",
-        billing_cycle_anchor: "now",
-      });
-
-      // Update DB
-      await db.update(subscriptions).set({
-        plan: "annual",
-        status: updatedSub.status,
-        currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
-        updatedAt: new Date(),
-      }).where(eq(subscriptions.id, sub.id));
-
-      return {
-        success: true,
-        plan: "annual",
-        message: "Upgrade completado. Se te cobro la diferencia prorrateada.",
-      };
     }),
 
   // ── Create Stripe Customer Portal session ──
