@@ -540,6 +540,9 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txDate = tx.date ? new Date(tx.date) : new Date();
         const normalizedMerchant = normalizeMerchantName(tx.name);
 
+        // Log each transaction being inserted
+        console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
+
         await db.insert(bankTransactions).values({
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
@@ -930,6 +933,57 @@ export const bankRouter = createRouter({
       fromPlaid: plaidSource,
       monthName: `${monthNames[month]} ${year}`,
     };
+  }),
+
+  // ─── DEBUG: Show transactions grouped by account ───
+  debugAccounts: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const userId = ctx.user.id;
+
+    // Get all accounts
+    const accounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+    
+    // Get transaction counts per account
+    const result = [];
+    for (const acc of accounts) {
+      const txs = await db.select({
+        id: bankTransactions.id,
+        description: bankTransactions.description,
+        amount: bankTransactions.amount,
+        category: bankTransactions.category,
+        transactionDate: bankTransactions.transactionDate,
+      }).from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, userId),
+          eq(bankTransactions.bankAccountId, acc.id),
+        ))
+        .orderBy(desc(bankTransactions.transactionDate))
+        .limit(20);
+      
+      result.push({
+        accountId: acc.id,
+        accountName: acc.bankName,
+        plaidAccountId: acc.plaidAccountId,
+        transactionCount: txs.length,
+        transactions: txs,
+      });
+    }
+
+    // Also get transactions with NULL bankAccountId
+    const orphaned = await db.select({
+      id: bankTransactions.id,
+      description: bankTransactions.description,
+      amount: bankTransactions.amount,
+      category: bankTransactions.category,
+    }).from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.userId, userId),
+        sql`${bankTransactions.bankAccountId} IS NULL`,
+      ))
+      .limit(10);
+
+    return { accounts: result, orphaned };
   }),
 
   // ─── LIST BY CATEGORY (for BankCategoryDetail page) ───
