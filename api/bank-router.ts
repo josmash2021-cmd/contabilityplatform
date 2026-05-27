@@ -793,6 +793,29 @@ export const bankRouter = createRouter({
     catch { return []; }
   }),
 
+  // Debug endpoint: return ALL user transactions (no date filter) to diagnose issues
+  debugTransactions: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { count: 0, transactions: [] };
+    const db = getDb();
+    const allTxs = await db.select({
+      id: bankTransactions.id,
+      description: bankTransactions.description,
+      amount: bankTransactions.amount,
+      type: bankTransactions.type,
+      category: bankTransactions.category,
+      transactionDate: bankTransactions.transactionDate,
+      plaidTransactionId: bankTransactions.plaidTransactionId,
+      bankAccountId: bankTransactions.bankAccountId,
+      importedFrom: bankTransactions.importedFrom,
+      isPending: bankTransactions.isPending,
+      createdAt: bankTransactions.createdAt,
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, ctx.user.id))
+      .orderBy(desc(bankTransactions.transactionDate))
+      .limit(100);
+    return { count: allTxs.length, transactions: allTxs };
+  }),
+
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     // Guard: no active bank = no data
@@ -812,7 +835,7 @@ export const bankRouter = createRouter({
     // ALL their bank transactions regardless of which internal bank account
     // they were assigned to during sync.
     // Use between for robust date range comparison
-    const txs = await db.select().from(bankTransactions)
+    let txs = await db.select().from(bankTransactions)
       .where(
         and(
           eq(bankTransactions.userId, ctx.user.id),
@@ -822,10 +845,19 @@ export const bankRouter = createRouter({
       .orderBy(desc(bankTransactions.transactionDate));
 
     console.log(`[GET_MONTH_DATA] Found ${txs.length} transactions for ${startStr} to ${endStr}, userId=${ctx.user.id}`);
+
+    let fallbackMode = false;
     if (txs.length === 0) {
-      // Check if user has ANY transactions at all (for debugging)
-      const allUserTxs = await db.select({ count: sql`COUNT(*)` }).from(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
-      console.log(`[GET_MONTH_DATA] User has ${allUserTxs[0]?.count ?? 0} total transactions in DB`);
+      // Check if user has ANY transactions at all — return them as fallback
+      const allUserTxs = await db.select().from(bankTransactions)
+        .where(eq(bankTransactions.userId, ctx.user.id))
+        .orderBy(desc(bankTransactions.transactionDate))
+        .limit(100);
+      if (allUserTxs.length > 0) {
+        console.log(`[GET_MONTH_DATA] Fallback: returning ${allUserTxs.length} transactions from other months`);
+        txs = allUserTxs;
+        fallbackMode = true;
+      }
     }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
@@ -913,6 +945,7 @@ export const bankRouter = createRouter({
       lastSyncedAt,
       fromPlaid: plaidSource,
       monthName: `${monthNames[month]} ${year}`,
+      fallbackMode,
     };
   }),
 

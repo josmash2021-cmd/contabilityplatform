@@ -419,9 +419,9 @@ export default function Bank() {
 
   // ─── useEffect hooks AFTER all useMutation declarations ───
 
-  // Auto-sync ONCE when accountIdNum is ready — fires when accountIdNum
-  // changes from undefined to a value, but autoSyncFiredRef prevents
-  // re-running when user switches accounts later.
+  // Auto-sync ONCE when bank is connected and account is ready.
+  // Fires when hasBankConnected becomes true OR accountIdNum becomes ready.
+  // autoSyncFiredRef prevents re-running on subsequent renders.
   useEffect(() => {
     if (!hasBankConnected || !account || autoSyncFiredRef.current) return;
     if (!accountIdNum) return; // Wait for accountIdNum to be ready
@@ -435,8 +435,7 @@ export default function Bank() {
       });
     }, 1500);
     return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accountIdNum]); // Trigger when accountIdNum becomes ready
+  }, [hasBankConnected, account, accountIdNum, selectedYear, selectedMonth, syncMutation]);
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
