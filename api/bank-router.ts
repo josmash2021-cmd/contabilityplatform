@@ -119,22 +119,37 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
 
-  // Check default rules first
+  // ===== INCOME DETECTION (must be FIRST — before generic keyword rules) =====
+  // These detect when money is coming TO the user, regardless of merchant name
+
+  // 1. MONEY TRANSFER FROM / payment FROM someone / deposit FROM
+  const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
+  const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
+  if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
+
+  // 2. Refunds / reversals: positive plaidAmount + same merchant = money returned
+  // (handled by detectReversedTransactions later, but we can also detect here)
+
+  // 3. Zelle received
+  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
+  if (isZelleRecv) return { type: "income", category: "zelle_income" };
+
+  // ===== NOW check default rules (these force expense for known merchants) =====
   for (const [keyword, rule] of Object.entries(defaultCategoryRules)) {
     if (desc.includes(keyword)) return { type: rule.type as "income" | "expense", category: rule.category };
   }
 
-  // Zelle detection
-  const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
-  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
-  if (isZelleSent) return { type: "expense", category: "zelle_sent" };
-  if (isZelleRecv) return { type: "income", category: "zelle_income" };
+  // ===== EXPENSE DETECTION =====
 
   // Incoming money transfers (MONEY TRANSFER FROM, payment FROM someone, etc.)
   // This detects when money is sent TO the user (e.g. "MONEY TRANSFER AUTHORIZED ON 05/24 FROM DoorDash")
   const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
   const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
   if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
+
+  // Zelle sent
+  const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
+  if (isZelleSent) return { type: "expense", category: "zelle_sent" };
 
   // Plaid categories
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";
