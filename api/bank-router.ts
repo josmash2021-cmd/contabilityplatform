@@ -447,11 +447,14 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txs = res.data.transactions || [];
         const total = res.data.total_transactions || 0;
         allTxs = allTxs.concat(txs);
-        // Page processed silently
         offset += txs.length;
         hasMore = txs.length === count && offset < total;
       }
-      // Plaid data received
+      console.log(`[SYNC] Plaid returned ${allTxs.length} transactions for ${startDate} to ${endDate}`);
+      // Log first few transaction names for debugging
+      if (allTxs.length > 0) {
+        console.log(`[SYNC] Sample transactions:`, allTxs.slice(0, 5).map((t: any) => ({ name: t.name, date: t.date, amount: t.amount, account_id: t.account_id })));
+      }
     } catch (plaidErr: any) {
       const errCode = plaidErr.response?.data?.error_code || "";
       const errMsg = plaidErr.response?.data?.error_message || plaidErr.message || "Unknown Plaid error";
@@ -509,6 +512,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
 
     const newTxs = allTxs.filter((tx: any) => !existingSet.has(tx.transaction_id));
     const duplicates = allTxs.length - newTxs.length;
+    console.log(`[SYNC] ${allTxs.length} total from Plaid, ${newTxs.length} new, ${duplicates} duplicates`);
     if (newTxs.length === 0) {
       return { success: true, added: 0, message: "Todas las transacciones ya estaban sincronizadas." };
     }
@@ -517,6 +521,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     let added = 0;
     let skipped = 0;
     const journalTxs: any[] = [];
+    console.log(`[SYNC] Inserting ${newTxs.length} new transactions...`);
 
     for (const tx of newTxs) {
       try {
@@ -552,6 +557,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     }
 
     // Sync complete
+    console.log(`[SYNC] Complete: ${added} added, ${skipped} skipped, ${duplicates} duplicates`);
 
     // Step 6: Journal entries (best effort, 5s timeout)
     if (journalTxs.length > 0) {
@@ -805,15 +811,22 @@ export const bankRouter = createRouter({
     // The account selector is for balance display only. Users want to see
     // ALL their bank transactions regardless of which internal bank account
     // they were assigned to during sync.
-    const conditions: any[] = [
-      eq(bankTransactions.userId, ctx.user.id),
-      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-    ];
-
+    // Use between for robust date range comparison
     const txs = await db.select().from(bankTransactions)
-      .where(and(...conditions))
+      .where(
+        and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
+        )
+      )
       .orderBy(desc(bankTransactions.transactionDate));
+
+    console.log(`[GET_MONTH_DATA] Found ${txs.length} transactions for ${startStr} to ${endStr}, userId=${ctx.user.id}`);
+    if (txs.length === 0) {
+      // Check if user has ANY transactions at all (for debugging)
+      const allUserTxs = await db.select({ count: sql`COUNT(*)` }).from(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
+      console.log(`[GET_MONTH_DATA] User has ${allUserTxs[0]?.count ?? 0} total transactions in DB`);
+    }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
@@ -944,14 +957,13 @@ export const bankRouter = createRouter({
 
     // Get ALL user transactions for the year — do NOT filter by accountId.
     // The account selector is for balance display only.
-    const conditions: any[] = [
-      eq(bankTransactions.userId, ctx.user.id),
-      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-    ];
-
     const txs = await db.select().from(bankTransactions)
-      .where(and(...conditions));
+      .where(
+        and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
+        )
+      );
 
     let inc = 0, exp = 0;
     for (const t of txs) {
