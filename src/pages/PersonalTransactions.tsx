@@ -179,7 +179,30 @@ export default function PersonalTransactions() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ─── Mutations (MUST be before useEffect that uses them) ───
+  // Auto-sync recent transactions on page load
+  useEffect(() => {
+    if (hasBankConnected) {
+      const timer = setTimeout(() => {
+        syncRecentMutation.mutate();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasBankConnected]);
+
+  // ─── PLAID POLLING: Auto-sync every 2 minutes for new transactions ───
+  useEffect(() => {
+    if (!hasBankConnected) return;
+    const interval = setInterval(() => {
+      console.log("[Plaid Polling] Syncing transactions...");
+      syncMutation.mutate({
+        year: parseInt(year),
+        month: parseInt(month),
+      });
+    }, 2 * 60 * 1000); // Every 2 minutes
+    return () => clearInterval(interval);
+  }, [hasBankConnected, year, month]);
+
+  // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
@@ -190,6 +213,7 @@ export default function PersonalTransactions() {
     onError: (err) => toast.error(err.message),
   });
 
+  // Auto-sync RECENT transactions on page load (last 7 days)
   const syncRecentMutation = trpc.bank.syncRecent.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
@@ -199,16 +223,6 @@ export default function PersonalTransactions() {
     },
     onError: () => { /* silent - recent sync is best effort */ },
   });
-
-  // Auto-sync recent transactions on page load
-  useEffect(() => {
-    if (hasBankConnected) {
-      const timer = setTimeout(() => {
-        syncRecentMutation.mutate();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasBankConnected]);
 
   // Auto-sync when month changes (always sync for selected month)
   useEffect(() => {
@@ -221,18 +235,6 @@ export default function PersonalTransactions() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [year, month, effectiveAccountId]);
-
-  // PLAID POLLING: Auto-sync every 2 minutes for new transactions
-  useEffect(() => {
-    if (!hasBankConnected) return;
-    const interval = setInterval(() => {
-      syncMutation.mutate({
-        year: parseInt(year),
-        month: parseInt(month),
-      });
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [hasBankConnected, year, month]);
 
   const allTransactions = monthData?.transactions ?? [];
   const totalAllAccounts = allMonthData?.transactions?.length ?? 0;
