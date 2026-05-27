@@ -244,7 +244,7 @@ async function syncAllBalances() {
       }
     }
 
-    console.log(`[bg-sync] Completed in ${Date.now() - started}ms. Updated ${updatedCount} accounts for ${userCount} users.`);
+    if (updatedCount > 0) console.log(`[bg-sync] Updated ${updatedCount} accounts in ${Date.now() - started}ms`);
   } catch (e: any) {
     console.error("[bg-sync] Fatal error:", e.message);
   }
@@ -347,7 +347,7 @@ async function syncAllTransactions() {
       }
     }
 
-    console.log(`[tx-sync] Completed in ${Date.now() - started}ms. Added ${totalAdded} transactions for ${totalUsers} users.`);
+    if (totalAdded > 0) console.log(`[tx-sync] Added ${totalAdded} txs for ${totalUsers} users in ${Date.now() - started}ms`);
   } catch (e: any) {
     console.error("[tx-sync] Fatal error:", e.message);
   }

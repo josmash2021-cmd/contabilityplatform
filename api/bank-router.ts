@@ -517,14 +517,11 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
 
     const newTxs = allTxs.filter((tx: any) => !existingSet.has(tx.transaction_id));
     const duplicates = allTxs.length - newTxs.length;
-    console.log(`[SYNC] New: ${newTxs.length}, Duplicates: ${duplicates}`);
-
     if (newTxs.length === 0) {
       return { success: true, added: 0, message: "Todas las transacciones ya estaban sincronizadas." };
     }
 
     // Step 5: Insert transactions
-    console.log(`[SYNC] Inserting ${newTxs.length} transactions...`);
     let added = 0;
     let skipped = 0;
     const journalTxs: any[] = [];
@@ -540,10 +537,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txDate = tx.date ? new Date(tx.date) : new Date();
         const normalizedMerchant = normalizeMerchantName(tx.name);
 
-        // Log each transaction being inserted
-        console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
-
-        const txData = {
+        await db.insert(bankTransactions).values({
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
@@ -555,18 +549,16 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           merchantName: normalizedMerchant,
           syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-        };
-        console.log(`[SYNC] Inserting tx:`, JSON.stringify(txData));
-        await db.insert(bankTransactions).values(txData);
+        });
         added++;
         journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
       } catch (e: any) {
-        console.error(`[SYNC] Insert error for ${tx.transaction_id}: ${e.message}`);
+        console.error(`[SYNC] Insert error for "${tx.name}": ${e.message.substring(0, 100)}`);
         skipped++;
       }
     }
 
-    console.log(`[SYNC] Inserted: ${added}, Skipped: ${skipped}`);
+    console.log(`[SYNC] Added: ${added}, Skipped: ${skipped}, Total from Plaid: ${allTxs.length}`);
 
     // Step 6: Journal entries (best effort, 5s timeout)
     if (journalTxs.length > 0) {
@@ -811,14 +803,12 @@ export const bankRouter = createRouter({
     if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
     const { year, month, accountId } = input;
-    console.log(`[getMonthData] Request: user=${ctx.user.id}, year=${year}, month=${month}, accountId=${accountId || 'ALL'}`);
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
     // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    console.log(`[getMonthData] Accounts:`, userAccounts.map(a => `id=${a.id} name=${a.bankName} plaid=${a.plaidAccountId?.slice(0,8)}`));
     const primaryAccount = userAccounts[0];
 
     // Build conditions: filter by user and date range
@@ -836,11 +826,8 @@ export const bankRouter = createRouter({
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
 
-    console.log(`[getMonthData] Found ${txs.length} transactions for account ${accountId || 'ALL'}`);
-
     // Fallback: if no results with account filter, get ALL user transactions for the month
     if (txs.length === 0 && accountId) {
-      console.log(`[getMonthData] Fallback: fetching ALL transactions for user ${ctx.user.id}`);
       txs = await db.select().from(bankTransactions)
         .where(and(
           eq(bankTransactions.userId, ctx.user.id),
@@ -848,7 +835,6 @@ export const bankRouter = createRouter({
           sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
         ))
         .orderBy(desc(bankTransactions.transactionDate));
-      console.log(`[getMonthData] Fallback found ${txs.length} transactions`);
     }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
