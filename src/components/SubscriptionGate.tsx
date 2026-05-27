@@ -417,7 +417,7 @@ function SubscriptionOverlayOnly() {
                   <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
                 </div>
                 <ul className="space-y-1.5">
-                  {monthlyPlan.features.slice(0, 4).map((f) => (
+                  {monthlyPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
@@ -451,7 +451,7 @@ function SubscriptionOverlayOnly() {
                   <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
                 </div>
                 <ul className="space-y-1.5">
-                  {annualPlan.features.slice(0, 4).map((f) => (
+                  {annualPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
