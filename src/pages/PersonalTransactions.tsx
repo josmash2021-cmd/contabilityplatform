@@ -11,7 +11,7 @@ import { useSearchParams } from "react-router";
 import {
   ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
   ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Fuel, Loader2,
+  Fuel,
 } from "lucide-react";
 
 /** Same dropdown as Dashboard - avoids scroll issues */
@@ -189,19 +189,6 @@ export default function PersonalTransactions() {
     }
   }, [hasBankConnected]);
 
-  // ─── PLAID POLLING: Auto-sync every 2 minutes for new transactions ───
-  useEffect(() => {
-    if (!hasBankConnected) return;
-    const interval = setInterval(() => {
-      console.log("[Plaid Polling] Syncing transactions...");
-      syncMutation.mutate({
-        year: parseInt(year),
-        month: parseInt(month),
-      });
-    }, 2 * 60 * 1000); // Every 2 minutes
-    return () => clearInterval(interval);
-  }, [hasBankConnected, year, month]);
-
   // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
@@ -345,18 +332,6 @@ export default function PersonalTransactions() {
       {/* Controls: dropdown, month, year, sync — ABOVE filters — ONLY when bank connected */}
       {hasBankConnected && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {/* SYNC BUTTON — prominent */}
-          <button
-            onClick={() => syncMutation.mutate({ year: parseInt(year), month: parseInt(month) })}
-            disabled={syncMutation.isPending}
-            className="h-8 px-3 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors flex items-center gap-1.5 disabled:opacity-50"
-          >
-            {syncMutation.isPending ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sync...</>
-            ) : (
-              <><RefreshCw className="w-3.5 h-3.5" /> Sincronizar</>
-            )}
-          </button>
           {(accounts ?? []).length > 0 && (
             <AccountDropdown
               accounts={accounts ?? []}
@@ -495,20 +470,10 @@ export default function PersonalTransactions() {
             {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
           </div>
         ) : transactions.length === 0 ? (
-          <div className="text-center py-10 space-y-3">
+          <div className="text-center py-10">
             <Landmark className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
             <p className="text-sm text-neutral-400">No hay transacciones este mes</p>
-            <button
-              onClick={() => syncMutation.mutate({ year: parseInt(year), month: parseInt(month) })}
-              disabled={syncMutation.isPending}
-              className="h-9 px-4 bg-black text-white text-xs font-medium rounded-lg hover:bg-neutral-800 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50"
-            >
-              {syncMutation.isPending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sincronizando...</>
-              ) : (
-                <><RefreshCw className="w-3.5 h-3.5" /> Sincronizar transacciones</>
-              )}
-            </button>
+            <p className="text-xs text-neutral-400 mt-1">Presiona sincronizar para traer datos del banco</p>
           </div>
         ) : (
           transactions.map((tx: any) => (
