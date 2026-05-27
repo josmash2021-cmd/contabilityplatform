@@ -914,10 +914,10 @@ export default function Bank() {
                 ) : (
                   <div className="space-y-1">
                     {(monthData?.transactions ?? []).slice(0, 3).map((tx: any) => (
-                      <div key={tx.id} className={`flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150 ${tx.isPending ? "border-l-2 border-amber-400 bg-amber-50/30" : ""}`}>
+                      <div key={tx.id} className="flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150">
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.isPending ? "bg-amber-50" : tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
-                            {tx.isPending ? <Clock className="w-4 h-4 text-amber-500" /> : tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-500" /> : <ArrowDownRight className="w-4 h-4 text-red-500" />}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
+                            {tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-500" /> : <ArrowDownRight className="w-4 h-4 text-red-500" />}
                           </div>
                           <div>
                             <p className="text-sm text-neutral-800 font-medium">{tx.description}</p>
@@ -929,12 +929,12 @@ export default function Bank() {
                                 if (isNaN(dateObj.getTime())) return "";
                                 return dateObj.toLocaleDateString("es", { day: "2-digit", month: "short" });
                               } catch { return ""; }
-                            })()}{tx.isPending ? " · Pendiente" : ""}</p>
+                            })()}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className={`text-sm font-semibold tabular-nums ${tx.isPending ? "text-amber-600" : tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                            {tx.isPending && <span className="text-[10px] mr-1 opacity-60">(P)</span>}{tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
+                          <span className={`text-sm font-semibold tabular-nums ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                            {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
                           </span>
                           {confirmDeleteTx === tx.id ? (
                             <div className="flex items-center gap-1">

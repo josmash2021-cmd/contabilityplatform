@@ -322,7 +322,6 @@ export const bankTransactions = mysqlTable("bankTransactions", {
   plaidCategory: text("plaidCategory"),
   merchantName: varchar("merchantName", { length: 255 }),
   isDuplicate: boolean("isDuplicate").default(false),
-  isPending: boolean("isPending").default(false),
   syncStatus: mysqlEnum("syncStatus", ["pending", "synced", "error", "retrying"]).default("synced"),
   syncError: text("syncError"),
   lastSyncedAt: timestamp("lastSyncedAt"),
