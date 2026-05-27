@@ -158,4 +158,18 @@ export default function BankCategoryDetail() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover:o
+                      className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-neutral-300 hover:text-red-500"
+                      onClick={() => deleteMut.mutate({ id: tx.id })}
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </ScrollArea>
+        )}
+      </div>
+    </div>
+  );
+}
