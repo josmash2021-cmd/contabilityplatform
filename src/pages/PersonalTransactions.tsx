@@ -179,7 +179,7 @@ export default function PersonalTransactions() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ─── Mutations (MUST be before useEffect that uses them) ───
+  // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
@@ -190,36 +190,16 @@ export default function PersonalTransactions() {
     onError: (err) => toast.error(err.message),
   });
 
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        toast.success(`${data.added} transacciones nuevas encontradas`);
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-    onError: () => { /* silent - recent sync is best effort */ },
-  });
-
-  // Auto-sync recent transactions on page load
+  // Auto-sync when month changes and no data
   useEffect(() => {
-    if (hasBankConnected) {
-      const timer = setTimeout(() => {
-        syncRecentMutation.mutate();
-      }, 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasBankConnected]);
-
-  // Auto-sync when month changes (always sync for selected month)
-  useEffect(() => {
-    const timer = setTimeout(() => {
+    if (!isLoading && monthData && monthData.transactions.length === 0 && effectiveAccountId) {
       syncMutation.mutate({
         year: parseInt(year),
         month: parseInt(month),
-        accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+        accountId: parseInt(effectiveAccountId),
       });
-    }, 1500);
-    return () => clearTimeout(timer);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [year, month, effectiveAccountId]);
 
   const allTransactions = monthData?.transactions ?? [];
@@ -242,36 +222,6 @@ export default function PersonalTransactions() {
     for (const b of GAS_BRANDS) { if (n.includes(b)) return true; }
     return false;
   };
-  const GIG_PLATFORMS = [
-    "doordash","uber","uber eats","uber driver","spark driver","spark",
-    "grubhub","grub hub","instacart","insta cart","shipt","gopuff",
-    "amazon flex","lyft driver","lyft","cornershop","drizly","favor",
-    "postmates","caviar","delivery.com","eatstreet","zume","bitesquad",
-    "ninja delivery","tapingo","orderup","bringg","onfleet","route4me",
-    "roadie","citizen shipper","u ship","uship","dispatch","deliv",
-    "taskrabbit","handy","thumbtack","wonolo","shiftgig","snagajob",
-    "gigsmart","veryable","bluecrew","qwick","tilr","shiftpixy",
-    "instawork","jobstack","peopleready","labor ready","trueblue",
-    "staffmark","randstad","adecco","kelly services","manpower",
-    "express employment","robert half","kforce","teksystems",
-    "paychex","adp payroll","adp","paycom","gusto","quickbooks payroll",
-    "square payroll","zenefits","onpay","surepayroll","patriot payroll",
-    "wagepoint","homebase","tsheets","timeclock plus","paylocity",
-    "workday","dayforce","ceridian","ultipro","kronos",
-    "instapay","earnin","dailypay","branch pay","even","payactiv",
-    "flexwage","rapid paycard","netspend payroll",
-  ];
-  const isGigWork = (t: any) => {
-    const n = (t.description || "").toLowerCase();
-    // Also check merchant name
-    const m = (t.merchantName || "").toLowerCase();
-    if (t.category === "paycheck" || t.category === "income") {
-      // Check if it's from a gig platform or payroll
-      for (const p of GIG_PLATFORMS) { if (n.includes(p) || m.includes(p)) return true; }
-    }
-    for (const p of GIG_PLATFORMS) { if (n.includes(p) || m.includes(p)) return true; }
-    return false;
-  };
   const isZelleRecibido = (t: any) => t.category === "zelle_income";
   const isZelleEnviado = (t: any) => t.category === "zelle_sent";
   // EXACT category match only — no broad keyword matching
@@ -291,7 +241,6 @@ export default function PersonalTransactions() {
     filterType === "cash_withdrawal" ? allTransactions.filter((t: any) => isCashWithdrawal(t)) :
     filterType === "compras" ? allTransactions.filter((t: any) => isCompras(t)) :
     filterType === "gasolina" ? allTransactions.filter((t: any) => isGas(t)) :
-    filterType === "gig" ? allTransactions.filter((t: any) => isGigWork(t)) :
     allTransactions;
 
   const totalIncome = allTransactions
@@ -311,7 +260,7 @@ export default function PersonalTransactions() {
       <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-lg font-semibold text-black">
-            {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "compras" ? "Compras" : filterType === "gasolina" ? "Gasolina" : filterType === "gig" ? "Pagos Laborales" : "Transacciones"}
+            {filterType === "zelle_in" ? "Zelle Recibidos" : filterType === "zelle_out" ? "Zelle Enviados" : filterType === "income" ? "Ingresos" : filterType === "expense" ? "Gastos" : filterType === "cash_deposit" ? "Depósitos de Efectivo" : filterType === "cash_withdrawal" ? "Retiros de Efectivo" : filterType === "compras" ? "Compras" : filterType === "gasolina" ? "Gasolina" : "Transacciones"}
           </h1>
           <p className="text-xs text-neutral-500">
             {allTransactions.length} de {totalAllAccounts} registros
@@ -391,7 +340,6 @@ export default function PersonalTransactions() {
           { key: "cash_withdrawal", label: "Ret. Efectivo" },
           { key: "compras", label: "Compras" },
           { key: "gasolina", label: "Gasolina" },
-          { key: "gig", label: "Pagos Laborales" },
         ] as const).map((f) => (
           <button key={f.key} onClick={() => setFilterType(f.key)} className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}>
             {f.label}
