@@ -1077,27 +1077,111 @@ export const bankRouter = createRouter({
     category: z.string(),
     year: z.number().optional(),
     month: z.number().optional(),
+    accountId: z.number().optional(),
   })).query(async ({ input, ctx }) => {
     if (!ctx.user) return [];
     const db = getDb();
-    const { category, year, month } = input;
+    const { category, year, month, accountId } = input;
 
+    // Build date range if year/month provided
+    let startStr: string | null = null;
+    let endStr: string | null = null;
+    if (year && month) {
+      startStr = `${year}-${String(month).padStart(2, "0")}-01`;
+      const endDay = new Date(year, month, 0).getDate();
+      endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    }
+
+    // Try DB first
     const conditions = [
       eq(bankTransactions.userId, ctx.user.id),
       eq(bankTransactions.category, category as any),
     ];
-
-    if (year && month) {
-      const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
-      const endDay = new Date(year, month, 0).getDate();
-      const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
-      conditions.push(sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`);
-      conditions.push(sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`);
+    if (accountId) {
+      conditions.push(eq(bankTransactions.bankAccountId, accountId));
+    }
+    if (startStr && endStr) {
+      conditions.push(sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`);
     }
 
-    const txs = await db.select().from(bankTransactions)
+    let txs = await db.select().from(bankTransactions)
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
+
+    // If no DB results, fetch from Plaid
+    if (txs.length === 0) {
+      try {
+        const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+        const primaryAccount = userAccounts[0];
+        const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
+        const targetPlaidAccountId = selectedAccount?.plaidAccountId;
+
+        const client = await initPlaid();
+        if (client && primaryAccount?.plaidAccessToken && startStr && endStr) {
+          const plaidRes = await client.transactionsGet({
+            access_token: primaryAccount.plaidAccessToken,
+            start_date: startStr,
+            end_date: endStr,
+            options: { include_personal_finance_category: true, count: 500 },
+          });
+          let plaidTxs = plaidRes.data.transactions || [];
+
+          // Filter by account
+          if (targetPlaidAccountId) {
+            plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
+          }
+
+          // Filter by category
+          const { category: determinedCat } = determineTypeAndCategory(0, [category], "");
+          plaidTxs = plaidTxs.filter((pt: any) => {
+            const { category: ptCat } = determineTypeAndCategory(
+              pt.amount,
+              pt.personal_finance_category?.detailed
+                ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
+                : pt.category || [],
+              pt.name
+            );
+            return ptCat === category;
+          });
+
+          txs = plaidTxs.map((pt: any) => {
+            const plaidAmount = pt.amount;
+            const absAmount = Math.abs(plaidAmount);
+            const determined = determineTypeAndCategory(
+              plaidAmount,
+              pt.personal_finance_category?.detailed
+                ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
+                : pt.category || [],
+              pt.name
+            );
+            return {
+              id: pt.transaction_id,
+              userId: ctx.user!.id,
+              bankAccountId: null,
+              bankName: primaryAccount.bankName,
+              accountNumber: null,
+              transactionDate: pt.date ? new Date(pt.date) : new Date(),
+              transactionTime: null,
+              description: pt.name,
+              amount: String(absAmount.toFixed(2)),
+              type: determined.type as any,
+              category: determined.category as any,
+              subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
+              reference: pt.transaction_id,
+              plaidAmount: String(plaidAmount.toFixed(2)),
+              plaidTransactionId: pt.transaction_id,
+              plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
+              merchantName: pt.merchant_name || pt.name,
+              isDuplicate: false,
+              lastSyncedAt: new Date(),
+              isReconciled: false,
+              importedFrom: "plaid" as any,
+              createdAt: new Date(),
+            };
+          });
+        }
+      } catch { /* ignore Plaid errors */ }
+    }
 
     return txs;
   }),

@@ -46,13 +46,19 @@ export default function BankCategoryDetail() {
 
   const meta = getCategoryMeta(category || "");
 
+  // Get selected account ID from localStorage (set by Bank page)
+  const selectedAccountId = (() => {
+    try { return localStorage.getItem("bank_selected_account_id"); } catch { return null; }
+  })();
+  const accountIdNum = selectedAccountId ? parseInt(selectedAccountId) : undefined;
+
   const { data: allTransactions, isLoading: loadingAll } = trpc.bank.listByCategory.useQuery(
-    { category: category || "" },
+    { category: category || "", accountId: accountIdNum },
     { enabled: !!category },
   );
 
   const { data: monthTransactions, isLoading: loadingMonth } = trpc.bank.listByCategory.useQuery(
-    { category: category || "", year: parseInt(returnYear), month: parseInt(returnMonth) },
+    { category: category || "", year: parseInt(returnYear), month: parseInt(returnMonth), accountId: accountIdNum },
     { enabled: !!category && filterMonth },
   );
 
