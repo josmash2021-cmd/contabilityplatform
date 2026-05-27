@@ -543,7 +543,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         // Log each transaction being inserted
         console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
 
-        await db.insert(bankTransactions).values({
+        const txData = {
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
@@ -553,9 +553,11 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           plaidTransactionId: tx.transaction_id,
           plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
           merchantName: normalizedMerchant,
-          syncStatus: "synced", lastSyncedAt: new Date(),
+          syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-        });
+        };
+        console.log(`[SYNC] Inserting tx:`, JSON.stringify(txData));
+        await db.insert(bankTransactions).values(txData);
         added++;
         journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
       } catch (e: any) {
@@ -809,13 +811,14 @@ export const bankRouter = createRouter({
     if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
     const { year, month, accountId } = input;
+    console.log(`[getMonthData] Request: user=${ctx.user.id}, year=${year}, month=${month}, accountId=${accountId || 'ALL'}`);
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
     // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    console.log(`[getMonthData] User ${ctx.user.id} has ${userAccounts.length} accounts:`, userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,8), currentBal: a.currentBalance, lastSync: a.lastSyncedAt })));
+    console.log(`[getMonthData] Accounts:`, userAccounts.map(a => `id=${a.id} name=${a.bankName} plaid=${a.plaidAccountId?.slice(0,8)}`));
     const primaryAccount = userAccounts[0];
 
     // Build conditions: filter by user and date range
