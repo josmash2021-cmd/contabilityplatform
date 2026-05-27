@@ -872,6 +872,8 @@ export const bankRouter = createRouter({
             console.log(`[getMonthData] Filtered to ${plaidTxs.length} transactions for account ${targetPlaidAccountId}`);
           }
 
+          // Map Plaid transactions and deduplicate by transaction_id
+          const seenIds = new Set<string>();
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
             const absAmount = Math.abs(plaidAmount);
@@ -905,8 +907,12 @@ export const bankRouter = createRouter({
               isReconciled: false,
               createdAt: new Date(),
             };
+          }).filter((tx: any) => {
+            if (seenIds.has(tx.id)) return false;
+            seenIds.add(tx.id);
+            return true;
           });
-          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend`);
+          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend (deduped from ${plaidTxs.length})`);
         }
       } catch (plaidErr: any) {
         const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
@@ -1144,6 +1150,8 @@ export const bankRouter = createRouter({
             return ptCat === category;
           });
 
+          // Deduplicate by transaction_id
+          const seenIds2 = new Set<string>();
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
             const absAmount = Math.abs(plaidAmount);
@@ -1178,6 +1186,10 @@ export const bankRouter = createRouter({
               importedFrom: "plaid" as any,
               createdAt: new Date(),
             };
+          }).filter((tx: any) => {
+            if (seenIds2.has(tx.id)) return false;
+            seenIds2.add(tx.id);
+            return true;
           });
         }
       } catch { /* ignore Plaid errors */ }
