@@ -533,7 +533,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txDate = tx.date ? new Date(tx.date) : new Date();
         const normalizedMerchant = normalizeMerchantName(tx.name);
 
-        insertValues.push({
+        const insertRow: any = {
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
@@ -543,10 +543,12 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           plaidTransactionId: tx.transaction_id,
           plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
           merchantName: normalizedMerchant,
-          // isPending: tx.pending === true, // TODO: enable after db:push in Railway
-          syncStatus: "synced" as const, lastSyncedAt: new Date(),
+          lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-        });
+        };
+        // Only add syncStatus if column exists in DB
+        try { insertRow.syncStatus = "synced"; } catch { /* ignore if column missing */ }
+        insertValues.push(insertRow);
         journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
       } catch (e: any) {
         console.error(`[SYNC] Build error for "${tx.name}": ${e.message?.substring(0, 100)}`);
@@ -565,14 +567,15 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         added += chunk.length;
         console.log(`[SYNC] Chunk ${Math.floor(i / CHUNK_SIZE) + 1}: ${chunk.length} inserted`);
       } catch (e: any) {
-        console.error(`[SYNC] Chunk insert error: ${e.message?.substring(0, 200)}`);
+        console.error(`[SYNC] Chunk insert error: ${e.message || JSON.stringify(e)}`);
+        console.error(`[SYNC] Chunk error stack:`, e.stack?.substring(0, 500));
         // Fallback: try one by one for this chunk
         for (const row of chunk) {
           try {
             await db.insert(bankTransactions).values(row);
             added++;
           } catch (e2: any) {
-            console.error(`[SYNC] Single insert error for "${row.description}": ${e2.message?.substring(0, 100)}`);
+            console.error(`[SYNC] Single insert error for "${row.description?.substring(0, 50)}": ${e2.message || JSON.stringify(e2)}`);
             skipped++;
           }
         }
