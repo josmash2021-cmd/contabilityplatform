@@ -800,31 +800,19 @@ export const bankRouter = createRouter({
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
     const primaryAccount = userAccounts[0];
 
-    // Build conditions: filter by user and date range
-    // If accountId specified, also filter by that account
+    // Get ALL user transactions for the month — do NOT filter by accountId.
+    // The account selector is for balance display only. Users want to see
+    // ALL their bank transactions regardless of which internal bank account
+    // they were assigned to during sync.
     const conditions: any[] = [
       eq(bankTransactions.userId, ctx.user.id),
       sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
       sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
     ];
-    if (accountId) {
-      conditions.push(eq(bankTransactions.bankAccountId, accountId));
-    }
 
-    let txs = await db.select().from(bankTransactions)
+    const txs = await db.select().from(bankTransactions)
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
-
-    // Fallback: if no results with account filter, get ALL user transactions for the month
-    if (txs.length === 0 && accountId) {
-      txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-        ))
-        .orderBy(desc(bankTransactions.transactionDate));
-    }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
@@ -953,28 +941,16 @@ export const bankRouter = createRouter({
     const startStr = `${year}-01-01`;
     const endStr = `${year}-12-31`;
 
-    // Try with account filter first
-    let conditions: any[] = [
+    // Get ALL user transactions for the year — do NOT filter by accountId.
+    // The account selector is for balance display only.
+    const conditions: any[] = [
       eq(bankTransactions.userId, ctx.user.id),
       sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
       sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
     ];
-    if (accountId) {
-      conditions.push(eq(bankTransactions.bankAccountId, accountId));
-    }
 
-    let txs = await db.select().from(bankTransactions)
+    const txs = await db.select().from(bankTransactions)
       .where(and(...conditions));
-
-    // Fallback: if no results with account filter, get ALL user transactions for the year
-    if (txs.length === 0 && accountId) {
-      txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-        ));
-    }
 
     let inc = 0, exp = 0;
     for (const t of txs) {
