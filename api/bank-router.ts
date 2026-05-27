@@ -807,32 +807,33 @@ export const bankRouter = createRouter({
 
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
+    // Guard: no active bank = no data
     if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
     const { year, month, accountId } = input;
+    console.log(`[getMonthData] Request: user=${ctx.user.id}, year=${year}, month=${month}, accountId=${accountId || 'ALL'}`);
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
+    // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    console.log(`[getMonthData] Accounts:`, userAccounts.map(a => `id=${a.id} name=${a.bankName} plaid=${a.plaidAccountId?.slice(0,8)}`));
     const primaryAccount = userAccounts[0];
 
-    // Get ALL user transactions for the month
-    let txs: any[] = [];
-    try {
-      txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
-        ))
-        .orderBy(desc(bankTransactions.transactionDate));
-    } catch (dbErr: any) {
-      console.error(`[getMonthData] DB ERROR: ${dbErr.message}`);
-    }
+    // Get ALL user transactions for the month — do NOT filter by accountId
+    let txs = await db.select().from(bankTransactions)
+      .where(and(
+        eq(bankTransactions.userId, ctx.user.id),
+        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
+      ))
+      .orderBy(desc(bankTransactions.transactionDate));
+
+    console.log(`[getMonthData] Found ${txs.length} transactions in DB`);
 
     // If no DB results, fetch DIRECTLY from Plaid
-    let plaidError = null;
     if (txs.length === 0) {
+      console.log(`[getMonthData] No DB results — fetching from Plaid...`);
       try {
         const client = await initPlaid();
         if (client && primaryAccount?.plaidAccessToken) {
@@ -843,6 +844,7 @@ export const bankRouter = createRouter({
             options: { include_personal_finance_category: true, count: 500 },
           });
           const plaidTxs = plaidRes.data.transactions || [];
+          console.log(`[getMonthData] Plaid returned ${plaidTxs.length} transactions`);
 
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
@@ -878,21 +880,20 @@ export const bankRouter = createRouter({
               createdAt: new Date(),
             };
           });
+          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend`);
         }
       } catch (plaidErr: any) {
-        plaidError = plaidErr.message?.substring(0, 200) || String(plaidErr);
-        console.error(`[getMonthData] Plaid ERROR: ${plaidError}`);
+        console.error(`[getMonthData] Plaid error: ${plaidErr.message?.substring(0, 200)}`);
       }
 
       // Fallback: any month from DB
       if (txs.length === 0) {
-        try {
-          const allTxs = await db.select().from(bankTransactions)
-            .where(eq(bankTransactions.userId, ctx.user.id))
-            .orderBy(desc(bankTransactions.transactionDate))
-            .limit(100);
-          txs = allTxs;
-        } catch { /* ignore */ }
+        const allTxs = await db.select().from(bankTransactions)
+          .where(eq(bankTransactions.userId, ctx.user.id))
+          .orderBy(desc(bankTransactions.transactionDate))
+          .limit(100);
+        txs = allTxs;
+        console.log(`[getMonthData] Fallback: ${txs.length} transactions from other months`);
       }
     }
 
@@ -983,8 +984,6 @@ export const bankRouter = createRouter({
       liveBalance,
       lastSyncedAt,
       fromPlaid: plaidSource,
-      fallbackMode: txs.length > 0 && !plaidSource,
-      plaidError,
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
@@ -1934,4 +1933,6 @@ export const bankRouter = createRouter({
         results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
       }
     }
-    retur
+    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
+  }),
+});
