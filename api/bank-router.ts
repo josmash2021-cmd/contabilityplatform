@@ -816,30 +816,15 @@ export const bankRouter = createRouter({
     const primaryAccount = userAccounts[0];
 
     // Build conditions: always filter by user and date range
-    let conditions: any[] = [
-      eq(bankTransactions.userId, ctx.user.id),
-      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-    ];
-    // If accountId specified, also filter by that account
-    if (accountId) {
-      conditions.push(eq(bankTransactions.bankAccountId, accountId));
-    }
-
+    // NOTE: We do NOT filter by accountId anymore — show ALL transactions for the user
+    // This fixes the issue where plaidAccountId mismatches cause transactions to disappear
     let txs = await db.select().from(bankTransactions)
-      .where(and(...conditions))
+      .where(and(
+        eq(bankTransactions.userId, ctx.user.id),
+        sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+        sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+      ))
       .orderBy(desc(bankTransactions.transactionDate));
-
-    // Fallback: if no results with account filter, get ALL user transactions for the month
-    if (txs.length === 0 && accountId) {
-      txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-        ))
-        .orderBy(desc(bankTransactions.transactionDate));
-    }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
