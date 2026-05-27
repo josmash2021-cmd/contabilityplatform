@@ -484,6 +484,7 @@ export default function Bank() {
   const needsReconnect = !loadingConnection && hasBankConnected && !!account && !connection?.hasBank;
   const hasAccount = !!account;
   const balance = liveBalanceData?.balance ?? account?.currentBalance ?? "0";
+  const isFallbackMode = monthData?.fallbackMode ?? false;
 
   const handleSync = () => {
     if (accountIdNum) {
@@ -710,6 +711,16 @@ export default function Bank() {
           </AnimatedCard>
         ))}
       </div>
+
+      {/* Fallback mode indicator */}
+      {isFallbackMode && (
+        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+          <p className="text-xs text-amber-700">
+            No hay transacciones para {monthData?.monthName || "este periodo"}. Mostrando transacciones de otros meses.
+          </p>
+        </div>
+      )}
 
       {/* MAIN CONTENT GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">

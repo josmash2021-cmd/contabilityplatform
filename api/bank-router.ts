@@ -517,11 +517,10 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       return { success: true, added: 0, message: "Todas las transacciones ya estaban sincronizadas." };
     }
 
-    // Step 5: Insert transactions
-    let added = 0;
-    let skipped = 0;
+    // Step 5: Build batch insert values (mass insert for reliability)
     const journalTxs: any[] = [];
-    console.log(`[SYNC] Inserting ${newTxs.length} new transactions...`);
+    const insertValues = [];
+    let skipped = 0;
 
     for (const tx of newTxs) {
       try {
@@ -534,7 +533,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txDate = tx.date ? new Date(tx.date) : new Date();
         const normalizedMerchant = normalizeMerchantName(tx.name);
 
-        await db.insert(bankTransactions).values({
+        insertValues.push({
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
@@ -548,11 +547,35 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
         });
-        added++;
         journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
       } catch (e: any) {
-        console.error(`[SYNC] Insert error for "${tx.name}": ${e.message.substring(0, 100)}`);
+        console.error(`[SYNC] Build error for "${tx.name}": ${e.message?.substring(0, 100)}`);
         skipped++;
+      }
+    }
+
+    // Mass insert in chunks of 100 (MySQL batch limit safety)
+    let added = 0;
+    const CHUNK_SIZE = 100;
+    console.log(`[SYNC] Inserting ${insertValues.length} transactions in chunks of ${CHUNK_SIZE}...`);
+    for (let i = 0; i < insertValues.length; i += CHUNK_SIZE) {
+      const chunk = insertValues.slice(i, i + CHUNK_SIZE);
+      try {
+        await db.insert(bankTransactions).values(chunk);
+        added += chunk.length;
+        console.log(`[SYNC] Chunk ${Math.floor(i / CHUNK_SIZE) + 1}: ${chunk.length} inserted`);
+      } catch (e: any) {
+        console.error(`[SYNC] Chunk insert error: ${e.message?.substring(0, 200)}`);
+        // Fallback: try one by one for this chunk
+        for (const row of chunk) {
+          try {
+            await db.insert(bankTransactions).values(row);
+            added++;
+          } catch (e2: any) {
+            console.error(`[SYNC] Single insert error for "${row.description}": ${e2.message?.substring(0, 100)}`);
+            skipped++;
+          }
+        }
       }
     }
 
