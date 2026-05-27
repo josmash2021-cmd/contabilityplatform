@@ -1772,6 +1772,43 @@ export const bankRouter = createRouter({
     };
   }),
 
+  // ── DEBUG: Show ALL raw transactions for this user ──
+  debugTransactions: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const userId = ctx.user.id;
+
+    // Get ALL transactions for this user (no filters, no limits)
+    const allTxs = await db.select().from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .orderBy(desc(bankTransactions.transactionDate))
+      .limit(100);
+
+    // Get count by category
+    const { count } = await import("drizzle-orm");
+    const byCategory = await db.select({
+      category: bankTransactions.category,
+      count: count(),
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .groupBy(bankTransactions.category);
+
+    return {
+      totalCount: allTxs.length,
+      byCategory,
+      recentTransactions: allTxs.slice(0, 50).map((t: any) => ({
+        id: t.id,
+        description: t.description,
+        amount: t.amount,
+        type: t.type,
+        category: t.category,
+        date: t.transactionDate,
+        plaidId: t.plaidTransactionId?.slice(0, 12),
+        bankAccountId: t.bankAccountId,
+      })),
+    };
+  }),
+
   // ── DEBUG: Raw Plaid balance data for this user ──
   debugBalance: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { error: "No auth" };
