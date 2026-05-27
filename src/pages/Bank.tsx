@@ -254,14 +254,16 @@ export default function Bank() {
   const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
     { accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
   );
+  // NOTE: accountId NOT passed - shows ALL transactions for the user regardless of selected account
+  // This ensures ALL bank transactions are visible (not filtered to one account)
   const monthDataQuery = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth) }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
   );
   const { data: liveBalanceData, isLoading: loadingBalance } = liveBalanceQuery;
   const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
-  // Annual summary for the resumen del año card
+  // Annual summary - ALL transactions (not filtered by account)
   const { data: yearData } = trpc.bank.getYearData.useQuery(
-    { year: parseInt(selectedYear), accountId: accountIdNum }, { enabled: hasBankConnected && !!account }
+    { year: parseInt(selectedYear) }, { enabled: hasBankConnected && !!account }
   );
   // DEBUG: Log month selection
   useEffect(() => {
