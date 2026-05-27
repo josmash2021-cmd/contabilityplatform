@@ -74,6 +74,8 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
   const reversed = new Set<string>();
   const byKey = new Map<string, any[]>();
 
+  console.log(`[detectReversed] Checking ${transactions.length} transactions`);
+
   // Group by normalized description + date + amount (absolute value)
   for (const tx of transactions) {
     const desc = (tx.description || tx.merchantName || "").toLowerCase().trim();
@@ -87,22 +89,29 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
     byKey.get(key)!.push(tx);
   }
 
-  // Find pairs with opposite signs
-  for (const [, group] of byKey) {
+  console.log(`[detectReversed] Grouped into ${byKey.size} groups`);
+
+  // Find pairs with opposite types (expense + income = same merchant, same amount, same date)
+  for (const [key, group] of byKey) {
     if (group.length < 2) continue;
 
-    // Separate by sign
-    const negatives = group.filter((tx: any) => parseFloat(tx.amount) > 0 && tx.type === "expense");
-    const positives = group.filter((tx: any) => parseFloat(tx.amount) > 0 && tx.type === "income");
+    const expenses = group.filter((tx: any) => tx.type === "expense");
+    const incomes = group.filter((tx: any) => tx.type === "income");
 
-    // Match negatives with positives (same count = reversed)
-    const pairCount = Math.min(negatives.length, positives.length);
+    console.log(`[detectReversed] Group "${key}": ${group.length} items, ${expenses.length} expense, ${incomes.length} income`);
+
+    // Match expenses with incomes (same count = reversed pairs)
+    const pairCount = Math.min(expenses.length, incomes.length);
     for (let i = 0; i < pairCount; i++) {
-      reversed.add(negatives[i].id || negatives[i].plaidTransactionId);
-      reversed.add(positives[i].id || positives[i].plaidTransactionId);
+      const expId = expenses[i].id || expenses[i].plaidTransactionId;
+      const incId = incomes[i].id || incomes[i].plaidTransactionId;
+      reversed.add(expId);
+      reversed.add(incId);
+      console.log(`[detectReversed] Marked as reversed: ${expId} + ${incId}`);
     }
   }
 
+  console.log(`[detectReversed] Found ${reversed.size} reversed transactions`);
   return reversed;
 }
 
