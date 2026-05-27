@@ -883,7 +883,14 @@ export const bankRouter = createRouter({
           console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend`);
         }
       } catch (plaidErr: any) {
-        console.error(`[getMonthData] Plaid error: ${plaidErr.message?.substring(0, 200)}`);
+        const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
+        console.error(`[getMonthData] Plaid error: ${errMsg}`);
+        // Return error to frontend so user can see what's wrong
+        return {
+          transactions: [], income: "0", expense: "0", topExpense: "0",
+          liveBalance: "0", monthName: `${month}/${year}`,
+          plaidError: errMsg,
+        };
       }
 
       // Fallback: any month from DB
