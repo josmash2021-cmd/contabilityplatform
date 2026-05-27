@@ -225,17 +225,31 @@ export default function Bank() {
   const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
   const hasBankConnected = connection?.hasBank === true;
 
-  // getAllPlaidAccounts - same as Transactions.tsx (this works)
-  const { data: plaidAccountsData, isLoading: loadingAccounts } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
+  // getAllPlaidAccounts - fetches from Plaid live
+  const { data: plaidAccountsData, isLoading: loadingAccounts, error: plaidError } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
   const dbAccountsList = dbAccounts ?? [];
-  const allAccounts = plaidAccounts;
-  const account = plaidAccounts.find((a: any) => String(a.id) === selectedAccountId) || plaidAccounts[0] || null;
-  // Map plaidAccountId to DB id (numeric) — getLiveBalance & getMonthData need DB id
+  // Fallback: if Plaid fails, use DB accounts so dropdown still shows
+  const allAccounts = plaidAccounts.length > 0 ? plaidAccounts : dbAccountsList.map((db: any) => ({
+    id: db.id,
+    plaidAccountId: db.plaidAccountId,
+    bankName: db.bankName || db.name || "Cuenta",
+    accountType: db.type || db.accountType || "",
+    accountNumber: db.accountNumber || "",
+    currentBalance: db.currentBalance || "0",
+    currency: "USD",
+    isInDb: true,
+  }));
+  const account = allAccounts.find((a: any) => String(a.id) === selectedAccountId) || allAccounts[0] || null;
+  // Map to DB id (numeric) — getLiveBalance & getMonthData need DB id
   const selectedPlaidId = account?.id ?? null;
-  const dbAccountMatch = selectedPlaidId ? dbAccountsList.find((db: any) => db.plaidAccountId === selectedPlaidId) : null;
-  const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : undefined;
+  // Try to find DB account by plaidAccountId first, then by id directly
+  const dbAccountMatch = selectedPlaidId 
+    ? (dbAccountsList.find((db: any) => db.plaidAccountId === account?.plaidAccountId) 
+       || dbAccountsList.find((db: any) => String(db.id) === String(selectedPlaidId)))
+    : null;
+  const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : (account?.id ? Number(account.id) : undefined);
 
   const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
     { accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
