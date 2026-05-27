@@ -833,8 +833,11 @@ export const bankRouter = createRouter({
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
 
+    console.log(`[getMonthData] Found ${txs.length} transactions for account ${accountId || 'ALL'}`);
+
     // Fallback: if no results with account filter, get ALL user transactions for the month
     if (txs.length === 0 && accountId) {
+      console.log(`[getMonthData] Fallback: fetching ALL transactions for user ${ctx.user.id}`);
       txs = await db.select().from(bankTransactions)
         .where(and(
           eq(bankTransactions.userId, ctx.user.id),
@@ -842,6 +845,7 @@ export const bankRouter = createRouter({
           sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
         ))
         .orderBy(desc(bankTransactions.transactionDate));
+      console.log(`[getMonthData] Fallback found ${txs.length} transactions`);
     }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
