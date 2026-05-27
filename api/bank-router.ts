@@ -533,7 +533,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txDate = tx.date ? new Date(tx.date) : new Date();
         const normalizedMerchant = normalizeMerchantName(tx.name);
 
-        const insertRow: any = {
+        insertValues.push({
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
@@ -545,10 +545,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           merchantName: normalizedMerchant,
           lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-        };
-        // Only add syncStatus if column exists in DB
-        try { insertRow.syncStatus = "synced"; } catch { /* ignore if column missing */ }
-        insertValues.push(insertRow);
+        } as any);
         journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
       } catch (e: any) {
         console.error(`[SYNC] Build error for "${tx.name}": ${e.message?.substring(0, 100)}`);
@@ -556,30 +553,28 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
     }
 
-    // Insert using RAW mysql2 connection (bypass Drizzle ORM to avoid schema mismatch)
+    // Mass insert with logging
     let added = 0;
-    console.log(`[SYNC] Inserting ${insertValues.length} transactions...`);
-    const mysqlPool = (db as any).$client as import("mysql2/promise").Pool;
-    for (const row of insertValues) {
+    const CHUNK_SIZE = 50;
+    console.log(`[SYNC] Inserting ${insertValues.length} transactions in chunks of ${CHUNK_SIZE}...`);
+    for (let i = 0; i < insertValues.length; i += CHUNK_SIZE) {
+      const chunk = insertValues.slice(i, i + CHUNK_SIZE);
       try {
-        const [result] = await mysqlPool.execute(
-          `INSERT INTO bankTransactions
-            (userId, bankAccountId, bankName, accountNumber, transactionDate, transactionTime,
-             description, amount, type, category, subcategory, reference, plaidAmount,
-             plaidTransactionId, plaidCategory, merchantName, isDuplicate,
-             lastSyncedAt, isReconciled, createdAt)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [row.userId, row.bankAccountId, row.bankName, row.accountNumber,
-           row.transactionDate, row.transactionDate,
-           row.description, row.amount, row.type, row.category, row.subcategory,
-           row.reference, row.plaidAmount, row.plaidTransactionId, row.plaidCategory,
-           row.merchantName, row.isDuplicate ?? false,
-           row.lastSyncedAt, row.isReconciled ?? false, new Date()]
-        );
-        added++;
+        await db.insert(bankTransactions).values(chunk as any);
+        added += chunk.length;
+        console.log(`[SYNC] Chunk ${Math.floor(i / CHUNK_SIZE) + 1}: ${chunk.length} inserted`);
       } catch (e: any) {
-        console.error(`[SYNC] Insert error for "${row.description?.substring(0, 40)}": ${e.message?.substring(0, 300)}`);
-        skipped++;
+        console.error(`[SYNC] Chunk error: ${e.message?.substring(0, 300)}`);
+        // Fallback: one by one
+        for (const row of chunk) {
+          try {
+            await db.insert(bankTransactions).values(row as any);
+            added++;
+          } catch (e2: any) {
+            console.error(`[SYNC] Single error: ${e2.message?.substring(0, 200)}`);
+            skipped++;
+          }
+        }
       }
     }
     console.log(`[SYNC] Done: ${added} inserted, ${skipped} skipped`);
@@ -875,11 +870,9 @@ export const bankRouter = createRouter({
     console.log(`[GET_MONTH_DATA] Found ${txs.length} transactions in DB for ${startStr} to ${endStr}`);
 
     let fallbackMode = false;
-    let fromPlaidDirect = false;
 
     if (txs.length === 0) {
-      // NO DB transactions — fetch DIRECTLY from Plaid (live, no DB needed)
-      console.log(`[GET_MONTH_DATA] No DB transactions — fetching directly from Plaid...`);
+      // No DB transactions — try fetching DIRECTLY from Plaid
       try {
         const client = await initPlaid();
         if (client && primaryAccount?.plaidAccessToken) {
@@ -890,12 +883,14 @@ export const bankRouter = createRouter({
             options: { include_personal_finance_category: true, count: 500 },
           });
           const plaidTxs = plaidRes.data.transactions || [];
-          console.log(`[GET_MONTH_DATA] Plaid returned ${plaidTxs.length} transactions directly`);
+          console.log(`[GET_MONTH_DATA] Plaid direct: ${plaidTxs.length} transactions`);
 
-          // Convert Plaid format to DB format for frontend compatibility
+          // Convert Plaid format to match DB schema for frontend
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
-            const { type, category } = determineTypeAndCategory(
+            const absAmount = Math.abs(plaidAmount);
+            const isIncome = plaidAmount < 0;
+            const determined = determineTypeAndCategory(
               plaidAmount,
               pt.personal_finance_category?.detailed
                 ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
@@ -903,7 +898,7 @@ export const bankRouter = createRouter({
               pt.name
             );
             return {
-              id: pt.transaction_id, // use plaid ID as temp ID
+              id: pt.transaction_id,
               userId: ctx.user!.id,
               bankAccountId: null,
               bankName: primaryAccount.bankName,
@@ -911,9 +906,9 @@ export const bankRouter = createRouter({
               transactionDate: pt.date ? new Date(pt.date) : new Date(),
               transactionTime: null,
               description: pt.name,
-              amount: String(Math.abs(plaidAmount).toFixed(2)),
-              type: type as any,
-              category: category as any,
+              amount: String(absAmount.toFixed(2)),
+              type: determined.type as any,
+              category: determined.category as any,
               subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
               reference: pt.transaction_id,
               plaidAmount: String(plaidAmount.toFixed(2)),
@@ -921,30 +916,25 @@ export const bankRouter = createRouter({
               plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
               merchantName: pt.merchant_name || pt.name,
               isDuplicate: false,
-              syncStatus: "synced" as any,
-              syncError: null,
               lastSyncedAt: new Date(),
-              journalEntryId: null,
               isReconciled: false,
-              importedFrom: "plaid_direct" as any,
               createdAt: new Date(),
             };
           });
-          fromPlaidDirect = true;
           fallbackMode = true;
         }
       } catch (plaidErr: any) {
-        console.error(`[GET_MONTH_DATA] Plaid direct fetch error: ${plaidErr.message?.substring(0, 200)}`);
+        console.error(`[GET_MONTH_DATA] Plaid direct error: ${plaidErr.message?.substring(0, 200)}`);
       }
 
-      // If Plaid direct also failed, try DB fallback (any month)
+      // If Plaid also failed, try DB fallback (any month)
       if (txs.length === 0) {
         const allUserTxs = await db.select().from(bankTransactions)
           .where(eq(bankTransactions.userId, ctx.user.id))
           .orderBy(desc(bankTransactions.transactionDate))
           .limit(100);
         if (allUserTxs.length > 0) {
-          console.log(`[GET_MONTH_DATA] Fallback: returning ${allUserTxs.length} transactions from other months`);
+          console.log(`[GET_MONTH_DATA] Fallback DB: ${allUserTxs.length} transactions from other months`);
           txs = allUserTxs;
           fallbackMode = true;
         }
@@ -1034,8 +1024,7 @@ export const bankRouter = createRouter({
       topExpense: txs.length > 0 ? String(Math.max(...txs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
       lastSyncedAt,
-      fromPlaid: plaidSource || fromPlaidDirect,
-      fromPlaidDirect,
+      fromPlaid: plaidSource,
       monthName: `${monthNames[month]} ${year}`,
       fallbackMode,
     };
@@ -1854,4 +1843,74 @@ export const bankRouter = createRouter({
     // Get all accounts
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
 
-    // Get transaction count
+    // Get transaction counts per account
+    const txCounts = await db.select({
+      bankAccountId: bankTransactions.bankAccountId,
+      count: count(),
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .groupBy(bankTransactions.bankAccountId);
+
+    // Get total transactions
+    const allTxs = await db.select({
+      id: bankTransactions.id,
+      description: bankTransactions.description,
+      amount: bankTransactions.amount,
+      transactionDate: bankTransactions.transactionDate,
+      bankAccountId: bankTransactions.bankAccountId,
+      plaidTransactionId: bankTransactions.plaidTransactionId,
+    }).from(bankTransactions)
+      .where(eq(bankTransactions.userId, userId))
+      .orderBy(desc(bankTransactions.transactionDate))
+      .limit(20);
+
+    return {
+      accounts: userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,12) })),
+      transactionCounts: txCounts,
+      totalTransactions: txCounts.reduce((s: number, t: any) => s + (t.count || 0), 0),
+      recentTransactions: allTxs,
+    };
+  }),
+
+  // ── DEBUG: Raw Plaid balance data for this user ──
+  debugBalance: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { error: "No auth" };
+    const db = getDb();
+    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    if (userAccounts.length === 0) return { error: "No accounts" };
+
+    const results = [];
+    for (const acc of userAccounts) {
+      if (!acc.plaidAccessToken) { results.push({ account: acc.bankName, error: "No access token" }); continue; }
+      try {
+        const client = await initPlaid();
+        if (!client) { results.push({ account: acc.bankName, error: "Plaid not initialized" }); continue; }
+        const res = await client.accountsGet({ access_token: acc.plaidAccessToken });
+        const plaidAccounts = (res.data.accounts || []).map((a: any) => ({
+          name: a.name,
+          account_id: a.account_id,
+          mask: a.mask,
+          type: a.type,
+          subtype: a.subtype,
+          balances: {
+            available: a.balances.available,
+            current: a.balances.current,
+            limit: a.balances.limit,
+            iso_currency_code: a.balances.iso_currency_code,
+          },
+        }));
+        results.push({
+          dbAccountId: acc.id,
+          dbBankName: acc.bankName,
+          dbPlaidAccountId: acc.plaidAccountId,
+          dbBalance: acc.currentBalance,
+          dbLastSync: acc.lastSyncedAt,
+          plaidAccounts,
+        });
+      } catch (e: any) {
+        results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
+      }
+    }
+    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
+  }),
+});                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    
