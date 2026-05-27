@@ -3,6 +3,7 @@ import { trpc } from "@/providers/trpc";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAutoSync } from "@/hooks/useAutoSync";
+import { SubscriptionGate } from "./SubscriptionGate";
 
 interface PersonalBankGateProps {
   children: React.ReactNode;
@@ -58,9 +59,13 @@ export function PersonalBankGate({ children }: PersonalBankGateProps) {
     );
   }
 
-  // Bank connected - show the actual page content + auto-sync
+  // Bank connected - show the actual page content + auto-sync + subscription gate
   if (isBankConnected) {
-    return <AutoSyncWrapper>{children}</AutoSyncWrapper>;
+    return (
+      <AutoSyncWrapper>
+        <SubscriptionGate>{children}</SubscriptionGate>
+      </AutoSyncWrapper>
+    );
   }
 
   // No bank connected - show overlay
