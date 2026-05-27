@@ -130,6 +130,12 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (isZelleSent) return { type: "expense", category: "zelle_sent" };
   if (isZelleRecv) return { type: "income", category: "zelle_income" };
 
+  // Incoming money transfers (MONEY TRANSFER FROM, payment FROM someone, etc.)
+  // This detects when money is sent TO the user (e.g. "MONEY TRANSFER AUTHORIZED ON 05/24 FROM DoorDash")
+  const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
+  const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
+  if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
+
   // Plaid categories
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";
   const detailed = plaidCategories?.[1]?.toUpperCase() || "";
