@@ -159,6 +159,27 @@ export default function PersonalDashboard() {
     return () => clearTimeout(timer);
   }, []);
 
+  // ─── Auto-sync when month changes ───
+  const syncMutation = trpc.bank.syncTransactions.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        utils.bank.getMonthData.invalidate();
+      }
+    },
+    onError: () => { /* silent */ },
+  });
+
+  // Sync selected month when it changes (for past months)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      syncMutation.mutate({
+        year: parseInt(selectedYear),
+        month: parseInt(selectedMonth),
+      });
+    }, 1500);
+    return () => clearTimeout(timer);
+  }, [selectedYear, selectedMonth]);
+
   // ─── Accounts from DB ───
   const { data: dbAccounts, isLoading: accountsLoading } = trpc.bank.listAccounts.useQuery(undefined, {
     refetchInterval: 30000, // Live balance refresh every 30s

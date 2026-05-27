@@ -211,16 +211,16 @@ export default function PersonalTransactions() {
     onError: () => { /* silent - recent sync is best effort */ },
   });
 
-  // Auto-sync when month changes and no data
+  // Auto-sync when month changes (always sync for selected month)
   useEffect(() => {
-    if (!isLoading && monthData && monthData.transactions.length === 0 && effectiveAccountId) {
+    const timer = setTimeout(() => {
       syncMutation.mutate({
         year: parseInt(year),
         month: parseInt(month),
-        accountId: parseInt(effectiveAccountId),
+        accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
       });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [year, month, effectiveAccountId]);
 
   const allTransactions = monthData?.transactions ?? [];
