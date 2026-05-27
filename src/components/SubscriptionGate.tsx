@@ -146,7 +146,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     onSuccess: (data) => {
       if (data.success && data.url) {
         window.location.href = data.url;
+      } else {
+        alert(data.error || "Error al crear la sesion de pago");
       }
+    },
+    onError: (err) => {
+      alert("Error: " + err.message);
     },
   });
 
@@ -371,7 +376,14 @@ function SubscriptionOverlayOnly() {
 
   const checkoutMut = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
-      if (data.success && data.url) window.location.href = data.url;
+      if (data.success && data.url) {
+        window.location.href = data.url;
+      } else {
+        alert(data.error || "Error al crear la sesion de pago");
+      }
+    },
+    onError: (err) => {
+      alert("Error: " + err.message);
     },
   });
 
