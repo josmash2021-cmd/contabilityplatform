@@ -539,6 +539,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           plaidTransactionId: tx.transaction_id,
           plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
           merchantName: normalizedMerchant,
+          isPending: tx.pending === true,
           syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
         });
