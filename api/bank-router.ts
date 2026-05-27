@@ -827,14 +827,18 @@ export const bankRouter = createRouter({
       ))
       .orderBy(desc(bankTransactions.transactionDate));
 
-    console.log(`[getMonthData] Found ${txs.length} transactions in DB`);
+    console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
 
     // If no DB results, fetch DIRECTLY from Plaid
+    console.log(`[getMonthData] STEP 2: checking if need Plaid fetch (txs.length=${txs.length})`);
     if (txs.length === 0) {
-      console.log(`[getMonthData] No DB results — fetching from Plaid...`);
+      console.log(`[getMonthData] STEP 3: No DB results — fetching from Plaid...`);
+      console.log(`[getMonthData] STEP 3b: primaryAccount.token=${primaryAccount?.plaidAccessToken ? 'EXISTS' : 'MISSING'}`);
       try {
         const client = await initPlaid();
+        console.log(`[getMonthData] STEP 4: Plaid client=${client ? 'READY' : 'NULL'}`);
         if (client && primaryAccount?.plaidAccessToken) {
+          console.log(`[getMonthData] STEP 5: Calling transactionsGet...`);
           const plaidRes = await client.transactionsGet({
             access_token: primaryAccount.plaidAccessToken,
             start_date: startStr,
@@ -842,7 +846,7 @@ export const bankRouter = createRouter({
             options: { include_personal_finance_category: true, count: 500 },
           });
           const plaidTxs = plaidRes.data.transactions || [];
-          console.log(`[getMonthData] Plaid returned ${plaidTxs.length} transactions`);
+          console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} transactions`);
 
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
