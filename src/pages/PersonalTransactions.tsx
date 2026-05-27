@@ -11,7 +11,7 @@ import { useSearchParams } from "react-router";
 import {
   ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
   ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Fuel,
+  Fuel, Loader2,
 } from "lucide-react";
 
 /** Same dropdown as Dashboard - avoids scroll issues */
