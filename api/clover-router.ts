@@ -7,9 +7,11 @@ import { eq, desc, and, sql } from "drizzle-orm";
 
 // ─── Clover API Client ───
 const CLOVER_BASE =
-  process.env.CLOVER_ENV === "sandbox"
-    ? "https://apisandbox.dev.clover.com/v3"
-    : "https://api.clover.com/v3";
+  process.env.CLOVER_ENV === "production"
+    ? "https://api.clover.com/v3"
+    : process.env.CLOVER_ENV === "sandbox"
+      ? "https://apisandbox.dev.clover.com/v3"
+      : "https://apisandbox.dev.clover.com/v3";
 
 async function cloverRequest(endpoint: string, accessToken: string, method = "GET", body?: any) {
   // Clover private tokens use ?access_token= query param, not Bearer header

@@ -320,16 +320,18 @@ export default function Bank() {
   // Single query for month data (includes transactions, income, expense, liveBalance)
   // refetchInterval: 5 min to avoid Plaid rate limits. Data is always served from DB;
   // Plaid is only used in the background server job.
+  // accountIdNum is included so data refetches when user switches accounts.
   const monthDataQuery = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
-    { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 5 * 60 * 1000 }
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum },
+    { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 5 * 60 * 1000 }
   );
   const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
   // Balance comes from monthData (which queries DB, not Plaid directly)
   const liveBalanceData = { balance: monthData?.liveBalance ?? account?.currentBalance ?? "0" };
-  // Annual summary - ALL transactions (not filtered by account)
+  // Annual summary - filtered by selected account
   const { data: yearData } = trpc.bank.getYearData.useQuery(
-    { year: parseInt(selectedYear) }, { enabled: hasBankConnected && !!account }
+    { year: parseInt(selectedYear), accountId: accountIdNum },
+    { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
   const { data: diagnosis, isLoading: loadingDiagnosis, refetch: refetchDiagnosis } = trpc.bank.diagnoseMonth.useQuery(
     { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
@@ -417,10 +419,12 @@ export default function Bank() {
 
   // ─── useEffect hooks AFTER all useMutation declarations ───
 
-  // Auto-sync ONCE on page load — NEVER re-run on dependency changes
+  // Auto-sync ONCE when accountIdNum is ready — fires when accountIdNum
+  // changes from undefined to a value, but autoSyncFiredRef prevents
+  // re-running when user switches accounts later.
   useEffect(() => {
     if (!hasBankConnected || !account || autoSyncFiredRef.current) return;
-    if (!accountIdNum) return;
+    if (!accountIdNum) return; // Wait for accountIdNum to be ready
 
     autoSyncFiredRef.current = true;
     const timer = setTimeout(() => {
@@ -432,7 +436,7 @@ export default function Bank() {
     }, 1500);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // <-- Empty deps = run once on mount only
+  }, [accountIdNum]); // Trigger when accountIdNum becomes ready
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
