@@ -13,8 +13,8 @@ interface SubscriptionGateProps {
 // ── Business Plans ──
 const BIZ_MONTHLY = {
   name: "Mensual",
-  price: "$1",
-  originalPrice: "$80",
+  price: "$80",
+  originalPrice: "$120",
   period: "/mes",
   badge: "New Plan",
   features: [

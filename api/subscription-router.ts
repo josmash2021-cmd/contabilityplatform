@@ -20,8 +20,8 @@ function getAppUrl() {
 }
 
 const PLAN_PRICES = {
-  monthly: { amount: 100, name: "AI AETHEL - Mensual" },
-  annual: { amount: 80000, name: "AI AETHEL - Anual" },
+  monthly: { amount: 8000, name: "AI AETHEL - Mensual" },  // $80 for business monthly
+  annual: { amount: 80000, name: "AI AETHEL - Anual" },     // $800 for business annual
 };
 
 const STRIPE_MONTHLY_LOOKUP = "contability_monthly_80";
