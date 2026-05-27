@@ -189,19 +189,6 @@ export default function PersonalTransactions() {
     }
   }, [hasBankConnected]);
 
-  // ─── PLAID POLLING: Auto-sync every 2 minutes for new transactions ───
-  useEffect(() => {
-    if (!hasBankConnected) return;
-    const interval = setInterval(() => {
-      console.log("[Plaid Polling] Syncing transactions...");
-      syncMutation.mutate({
-        year: parseInt(year),
-        month: parseInt(month),
-      });
-    }, 2 * 60 * 1000); // Every 2 minutes
-    return () => clearInterval(interval);
-  }, [hasBankConnected, year, month]);
-
   // Auto-sync on load if no transactions
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
