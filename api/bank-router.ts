@@ -840,42 +840,49 @@ export const bankRouter = createRouter({
   }),
 
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
+    console.log(`[GET_MONTH_DATA] START user=${ctx.user?.id}, year=${input.year}, month=${input.month}`);
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     // Guard: no active bank = no data
-    if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
+    if (!await hasActiveBank(ctx.user.id)) { console.log('[GET_MONTH_DATA] No active bank'); return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" }; }
     const db = getDb();
     const { year, month, accountId } = input;
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    console.log(`[GET_MONTH_DATA] Date range: ${startStr} to ${endStr}`);
 
     // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    console.log(`[GET_MONTH_DATA] Found ${userAccounts.length} accounts`);
     const primaryAccount = userAccounts[0];
+    console.log(`[GET_MONTH_DATA] Primary account: ${primaryAccount?.bankName}, token: ${primaryAccount?.plaidAccessToken ? 'YES' : 'NO'}`);
 
-    // Get ALL user transactions for the month — do NOT filter by accountId.
-    // The account selector is for balance display only. Users want to see
-    // ALL their bank transactions regardless of which internal bank account
-    // they were assigned to during sync.
-    // Use between for robust date range comparison
-    let txs = await db.select().from(bankTransactions)
-      .where(
-        and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
-        )
-      )
-      .orderBy(desc(bankTransactions.transactionDate));
-
-    console.log(`[GET_MONTH_DATA] Found ${txs.length} transactions in DB for ${startStr} to ${endStr}`);
-
+    // Try DB first, but catch errors
+    let txs: any[] = [];
     let fallbackMode = false;
+    try {
+      txs = await db.select().from(bankTransactions)
+        .where(
+          and(
+            eq(bankTransactions.userId, ctx.user.id),
+            sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
+          )
+        )
+        .orderBy(desc(bankTransactions.transactionDate));
+      console.log(`[GET_MONTH_DATA] DB query returned ${txs.length} transactions`);
+    } catch (dbErr: any) {
+      console.error(`[GET_MONTH_DATA] DB query ERROR: ${dbErr.message}`);
+      txs = [];
+    }
 
     if (txs.length === 0) {
+      console.log(`[GET_MONTH_DATA] No DB results — attempting Plaid direct fetch...`);
       // No DB transactions — try fetching DIRECTLY from Plaid
       try {
         const client = await initPlaid();
+        console.log(`[GET_MONTH_DATA] Plaid client: ${client ? 'READY' : 'NULL'}`);
         if (client && primaryAccount?.plaidAccessToken) {
+          console.log(`[GET_MONTH_DATA] Calling Plaid transactionsGet...`);
           const plaidRes = await client.transactionsGet({
             access_token: primaryAccount.plaidAccessToken,
             start_date: startStr,
@@ -883,13 +890,12 @@ export const bankRouter = createRouter({
             options: { include_personal_finance_category: true, count: 500 },
           });
           const plaidTxs = plaidRes.data.transactions || [];
-          console.log(`[GET_MONTH_DATA] Plaid direct: ${plaidTxs.length} transactions`);
+          console.log(`[GET_MONTH_DATA] Plaid returned ${plaidTxs.length} transactions`);
 
           // Convert Plaid format to match DB schema for frontend
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
             const absAmount = Math.abs(plaidAmount);
-            const isIncome = plaidAmount < 0;
             const determined = determineTypeAndCategory(
               plaidAmount,
               pt.personal_finance_category?.detailed
@@ -922,21 +928,32 @@ export const bankRouter = createRouter({
             };
           });
           fallbackMode = true;
+          console.log(`[GET_MONTH_DATA] Converted ${txs.length} Plaid transactions for frontend`);
+        } else {
+          console.log(`[GET_MONTH_DATA] Cannot fetch from Plaid: client=${!!client}, token=${!!primaryAccount?.plaidAccessToken}`);
         }
       } catch (plaidErr: any) {
-        console.error(`[GET_MONTH_DATA] Plaid direct error: ${plaidErr.message?.substring(0, 200)}`);
+        console.error(`[GET_MONTH_DATA] Plaid direct ERROR: ${plaidErr.message || plaidErr}`);
+        console.error(`[GET_MONTH_DATA] Plaid error code: ${plaidErr.response?.data?.error_code || 'N/A'}`);
       }
 
       // If Plaid also failed, try DB fallback (any month)
       if (txs.length === 0) {
-        const allUserTxs = await db.select().from(bankTransactions)
-          .where(eq(bankTransactions.userId, ctx.user.id))
-          .orderBy(desc(bankTransactions.transactionDate))
-          .limit(100);
-        if (allUserTxs.length > 0) {
-          console.log(`[GET_MONTH_DATA] Fallback DB: ${allUserTxs.length} transactions from other months`);
-          txs = allUserTxs;
-          fallbackMode = true;
+        console.log(`[GET_MONTH_DATA] Trying DB fallback (any month)...`);
+        try {
+          const allUserTxs = await db.select().from(bankTransactions)
+            .where(eq(bankTransactions.userId, ctx.user.id))
+            .orderBy(desc(bankTransactions.transactionDate))
+            .limit(100);
+          if (allUserTxs.length > 0) {
+            console.log(`[GET_MONTH_DATA] Fallback DB: ${allUserTxs.length} transactions from other months`);
+            txs = allUserTxs;
+            fallbackMode = true;
+          } else {
+            console.log(`[GET_MONTH_DATA] No transactions in DB at all`);
+          }
+        } catch (fallbackErr: any) {
+          console.error(`[GET_MONTH_DATA] Fallback DB error: ${fallbackErr.message}`);
         }
       }
     }
