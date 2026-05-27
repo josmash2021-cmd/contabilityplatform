@@ -34,30 +34,22 @@ export async function authenticateLocalRequest(headers: Headers) {
   const cookies = cookie.parse(headers.get("cookie") || "");
   const cookieToken = cookies[LOCAL_AUTH_COOKIE];
   if (cookieToken) {
-    console.log("[auth] Found cookie token, verifying...");
     const claim = await verifyLocalToken(cookieToken);
     if (claim && claim.sub) {
-      console.log("[auth] Cookie token valid, userId:", claim.sub);
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.id, Number(claim.sub))).limit(1);
       if (rows[0]) return rows[0];
-    } else {
-      console.log("[auth] Cookie token invalid or expired");
     }
   }
 
   // Fallback: Check x-auth-token header (for migration/compatibility)
   const authHeader = headers.get("x-auth-token");
   if (authHeader) {
-    console.log("[auth] Found x-auth-token header, verifying...");
     const claim = await verifyLocalToken(authHeader);
     if (claim && claim.sub) {
-      console.log("[auth] Header token valid, userId:", claim.sub);
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.id, Number(claim.sub))).limit(1);
       if (rows[0]) return rows[0];
-    } else {
-      console.log("[auth] Header token invalid or expired");
     }
   }
 

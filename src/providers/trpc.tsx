@@ -26,13 +26,10 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
           url: "/api/trpc",
           transformer: superjson,
           headers() {
-            // Always read token from localStorage on each request
             const token = localStorage.getItem("auth_token");
             if (token) {
-              console.log("[trpc] Sending x-auth-token header");
               return { "x-auth-token": token };
             }
-            console.log("[trpc] No auth_token in localStorage");
             return {};
           },
         }),

@@ -297,7 +297,7 @@ export const subscriptionRouter = createRouter({
 
           // If the best sub is different from what's in DB, update DB
           if (bestSub.id !== sub.stripeSubscriptionId) {
-            console.log(`[status] Found better subscription ${bestSub.status}: ${bestSub.id} (was ${sub.stripeSubscriptionId})`);
+
             // Delete old records for this user and insert the correct one
             await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
             await db.insert(subscriptions).values({
@@ -326,7 +326,7 @@ export const subscriptionRouter = createRouter({
 
           // If broken (past_due/unpaid/incomplete), auto-recover
           if (!isActive && (bestSub.status === "past_due" || bestSub.status === "unpaid" || bestSub.status === "incomplete")) {
-            console.log(`[status] Subscription ${bestSub.id} is ${bestSub.status} — auto-recovering...`);
+
             const recovered = await recoverSubscription(db, stripe, userId);
             if (recovered.success && recovered.finalSub) {
               const recStatus = recovered.finalSub.status;
@@ -811,117 +811,6 @@ export const subscriptionRouter = createRouter({
     }
   }),
 
-  // ── Get payment status from Stripe ──
-  paymentStatus: authedQuery.query(async ({ ctx }) => {
-    if (!ctx.user) return { error: "No auth" };
-    const db = getDb();
-    const stripe = getStripe();
-    const userId = Number(ctx.user.id);
-
-    try {
-      // Find subscription
-      const subs = await db.select().from(subscriptions)
-        .where(eq(subscriptions.userId, userId))
-        .orderBy(desc(subscriptions.createdAt))
-        .limit(1);
-      const sub = subs[0];
-      if (!sub?.stripeSubscriptionId) return { error: "No subscription" };
-
-      // Get subscription from Stripe
-      const stripeSub = await stripe.subscriptions.retrieve(sub.stripeSubscriptionId) as any;
-
-      // Get latest invoice
-      let latestInvoice: any = null;
-      if (stripeSub.latest_invoice) {
-        latestInvoice = await stripe.invoices.retrieve(stripeSub.latest_invoice as string);
-      }
-
-      // Get payment intent if exists
-      let paymentIntent: any = null;
-      if (latestInvoice?.payment_intent) {
-        paymentIntent = await stripe.paymentIntents.retrieve(latestInvoice.payment_intent as string);
-      }
-
-      return {
-        subscriptionStatus: stripeSub.status,
-        plan: sub.plan,
-        amountDue: latestInvoice?.amount_due ? (latestInvoice.amount_due / 100).toFixed(2) : null,
-        amountPaid: latestInvoice?.amount_paid ? (latestInvoice.amount_paid / 100).toFixed(2) : null,
-        invoiceStatus: latestInvoice?.status,
-        paymentStatus: paymentIntent?.status,
-        paymentMethod: paymentIntent?.payment_method_types?.[0] || null,
-        chargeStatus: paymentIntent?.charges?.data?.[0]?.status || null,
-        receiptUrl: paymentIntent?.charges?.data?.[0]?.receipt_url || null,
-        failureMessage: paymentIntent?.last_payment_error?.message || null,
-        created: stripeSub.created ? new Date(stripeSub.created * 1000).toISOString() : null,
-      };
-    } catch (err: any) {
-      return { error: err.message };
-    }
-  }),
-
-  // ── DEBUG: Show raw DB + Stripe data for this user ──
-  debug: authedQuery.query(async ({ ctx }) => {
-    if (!ctx.user) return { error: "No auth" };
-    const db = getDb();
-    const stripe = getStripe();
-    const userId = Number(ctx.user.id);
-    const userEmail = ctx.user.email;
-
-    // 1. DB contents
-    const dbSubs = await db.select().from(subscriptions)
-      .where(eq(subscriptions.userId, userId));
-    const dbPayments = await db.select().from(subscriptionPayments)
-      .where(eq(subscriptionPayments.userId, userId));
-
-    // 2. Search Stripe by all methods
-    let stripeCustomer: any = null;
-    let stripeSubs: any = [];
-    try {
-      const allCusts = await stripe.customers.list({ limit: 100 });
-      stripeCustomer = allCusts.data.find((c: any) =>
-        c.metadata?.platformUserId === String(userId) ||
-        (userEmail && c.email === userEmail)
-      );
-
-      if (stripeCustomer) {
-        const subsList = await stripe.subscriptions.list({
-          customer: stripeCustomer.id,
-          status: "all",
-          limit: 5,
-        });
-        stripeSubs = subsList.data.map((s: any) => ({
-          id: s.id,
-          status: s.status,
-          plan: s.items?.data?.[0]?.price?.unit_amount,
-          metadata: s.metadata,
-        }));
-      }
-    } catch (err: any) {
-      return {
-        userId,
-        userIdType: typeof userId,
-        userEmail,
-        dbSubs,
-        dbPayments,
-        stripeError: err.message,
-      };
-    }
-
-    return {
-      userId,
-      userIdType: typeof userId,
-      userEmail,
-      dbSubs: dbSubs.map((s: any) => ({ id: s.id, plan: s.plan, status: s.status, stripeSubId: s.stripeSubscriptionId, stripeCustId: s.stripeCustomerId })),
-      dbPayments: dbPayments.map((p: any) => ({ id: p.id, plan: p.plan, amount: p.amount, status: p.status })),
-      stripeFound: !!stripeCustomer,
-      stripeCustomerId: stripeCustomer?.id,
-      stripeCustomerEmail: stripeCustomer?.email,
-      stripeCustomerMeta: stripeCustomer?.metadata,
-      stripeSubs,
-    };
-  }),
-
   // ── Create Stripe Customer Portal session ──
   createPortalSession: authedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
@@ -1003,7 +892,7 @@ export const subscriptionRouter = createRouter({
         },
       });
 
-      console.log(`[createCheckout] Session created: ${session.id}, url: ${session.url?.substring(0, 50)}...`);
+
 
       if (!session.url) {
         return { success: false, error: "No se pudo crear la sesion de pago" };

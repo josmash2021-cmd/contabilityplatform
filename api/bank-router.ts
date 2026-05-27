@@ -23,7 +23,7 @@ async function initPlaid() {
   try {
     const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
     const env = isProductionEnv ? "production" : "sandbox";
-    console.log(`[Plaid] Using ${env.toUpperCase()} environment (detected production: ${isProductionEnv})`);
+    // Plaid environment initialized
     const config = new Configuration({
       basePath: PlaidEnvironments[env],
       baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
@@ -392,21 +392,18 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
   const db = getDb();
   const startTime = Date.now();
 
-  console.log(`[SYNC-${syncType}] Starting for userId=${userId}`);
+  // Sync started - only log errors in production
 
   try {
     // Step 1: Get Plaid client (5s timeout)
     const client = await withTimeout(initPlaid(), 5000, "Plaid init");
     if (!client) return { success: false, error: "Plaid SDK no disponible" };
-    console.log(`[SYNC] Plaid client ready`);
-
     // Step 2: Get user accounts (5s timeout)
     const userAccounts = await withTimeout(
       db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)),
       5000, "Get accounts"
     );
     if (userAccounts.length === 0) return { success: false, error: "No hay cuentas conectadas" };
-    console.log(`[SYNC] Found ${userAccounts.length} accounts`);
 
     const primaryAccount = userAccounts[0];
     if (!primaryAccount?.plaidAccessToken) return { success: false, error: "No hay token de acceso" };
@@ -431,11 +428,8 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       startDate = new Date(syncYear, syncMonth - 1, 1).toISOString().split("T")[0];
       endDate = new Date(syncYear, syncMonth, 0).toISOString().split("T")[0];
     }
-    console.log(`[SYNC] Date range: ${startDate} to ${endDate}`);
-
     // Step 3: Fetch ALL transactions from Plaid with pagination (20s timeout per page)
     // NOTE: Do NOT pass account_ids - let Plaid return all transactions for the token
-    console.log(`[SYNC] Calling Plaid transactionsGet with pagination...`);
     let allTxs: any[] = [];
     try {
       let offset = 0;
@@ -453,11 +447,11 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         const txs = res.data.transactions || [];
         const total = res.data.total_transactions || 0;
         allTxs = allTxs.concat(txs);
-        console.log(`[SYNC] Page offset=${offset}, got ${txs.length} txs, total=${total}, accumulated=${allTxs.length}`);
+        // Page processed silently
         offset += txs.length;
         hasMore = txs.length === count && offset < total;
       }
-      console.log(`[SYNC] Plaid returned ${allTxs.length} total transactions`);
+      // Plaid data received
     } catch (plaidErr: any) {
       const errCode = plaidErr.response?.data?.error_code || "";
       const errMsg = plaidErr.response?.data?.error_message || plaidErr.message || "Unknown Plaid error";
@@ -474,7 +468,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
       // Retry once for "not yet ready"
       if (errMsg.includes("not yet ready")) {
-        console.log(`[SYNC] Retrying in 3s...`);
+        // Retry once for "not yet ready"
         await new Promise(r => setTimeout(r, 3000));
         try {
           const res = await withTimeout(
@@ -486,7 +480,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
             20000, "Plaid transactionsGet retry"
           );
           allTxs = res.data.transactions || [];
-          console.log(`[SYNC] Retry successful: ${allTxs.length} transactions`);
+          // Retry completed
         } catch (retryErr: any) {
           return { success: false, error: retryErr.message || "Error en reintento" };
         }
@@ -496,12 +490,10 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     }
 
     if (allTxs.length === 0) {
-      console.log(`[SYNC] No transactions found`);
       return { success: true, added: 0, message: "Sin transacciones nuevas para este periodo." };
     }
 
     // Step 4: Deduplication (5s timeout)
-    console.log(`[SYNC] Checking for duplicates...`);
     let existingSet = new Set<string>();
     try {
       const existingTxIds = await withTimeout(
@@ -558,14 +550,13 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
     }
 
-    console.log(`[SYNC] Added: ${added}, Skipped: ${skipped}, Total from Plaid: ${allTxs.length}`);
+    // Sync complete
 
     // Step 6: Journal entries (best effort, 5s timeout)
     if (journalTxs.length > 0) {
       try {
         await withTimeout(createJournalEntries(db, journalTxs, userId), 5000, "Journal entries");
-        console.log(`[SYNC] Journal entries created`);
-      } catch { console.log(`[SYNC] Journal entries skipped`); }
+      } catch { /* journal entries skipped */ }
     }
 
     // Step 7: Update balances (best effort, 10s timeout)
@@ -581,11 +572,9 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
           if (bal != null) await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
         }
       }
-      console.log(`[SYNC] Balances updated`);
-    } catch { console.log(`[SYNC] Balance update skipped`); }
+    } catch { /* balance update skipped */ }
 
     const duration = Date.now() - (startTime || Date.now());
-    console.log(`[SYNC] Complete in ${duration}ms. Added: ${added}`);
     return { success: true, added, total: allTxs.length, duplicates, message: added > 0 ? `${added} transacciones sincronizadas` : "Sin transacciones nuevas" };
   } catch (err: any) {
     console.error(`[SYNC] Fatal error:`, err);
@@ -863,13 +852,13 @@ export const bankRouter = createRouter({
     try {
       const client = await initPlaid();
       if (client && primaryAccount?.plaidAccessToken) {
-        console.log(`[getMonthData] Fetching fresh balance from Plaid for user ${ctx.user.id}, account ${accountId || 'all'}`);
+        // Fetching fresh balance from Plaid
         const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
         const freshBalances = new Map<string, string>();
         for (const plaidAcc of accountsRes.data.accounts || []) {
           const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
           if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
-          console.log(`[getMonthData] Plaid account ${plaidAcc.name} (${plaidAcc.account_id}): available=${plaidAcc.balances.available}, current=${plaidAcc.balances.current}`);
+          // Plaid account balance received
         }
         // Update DB with fresh balances
         for (const dbAccount of userAccounts) {
@@ -883,7 +872,7 @@ export const bankRouter = createRouter({
         if (accountId) {
           const targetAcc = userAccounts.find((a: any) => a.id === accountId);
           liveBalance = targetAcc?.plaidAccountId ? (freshBalances.get(targetAcc.plaidAccountId) ?? targetAcc?.currentBalance ?? "0") : (targetAcc?.currentBalance ?? "0");
-          console.log(`[getMonthData] Account ${accountId} balance: ${liveBalance} (from Plaid: ${targetAcc?.plaidAccountId ? 'yes' : 'no'})`);
+          // Account balance calculated
         } else {
           let total = 0;
           for (const a of userAccounts) {
@@ -894,16 +883,13 @@ export const bankRouter = createRouter({
         }
         plaidSource = true;
         lastSyncedAt = new Date().toISOString();
-      } else {
-        console.log(`[getMonthData] Cannot fetch from Plaid: client=${!!client}, token=${!!primaryAccount?.plaidAccessToken}`);
-      }
+      } /* else: cannot fetch from Plaid, will use DB fallback */
     } catch (plaidErr: any) {
       console.error("[getMonthData] Plaid balance error:", plaidErr.message);
     }
 
     // If Plaid didn't work, fallback to DB
     if (!plaidSource) {
-      console.log(`[getMonthData] Using DB fallback for balance`);
       if (accountId) {
         const acc = await db.select({ currentBalance: bankAccounts.currentBalance, lastSyncedAt: bankAccounts.lastSyncedAt }).from(bankAccounts).where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.userId, ctx.user.id)));
         liveBalance = acc[0]?.currentBalance ? String(parseFloat(acc[0].currentBalance).toFixed(2)) : "0";
@@ -926,57 +912,6 @@ export const bankRouter = createRouter({
       fromPlaid: plaidSource,
       monthName: `${monthNames[month]} ${year}`,
     };
-  }),
-
-  // ─── DEBUG: Show transactions grouped by account ───
-  debugAccounts: authedQuery.query(async ({ ctx }) => {
-    if (!ctx.user) return { error: "No auth" };
-    const db = getDb();
-    const userId = ctx.user.id;
-
-    // Get all accounts
-    const accounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
-    
-    // Get transaction counts per account
-    const result = [];
-    for (const acc of accounts) {
-      const txs = await db.select({
-        id: bankTransactions.id,
-        description: bankTransactions.description,
-        amount: bankTransactions.amount,
-        category: bankTransactions.category,
-        transactionDate: bankTransactions.transactionDate,
-      }).from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, userId),
-          eq(bankTransactions.bankAccountId, acc.id),
-        ))
-        .orderBy(desc(bankTransactions.transactionDate))
-        .limit(20);
-      
-      result.push({
-        accountId: acc.id,
-        accountName: acc.bankName,
-        plaidAccountId: acc.plaidAccountId,
-        transactionCount: txs.length,
-        transactions: txs,
-      });
-    }
-
-    // Also get transactions with NULL bankAccountId
-    const orphaned = await db.select({
-      id: bankTransactions.id,
-      description: bankTransactions.description,
-      amount: bankTransactions.amount,
-      category: bankTransactions.category,
-    }).from(bankTransactions)
-      .where(and(
-        eq(bankTransactions.userId, userId),
-        sql`${bankTransactions.bankAccountId} IS NULL`,
-      ))
-      .limit(10);
-
-    return { accounts: result, orphaned };
   }),
 
   // ─── LIST BY CATEGORY (for BankCategoryDetail page) ───

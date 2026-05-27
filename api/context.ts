@@ -13,14 +13,7 @@ export async function createContext(
   opts: FetchCreateContextFnOptions,
 ): Promise<TrpcContext> {
   const ctx: TrpcContext = { req: opts.req, resHeaders: opts.resHeaders };
-  
-  // Debug logging for auth troubleshooting
-  const authHeader = opts.req.headers.get("x-auth-token");
-  const cookieHeader = opts.req.headers.get("cookie");
-  if (authHeader || cookieHeader?.includes("local_auth_token")) {
-    console.log("[auth] Headers present - x-auth-token:", authHeader ? "yes" : "no", "cookie:", cookieHeader ? "yes" : "no");
-  }
-  
+
   // Try OAuth first
   try {
     ctx.user = await authenticateRequest(opts.req.headers);
