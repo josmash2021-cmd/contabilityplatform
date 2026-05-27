@@ -819,14 +819,23 @@ export const bankRouter = createRouter({
     console.log(`[getMonthData] Accounts:`, userAccounts.map(a => `id=${a.id} name=${a.bankName} plaid=${a.plaidAccountId?.slice(0,8)}`));
     const primaryAccount = userAccounts[0];
 
-    // Get ALL user transactions for the month — do NOT filter by accountId
+    // Find the selected account to filter by its plaidAccountId
+    const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
+    const targetPlaidAccountId = selectedAccount?.plaidAccountId;
+    console.log(`[getMonthData] Filtering for accountId=${accountId}, plaidAccountId=${targetPlaidAccountId || 'ALL'}`);
+
+    // Get user transactions for the month — filter by accountId if selected
     let txs: any[] = [];
     try {
+      const whereConditions: any[] = [
+        eq(bankTransactions.userId, ctx.user.id),
+        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+      ];
+      if (accountId) {
+        whereConditions.push(eq(bankTransactions.bankAccountId, accountId));
+      }
       txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
-        ))
+        .where(and(...whereConditions))
         .orderBy(desc(bankTransactions.transactionDate));
       console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
     } catch (dbErr: any) {
@@ -854,8 +863,14 @@ export const bankRouter = createRouter({
             end_date: endStr,
             options: { include_personal_finance_category: true, count: 500 },
           });
-          const plaidTxs = plaidRes.data.transactions || [];
-          console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} transactions`);
+          let plaidTxs = plaidRes.data.transactions || [];
+          console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
+
+          // Filter by selected account if accountId is specified
+          if (targetPlaidAccountId) {
+            plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
+            console.log(`[getMonthData] Filtered to ${plaidTxs.length} transactions for account ${targetPlaidAccountId}`);
+          }
 
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
