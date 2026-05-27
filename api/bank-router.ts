@@ -12,11 +12,9 @@ import { join } from "path";
 
 let plaidClient: any = null;
 
-// Detect if running in production (Railway or NODE_ENV=production)
-const isProductionEnv = process.env.PLAID_ENV === "production"
-  || process.env.NODE_ENV === "production"
-  || !!process.env.RAILWAY_ENVIRONMENT
-  || !!process.env.RAILWAY_SERVICE_NAME;
+// Use PLAID_ENV only — Railway env vars should NOT force production Plaid
+// Default to sandbox for safety. Set PLAID_ENV=production explicitly when ready.
+const isProductionEnv = process.env.PLAID_ENV === "production";
 
 async function initPlaid() {
   if (plaidClient) return plaidClient;
