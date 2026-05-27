@@ -251,16 +251,16 @@ export default function Bank() {
     : null;
   const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : (account?.id ? Number(account.id) : undefined);
 
-  const liveBalanceQuery = trpc.bank.getLiveBalance.useQuery(
-    { accountId: accountIdNum }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
-  );
-  // NOTE: accountId NOT passed - shows ALL transactions for the user regardless of selected account
-  // This ensures ALL bank transactions are visible (not filtered to one account)
+  // Single query for month data (includes transactions, income, expense, liveBalance)
+  // refetchInterval: 5 min to avoid Plaid rate limits. Data is always served from DB;
+  // Plaid is only used in the background server job.
   const monthDataQuery = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth) }, { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 30000 }
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
+    { enabled: hasBankConnected && !!account, retry: 1, refetchInterval: 5 * 60 * 1000 }
   );
-  const { data: liveBalanceData, isLoading: loadingBalance } = liveBalanceQuery;
   const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
+  // Balance comes from monthData (which queries DB, not Plaid directly)
+  const liveBalanceData = { balance: monthData?.liveBalance ?? account?.currentBalance ?? "0" };
   // Annual summary - ALL transactions (not filtered by account)
   const { data: yearData } = trpc.bank.getYearData.useQuery(
     { year: parseInt(selectedYear) }, { enabled: hasBankConnected && !!account }
@@ -332,58 +332,21 @@ export default function Bank() {
 
   // ─── useEffect hooks AFTER all useMutation declarations ───
 
-  // Auto-sync on mount then refetch every 30 seconds
+  // Single sync on page load only — background server handles periodic sync
   useEffect(() => {
     if (!hasBankConnected || !account) return;
-
-    const doRefresh = async () => {
-      try {
-        const syncInput: any = { year: parseInt(selectedYear), month: parseInt(selectedMonth) };
-        if (accountIdNum) syncInput.accountId = accountIdNum;
-        await syncMutation.mutateAsync(syncInput);
-      } catch { /* silent fail on sync, still refetch balance */ }
-      liveBalanceQuery.refetch();
-      monthDataQuery.refetch();
-    };
-
-    doRefresh();
-    const interval = setInterval(doRefresh, 30000);
-    return () => clearInterval(interval);
-  }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum, syncMutation, liveBalanceQuery, monthDataQuery]);
-
-  // Run auto-sync on load
-  useEffect(() => {
-    if (hasBankConnected) {
-      const timer = setTimeout(() => syncRecentMutation.mutate(), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasBankConnected, syncRecentMutation]);
-
-  // Auto-sync every 2 minutes for new transactions
-  useEffect(() => {
-    if (!hasBankConnected || !account) return;
-    const interval = setInterval(() => {
+    const timer = setTimeout(() => {
       syncMutation.mutate({
         year: parseInt(selectedYear),
         month: parseInt(selectedMonth),
         accountId: accountIdNum,
       });
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
+    }, 1500);
+    return () => clearTimeout(timer);
   }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum, syncMutation]);
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
-
-  // Initial auto-sync on first bank connection
-  useEffect(() => {
-    const bankNowConnected = connection?.hasBank === true && !loadingConnection;
-    if (bankNowConnected && !wasConnectedRef.current) {
-      wasConnectedRef.current = true;
-      setSyncing(true);
-      syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth) });
-    }
-  }, [connection?.hasBank, loadingConnection, selectedYear, selectedMonth, syncMutation]);
 
   useEffect(() => {
     if (!allAccounts || allAccounts.length === 0) return;
@@ -617,7 +580,7 @@ export default function Bank() {
                   <div className={`p-1.5 rounded-md ${s.color}`}><s.icon className="w-3.5 h-3.5" /></div>
                   <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{s.label}</p>
                 </div>
-                {loadingAccounts || loadingBalance ? (
+                {loadingAccounts || loadingMonth ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className={`text-2xl font-bold tabular-nums ${s.valColor}`}>{s.value}</p>
