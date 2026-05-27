@@ -10,6 +10,34 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap } from "lucide-react";
 
+// ── Shimmer animation styles for subscription titles ──
+const SHIMMER_CSS = `
+  @keyframes shimmer-silver {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  @keyframes shimmer-elite {
+    0% { background-position: -200% center; }
+    100% { background-position: 200% center; }
+  }
+  .shimmer-premium {
+    background: linear-gradient(90deg, #9ca3af 0%, #d1d5db 25%, #f3f4f6 50%, #d1d5db 75%, #9ca3af 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer-silver 3s linear infinite;
+  }
+  .shimmer-elite {
+    background: linear-gradient(90deg, #000000 0%, #4b5563 25%, #9ca3af 50%, #4b5563 75%, #000000 100%);
+    background-size: 200% auto;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: shimmer-elite 3s linear infinite;
+  }
+`;
+
 // Business plans (original)
 const BUSINESS_MONTHLY = {
   id: "monthly" as const,
@@ -485,114 +513,128 @@ export default function SubscriptionSettings() {
     );
   }
 
-  // ─── NO SUBSCRIPTION — SHOW PLANS ───
+  // ─── NO SUBSCRIPTION — SHOW PLANS (same design as SubscriptionGate overlay) ───
   const wasBroken = status?.status === "past_due" || status?.status === "incomplete" || status?.status === "unpaid";
 
   return (
-    <div className="space-y-6">
-      {wasBroken ? (
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
-          <p className="text-sm text-amber-800 font-medium">Suscripcion interrumpida</p>
-          <p className="text-xs text-amber-700">
-            Tu suscripcion anterior fue cancelada por un problema de pago.
-            Selecciona el plan Mensual y suscribete de nuevo — tu tarjeta sera cobrada automaticamente.
+    <>
+      <style>{SHIMMER_CSS}</style>
+      <div className="space-y-6">
+        {wasBroken ? (
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
+            <p className="text-sm text-amber-800 font-medium">Suscripcion interrumpida</p>
+            <p className="text-xs text-amber-700">
+              Tu suscripcion anterior fue cancelada por un problema de pago.
+              Selecciona el plan Mensual y suscribete de nuevo — tu tarjeta sera cobrada automaticamente.
+            </p>
+          </div>
+        ) : (
+          <p className="text-xs text-neutral-400">
+            Configura tu plan para desbloquear el acceso completo a Accounting Platform.
           </p>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Monthly — Premium */}
+          <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+            {PLAN_MONTHLY.badge && (
+              <div className="absolute -top-2.5 right-4">
+                <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{PLAN_MONTHLY.badge}</Badge>
+              </div>
+            )}
+            {/* Silver crown */}
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
+                <Crown className="w-4 h-4 text-gray-400" />
+              </div>
+            </div>
+            <div>
+              {/* Shimmer title with crown icon */}
+              <div className="flex items-center gap-1.5">
+                <Crown className="w-3 h-3 text-gray-400" />
+                <p className="text-[11px] font-bold uppercase tracking-wide shimmer-premium">Suscripcion Premium</p>
+              </div>
+              <h4 className="text-sm font-medium text-black mt-0.5">{PLAN_MONTHLY.name}</h4>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-medium text-black">{PLAN_MONTHLY.price}</span>
+                <span className="text-xs text-neutral-400 line-through">{PLAN_MONTHLY.originalPrice}</span>
+                <span className="text-xs text-neutral-400">{PLAN_MONTHLY.period}</span>
+              </div>
+              <p className="text-[11px] text-neutral-400 mt-1">{PLAN_MONTHLY.description}</p>
+            </div>
+            <ul className="space-y-1.5">
+              {PLAN_MONTHLY.features.map((f) => (
+                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                  <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Button
+              onClick={() => createCheckout.mutate({ plan: "monthly" })}
+              disabled={createCheckout.isPending}
+              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
+            >
+              {createCheckout.isPending && createCheckout.variables?.plan === "monthly" ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</>
+              ) : (
+                <><Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse Mensual</>
+              )}
+            </Button>
+          </div>
+
+          {/* Annual — Elite */}
+          <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+            {PLAN_ANNUAL.badge && (
+              <div className="absolute -top-2.5 right-4">
+                <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">{PLAN_ANNUAL.badge}</Badge>
+              </div>
+            )}
+            {/* Black illuminated crown */}
+            <div className="flex items-center gap-2 mb-1">
+              <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
+                <Crown className="w-4 h-4 text-black drop-shadow-sm" />
+              </div>
+            </div>
+            <div>
+              {/* Shimmer title with crown icon */}
+              <div className="flex items-center gap-1.5">
+                <Crown className="w-3 h-3 text-yellow-500" />
+                <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">Suscripcion elite</p>
+              </div>
+              <h4 className="text-sm font-medium text-black mt-0.5">{PLAN_ANNUAL.name}</h4>
+              <div className="flex items-baseline gap-2 mt-1">
+                <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
+                <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
+                <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
+              </div>
+              {PLAN_ANNUAL.savings && (
+                <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
+              )}
+              <p className="text-[11px] text-neutral-400 mt-1">{PLAN_ANNUAL.description}</p>
+            </div>
+            <ul className="space-y-1.5">
+              {PLAN_ANNUAL.features.map((f) => (
+                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                  <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
+                  {f}
+                </li>
+              ))}
+            </ul>
+            <Button
+              onClick={() => createCheckout.mutate({ plan: "annual" })}
+              disabled={createCheckout.isPending}
+              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
+            >
+              {createCheckout.isPending && createCheckout.variables?.plan === "annual" ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</>
+              ) : (
+                <><Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse Anual</>
+              )}
+            </Button>
+          </div>
         </div>
-      ) : (
-        <p className="text-xs text-neutral-400">
-          Configura tu plan para desbloquear el acceso completo a Accounting Platform.
-        </p>
-      )}
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Monthly */}
-        <button
-          onClick={() => setSelectedPlan("monthly")}
-          className={`text-left border rounded-lg p-5 space-y-4 transition-all cursor-pointer relative ${
-            selectedPlan === "monthly" ? "border-2 border-black ring-1 ring-black" : "border-neutral-200 hover:border-neutral-300"
-          }`}
-        >
-          {PLAN_MONTHLY.badge && (
-            <div className="absolute -top-2.5 right-4">
-              <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{PLAN_MONTHLY.badge}</Badge>
-            </div>
-          )}
-          <div>
-            <h4 className="text-sm font-medium text-black">{PLAN_MONTHLY.name}</h4>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-medium text-black">{PLAN_MONTHLY.price}</span>
-              <span className="text-xs text-neutral-400 line-through">{PLAN_MONTHLY.originalPrice}</span>
-              <span className="text-xs text-neutral-400">{PLAN_MONTHLY.period}</span>
-            </div>
-            <p className="text-[11px] text-neutral-400 mt-1">{PLAN_MONTHLY.description}</p>
-          </div>
-          <ul className="space-y-1.5">
-            {PLAN_MONTHLY.features.map((f) => (
-              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
-                <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <Button
-            onClick={(e) => { e.stopPropagation(); createCheckout.mutate({ plan: "monthly" }); }}
-            disabled={createCheckout.isPending}
-            className={`w-full h-9 text-xs ${
-              selectedPlan === "monthly" ? "bg-black hover:bg-neutral-800 text-white" : "bg-neutral-100 hover:bg-neutral-200 text-neutral-700"
-            }`}
-          >
-            {createCheckout.isPending && createCheckout.variables?.plan === "monthly" ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Procesando...</>
-            ) : (
-              "Suscribirse Mensual"
-            )}
-          </Button>
-        </button>
-
-        {/* Annual */}
-        <button
-          onClick={() => setSelectedPlan("annual")}
-          className={`text-left border rounded-lg p-5 space-y-4 transition-all cursor-pointer relative ${
-            selectedPlan === "annual" ? "border-2 border-black ring-1 ring-black" : "border-neutral-200 hover:border-neutral-300"
-          }`}
-        >
-          {PLAN_ANNUAL.badge && (
-            <div className="absolute -top-2.5 right-4">
-              <Badge className="bg-black text-white text-[10px] px-2 py-0.5">{PLAN_ANNUAL.badge}</Badge>
-            </div>
-          )}
-          <div>
-            <h4 className="text-sm font-medium text-black">{PLAN_ANNUAL.name}</h4>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
-              <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
-            </div>
-            <p className="text-[11px] text-emerald-700 font-medium mt-1">{PLAN_ANNUAL.savings}</p>
-            <p className="text-[11px] text-neutral-400 mt-1">{PLAN_ANNUAL.description}</p>
-          </div>
-          <ul className="space-y-1.5">
-            {PLAN_ANNUAL.features.map((f) => (
-              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
-                <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                {f}
-              </li>
-            ))}
-          </ul>
-          <Button
-            onClick={(e) => { e.stopPropagation(); createCheckout.mutate({ plan: "annual" }); }}
-            disabled={createCheckout.isPending}
-            className={`w-full h-9 text-xs ${
-              selectedPlan === "annual" ? "bg-black hover:bg-neutral-800 text-white" : "bg-neutral-100 hover:bg-neutral-200 text-neutral-700"
-            }`}
-          >
-            {createCheckout.isPending && createCheckout.variables?.plan === "annual" ? (
-              <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> Procesando...</>
-            ) : (
-              "Suscribirse Anual"
-            )}
-          </Button>
-        </button>
       </div>
-    </div>
+    </>
   );
 }
