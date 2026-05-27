@@ -18,8 +18,7 @@ interface SubscriptionGateProps {
  */
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const navigate = useNavigate();
-  const [phase, setPhase] = useState<"checking" | "connect_bank" | "preview" | "subscribe" | "active">("checking");
-  const [countdown, setCountdown] = useState(10);
+  const [phase, setPhase] = useState<"checking" | "connect_bank" | "subscribe" | "active">("checking");
 
   const { data: status, isLoading: subLoading } = trpc.subscription.status.useQuery(
     undefined,
@@ -47,27 +46,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       return;
     }
 
-    // Has bank but no subscription
-    if (phase === "checking" || phase === "connect_bank") {
-      setPhase("preview");
-    }
-  }, [hasSubscription, hasBank, subLoading, bankLoading, phase]);
-
-  // Countdown from 10 seconds after bank is connected
-  useEffect(() => {
-    if (phase !== "preview") return;
-
-    if (countdown <= 0) {
-      setPhase("subscribe");
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      setCountdown((c) => c - 1);
-    }, 1000);
-
-    return () => clearTimeout(timer);
-  }, [phase, countdown]);
+    // Has bank but no subscription — show subscribe screen directly
+    setPhase("subscribe");
+  }, [hasSubscription, hasBank, subLoading, bankLoading]);
 
   // Loading state
   if (phase === "checking") {
@@ -108,40 +89,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     );
   }
 
-  // PHASE 2: Bank connected — show preview with countdown
-  if (phase === "preview") {
-    return (
-      <div className="relative">
-        {/* Show the actual content behind */}
-        {children}
-
-        {/* Bottom banner with countdown */}
-        <div className="fixed bottom-0 left-0 right-0 z-50 bg-black text-white p-4">
-          <div className="max-w-lg mx-auto flex items-center justify-between gap-3">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-full bg-emerald-500 flex items-center justify-center shrink-0">
-                <CheckCircle className="w-4 h-4 text-white" />
-              </div>
-              <div>
-                <p className="text-sm font-medium">Banco conectado correctamente</p>
-                <p className="text-xs text-neutral-400">
-                  Suscribete en {countdown}s para acceso completo...
-                </p>
-              </div>
-            </div>
-            <div className="w-10 h-10 rounded-full border-2 border-white flex items-center justify-center shrink-0">
-              <span className="text-sm font-bold">{countdown}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Spacer for bottom banner */}
-        <div className="h-20" />
-      </div>
-    );
-  }
-
-  // PHASE 3: Show subscription screen
   if (phase === "subscribe") {
     return (
       <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
@@ -228,6 +175,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     );
   }
 
-  // PHASE 4: Has subscription — show content normally
+  // PHASE 3: Has subscription — show content normally
   return <>{children}</>;
 }
