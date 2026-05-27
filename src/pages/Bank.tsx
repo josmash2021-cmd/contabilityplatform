@@ -15,7 +15,7 @@ import {
   RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
   Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
-  CheckCircle2, PiggyBank, Loader2, X, Check, Clock,
+  CheckCircle2, PiggyBank, Loader2, X, Check, Clock, Bug,
 } from "lucide-react";
 
 /** Account dropdown — pushes content down when open (part of document flow) */
@@ -241,11 +241,18 @@ export default function Bank() {
   const [confirmDeleteTx, setConfirmDeleteTx] = useState<number | null>(null);
   const [showDiagnosis, setShowDiagnosis] = useState(false);
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+  const [debugLogs, setDebugLogs] = useState<string[]>([]);
   const wasConnectedRef = useRef(false);
 
   // Refs to prevent duplicate operations
   const autoSyncFiredRef = useRef(false);
   const lastToastRef = useRef<{ type: string; time: number } | null>(null);
+
+  // Helper to collect debug logs
+  const addDebugLog = useCallback((msg: string) => {
+    setDebugLogs(prev => [...prev.slice(-50), `[${new Date().toLocaleTimeString()}] ${msg}`]);
+  }, []);
 
   // Use checkConnection as PRIMARY source for bank detection (same as Transactions.tsx)
   const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
@@ -627,6 +634,14 @@ export default function Bank() {
                 )
               )}
               {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> Reconexion necesaria</Badge>}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-6 px-2 text-[10px] border-purple-200 text-purple-600 hover:bg-purple-50"
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+              >
+                <Bug className="w-3 h-3 mr-1" /> Debug
+              </Button>
             </div>
             {account && (
               <p className="text-sm text-neutral-400 mt-1">
@@ -711,6 +726,30 @@ export default function Bank() {
           </AnimatedCard>
         ))}
       </div>
+
+      {/* DEBUG PANEL */}
+      {showDebugPanel && (
+        <DebugPanel
+          hasBankConnected={hasBankConnected}
+          account={account}
+          accountIdNum={accountIdNum}
+          allAccounts={allAccounts}
+          monthData={monthData}
+          yearData={yearData}
+          loadingMonth={loadingMonth}
+          connection={connection}
+          loadingConnection={loadingConnection}
+          selectedYear={selectedYear}
+          selectedMonth={selectedMonth}
+          syncResult={syncMutation.data}
+          syncError={syncMutation.error}
+          onCopy={() => {
+            const text = debugLogs.join("\n");
+            navigator.clipboard.writeText(text).then(() => toast.success("Logs copiados"));
+          }}
+          debugLogs={debugLogs}
+        />
+      )}
 
       {/* Fallback mode indicator */}
       {isFallbackMode && (
@@ -963,6 +1002,189 @@ export default function Bank() {
           </AnimatedCard>
         </div>
 
+      </div>
+    </div>
+  );
+}
+
+/** Debug Panel — shows diagnostic info for troubleshooting */
+function DebugPanel({
+  hasBankConnected,
+  account,
+  accountIdNum,
+  allAccounts,
+  monthData,
+  yearData,
+  loadingMonth,
+  connection,
+  loadingConnection,
+  selectedYear,
+  selectedMonth,
+  syncResult,
+  syncError,
+  onCopy,
+  debugLogs,
+}: {
+  hasBankConnected: boolean;
+  account: any;
+  accountIdNum: number | undefined;
+  allAccounts: any[];
+  monthData: any;
+  yearData: any;
+  loadingMonth: boolean;
+  connection: any;
+  loadingConnection: boolean;
+  selectedYear: string;
+  selectedMonth: string;
+  syncResult: any;
+  syncError: any;
+  onCopy: () => void;
+  debugLogs: string[];
+}) {
+  const [activeTab, setActiveTab] = useState<"state" | "data" | "logs">("state");
+
+  const rawTransactions = monthData?.transactions ?? [];
+  const income = monthData?.income ?? "0";
+  const expense = monthData?.expense ?? "0";
+  const liveBalance = monthData?.liveBalance ?? "0";
+  const fallbackMode = monthData?.fallbackMode ?? false;
+  const fromPlaid = monthData?.fromPlaid ?? false;
+
+  return (
+    <div className="mb-4 border border-purple-200 rounded-xl bg-purple-50/50 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-2 bg-purple-100 border-b border-purple-200">
+        <div className="flex items-center gap-2">
+          <Bug className="w-4 h-4 text-purple-600" />
+          <span className="text-sm font-semibold text-purple-800">Panel de Diagnostico</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setActiveTab("state")} className={`px-2 py-1 text-xs rounded ${activeTab === "state" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-200"}`}>Estado</button>
+          <button onClick={() => setActiveTab("data")} className={`px-2 py-1 text-xs rounded ${activeTab === "data" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-200"}`}>Datos</button>
+          <button onClick={() => setActiveTab("logs")} className={`px-2 py-1 text-xs rounded ${activeTab === "logs" ? "bg-purple-600 text-white" : "text-purple-600 hover:bg-purple-200"}`}>Logs</button>
+          <button onClick={onCopy} className="px-2 py-1 text-xs bg-purple-600 text-white rounded hover:bg-purple-700">Copiar</button>
+        </div>
+      </div>
+
+      <div className="p-4 max-h-[400px] overflow-auto">
+        {activeTab === "state" && (
+          <div className="space-y-2 text-xs font-mono">
+            <div className="grid grid-cols-2 gap-2">
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Banco Conectado</p>
+                <p className={hasBankConnected ? "text-emerald-600" : "text-red-600"}>{hasBankConnected ? "SI" : "NO"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Loading Connection</p>
+                <p>{loadingConnection ? "SI" : "NO"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Cuenta Seleccionada</p>
+                <p>{account ? `${account.bankName} (ID:${account.id})` : "Ninguna"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">accountIdNum</p>
+                <p>{accountIdNum ?? "undefined"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Total Cuentas</p>
+                <p>{allAccounts.length}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Periodo</p>
+                <p>{selectedMonth}/{selectedYear}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Loading MonthData</p>
+                <p>{loadingMonth ? "SI" : "NO"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Balance Plaid</p>
+                <p>${liveBalance}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Fallback Mode</p>
+                <p className={fallbackMode ? "text-amber-600" : "text-emerald-600"}>{fallbackMode ? "SI" : "NO"}</p>
+              </div>
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">From Plaid</p>
+                <p>{fromPlaid ? "SI" : "NO"}</p>
+              </div>
+            </div>
+            <div className="bg-white p-2 rounded border">
+              <p className="text-purple-600 font-semibold">Connection Data</p>
+              <pre className="text-[10px] whitespace-pre-wrap overflow-auto">{JSON.stringify(connection, null, 2)}</pre>
+            </div>
+            {syncResult && (
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Ultimo Sync Result</p>
+                <pre className="text-[10px] whitespace-pre-wrap overflow-auto">{JSON.stringify(syncResult, null, 2)}</pre>
+              </div>
+            )}
+            {syncError && (
+              <div className="bg-white p-2 rounded border border-red-300">
+                <p className="text-red-600 font-semibold">Sync Error</p>
+                <pre className="text-[10px] whitespace-pre-wrap overflow-auto text-red-600">{JSON.stringify(syncError, null, 2)}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "data" && (
+          <div className="space-y-2 text-xs font-mono">
+            <div className="grid grid-cols-3 gap-2">
+              <div className="bg-white p-2 rounded border text-center">
+                <p className="text-purple-600 font-semibold">Ingresos</p>
+                <p className="text-lg text-emerald-600">${income}</p>
+              </div>
+              <div className="bg-white p-2 rounded border text-center">
+                <p className="text-purple-600 font-semibold">Gastos</p>
+                <p className="text-lg text-red-600">${expense}</p>
+              </div>
+              <div className="bg-white p-2 rounded border text-center">
+                <p className="text-purple-600 font-semibold">Transacciones</p>
+                <p className="text-lg">{rawTransactions.length}</p>
+              </div>
+            </div>
+            <div className="bg-white p-2 rounded border">
+              <p className="text-purple-600 font-semibold mb-1">Transacciones ({rawTransactions.length})</p>
+              {rawTransactions.length === 0 ? (
+                <p className="text-red-500">Sin transacciones</p>
+              ) : (
+                <div className="space-y-1 max-h-[250px] overflow-auto">
+                  {rawTransactions.map((tx: any, i: number) => (
+                    <div key={tx.id ?? i} className="flex justify-between items-center p-1 bg-neutral-50 rounded text-[10px]">
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate font-medium">{tx.description || "Sin desc"}</p>
+                        <p className="text-neutral-400">{tx.category} | {tx.type} | {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString() : "?"}</p>
+                      </div>
+                      <span className={`ml-2 font-bold ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                        ${tx.amount}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {yearData && (
+              <div className="bg-white p-2 rounded border">
+                <p className="text-purple-600 font-semibold">Year Data</p>
+                <pre className="text-[10px] whitespace-pre-wrap overflow-auto">{JSON.stringify(yearData, null, 2)}</pre>
+              </div>
+            )}
+          </div>
+        )}
+
+        {activeTab === "logs" && (
+          <div className="bg-black text-green-400 p-3 rounded font-mono text-[10px] max-h-[350px] overflow-auto">
+            {debugLogs.length === 0 ? (
+              <p className="text-neutral-500">Sin logs aun. Interactua con la pagina para generar logs.</p>
+            ) : (
+              debugLogs.map((log, i) => (
+                <div key={i} className="mb-0.5">{log}</div>
+              ))
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
