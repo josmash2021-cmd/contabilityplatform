@@ -556,26 +556,62 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
     }
 
-    // Mass insert in chunks of 100 (MySQL batch limit safety)
+    // Mass insert using RAW SQL to avoid schema mismatch
+    // (columns like isPending, syncStatus, importedFrom may not exist in Railway yet)
     let added = 0;
-    const CHUNK_SIZE = 100;
-    console.log(`[SYNC] Inserting ${insertValues.length} transactions in chunks of ${CHUNK_SIZE}...`);
+    const CHUNK_SIZE = 50;
+    console.log(`[SYNC] Inserting ${insertValues.length} transactions via raw SQL...`);
     for (let i = 0; i < insertValues.length; i += CHUNK_SIZE) {
       const chunk = insertValues.slice(i, i + CHUNK_SIZE);
       try {
-        await db.insert(bankTransactions).values(chunk);
+        // Build multi-value INSERT with only columns that definitely exist
+        const valuePlaceholders = chunk.map(() =>
+          "(DEFAULT, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+        ).join(", ");
+        const sqlQuery = `INSERT INTO bankTransactions
+          (id, userId, bankAccountId, bankName, accountNumber, transactionDate, transactionTime,
+           description, amount, type, category, subcategory, reference, plaidAmount,
+           plaidTransactionId, plaidCategory, merchantName, isDuplicate,
+           lastSyncedAt, isReconciled, createdAt)
+          VALUES ${valuePlaceholders}`;
+
+        const params: any[] = [];
+        for (const row of chunk) {
+          params.push(
+            row.userId, row.bankAccountId, row.bankName, row.accountNumber,
+            row.transactionDate, row.transactionDate, // transactionDate + transactionTime
+            row.description, row.amount, row.type, row.category, row.subcategory,
+            row.reference, row.plaidAmount, row.plaidTransactionId, row.plaidCategory,
+            row.merchantName, row.isDuplicate ?? false,
+            row.lastSyncedAt, row.isReconciled ?? false, new Date()
+          );
+        }
+
+        await db.execute(sql.raw(sqlQuery, params));
         added += chunk.length;
         console.log(`[SYNC] Chunk ${Math.floor(i / CHUNK_SIZE) + 1}: ${chunk.length} inserted`);
       } catch (e: any) {
-        console.error(`[SYNC] Chunk insert error: ${e.message || JSON.stringify(e)}`);
-        console.error(`[SYNC] Chunk error stack:`, e.stack?.substring(0, 500));
-        // Fallback: try one by one for this chunk
+        console.error(`[SYNC] Chunk insert error: ${e.message?.substring(0, 300)}`);
+        // Fallback: try one by one
         for (const row of chunk) {
           try {
-            await db.insert(bankTransactions).values(row);
+            await db.execute(sql.raw(
+              `INSERT INTO bankTransactions
+                (userId, bankAccountId, bankName, accountNumber, transactionDate, transactionTime,
+                 description, amount, type, category, subcategory, reference, plaidAmount,
+                 plaidTransactionId, plaidCategory, merchantName, isDuplicate,
+                 lastSyncedAt, isReconciled, createdAt)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+              [row.userId, row.bankAccountId, row.bankName, row.accountNumber,
+               row.transactionDate, row.transactionDate,
+               row.description, row.amount, row.type, row.category, row.subcategory,
+               row.reference, row.plaidAmount, row.plaidTransactionId, row.plaidCategory,
+               row.merchantName, row.isDuplicate ?? false,
+               row.lastSyncedAt, row.isReconciled ?? false, new Date()]
+            ));
             added++;
           } catch (e2: any) {
-            console.error(`[SYNC] Single insert error for "${row.description?.substring(0, 50)}": ${e2.message || JSON.stringify(e2)}`);
+            console.error(`[SYNC] Single insert error for "${row.description?.substring(0, 50)}": ${e2.message?.substring(0, 200)}`);
             skipped++;
           }
         }
