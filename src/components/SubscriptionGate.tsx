@@ -33,8 +33,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const hasSubscription = status?.active === true;
   const hasBank = bankConnection?.hasBank === true;
 
+  // Timer: after 20 seconds of bank connected, show subscription
   useEffect(() => {
-    if (subLoading || bankLoading) return;
+    if (phase === "subscribe") return; // Already showing
 
     if (hasSubscription) {
       setPhase("active");
@@ -46,9 +47,14 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       return;
     }
 
-    // Has bank but no subscription — show subscribe screen directly
-    setPhase("subscribe");
-  }, [hasSubscription, hasBank, subLoading, bankLoading]);
+    // Has bank but no subscription — wait 20s silently, then show subscribe
+    if (hasBank && !hasSubscription && phase !== "subscribe") {
+      const timer = setTimeout(() => {
+        setPhase("subscribe");
+      }, 20000); // 20 seconds
+      return () => clearTimeout(timer);
+    }
+  }, [hasSubscription, hasBank, subLoading, bankLoading, phase]);
 
   // Loading state
   if (phase === "checking") {
