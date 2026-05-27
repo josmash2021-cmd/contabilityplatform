@@ -616,18 +616,22 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         // Log each transaction being inserted
         console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
 
+        // Detect refunds: plaidAmount > 0 on a purchase = money returned
+        const finalType = (plaidAmount > 0 && type === "expense") ? "income" : type;
+        
         const txData = {
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
           amount: String(absAmount.toFixed(2)), plaidAmount: String(plaidAmount.toFixed(2)),
-          type, category: category as any,
+          type: finalType, category: category as any,
           subcategory: tx.personal_finance_category?.detailed || tx.category?.[1] || null,
           plaidTransactionId: tx.transaction_id,
           plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
           merchantName: normalizedMerchant,
           syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
+          balanceAfter: null,
         };
         console.log(`[SYNC] Inserting tx:`, JSON.stringify(txData));
         await db.insert(bankTransactions).values(txData);
