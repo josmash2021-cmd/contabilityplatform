@@ -444,6 +444,7 @@ export default function Bank() {
   // Select first account only when: no selection exists, or selected account no longer in list
   // Uses refs to avoid re-triggering when accounts haven't meaningfully changed
   const prevAccountCountRef = useRef(0);
+  const prevAccountIdRef = useRef<string | null>(null);
   useEffect(() => {
     if (!allAccounts || allAccounts.length === 0) {
       prevAccountCountRef.current = 0;
@@ -455,7 +456,13 @@ export default function Bank() {
       const stillExists = allAccounts.some((a: any) => String(a.id) === selectedAccountId);
       if (stillExists) {
         prevAccountCountRef.current = allAccounts.length;
-        return; // Account still valid, do nothing
+        // Account changed — invalidate queries to load new account data
+        if (prevAccountIdRef.current !== selectedAccountId) {
+          prevAccountIdRef.current = selectedAccountId;
+          utils.bank.getMonthData.invalidate();
+          utils.bank.getYearData.invalidate();
+        }
+        return; // Account still valid, do nothing else
       }
       // Account no longer exists — fall through to select first
     }
@@ -468,10 +475,11 @@ export default function Bank() {
       const firstId = String(allAccounts[0].id);
       setSelectedAccountIdRaw(firstId);
       try { localStorage.setItem("bank_selected_account_id", firstId); } catch { /* ignore */ }
+      prevAccountIdRef.current = firstId;
     }
 
     prevAccountCountRef.current = allAccounts.length;
-  }, [allAccounts, selectedAccountId]);
+  }, [allAccounts, selectedAccountId, utils]);
 
   const isPlaidConnected = hasBankConnected && !loadingConnection;
   const needsReconnect = !loadingConnection && hasBankConnected && !!account && !connection?.hasBank;
