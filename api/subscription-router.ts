@@ -947,4 +947,77 @@ export const subscriptionRouter = createRouter({
     return { url: portalSession.url };
   }),
 
+  // ── Create Stripe Checkout for direct subscription ──
+  createCheckout: authedQuery
+    .input(z.object({ plan: z.enum(["monthly", "annual"]), mode: z.enum(["business", "personal"]).optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const stripe = getStripe();
+      const db = getDb();
+      const userId = Number(ctx.user.id);
+      const userMode = input.mode || "business";
+
+      // Get or create Stripe customer
+      let customerId: string;
+      const existingSubs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+
+      if (existingSubs[0]?.stripeCustomerId) {
+        customerId = existingSubs[0].stripeCustomerId;
+      } else {
+        const customer = await stripe.customers.create({
+          email: ctx.user.email || undefined,
+          metadata: { platformUserId: String(userId) },
+        });
+        customerId = customer.id;
+      }
+
+      const appUrl = getAppUrl();
+      const planConfig = PLAN_PRICES[input.plan];
+      const productName = userMode === "personal"
+        ? (input.plan === "monthly" ? "AI Aethel - Personal Mensual" : "AI Aethel - Personal Anual")
+        : planConfig.name;
+
+      const session = await stripe.checkout.sessions.create({
+        customer: customerId,
+        mode: "subscription",
+        line_items: [{
+          price_data: {
+            currency: "usd",
+            unit_amount: planConfig.amount,
+            recurring: { interval: input.plan === "monthly" ? "month" : "year" },
+            product_data: {
+              name: productName,
+              description: input.plan === "monthly" ? "Suscripcion mensual - Cancela cuando quieras" : "Suscripcion anual - Ahorra $400",
+            },
+          },
+          quantity: 1,
+        }],
+        success_url: `${appUrl}/settings?subscription=success`,
+        cancel_url: `${appUrl}/settings?subscription=cancelled`,
+        metadata: {
+          platformUserId: String(userId),
+          plan: input.plan,
+          mode: userMode,
+        },
+      });
+
+      // Store pending subscription in DB
+      if (!existingSubs[0]) {
+        await db.insert(subscriptions).values({
+          userId,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: session.subscription as string || "pending_" + session.id,
+          plan: input.plan,
+          status: "incomplete",
+          currentPeriodStart: new Date(),
+          currentPeriodEnd: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          cancelAtPeriodEnd: false,
+        });
+      }
+
+      return { success: true, url: session.url };
+    }),
+
 });
