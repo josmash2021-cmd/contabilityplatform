@@ -9,6 +9,7 @@ import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Logo } from "@/components/Logo";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
+import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import {
   LayoutDashboard, ShoppingCart, Wrench, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
@@ -139,8 +140,10 @@ export function AppLayout() {
         </div>
       </div>
 
-      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0">
-        <Outlet />
+      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0 relative">
+        <SubscriptionPageGate>
+          <Outlet />
+        </SubscriptionPageGate>
       </main>
 
       {/* Subscription expired overlay — shown on all pages when subscription expires */}

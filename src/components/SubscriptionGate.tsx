@@ -1,74 +1,134 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router";
+import { useNavigate, useLocation } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { Crown, Landmark, CheckCircle, CalendarDays, Zap, ArrowRight } from "lucide-react";
+import { useAuth } from "@/hooks/useAuth";
+import {
+  Crown, Landmark, CheckCircle, CalendarDays, Zap, X,
+} from "lucide-react";
 
 interface SubscriptionGateProps {
   children: React.ReactNode;
 }
 
+// ── Business Plans ──
+const BIZ_MONTHLY = {
+  name: "Mensual",
+  price: "$1",
+  originalPrice: "$80",
+  period: "/mes",
+  badge: "New Plan",
+  features: [
+    "Agente de contabilidad AI personalizado",
+    "Contabilidad completa del negocio",
+    "Manejo y almacenamiento de clientes",
+    "Contabilidad bancaria conectada",
+    "Soporte prioritario 24/7",
+    "Finanzas organizadas automaticamente",
+  ],
+};
+
+const BIZ_ANNUAL = {
+  name: "Anual",
+  price: "$800",
+  originalPrice: "$1200",
+  period: "/año",
+  badge: "Mejor valor",
+  savings: "Ahorras $400",
+  features: [
+    "Todo lo incluido en el plan Mensual",
+    "Agente de contabilidad AI ilimitado",
+    "Clientes ilimitados en tu base de datos",
+    "Reportes contables exportables (PDF / Excel)",
+    "Backups diarios automaticos",
+    "Soporte prioritario VIP",
+  ],
+};
+
+// ── Personal Plans ──
+const PERS_MONTHLY = {
+  name: "Mensual",
+  price: "$40",
+  originalPrice: "$80",
+  period: "/mes",
+  badge: "Oferta",
+  features: [
+    "Agente de contabilidad AI personal",
+    "Toda tu contabilidad personal organizada",
+    "Seguimiento de ingresos y gastos",
+    "Metas de ahorro con IA",
+    "Reportes financieros automaticos",
+    "Soporte dedicado 24/7",
+  ],
+};
+
+const PERS_ANNUAL = {
+  name: "Anual",
+  price: "$400",
+  originalPrice: "$800",
+  period: "/año",
+  badge: "Mejor valor",
+  savings: "Ahorras $400",
+  features: [
+    "Todo lo incluido en el plan Mensual",
+    "Agente de contabilidad AI ilimitado",
+    "Metas de ahorro avanzadas con IA",
+    "Reportes anuales exportables",
+    "Backups diarios automaticos",
+    "Soporte VIP prioritario",
+  ],
+};
+
 /**
- * Subscription Gate — Shows a subscribe screen after the user has connected
- * their bank and seen it working for 10 seconds.
- * 
- * Flow:
- * 1. No subscription + no bank → Show "connect bank" first
- * 2. No subscription + bank connected → Show bank success for 10s, then subscribe
- * 3. Has subscription → Show content normally
+ * Full-screen subscription overlay.
+ * Shows different plans based on mode (business vs personal).
+ * Can be dismissed with X to navigate freely.
+ * Pages are gated individually via SubscriptionPageGate.
  */
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<"checking" | "connect_bank" | "subscribe" | "active">("checking");
+  const [dismissed, setDismissed] = useState(false);
+
+  const { user } = useAuth();
+  const userMode = user?.modePreference || "business";
 
   const { data: status, isLoading: subLoading } = trpc.subscription.status.useQuery(
-    undefined,
-    { refetchInterval: 10000 }
+    undefined, { refetchInterval: 10000 }
   );
-
   const { data: bankConnection, isLoading: bankLoading } = trpc.bank.checkConnection.useQuery(
-    undefined,
-    { refetchInterval: 10000 }
+    undefined, { refetchInterval: 10000 }
   );
 
   const hasSubscription = status?.active === true;
   const hasBank = bankConnection?.hasBank === true;
 
-  // Timer: after 20 seconds of bank connected, show subscription
+  // 20s timer then show subscribe screen
   useEffect(() => {
-    if (phase === "subscribe") return; // Already showing
-
-    if (hasSubscription) {
-      setPhase("active");
-      return;
-    }
-
-    if (!hasBank) {
-      setPhase("connect_bank");
-      return;
-    }
-
-    // Has bank but no subscription — wait 20s silently, then show subscribe
-    if (hasBank && !hasSubscription && phase !== "subscribe") {
-      const timer = setTimeout(() => {
-        setPhase("subscribe");
-      }, 20000); // 20 seconds
+    if (phase === "subscribe") return;
+    if (hasSubscription) { setPhase("active"); return; }
+    if (!hasBank) { setPhase("connect_bank"); return; }
+    if (hasBank && !hasSubscription) {
+      const timer = setTimeout(() => setPhase("subscribe"), 20000);
       return () => clearTimeout(timer);
     }
   }, [hasSubscription, hasBank, subLoading, bankLoading, phase]);
 
-  // Loading state
+  // If user dismissed the overlay, just show children
+  if (dismissed) return <>{children}</>;
+
+  // Has subscription → show content
+  if (phase === "active") return <>{children}</>;
+
+  // Loading
   if (phase === "checking") {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center space-y-3">
-          <div className="w-10 h-10 border-2 border-neutral-200 border-t-black rounded-full animate-spin mx-auto" />
-          <p className="text-sm text-neutral-500">Verificando acceso...</p>
-        </div>
+        <div className="w-10 h-10 border-2 border-neutral-200 border-t-black rounded-full animate-spin" />
       </div>
     );
   }
 
-  // PHASE 1: No bank connected — redirect to connect bank first
+  // No bank → connect bank first
   if (phase === "connect_bank") {
     return (
       <div className="flex flex-col items-center justify-center min-h-[500px] p-6">
@@ -76,111 +136,289 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
           <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto">
             <Landmark className="w-8 h-8 text-neutral-400" />
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-black">Conecta tu banco primero</h2>
-            <p className="text-sm text-neutral-500 mt-1">
-              Conecta tu cuenta bancaria para desbloquear todas las funciones de AI Aethel Accountant.
-            </p>
-          </div>
+          <h2 className="text-lg font-semibold text-black">Conecta tu banco primero</h2>
+          <p className="text-sm text-neutral-500">Conecta tu cuenta bancaria para desbloquear todas las funciones.</p>
           <button
-            onClick={() => navigate("/bank")}
+            onClick={() => navigate(userMode === "personal" ? "/bank?mode=personal" : "/bank")}
             className="w-full h-11 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
           >
-            <Landmark className="w-4 h-4" />
-            Conectar banco
-            <ArrowRight className="w-4 h-4" />
+            <Landmark className="w-4 h-4" /> Conectar banco
           </button>
         </div>
       </div>
     );
   }
 
-  if (phase === "subscribe") {
-    return (
-      <div className="fixed inset-0 z-[99999] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-300">
-          {/* Success message */}
+  // ── SUBSCRIBE FULL-SCREEN OVERLAY ──
+  const isBusiness = userMode === "business";
+  const monthlyPlan = isBusiness ? BIZ_MONTHLY : PERS_MONTHLY;
+  const annualPlan = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
+  const title = isBusiness ? "Negocio" : "Personal";
+
+  return (
+    <div className="fixed inset-0 z-[99998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
+      <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        {/* Header with close X */}
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
+              <Crown className="w-4 h-4 text-yellow-500" />
+            </div>
+            <span className="text-sm font-medium text-black">{title} — Premium</span>
+          </div>
+          <button
+            onClick={() => setDismissed(true)}
+            className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-black hover:bg-neutral-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
+          {/* Success banner */}
           <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
             <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
             <p className="text-sm text-emerald-800">
-              <strong>Banco conectado.</strong> Ahora suscribete para acceso completo.
+              <strong>Banco conectado.</strong> Suscribete para acceso completo.
             </p>
           </div>
 
-          {/* Header */}
+          {/* Crown + Title */}
           <div className="text-center space-y-2">
             <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent mx-auto">
               <Crown className="w-7 h-7 text-yellow-500" />
             </div>
             <h2 className="text-xl font-semibold text-black">Desbloquea el acceso completo</h2>
             <p className="text-sm text-neutral-500">
-              Tu banco esta conectado. Suscribete para ver todas tus transacciones, analisis y reportes.
+              Suscribete para ver todas tus transacciones, analisis y reportes.
             </p>
           </div>
 
-          {/* Plans */}
+          {/* Cards — same design as SubscriptionSettings */}
           <div className="space-y-3">
-            {/* Monthly */}
-            <button
-              onClick={() => navigate("/settings?renew=monthly")}
-              className="w-full flex items-center gap-3 p-4 border-2 border-emerald-200 rounded-xl hover:border-emerald-400 hover:bg-emerald-50/50 transition-all text-left"
-            >
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0">
-                <CalendarDays className="w-5 h-5 text-emerald-600" />
+            {/* Monthly Card */}
+            <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="absolute -top-2.5 right-4">
+                <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-black">Plan Mensual</p>
-                <p className="text-xs text-neutral-500">$1/mes — Cancela cuando quieras</p>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
+                  <Crown className="w-4 h-4 text-gray-400" />
+                </div>
               </div>
-              <ArrowRight className="w-4 h-4 text-neutral-400" />
-            </button>
+              <div>
+                <h4 className="text-sm font-medium text-black">{monthlyPlan.name}</h4>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
+                  <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
+                  <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
+                </div>
+                <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
+              </div>
+              <ul className="space-y-1.5">
+                {monthlyPlan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => { setDismissed(true); navigate("/settings?renew=monthly"); }}
+                className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> Suscribirse {monthlyPlan.name}
+              </button>
+            </div>
 
-            {/* Annual */}
-            <button
-              onClick={() => navigate("/settings?renew=annual")}
-              className="w-full flex items-center gap-3 p-4 border-2 border-yellow-400 rounded-xl hover:border-yellow-500 hover:bg-yellow-50/50 transition-all text-left bg-yellow-50/30"
-            >
-              <div className="w-10 h-10 rounded-lg bg-yellow-100 flex items-center justify-center shrink-0">
-                <Zap className="w-5 h-5 text-yellow-600" />
+            {/* Annual Card */}
+            <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="absolute -top-2.5 right-4">
+                <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
               </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-black">Plan Anual</p>
-                <p className="text-xs text-neutral-500">$800/año — <span className="text-emerald-600 font-medium">Ahorras $400</span></p>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
+                  <Crown className="w-4 h-4 text-black drop-shadow-sm" />
+                </div>
               </div>
-              <div className="shrink-0">
-                <span className="text-[10px] bg-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">Mejor valor</span>
+              <div>
+                <h4 className="text-sm font-medium text-black">{annualPlan.name}</h4>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
+                  <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
+                  <span className="text-xs text-neutral-400">{annualPlan.period}</span>
+                </div>
+                {annualPlan.savings && (
+                  <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
+                )}
+                <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
               </div>
-            </button>
-          </div>
-
-          {/* Features */}
-          <div className="space-y-2">
-            <p className="text-xs text-neutral-500 font-medium">Incluido en tu suscripcion:</p>
-            <ul className="space-y-1.5">
-              {[
-                "Transacciones ilimitadas",
-                "Balance en tiempo real",
-                "Reportes mensuales y anuales",
-                "Categorizacion automatica con IA",
-                "Soporte prioritario",
-              ].map((f) => (
-                <li key={f} className="flex items-center gap-2 text-xs text-neutral-600">
-                  <CheckCircle className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
+              <ul className="space-y-1.5">
+                {annualPlan.features.map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => { setDismissed(true); navigate("/settings?renew=annual"); }}
+                className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Zap className="w-3.5 h-3.5" /> Suscribirse {annualPlan.name}
+              </button>
+            </div>
           </div>
 
           {/* Footer */}
-          <p className="text-[10px] text-neutral-400 text-center">
+          <p className="text-[10px] text-neutral-400 text-center pb-4">
             Al suscribirte, aceptas los terminos de servicio de AI Aethel Accountant.
           </p>
         </div>
       </div>
-    );
+    </div>
+  );
+}
+
+/**
+ * Page-level gate: blocks individual pages when user has no subscription.
+ * - Business mode: only Settings is allowed
+ * - Personal mode: only Profile (/settings) is allowed
+ */
+export function SubscriptionPageGate({ children }: { children: React.ReactNode }) {
+  const location = useLocation();
+  const { user } = useAuth();
+  const { data: status } = trpc.subscription.status.useQuery(undefined, {
+    refetchInterval: 10000,
+  });
+
+  const userMode = user?.modePreference || "business";
+  const hasSubscription = status?.active === true;
+  const currentPath = location.pathname;
+
+  // If has subscription → show everything
+  if (hasSubscription) return <>{children}</>;
+
+  // Business mode: only /settings is allowed
+  if (userMode === "business" && currentPath !== "/settings") {
+    return <SubscriptionOverlayOnly />;
   }
 
-  // PHASE 3: Has subscription — show content normally
+  // Personal mode: only /settings (profile) is allowed
+  if (userMode === "personal" && currentPath !== "/settings") {
+    return <SubscriptionOverlayOnly />;
+  }
+
+  // Allowed page without subscription → show content
   return <>{children}</>;
+}
+
+/**
+ * Just the subscription overlay without the full gate logic.
+ * Used by SubscriptionPageGate to block individual pages.
+ */
+function SubscriptionOverlayOnly() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
+  const userMode = user?.modePreference || "business";
+  const isBusiness = userMode === "business";
+
+  const monthlyPlan = isBusiness ? BIZ_MONTHLY : PERS_MONTHLY;
+  const annualPlan = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
+  const title = isBusiness ? "Negocio" : "Personal";
+
+  return (
+    <div className="fixed inset-0 z-[99998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
+      <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        {/* Header with close X → goes to allowed page */}
+        <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-4 border-b border-neutral-100">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
+              <Crown className="w-4 h-4 text-yellow-500" />
+            </div>
+            <span className="text-sm font-medium text-black">{title} — Premium</span>
+          </div>
+          <button
+            onClick={() => navigate("/settings")}
+            className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-black hover:bg-neutral-200 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
+          {/* Crown + Title */}
+          <div className="text-center space-y-2">
+            <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent mx-auto">
+              <Crown className="w-7 h-7 text-yellow-500" />
+            </div>
+            <h2 className="text-xl font-semibold text-black">Desbloquea el acceso completo</h2>
+            <p className="text-sm text-neutral-500">
+              Suscribete para acceder a esta pagina y todas las funciones.
+            </p>
+          </div>
+
+          {/* Cards */}
+          <div className="space-y-3">
+            {/* Monthly */}
+            <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="absolute -top-2.5 right-4">
+                <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-black">{monthlyPlan.name}</h4>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
+                  <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
+                  <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
+                </div>
+              </div>
+              <ul className="space-y-1.5">
+                {monthlyPlan.features.slice(0, 4).map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => navigate("/settings?renew=monthly")}
+                className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <CalendarDays className="w-3.5 h-3.5" /> Suscribirse {monthlyPlan.name}
+              </button>
+            </div>
+
+            {/* Annual */}
+            <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="absolute -top-2.5 right-4">
+                <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-black">{annualPlan.name}</h4>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
+                  <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
+                  <span className="text-xs text-neutral-400">{annualPlan.period}</span>
+                </div>
+                {annualPlan.savings && (
+                  <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
+                )}
+              </div>
+              <ul className="space-y-1.5">
+                {annualPlan.features.slice(0, 4).map((f) => (
+                  <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
+                  </li>
+                ))}
+              </ul>
+              <button
+                onClick={() => navigate("/settings?renew=annual")}
+                className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2"
+              >
+                <Zap className="w-3.5 h-3.5" /> Suscribirse {annualPlan.name}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
