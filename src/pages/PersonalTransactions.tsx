@@ -131,6 +131,11 @@ export default function PersonalTransactions() {
   // Fetch bank accounts from DB (for currentBalance) — only when bank is connected
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
     enabled: hasBankConnected,
+    onSuccess: (data) => {
+      if (data && data.length > 0 && !selectedAccountId && !qpAccount) {
+        setSelectedAccountId(String(data[0].id));
+      }
+    },
   });
 
   // Merge Plaid accounts with DB data for currentBalance
@@ -144,13 +149,6 @@ export default function PersonalTransactions() {
 
   const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
 
-  // Auto-select first account on load
-  useEffect(() => {
-    if (accounts.length > 0 && !selectedAccountId && !qpAccount) {
-      setSelectedAccountId(String(accounts[0].id));
-    }
-  }, [accounts.length > 0 ? accounts[0]?.id : null]);
-
   // Use SAME endpoint as Dashboard - bank.getMonthData
   // First get ALL transactions (no account filter) to show count
   const { data: allMonthData } = trpc.bank.getMonthData.useQuery({
@@ -163,7 +161,8 @@ export default function PersonalTransactions() {
     accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
   });
 
-  // ─── Mutations (MUST be defined before useEffect that uses them) ───
+  // ─── AI Auto-Categorization Agent ───
+  // Silently fixes miscategorized transactions on page load
   const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
     onSuccess: (data) => {
       if (data.fixed && data.fixed > 0) {
@@ -172,31 +171,11 @@ export default function PersonalTransactions() {
     },
   });
 
-  const syncMutation = trpc.bank.syncTransactions.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        toast.success(`${data.added} transacciones sincronizadas`);
-      }
-      utils.bank.getMonthData.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        toast.success(`${data.added} transacciones nuevas encontradas`);
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-
-  // ─── AI Auto-Categorization Agent ───
+  // Run auto-fix on page load
   useEffect(() => {
     const timer = setTimeout(() => {
       autoFixMutation.mutate();
-    }, 2000);
+    }, 2000); // Wait 2s for data to load first
     return () => clearTimeout(timer);
   }, []);
 
@@ -219,9 +198,31 @@ export default function PersonalTransactions() {
         year: parseInt(year),
         month: parseInt(month),
       });
-    }, 2 * 60 * 1000);
+    }, 2 * 60 * 1000); // Every 2 minutes
     return () => clearInterval(interval);
   }, [hasBankConnected, year, month]);
+
+  // Auto-sync on load if no transactions
+  const syncMutation = trpc.bank.syncTransactions.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        toast.success(`${data.added} transacciones sincronizadas`);
+      }
+      utils.bank.getMonthData.invalidate();
+    },
+    onError: (err) => toast.error(err.message),
+  });
+
+  // Auto-sync RECENT transactions on page load (last 7 days)
+  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        toast.success(`${data.added} transacciones nuevas encontradas`);
+        utils.bank.getMonthData.invalidate();
+      }
+    },
+    onError: () => { /* silent - recent sync is best effort */ },
+  });
 
   // Auto-sync when month changes (always sync for selected month)
   useEffect(() => {
@@ -234,6 +235,18 @@ export default function PersonalTransactions() {
     }, 1500);
     return () => clearTimeout(timer);
   }, [year, month, effectiveAccountId]);
+
+  // PLAID POLLING: Auto-sync every 2 minutes for new transactions
+  useEffect(() => {
+    if (!hasBankConnected) return;
+    const interval = setInterval(() => {
+      syncMutation.mutate({
+        year: parseInt(year),
+        month: parseInt(month),
+      });
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [hasBankConnected, year, month]);
 
   const allTransactions = monthData?.transactions ?? [];
   const totalAllAccounts = allMonthData?.transactions?.length ?? 0;
