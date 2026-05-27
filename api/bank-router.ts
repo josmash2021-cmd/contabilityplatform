@@ -820,14 +820,23 @@ export const bankRouter = createRouter({
     const primaryAccount = userAccounts[0];
 
     // Get ALL user transactions for the month — do NOT filter by accountId
-    let txs = await db.select().from(bankTransactions)
-      .where(and(
-        eq(bankTransactions.userId, ctx.user.id),
-        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
-      ))
-      .orderBy(desc(bankTransactions.transactionDate));
-
-    console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
+    let txs: any[] = [];
+    try {
+      txs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`
+        ))
+        .orderBy(desc(bankTransactions.transactionDate));
+      console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
+    } catch (dbErr: any) {
+      console.error(`[getMonthData] DB QUERY ERROR: ${dbErr.message?.substring(0, 300)}`);
+      return {
+        transactions: [], income: "0", expense: "0", topExpense: "0",
+        liveBalance: "0", monthName: `${month}/${year}`,
+        plaidError: `DB Error: ${dbErr.message?.substring(0, 200)}`,
+      };
+    }
 
     // If no DB results, fetch DIRECTLY from Plaid
     console.log(`[getMonthData] STEP 2: checking if need Plaid fetch (txs.length=${txs.length})`);
