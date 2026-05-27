@@ -7,7 +7,7 @@ import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { ArrowLeft, Trash2, Calendar, LayoutList } from "lucide-react";
+import { ArrowLeft, Trash2, Calendar, LayoutList, RotateCcw } from "lucide-react";
 
 const categoryMeta: Record<string, { label: string; type: "income" | "expense" }> = {
   zelle_income: { label: "Zelle Recibidos", type: "income" },
@@ -133,38 +133,29 @@ export default function BankCategoryDetail() {
           <ScrollArea className="h-[500px]">
             <div className="space-y-0">
               {(transactions ?? []).map((tx: any) => (
-                <div key={tx.id} className="flex items-center justify-between py-3 border-b border-neutral-50 last:border-0 group">
+                <div key={tx.id} className={`flex items-center justify-between py-3 border-b border-neutral-50 last:border-0 group ${tx.isReversed ? "opacity-50 bg-neutral-50" : ""}`}>
                   <div className="flex items-center gap-3">
-                    <span className={`text-xs font-medium ${tx.type === "income" ? "text-emerald-600" : "text-red-500"}`}>
-                      {tx.type === "income" ? "+" : "-"}
-                    </span>
+                    {tx.isReversed ? (
+                      <RotateCcw className="w-4 h-4 text-neutral-400" />
+                    ) : (
+                      <span className={`text-xs font-medium ${tx.type === "income" ? "text-emerald-600" : "text-red-500"}`}>
+                        {tx.type === "income" ? "+" : "-"}
+                      </span>
+                    )}
                     <div>
-                      <p className="text-sm text-neutral-800">{tx.description}</p>
+                      <p className={`text-sm ${tx.isReversed ? "text-neutral-400 line-through" : "text-neutral-800"}`}>{tx.description}</p>
                       <p className="text-[10px] text-neutral-400">
                         {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}
                         {tx.importedFrom === "plaid" && " · Sync"}
+                        {tx.isReversed && " · Reversada"}
                       </p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className={`text-sm font-medium ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                    <span className={`text-sm font-medium ${tx.isReversed ? "text-neutral-400 line-through" : tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
                       {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
                     </span>
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="opacity-0 group-hover:opacity-100 h-6 w-6 p-0 text-neutral-300 hover:text-red-500"
-                      onClick={() => deleteMut.mutate({ id: tx.id })}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-        )}
-      </div>
-    </div>
-  );
-}
+                      className="opacity-0 group-hover:o

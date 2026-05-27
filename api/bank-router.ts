@@ -61,6 +61,51 @@ const defaultCategoryRules: Record<string, { category: string; type: string }> =
   "gas station": { category: "gasolina", type: "expense" },
 };
 
+/**
+ * Detects reversed/voided transactions.
+ * A transaction is reversed when:
+ * - Same merchant/description
+ * - Same date (within same day)
+ * - Opposite amounts (+$40 and -$40)
+ * - The positive one is a refund/reversal of the negative one
+ * Returns a Set of transaction_ids that are reversed.
+ */
+function detectReversedTransactions(transactions: any[]): Set<string> {
+  const reversed = new Set<string>();
+  const byKey = new Map<string, any[]>();
+
+  // Group by normalized description + date + amount (absolute value)
+  for (const tx of transactions) {
+    const desc = (tx.description || tx.merchantName || "").toLowerCase().trim();
+    const date = tx.transactionDate
+      ? (tx.transactionDate instanceof Date ? tx.transactionDate.toISOString().split("T")[0] : String(tx.transactionDate).split("T")[0])
+      : "";
+    const absAmount = Math.abs(parseFloat(tx.amount || 0)).toFixed(2);
+    const key = `${desc}|${date}|${absAmount}`;
+
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(tx);
+  }
+
+  // Find pairs with opposite signs
+  for (const [, group] of byKey) {
+    if (group.length < 2) continue;
+
+    // Separate by sign
+    const negatives = group.filter((tx: any) => parseFloat(tx.amount) > 0 && tx.type === "expense");
+    const positives = group.filter((tx: any) => parseFloat(tx.amount) > 0 && tx.type === "income");
+
+    // Match negatives with positives (same count = reversed)
+    const pairCount = Math.min(negatives.length, positives.length);
+    for (let i = 0; i < pairCount; i++) {
+      reversed.add(negatives[i].id || negatives[i].plaidTransactionId);
+      reversed.add(positives[i].id || positives[i].plaidTransactionId);
+    }
+  }
+
+  return reversed;
+}
+
 function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[], description: string): { type: "income" | "expense"; category: string } {
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
@@ -936,10 +981,20 @@ export const bankRouter = createRouter({
       }
     }
 
+    // Mark reversed transactions (in memory only - no DB column needed for Railway)
+    const reversedIds = detectReversedTransactions(txs);
+    for (const tx of txs) {
+      if (reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId)) {
+        (tx as any).isReversed = true;
+      }
+    }
+    const activeTxs = txs.filter((tx: any) => !tx.isReversed);
+
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
+    // Only count NON-REVERSED transactions in the totals
     let inc = 0, exp = 0;
-    for (const t of txs) {
+    for (const t of activeTxs) {
       const amt = parseFloat(t.amount ?? "0");
       if (amt <= 0) continue; // Skip zero/negative amounts
       // Use plaidAmount if available (negative = income, positive = expense)
@@ -1193,6 +1248,14 @@ export const bankRouter = createRouter({
           });
         }
       } catch { /* ignore Plaid errors */ }
+    }
+
+    // Mark reversed transactions (in memory only)
+    const reversedIds2 = detectReversedTransactions(txs);
+    for (const tx of txs) {
+      if (reversedIds2.has(tx.id) || reversedIds2.has(tx.plaidTransactionId)) {
+        (tx as any).isReversed = true;
+      }
     }
 
     return txs;

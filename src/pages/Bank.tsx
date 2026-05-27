@@ -15,7 +15,7 @@ import {
   RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
   Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
-  CheckCircle2, PiggyBank, Loader2, X, Check, Clock, Bug,
+  CheckCircle2, PiggyBank, Loader2, X, Check, Clock, Bug, RotateCcw,
 } from "lucide-react";
 
 /** Account dropdown — pushes content down when open (part of document flow) */
@@ -914,13 +914,13 @@ export default function Bank() {
                 ) : (
                   <div className="space-y-1">
                     {(monthData?.transactions ?? []).slice(0, 3).map((tx: any) => (
-                      <div key={tx.id} className="flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150">
+                      <div key={tx.id} className={`flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150 ${tx.isReversed ? "opacity-50 bg-neutral-50" : ""}`}>
                         <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
-                            {tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-500" /> : <ArrowDownRight className="w-4 h-4 text-red-500" />}
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.isReversed ? "bg-neutral-100" : tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
+                            {tx.isReversed ? <RotateCcw className="w-4 h-4 text-neutral-400" /> : tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-500" /> : <ArrowDownRight className="w-4 h-4 text-red-500" />}
                           </div>
                           <div>
-                            <p className="text-sm text-neutral-800 font-medium">{tx.description}</p>
+                            <p className={`text-sm font-medium ${tx.isReversed ? "text-neutral-400 line-through" : "text-neutral-800"}`}>{tx.description}</p>
                             <p className="text-[10px] text-neutral-400">{tx.category?.replace(/_/g, " ")} . {(() => {
                               const d = tx.transactionDate;
                               if (!d) return "";
@@ -929,11 +929,11 @@ export default function Bank() {
                                 if (isNaN(dateObj.getTime())) return "";
                                 return dateObj.toLocaleDateString("es", { day: "2-digit", month: "short" });
                               } catch { return ""; }
-                            })()}</p>
+                            })()}{tx.isReversed ? " · Reversada" : ""}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className={`text-sm font-semibold tabular-nums ${tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
+                          <span className={`text-sm font-semibold tabular-nums ${tx.isReversed ? "text-neutral-400 line-through" : tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
                             {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
                           </span>
                           {confirmDeleteTx === tx.id ? (
