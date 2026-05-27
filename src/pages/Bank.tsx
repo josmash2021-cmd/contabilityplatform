@@ -265,10 +265,6 @@ export default function Bank() {
   const { data: yearData } = trpc.bank.getYearData.useQuery(
     { year: parseInt(selectedYear) }, { enabled: hasBankConnected && !!account }
   );
-  // DEBUG: Log month selection
-  useEffect(() => {
-    console.log("[DEBUG] selectedMonth:", selectedMonth, "selectedYear:", selectedYear, "accountIdNum:", accountIdNum, "monthData count:", monthData?.count ?? "no data", "loading:", loadingMonth);
-  }, [selectedMonth, selectedYear, accountIdNum, monthData, loadingMonth]);
   const { data: diagnosis, isLoading: loadingDiagnosis, refetch: refetchDiagnosis } = trpc.bank.diagnoseMonth.useQuery(
     { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
     { enabled: false } // manual only
@@ -276,65 +272,7 @@ export default function Bank() {
 
   const handleSuccess = useCallback(() => { utils.invalidate(); }, [utils]);
 
-  // Auto-sync on mount then refetch every 30 seconds
-  useEffect(() => {
-    if (!hasBankConnected || !account) return;
-
-    const doRefresh = async () => {
-      try {
-        const syncInput: any = { year: parseInt(selectedYear), month: parseInt(selectedMonth) };
-        if (accountIdNum) syncInput.accountId = accountIdNum;
-        await syncMutation.mutateAsync(syncInput);
-      } catch { /* silent fail on sync, still refetch balance */ }
-      // Always refetch balance from Plaid (live)
-      liveBalanceQuery.refetch();
-      monthDataQuery.refetch();
-    };
-
-    doRefresh(); // Initial
-    const interval = setInterval(doRefresh, 30000);
-    return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hasBankConnected, account]);
-
-  const importMutation = trpc.bank.importBankStatement.useMutation();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-sync recent transactions on page load
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        utils.transactions.getAll.invalidate();
-        utils.bank.listAccounts.invalidate();
-        utils.bankAccounts.list.invalidate();
-        toast.success(`${data.added} transacciones nuevas sincronizadas`);
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-
-  // Run auto-sync on load
-  useEffect(() => {
-    if (hasBankConnected) {
-      const timer = setTimeout(() => syncRecentMutation.mutate(), 2000);
-      return () => clearTimeout(timer);
-    }
-  }, [hasBankConnected]);
-
-  // ─── PLAID POLLING: Auto-sync every 2 minutes for new transactions ───
-  useEffect(() => {
-    if (!hasBankConnected || !account) return;
-    const interval = setInterval(() => {
-      console.log("[Plaid Polling Business] Syncing transactions...");
-      syncMutation.mutate({
-        year: parseInt(selectedYear),
-        month: parseInt(selectedMonth),
-        accountId: accountIdNum,
-      });
-    }, 2 * 60 * 1000); // Every 2 minutes
-    return () => clearInterval(interval);
-  }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum]);
-
+  // ─── ALL MUTATIONS MUST BE DECLARED BEFORE ANY useEffect THAT USES THEM ───
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
@@ -366,11 +304,6 @@ export default function Bank() {
     onError: (err: { message: string }) => { setSyncing(false); toast.error(err.message); },
   });
 
-  // Note: Auto-sync removed to prevent race conditions with queries.
-  // Users can sync manually with the sync button.
-
-
-
   const disconnectMut = trpc.bank.disconnect.useMutation({
     onSuccess: () => { setAutoSyncDone(false); setConfirmDisconnect(false); handleSuccess(); },
     onError: (err: { message: string }) => toast.error(err.message),
@@ -381,8 +314,67 @@ export default function Bank() {
     onError: (err) => toast.error(err.message),
   });
 
+  const importMutation = trpc.bank.importBankStatement.useMutation();
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Auto-sync recent transactions on page load
+  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.added && data.added > 0) {
+        utils.transactions.getAll.invalidate();
+        utils.bank.listAccounts.invalidate();
+        utils.bankAccounts.list.invalidate();
+        toast.success(`${data.added} transacciones nuevas sincronizadas`);
+      }
+    },
+    onError: () => { /* silent */ },
+  });
+
+  // ─── useEffect hooks AFTER all useMutation declarations ───
+
+  // Auto-sync on mount then refetch every 30 seconds
+  useEffect(() => {
+    if (!hasBankConnected || !account) return;
+
+    const doRefresh = async () => {
+      try {
+        const syncInput: any = { year: parseInt(selectedYear), month: parseInt(selectedMonth) };
+        if (accountIdNum) syncInput.accountId = accountIdNum;
+        await syncMutation.mutateAsync(syncInput);
+      } catch { /* silent fail on sync, still refetch balance */ }
+      liveBalanceQuery.refetch();
+      monthDataQuery.refetch();
+    };
+
+    doRefresh();
+    const interval = setInterval(doRefresh, 30000);
+    return () => clearInterval(interval);
+  }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum, syncMutation, liveBalanceQuery, monthDataQuery]);
+
+  // Run auto-sync on load
+  useEffect(() => {
+    if (hasBankConnected) {
+      const timer = setTimeout(() => syncRecentMutation.mutate(), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [hasBankConnected, syncRecentMutation]);
+
+  // Auto-sync every 2 minutes for new transactions
+  useEffect(() => {
+    if (!hasBankConnected || !account) return;
+    const interval = setInterval(() => {
+      syncMutation.mutate({
+        year: parseInt(selectedYear),
+        month: parseInt(selectedMonth),
+        accountId: accountIdNum,
+      });
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum, syncMutation]);
+
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
+
   // Initial auto-sync on first bank connection
   useEffect(() => {
     const bankNowConnected = connection?.hasBank === true && !loadingConnection;
@@ -392,9 +384,6 @@ export default function Bank() {
       syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth) });
     }
   }, [connection?.hasBank, loadingConnection, selectedYear, selectedMonth, syncMutation]);
-
-  // Note: Auto-sync removed to prevent accidental data loss.
-  // User must manually click "Sincronizar" to sync a month.
 
   useEffect(() => {
     if (!allAccounts || allAccounts.length === 0) return;
@@ -565,9 +554,9 @@ export default function Bank() {
           </div>
           {/* Single row: Account + Month + Year + Sync + Disconnect */}
           <div className="flex items-center gap-1.5 flex-wrap">
-            {allAccounts && allAccounts.length > 0 && (
+            {hasBankConnected && (
               <AccountDropdown
-                accounts={allAccounts}
+                accounts={allAccounts.length > 0 ? allAccounts : (account ? [{ ...account, isInDb: true }] : [])}
                 selectedId={selectedAccountId || String(account?.id) || ""}
                 onChange={(id) => setSelectedAccountId(id)}
               />
