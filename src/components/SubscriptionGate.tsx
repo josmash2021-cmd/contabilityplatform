@@ -12,11 +12,13 @@ interface SubscriptionGateProps {
 
 // ── Business Plans ──
 const BIZ_MONTHLY = {
+  subtitle: "Suscripcion Premium",
   name: "Mensual",
   price: "$80",
   originalPrice: "$120",
   period: "/mes",
   badge: "New Plan",
+  description: "Facturado mensualmente. Cancela cuando quieras.",
   features: [
     "Agente de contabilidad AI personalizado",
     "Contabilidad completa del negocio",
@@ -28,12 +30,14 @@ const BIZ_MONTHLY = {
 };
 
 const BIZ_ANNUAL = {
+  subtitle: "Suscripcion elite",
   name: "Anual",
   price: "$800",
   originalPrice: "$1200",
   period: "/año",
   badge: "Mejor valor",
   savings: "Ahorras $400",
+  description: "Facturado anualmente. Cancela cuando quieras.",
   features: [
     "Todo lo incluido en el plan Mensual",
     "Agente de contabilidad AI ilimitado",
@@ -46,11 +50,13 @@ const BIZ_ANNUAL = {
 
 // ── Personal Plans ──
 const PERS_MONTHLY = {
+  subtitle: "Suscripcion Premium",
   name: "Mensual",
   price: "$40",
   originalPrice: "$80",
   period: "/mes",
   badge: "Oferta",
+  description: "Facturado mensualmente. Cancela cuando quieras.",
   features: [
     "Agente de contabilidad AI personal",
     "Toda tu contabilidad personal organizada",
@@ -62,12 +68,14 @@ const PERS_MONTHLY = {
 };
 
 const PERS_ANNUAL = {
+  subtitle: "Suscripcion elite",
   name: "Anual",
   price: "$400",
-  originalPrice: "$800",
+  originalPrice: "$700",
   period: "/año",
   badge: "Mejor valor",
-  savings: "Ahorras $400",
+  savings: "Ahorras $300",
+  description: "Facturado anualmente. Cancela cuando quieras.",
   features: [
     "Todo lo incluido en el plan Mensual",
     "Agente de contabilidad AI ilimitado",
@@ -207,7 +215,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                 </div>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-black">{monthlyPlan.name}</h4>
+                <p className="text-[11px] text-neutral-500 font-medium uppercase tracking-wide">{monthlyPlan.subtitle}</p>
+                <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
                   <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
@@ -241,7 +250,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                 </div>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-black">{annualPlan.name}</h4>
+                <p className="text-[11px] text-neutral-500 font-medium uppercase tracking-wide">{annualPlan.subtitle}</p>
+                <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
                   <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
@@ -364,12 +374,14 @@ function SubscriptionOverlayOnly() {
                 <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-black">{monthlyPlan.name}</h4>
+                <p className="text-[11px] text-neutral-500 font-medium uppercase tracking-wide">{monthlyPlan.subtitle}</p>
+                <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
                   <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                   <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                 </div>
+                <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
               </div>
               <ul className="space-y-1.5">
                 {monthlyPlan.features.slice(0, 4).map((f) => (
@@ -392,7 +404,8 @@ function SubscriptionOverlayOnly() {
                 <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
               </div>
               <div>
-                <h4 className="text-sm font-medium text-black">{annualPlan.name}</h4>
+                <p className="text-[11px] text-neutral-500 font-medium uppercase tracking-wide">{annualPlan.subtitle}</p>
+                <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
                   <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
@@ -401,6 +414,7 @@ function SubscriptionOverlayOnly() {
                 {annualPlan.savings && (
                   <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
                 )}
+                <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
               </div>
               <ul className="space-y-1.5">
                 {annualPlan.features.slice(0, 4).map((f) => (
