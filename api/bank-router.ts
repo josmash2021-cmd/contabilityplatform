@@ -1808,6 +1808,6 @@ export const bankRouter = createRouter({
         results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
       }
     }
-    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
+    return { results, plaidEnv: process.env.PLAID_ENV || "production" };
   }),
 });

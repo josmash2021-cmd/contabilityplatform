@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
@@ -23,10 +23,12 @@ function AccountDropdown({
   accounts,
   selectedId,
   onChange,
+  isLoading,
 }: {
   accounts: any[];
   selectedId: string | null;
   onChange: (id: string) => void;
+  isLoading?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -40,6 +42,26 @@ function AccountDropdown({
   }, [open]);
 
   const selected = accounts.find((a) => String(a.id) === selectedId);
+
+  // Loading state — show skeleton instead of disappearing
+  if (isLoading && accounts.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 animate-pulse">
+        <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+        <span className="text-neutral-400">Cargando cuentas...</span>
+      </div>
+    );
+  }
+
+  // Empty state — still show the dropdown but disabled
+  if (accounts.length === 0) {
+    return (
+      <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 opacity-60">
+        <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
+        <span className="text-neutral-400">Sin cuentas</span>
+      </div>
+    );
+  }
 
   return (
     <div ref={ref} className="relative">
@@ -221,35 +243,79 @@ export default function Bank() {
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const wasConnectedRef = useRef(false);
 
+  // Refs to prevent duplicate operations
+  const autoSyncFiredRef = useRef(false);
+  const lastToastRef = useRef<{ type: string; time: number } | null>(null);
+
   // Use checkConnection as PRIMARY source for bank detection (same as Transactions.tsx)
   const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
   const hasBankConnected = connection?.hasBank === true;
 
-  // getAllPlaidAccounts - fetches from Plaid live
-  const { data: plaidAccountsData, isLoading: loadingAccounts, error: plaidError } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
+  // getAllPlaidAccounts - fetches from Plaid live (may fail due to rate limits)
+  const { data: plaidAccountsData, isLoading: loadingPlaidAccounts } = trpc.bank.getAllPlaidAccounts.useQuery(
+    undefined,
+    { retry: false, staleTime: 2 * 60 * 1000 } // 2min cache to reduce Plaid calls
+  );
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
-  const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
+
+  // DB accounts — always the reliable source of truth
+  const { data: dbAccounts, isLoading: loadingDbAccounts } = trpc.bank.listAccounts.useQuery(
+    undefined,
+    { retry: false, staleTime: 2 * 60 * 1000 }
+  );
   const dbAccountsList = dbAccounts ?? [];
-  // Fallback: if Plaid fails, use DB accounts so dropdown still shows
-  const allAccounts = plaidAccounts.length > 0 ? plaidAccounts : dbAccountsList.map((db: any) => ({
-    id: db.id,
-    plaidAccountId: db.plaidAccountId,
-    bankName: db.bankName || db.name || "Cuenta",
-    accountType: db.type || db.accountType || "",
-    accountNumber: db.accountNumber || "",
-    currentBalance: db.currentBalance || "0",
-    currency: "USD",
-    isInDb: true,
-  }));
-  const account = allAccounts.find((a: any) => String(a.id) === selectedAccountId) || allAccounts[0] || null;
-  // Map to DB id (numeric) — getLiveBalance & getMonthData need DB id
-  const selectedPlaidId = account?.id ?? null;
-  // Try to find DB account by plaidAccountId first, then by id directly
-  const dbAccountMatch = selectedPlaidId 
-    ? (dbAccountsList.find((db: any) => db.plaidAccountId === account?.plaidAccountId) 
-       || dbAccountsList.find((db: any) => String(db.id) === String(selectedPlaidId)))
-    : null;
-  const accountIdNum = dbAccountMatch?.id ? Number(dbAccountMatch.id) : (account?.id ? Number(account.id) : undefined);
+
+  // Merge Plaid + DB accounts using useMemo for stable references
+  // Priority: Plaid accounts (live) merged with DB accounts (reliable)
+  const allAccounts = useMemo(() => {
+    // If we have Plaid accounts, use them as primary (they have fresh balances)
+    if (plaidAccounts.length > 0) {
+      return plaidAccounts.map((pa: any) => {
+        // Find matching DB account to get the numeric DB id
+        const dbMatch = dbAccountsList.find((db: any) => db.plaidAccountId === pa.plaidAccountId);
+        return {
+          ...pa,
+          // Prefer DB id if available (needed for monthData queries)
+          id: dbMatch?.id ?? pa.id,
+          isInDb: !!dbMatch,
+        };
+      });
+    }
+    // Fallback: use DB accounts directly
+    if (dbAccountsList.length > 0) {
+      return dbAccountsList.map((db: any) => ({
+        id: db.id,
+        plaidAccountId: db.plaidAccountId,
+        bankName: db.bankName || db.name || "Cuenta",
+        accountType: db.type || db.accountType || "",
+        accountNumber: db.accountNumber || "",
+        currentBalance: db.currentBalance || "0",
+        currency: "USD",
+        isInDb: true,
+      }));
+    }
+    return [];
+  }, [plaidAccounts, dbAccountsList]);
+
+  // Stable account selection using useMemo
+  const account = useMemo(() => {
+    if (allAccounts.length === 0) return null;
+    const found = allAccounts.find((a: any) => String(a.id) === selectedAccountId);
+    return found ?? allAccounts[0];
+  }, [allAccounts, selectedAccountId]);
+
+  // DB account ID for monthData queries (needs numeric DB id)
+  const accountIdNum = useMemo(() => {
+    if (!account) return undefined;
+    const dbMatch = dbAccountsList.find((db: any) =>
+      db.plaidAccountId && account.plaidAccountId
+        ? db.plaidAccountId === account.plaidAccountId
+        : String(db.id) === String(account.id)
+    );
+    return dbMatch?.id ? Number(dbMatch.id) : (account.id ? Number(account.id) : undefined);
+  }, [account, dbAccountsList]);
+
+  const loadingAccounts = loadingPlaidAccounts && loadingDbAccounts;
 
   // Single query for month data (includes transactions, income, expense, liveBalance)
   // refetchInterval: 5 min to avoid Plaid rate limits. Data is always served from DB;
@@ -270,6 +336,14 @@ export default function Bank() {
     { enabled: false } // manual only
   );
 
+  // Helper: deduplicate toasts — only show one per 30 seconds per type
+  const showToastOnce = useCallback((type: string, fn: () => void) => {
+    const now = Date.now();
+    if (lastToastRef.current?.type === type && now - lastToastRef.current.time < 30000) return;
+    lastToastRef.current = { type, time: now };
+    fn();
+  }, []);
+
   const handleSuccess = useCallback(() => { utils.invalidate(); }, [utils]);
 
   // ─── ALL MUTATIONS MUST BE DECLARED BEFORE ANY useEffect THAT USES THEM ───
@@ -281,27 +355,38 @@ export default function Bank() {
         setTimeout(() => setJustSynced(false), 3000);
         handleSuccess();
         if (data.added === 0) {
-          toast.info(data.message || "No se encontraron transacciones nuevas para este periodo en tu banco.");
+          showToastOnce("sync-no-new", () => {
+            toast.info(data.message || "No se encontraron transacciones nuevas para este periodo en tu banco.");
+          });
         } else {
-          toast.success(`${data.added} transacciones sincronizadas. Los asientos contables se crearon automaticamente.`);
+          showToastOnce("sync-success", () => {
+            toast.success(`${data.added} transacciones sincronizadas. Los asientos contables se crearon automaticamente.`);
+          });
         }
       } else if (data.error === "TOKEN_INVALID") {
-        toast.error("Tu sesion con el banco expiro. Reconecta tu cuenta.");
+        showToastOnce("sync-token-invalid", () => {
+          toast.error("Tu sesion con el banco expiro. Reconecta tu cuenta.");
+        });
         handleSuccess();
       } else {
-        toast.error(data.error || "Error al sincronizar");
+        showToastOnce("sync-error", () => {
+          toast.error(data.error || "Error al sincronizar");
+        });
       }
     },
-    onError: (err: { message: string }) => { setSyncing(false); toast.error(err.message); },
+    onError: (err: { message: string }) => {
+      setSyncing(false);
+      showToastOnce("sync-error", () => toast.error(err.message));
+    },
   });
 
   const syncHistoricalMutation = trpc.bank.syncHistorical.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
-      if (data.success) { setJustSynced(true); setTimeout(() => setJustSynced(false), 3000); handleSuccess(); toast.success(`${data.totalAdded} transacciones sincronizadas en ${data.monthsSynced} meses. Los asientos contables se crearon automaticamente.`); }
-      else { toast.error(data.error || "Error al sincronizar historial"); }
+      if (data.success) { setJustSynced(true); setTimeout(() => setJustSynced(false), 3000); handleSuccess(); showToastOnce("sync-hist-success", () => toast.success(`${data.totalAdded} transacciones sincronizadas en ${data.monthsSynced} meses. Los asientos contables se crearon automaticamente.`)); }
+      else { showToastOnce("sync-hist-error", () => toast.error(data.error || "Error al sincronizar historial")); }
     },
-    onError: (err: { message: string }) => { setSyncing(false); toast.error(err.message); },
+    onError: (err: { message: string }) => { setSyncing(false); showToastOnce("sync-hist-error", () => toast.error(err.message)); },
   });
 
   const disconnectMut = trpc.bank.disconnect.useMutation({
@@ -332,9 +417,12 @@ export default function Bank() {
 
   // ─── useEffect hooks AFTER all useMutation declarations ───
 
-  // Single sync on page load only — background server handles periodic sync
+  // Auto-sync ONCE on page load — NEVER re-run on dependency changes
   useEffect(() => {
-    if (!hasBankConnected || !account) return;
+    if (!hasBankConnected || !account || autoSyncFiredRef.current) return;
+    if (!accountIdNum) return;
+
+    autoSyncFiredRef.current = true;
     const timer = setTimeout(() => {
       syncMutation.mutate({
         year: parseInt(selectedYear),
@@ -343,24 +431,43 @@ export default function Bank() {
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [hasBankConnected, account, selectedYear, selectedMonth, accountIdNum, syncMutation]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // <-- Empty deps = run once on mount only
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
 
+  // Select first account only when: no selection exists, or selected account no longer in list
+  // Uses refs to avoid re-triggering when accounts haven't meaningfully changed
+  const prevAccountCountRef = useRef(0);
   useEffect(() => {
-    if (!allAccounts || allAccounts.length === 0) return;
-    if (selectedAccountId) {
-      const stillExists = allAccounts.some((a: typeof allAccounts[0]) => String(a.id) === selectedAccountId);
-      if (!stillExists) {
-        setSelectedAccountIdRaw(String(allAccounts[0].id));
-        try { localStorage.setItem("bank_selected_account_id", String(allAccounts[0].id)); } catch { /* ignore */ }
-      }
-    } else {
-      setSelectedAccountIdRaw(String(allAccounts[0].id));
-      try { localStorage.setItem("bank_selected_account_id", String(allAccounts[0].id)); } catch { /* ignore */ }
+    if (!allAccounts || allAccounts.length === 0) {
+      prevAccountCountRef.current = 0;
+      return;
     }
-  }, [allAccounts]);
+
+    // If we already have a valid selection, keep it
+    if (selectedAccountId) {
+      const stillExists = allAccounts.some((a: any) => String(a.id) === selectedAccountId);
+      if (stillExists) {
+        prevAccountCountRef.current = allAccounts.length;
+        return; // Account still valid, do nothing
+      }
+      // Account no longer exists — fall through to select first
+    }
+
+    // Only auto-select if: no account selected, selected no longer exists,
+    // or this is the first time we have accounts loaded
+    const shouldAutoSelect = !selectedAccountId || allAccounts.length !== prevAccountCountRef.current;
+
+    if (shouldAutoSelect) {
+      const firstId = String(allAccounts[0].id);
+      setSelectedAccountIdRaw(firstId);
+      try { localStorage.setItem("bank_selected_account_id", firstId); } catch { /* ignore */ }
+    }
+
+    prevAccountCountRef.current = allAccounts.length;
+  }, [allAccounts, selectedAccountId]);
 
   const isPlaidConnected = hasBankConnected && !loadingConnection;
   const needsReconnect = !loadingConnection && hasBankConnected && !!account && !connection?.hasBank;
@@ -368,9 +475,9 @@ export default function Bank() {
   const balance = liveBalanceData?.balance ?? account?.currentBalance ?? "0";
 
   const handleSync = () => {
-    if (account?.id) {
+    if (accountIdNum) {
       setSyncing(true);
-      syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: Number(account.id) });
+      syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum });
     }
   };
 
@@ -519,9 +626,10 @@ export default function Bank() {
           <div className="flex items-center gap-1.5 flex-wrap">
             {hasBankConnected && (
               <AccountDropdown
-                accounts={allAccounts.length > 0 ? allAccounts : (account ? [{ ...account, isInDb: true }] : [])}
+                accounts={allAccounts}
                 selectedId={selectedAccountId || String(account?.id) || ""}
                 onChange={(id) => setSelectedAccountId(id)}
+                isLoading={loadingAccounts}
               />
             )}
             <MonthSelector value={selectedMonth} onChange={setSelectedMonth} selectedYear={selectedYear} />
