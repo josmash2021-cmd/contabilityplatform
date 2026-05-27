@@ -141,12 +141,6 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
 
   // ===== EXPENSE DETECTION =====
 
-  // Incoming money transfers (MONEY TRANSFER FROM, payment FROM someone, etc.)
-  // This detects when money is sent TO the user (e.g. "MONEY TRANSFER AUTHORIZED ON 05/24 FROM DoorDash")
-  const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
-  const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
-  if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
-
   // Zelle sent
   const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
   if (isZelleSent) return { type: "expense", category: "zelle_sent" };
@@ -2161,4 +2155,4 @@ export const bankRouter = createRouter({
     }
     return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
   }),
-});
+});                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
