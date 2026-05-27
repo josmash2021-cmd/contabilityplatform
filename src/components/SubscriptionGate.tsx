@@ -251,7 +251,10 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
+                  <div className="flex items-center gap-1.5">
+                    <Crown className="w-3 h-3 text-gray-400" />
+                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
+                  </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
@@ -287,7 +290,10 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
+                  <div className="flex items-center gap-1.5">
+                    <Crown className="w-3 h-3 text-yellow-500" />
+                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
+                  </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
@@ -407,7 +413,10 @@ function SubscriptionOverlayOnly() {
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
+                  <div className="flex items-center gap-1.5">
+                    <Crown className="w-3 h-3 text-gray-400" />
+                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
+                  </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
@@ -438,7 +447,10 @@ function SubscriptionOverlayOnly() {
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
                 <div>
-                  <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
+                  <div className="flex items-center gap-1.5">
+                    <Crown className="w-3 h-3 text-yellow-500" />
+                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
+                  </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
