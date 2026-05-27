@@ -250,12 +250,120 @@ async function syncAllBalances() {
   }
 }
 
-// Run every 5 minutes in production
+// ═══════════════════════════════════════════════════════════
+// BACKGROUND TRANSACTION SYNC — runs every 3 minutes
+// Fetches new transactions from Plaid for ALL users automatically
+// ═══════════════════════════════════════════════════════════
+async function syncAllTransactions() {
+  const started = Date.now();
+  try {
+    const client = await initPlaid();
+    if (!client) { console.log("[tx-sync] Plaid not initialized"); return; }
+
+    const { bankAccounts, bankTransactions } = await import("@db/schema");
+    const { getDb } = await import("./queries/connection");
+    const { eq, and, sql } = await import("drizzle-orm");
+    const db = getDb();
+
+    // Get all unique access tokens (one per bank connection)
+    const allAccounts = await db.select().from(bankAccounts);
+    const accessTokenMap = new Map<string, { userId: number; accountIds: string[]; dbAccountIds: number[] }>();
+    
+    for (const acc of allAccounts) {
+      if (!acc.plaidAccessToken) continue;
+      const existing = accessTokenMap.get(acc.plaidAccessToken);
+      if (existing) {
+        if (acc.plaidAccountId) existing.accountIds.push(acc.plaidAccountId);
+        existing.dbAccountIds.push(acc.id);
+      } else {
+        accessTokenMap.set(acc.plaidAccessToken, {
+          userId: acc.userId,
+          accountIds: acc.plaidAccountId ? [acc.plaidAccountId] : [],
+          dbAccountIds: [acc.id],
+        });
+      }
+    }
+
+    let totalAdded = 0;
+    let totalUsers = 0;
+
+    for (const [token, data] of accessTokenMap) {
+      try {
+        // Get current date range (last 30 days)
+        const now = new Date();
+        const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+        const endDate = now.toISOString().split("T")[0];
+
+        // Fetch transactions from Plaid
+        const res = await client.transactionsGet({
+          access_token: token,
+          start_date: startDate,
+          end_date: endDate,
+          options: { count: 500 },
+        });
+
+        const plaidTxs = res.data.transactions || [];
+        
+        // Get existing plaid transaction IDs for this user
+        const existingIds = new Set<string>();
+        const existingTxs = await db.select({ plaidTransactionId: bankTransactions.plaidTransactionId })
+          .from(bankTransactions)
+          .where(eq(bankTransactions.userId, data.userId));
+        for (const t of existingTxs) {
+          if (t.plaidTransactionId) existingIds.add(t.plaidTransactionId);
+        }
+
+        // Insert new transactions
+        let added = 0;
+        for (const tx of plaidTxs) {
+          if (existingIds.has(tx.transaction_id)) continue;
+          
+          // Find matching db account
+          const dbAccountId = data.accountIds.includes(tx.account_id) 
+            ? data.dbAccountIds[data.accountIds.indexOf(tx.account_id)]
+            : data.dbAccountIds[0];
+
+          await db.insert(bankTransactions).values({
+            userId: data.userId,
+            bankAccountId: dbAccountId,
+            plaidTransactionId: tx.transaction_id,
+            description: tx.name,
+            amount: String(tx.amount),
+            type: tx.amount >= 0 ? "debit" : "credit",
+            category: tx.personal_finance_category?.detailed?.replace("_", " ") || tx.category?.[0] || "uncategorized",
+            transactionDate: tx.date ? new Date(tx.date) : new Date(),
+            merchantName: tx.merchant_name || tx.name,
+          });
+          added++;
+        }
+
+        if (added > 0) {
+          totalAdded += added;
+          totalUsers++;
+          console.log(`[tx-sync] Added ${added} transactions for user ${data.userId}`);
+        }
+      } catch (e: any) {
+        console.log(`[tx-sync] Error syncing token: ${e.message}`);
+      }
+    }
+
+    console.log(`[tx-sync] Completed in ${Date.now() - started}ms. Added ${totalAdded} transactions for ${totalUsers} users.`);
+  } catch (e: any) {
+    console.error("[tx-sync] Fatal error:", e.message);
+  }
+}
+
+// Run every 3 minutes in production
 if (env.isProduction) {
-  setInterval(syncAllBalances, 5 * 60 * 1000); // 5 minutes
-  // Also run immediately on startup (after 10s delay to let server init)
+  // Balance sync every 5 minutes
+  setInterval(syncAllBalances, 5 * 60 * 1000);
   setTimeout(syncAllBalances, 10000);
-  console.log("[bg-sync] Background balance sync scheduled every 5 minutes");
+  
+  // Transaction sync every 3 minutes  
+  setInterval(syncAllTransactions, 3 * 60 * 1000);
+  setTimeout(syncAllTransactions, 15000); // 5s after balance sync
+  
+  console.log("[bg-sync] Background sync scheduled: balances every 5min, transactions every 3min");
 }
 
 // ── DEBUG: Check raw Plaid balance for logged-in user ──
