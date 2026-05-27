@@ -556,25 +556,26 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
     }
 
-    // Insert using Drizzle's execute with template literals (mysql2 compatible)
+    // Insert using RAW mysql2 connection (bypass Drizzle ORM to avoid schema mismatch)
     let added = 0;
     console.log(`[SYNC] Inserting ${insertValues.length} transactions...`);
+    const mysqlPool = (db as any).$client as import("mysql2/promise").Pool;
     for (const row of insertValues) {
       try {
-        await db.execute(sql`
-          INSERT INTO bankTransactions
+        const [result] = await mysqlPool.execute(
+          `INSERT INTO bankTransactions
             (userId, bankAccountId, bankName, accountNumber, transactionDate, transactionTime,
              description, amount, type, category, subcategory, reference, plaidAmount,
              plaidTransactionId, plaidCategory, merchantName, isDuplicate,
              lastSyncedAt, isReconciled, createdAt)
-          VALUES
-            (${row.userId}, ${row.bankAccountId}, ${row.bankName}, ${row.accountNumber},
-             ${row.transactionDate}, ${row.transactionDate},
-             ${row.description}, ${row.amount}, ${row.type}, ${row.category}, ${row.subcategory},
-             ${row.reference}, ${row.plaidAmount}, ${row.plaidTransactionId}, ${row.plaidCategory},
-             ${row.merchantName}, ${row.isDuplicate ?? false},
-             ${row.lastSyncedAt}, ${row.isReconciled ?? false}, ${new Date()})
-        `);
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          [row.userId, row.bankAccountId, row.bankName, row.accountNumber,
+           row.transactionDate, row.transactionDate,
+           row.description, row.amount, row.type, row.category, row.subcategory,
+           row.reference, row.plaidAmount, row.plaidTransactionId, row.plaidCategory,
+           row.merchantName, row.isDuplicate ?? false,
+           row.lastSyncedAt, row.isReconciled ?? false, new Date()]
+        );
         added++;
       } catch (e: any) {
         console.error(`[SYNC] Insert error for "${row.description?.substring(0, 40)}": ${e.message?.substring(0, 300)}`);
