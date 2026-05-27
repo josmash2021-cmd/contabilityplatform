@@ -815,16 +815,31 @@ export const bankRouter = createRouter({
     console.log(`[getMonthData] User ${ctx.user.id} has ${userAccounts.length} accounts:`, userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,8), currentBal: a.currentBalance, lastSync: a.lastSyncedAt })));
     const primaryAccount = userAccounts[0];
 
-    // Build conditions: always filter by user and date range
-    // NOTE: We do NOT filter by accountId anymore — show ALL transactions for the user
-    // This fixes the issue where plaidAccountId mismatches cause transactions to disappear
+    // Build conditions: filter by user and date range
+    // If accountId specified, also filter by that account
+    const conditions: any[] = [
+      eq(bankTransactions.userId, ctx.user.id),
+      sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+      sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+    ];
+    if (accountId) {
+      conditions.push(eq(bankTransactions.bankAccountId, accountId));
+    }
+
     let txs = await db.select().from(bankTransactions)
-      .where(and(
-        eq(bankTransactions.userId, ctx.user.id),
-        sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
-        sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
-      ))
+      .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
+
+    // Fallback: if no results with account filter, get ALL user transactions for the month
+    if (txs.length === 0 && accountId) {
+      txs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`DATE(${bankTransactions.transactionDate}) >= ${startStr}`,
+          sql`DATE(${bankTransactions.transactionDate}) <= ${endStr}`,
+        ))
+        .orderBy(desc(bankTransactions.transactionDate));
+    }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
