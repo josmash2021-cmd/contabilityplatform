@@ -48,6 +48,21 @@ export function AppLayout() {
   });
   const isActive = (path: string) => location.pathname === path;
 
+  // ── Auto-sync admin role from server ──
+  // If server says user is admin but localStorage says user, update and reload
+  const { data: serverUser } = trpc.auth.me.useQuery(undefined, {
+    enabled: !!user,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+  });
+  useEffect(() => {
+    if (serverUser?.role === "admin" && user?.role !== "admin") {
+      // Server says admin, local says otherwise → update and reload
+      const updated = { ...user, role: "admin" };
+      localStorage.setItem("auth_user", JSON.stringify(updated));
+      window.location.reload();
+    }
+  }, [serverUser?.role, user]);
+
   // Route guard: redirect users to their correct mode routes
   useEffect(() => {
     if (!user) return;
