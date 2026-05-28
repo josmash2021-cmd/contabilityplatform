@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import BankConnectPrompt from "@/components/BankConnectPrompt";
 import {
   RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
   Receipt,
@@ -237,6 +238,9 @@ export default function PersonalTransactions() {
           </p>
         </div>
       </div>
+
+      {/* Show connect prompt when no bank connected */}
+      {!hasBankConnected && !isCheckingBank && <BankConnectPrompt />}
 
       {/* Controls: dropdown, month, year, sync - ONLY when bank connected */}
       {hasBankConnected && (

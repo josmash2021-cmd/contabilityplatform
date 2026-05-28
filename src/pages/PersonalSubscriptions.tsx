@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import { getCancelGuide } from "@/lib/cancelGuides";
+import BankConnectPrompt from "@/components/BankConnectPrompt";
 import {
   Tv, CreditCard, Landmark, Building2, ChevronDown,
   Music, Film, Car, Droplets, Zap, Shield, ExternalLink,
@@ -82,7 +83,14 @@ export default function PersonalSubscriptions() {
   const [historyFilter, setHistoryFilter] = useState<"all" | "3months" | "6months" | "12months">("all");
   const utils = trpc.useUtils();
 
+  // Check if bank is connected
+  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
+    staleTime: 30000,
+  });
+  const hasBankConnected = bankConnection?.hasBank === true;
+
   const { data: accounts } = trpc.bank.listAccounts.useQuery(undefined, {
+    enabled: hasBankConnected,
     onSuccess: (d) => { if (d?.length && !selectedAccountId) setSelectedAccountId(String(d[0].id)); },
   });
   const effectiveAccountId = selectedAccountId || (accounts?.[0] ? String(accounts[0].id) : "");
@@ -162,6 +170,9 @@ export default function PersonalSubscriptions() {
           </Button>
         </div>
       </div>
+
+      {/* Show connect prompt when no bank connected */}
+      {!hasBankConnected && !isCheckingBank && <BankConnectPrompt />}
 
       {/* System Update Banner */}
       {migrationStatus && !migrationStatus.applied && (

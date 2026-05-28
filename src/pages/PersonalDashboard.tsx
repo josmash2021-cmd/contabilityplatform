@@ -14,6 +14,7 @@ import {
   Send, Receipt, LogOut, Star,
 } from "lucide-react";
 import { useNavigate } from "react-router";
+import BankConnectPrompt from "@/components/BankConnectPrompt";
 
 const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
   zelle_income: { label: "Zelle Recibidos", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
@@ -125,17 +126,11 @@ export default function PersonalDashboard() {
   const hasAutoSelected = useRef(false);
   const utils = trpc.useUtils();
 
-  // ─── Redirect to bank connect if no bank connected ───
+  // ─── Check if bank is connected ───
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
     staleTime: 30000,
   });
   const hasBankConnected = bankConnection?.hasBank === true;
-
-  useEffect(() => {
-    if (!isCheckingBank && !hasBankConnected) {
-      navigate("/personal/bank");
-    }
-  }, [isCheckingBank, hasBankConnected, navigate]);
 
   // ─── AI Auto-Categorization Agent ───
   // Silently fixes miscategorized transactions on page load
@@ -354,6 +349,9 @@ export default function PersonalDashboard() {
           )}
         </div>
       </div>
+
+      {/* Show connect prompt when no bank connected */}
+      {!hasBankConnected && !isCheckingBank && <BankConnectPrompt />}
 
       {/* Bank Balance Card - only when bank connected */}
       {hasBankConnected && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
