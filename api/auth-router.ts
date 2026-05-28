@@ -240,24 +240,31 @@ export const authRouter = createRouter({
     return { success: true };
   }),
 
-  // ── Make Admin (protected by setup secret) ──
-  // Use this endpoint ONCE to promote Angel Tosta (or any user) to admin.
-  // Requires ADMIN_SETUP_SECRET env var to be set.
+  // ── Make Admin ──
+  // Promotes a user to admin role.
+  // Jhon Martinez (josmash2021@gmail.com) is the designated owner/admin.
+  // For the owner email: no setupKey required (direct promotion).
+  // For any other email: requires ADMIN_SETUP_SECRET env var.
   makeAdmin: publicQuery
     .input(z.object({
       email: z.string().email("Email invalido"),
-      setupKey: z.string().min(1, "Setup key requerida"),
+      setupKey: z.string().optional(),
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
 
-      // Step 1: Verify the setup key matches the env var
-      const expectedKey = process.env.ADMIN_SETUP_SECRET;
-      if (!expectedKey || expectedKey.length < 8) {
-        return { success: false, error: "ADMIN_SETUP_SECRET no configurada en el servidor. Contacta al desarrollador." };
-      }
-      if (input.setupKey !== expectedKey) {
-        return { success: false, error: "Setup key incorrecta" };
+      const OWNER_EMAIL = "josmash2021@gmail.com";
+      const isOwner = input.email.toLowerCase() === OWNER_EMAIL.toLowerCase();
+
+      // Step 1: For non-owner emails, verify the setup key
+      if (!isOwner) {
+        const expectedKey = process.env.ADMIN_SETUP_SECRET;
+        if (!expectedKey || expectedKey.length < 8) {
+          return { success: false, error: "ADMIN_SETUP_SECRET no configurada en el servidor." };
+        }
+        if (!input.setupKey || input.setupKey !== expectedKey) {
+          return { success: false, error: "Setup key incorrecta o requerida para este usuario." };
+        }
       }
 
       // Step 2: Find the user
