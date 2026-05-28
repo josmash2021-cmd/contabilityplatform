@@ -278,6 +278,8 @@ export default function PersonalDashboard() {
       try { localStorage.removeItem("aethel_bank_connected"); } catch { /* ignore */ }
       utils.bank.listAccounts.invalidate();
       utils.bank.checkConnection.invalidate();
+      utils.bank.getMonthData.invalidate();
+      utils.bank.getAllPlaidAccounts.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
@@ -347,8 +349,29 @@ export default function PersonalDashboard() {
         </div>
       </div>
 
-      {/* Bank Balance Card */}
-      {isLoading || accountsLoading ? <Skeleton className="h-28 rounded-xl mb-4" /> : (
+      {/* No bank connected - show connect prompt */}
+      {!hasBankConnected && (
+        <Card className="rounded-xl shadow-none mb-4 border-2 border-dashed border-neutral-200 bg-white">
+          <CardContent className="p-5">
+            <div className="flex items-center gap-4">
+              <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center">
+                <Landmark className="w-6 h-6 text-neutral-400" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-medium text-black">Conectar tu banco</p>
+                <p className="text-xs text-neutral-400 mt-0.5">Conecta tu cuenta para ver transacciones automaticas y balance en tiempo real.</p>
+              </div>
+              <Button onClick={() => navigate("/personal/bank")} className="h-9 px-4 bg-black text-white text-xs rounded-lg hover:bg-neutral-800">
+                Conectar
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Bank Balance Card - only when bank connected */}
+      {hasBankConnected && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
+      {hasBankConnected && !accountsLoading && (
         <Card className={`rounded-xl shadow-none mb-4 bg-white ${balance >= 0 ? "border-2 border-emerald-400" : "border-2 border-red-400"}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
