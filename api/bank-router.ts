@@ -125,8 +125,19 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
 
   // Check default rules (shell, doordash, etc.)
+  // CRITICAL: plaidAmount direction determines if it's expense or income:
+  //   plaidAmount > 0 = money LEAVING account = expense
+  //   plaidAmount < 0 = money ENTERING account = income (refunds, reversals)
   for (const [keyword, rule] of Object.entries(defaultCategoryRules)) {
-    if (desc.includes(keyword)) return { type: rule.type as "income" | "expense", category: rule.category };
+    if (desc.includes(keyword)) {
+      if (plaidAmount < 0) {
+        // Money entering account: this is a REFUND/REVERSAL of a known merchant
+        // Keep the same category but mark as income (e.g., Shell refund = gasolina income)
+        return { type: "income", category: rule.category };
+      }
+      // Money leaving account: normal expense
+      return { type: rule.type as "income" | "expense", category: rule.category };
+    }
   }
 
   // Zelle detection
