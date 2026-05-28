@@ -9,7 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Receipt, CheckCircle,
+  Receipt, CheckCircle, Search, Tv,
 } from "lucide-react";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 
@@ -86,6 +86,7 @@ export default function PersonalTransactions() {
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [filterType, setFilterType] = useState("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const utils = trpc.useUtils();
@@ -182,6 +183,22 @@ export default function PersonalTransactions() {
     return false;
   };
 
+  // ─── Streaming services: Netflix, Spotify, Disney, HBO, etc. ───
+  const STREAMING_SERVICES = [
+    "netflix","spotify","disney","hulu","hbo","max","paramount","peacock",
+    "prime video","youtube premium","youtube tv","crunchyroll","twitch",
+    "starz","showtime","amc+","apple tv","apple music","apple arcade",
+    "amazon prime","netflix.com","disneyplus","hbomax",
+  ];
+  const isStreaming = (t: any) => {
+    if (t.category === "subscription" || t.category === "membership") return true;
+    const n = (t.description || "").toLowerCase();
+    for (const s of STREAMING_SERVICES) {
+      if (n.includes(s)) return true;
+    }
+    return false;
+  };
+
   // ─── Apply bank filters ───
   const filteredBankTransactions =
     filterType === "all" ? accountFilteredTransactions :
@@ -193,10 +210,18 @@ export default function PersonalTransactions() {
     filterType === "cash_deposit" ? accountFilteredTransactions.filter((t: any) => isCashDeposit(t)) :
     filterType === "cash_withdrawal" ? accountFilteredTransactions.filter((t: any) => isCashWithdrawal(t)) :
     filterType === "gasolina" ? accountFilteredTransactions.filter((t: any) => isGas(t)) :
+    filterType === "streaming" ? accountFilteredTransactions.filter((t: any) => isStreaming(t)) :
     filterType === "p2p" ? accountFilteredTransactions.filter((t: any) => isP2P(t)) :
     accountFilteredTransactions;
 
-  const displayTransactions = hasBankConnected ? filteredBankTransactions : [];
+  // Apply text search filter on top of type filters
+  const searchFilteredTransactions = searchQuery.trim()
+    ? filteredBankTransactions.filter((t: any) =>
+        (t.description || "").toLowerCase().includes(searchQuery.toLowerCase())
+      )
+    : filteredBankTransactions;
+
+  const displayTransactions = hasBankConnected ? searchFilteredTransactions : [];
 
   const totalIncome = accountFilteredTransactions
     .filter((t: any) => t.type === "income")
@@ -218,6 +243,7 @@ export default function PersonalTransactions() {
     { key: "cash_deposit", label: "Dep. Efectivo" },
     { key: "cash_withdrawal", label: "Ret. Efectivo" },
     { key: "gasolina", label: "Gasolina" },
+    { key: "streaming", label: "Streaming" },
     { key: "p2p", label: "P2P" },
   ];
 
@@ -230,6 +256,7 @@ export default function PersonalTransactions() {
     filterType === "cash_deposit" ? "Depósitos de Efectivo" :
     filterType === "cash_withdrawal" ? "Retiros de Efectivo" :
     filterType === "gasolina" ? "Gasolina" :
+    filterType === "streaming" ? "Streaming (Netflix, Spotify, Disney, HBO, etc.)" :
     filterType === "p2p" ? "P2P (Cash App, Venmo, Square, Clover, PayPal)" :
     "Transacciones";
 
@@ -267,7 +294,9 @@ export default function PersonalTransactions() {
         <div>
           <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
           <p className="text-xs text-neutral-500">
-            {accountFilteredTransactions.length} registros · {monthData?.monthName ?? ""}
+            {searchFilteredTransactions.length} de {accountFilteredTransactions.length} registros
+            {searchQuery.trim() ? ` · Buscando "${searchQuery}"` : ""}
+            {" · "}{monthData?.monthName ?? ""}
           </p>
         </div>
       </div>
@@ -315,6 +344,18 @@ export default function PersonalTransactions() {
             >
               {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
             </Button>
+          </div>
+
+          {/* Search input */}
+          <div className="relative mb-3">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+            <input
+              type="text"
+              placeholder="Buscar en descripciones..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full h-9 pl-8 pr-3 text-xs border border-neutral-200 rounded-lg bg-white focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-200 transition-colors"
+            />
           </div>
 
           {/* Filter buttons */}
