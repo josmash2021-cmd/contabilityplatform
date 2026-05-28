@@ -1014,12 +1014,11 @@ export const bankRouter = createRouter({
 
     // Mark reversed transactions (in memory only - no DB column needed for Railway)
     const reversedIds = detectReversedTransactions(txs);
-    for (const tx of txs) {
-      if (reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId)) {
-        (tx as any).isReversed = true;
-      }
-    }
-    const activeTxs = txs.filter((tx: any) => !tx.isReversed);
+    const txsWithReversed = txs.map((tx: any) => {
+      const isReversed = reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId);
+      return { ...tx, isReversed };
+    });
+    const activeTxs = txsWithReversed.filter((tx: any) => !tx.isReversed);
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
@@ -1104,11 +1103,13 @@ export const bankRouter = createRouter({
     const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     return {
-      transactions: txs, income: inc.toFixed(2), expense: exp.toFixed(2),
-      topExpense: txs.length > 0 ? String(Math.max(...txs.map((t: any) => parseFloat(t.amount)))) : "0",
+      transactions: txsWithReversed, income: inc.toFixed(2), expense: exp.toFixed(2),
+      topExpense: activeTxs.length > 0 ? String(Math.max(...activeTxs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
       lastSyncedAt,
       fromPlaid: plaidSource,
+      fallbackMode: txsWithReversed.length > 0 && !plaidSource,
+      plaidError,
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
@@ -2168,9 +2169,4 @@ export const bankRouter = createRouter({
           plaidAccounts,
         });
       } catch (e: any) {
-        results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
-      }
-    }
-    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
-  }),
-});
+        results.push({ dbBankName: acc.bankName, error: e.message, code
