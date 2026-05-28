@@ -125,6 +125,18 @@ export default function PersonalDashboard() {
   const hasAutoSelected = useRef(false);
   const utils = trpc.useUtils();
 
+  // ─── Redirect to bank connect if no bank connected ───
+  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
+    staleTime: 30000,
+  });
+  const hasBankConnected = bankConnection?.hasBank === true;
+
+  useEffect(() => {
+    if (!isCheckingBank && !hasBankConnected) {
+      navigate("/personal/bank");
+    }
+  }, [isCheckingBank, hasBankConnected, navigate]);
+
   // ─── AI Auto-Categorization Agent ───
   // Silently fixes miscategorized transactions on page load
   const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
@@ -348,26 +360,6 @@ export default function PersonalDashboard() {
           )}
         </div>
       </div>
-
-      {/* No bank connected - show connect prompt */}
-      {!hasBankConnected && (
-        <Card className="rounded-xl shadow-none mb-4 border-2 border-dashed border-neutral-200 bg-white">
-          <CardContent className="p-5">
-            <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-neutral-100 flex items-center justify-center">
-                <Landmark className="w-6 h-6 text-neutral-400" />
-              </div>
-              <div className="flex-1">
-                <p className="text-sm font-medium text-black">Conectar tu banco</p>
-                <p className="text-xs text-neutral-400 mt-0.5">Conecta tu cuenta para ver transacciones automaticas y balance en tiempo real.</p>
-              </div>
-              <Button onClick={() => navigate("/personal/bank")} className="h-9 px-4 bg-black text-white text-xs rounded-lg hover:bg-neutral-800">
-                Conectar
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Bank Balance Card - only when bank connected */}
       {hasBankConnected && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
