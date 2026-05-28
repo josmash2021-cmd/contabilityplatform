@@ -136,8 +136,6 @@ export default function PersonalTransactions() {
   });
 
   const allBankTransactions = monthData?.transactions ?? [];
-  const plaidError = (monthData as any)?.plaidError;
-
   // Show ALL transactions from backend (no frontend account filtering)
   const accountFilteredTransactions = allBankTransactions;
 
@@ -230,26 +228,6 @@ export default function PersonalTransactions() {
 
   return (
     <AnimatedPage className="p-4 lg:p-6">
-      {/* DEBUG PANEL - Remove after fix */}
-      {monthData && (
-        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs font-bold text-blue-800">DEBUG INFO (para diagnostico):</p>
-          <p className="text-xs text-blue-700">Total transacciones del backend: {allBankTransactions.length}</p>
-          <p className="text-xs text-blue-700">Filtradas por cuenta: {accountFilteredTransactions.length}</p>
-          <p className="text-xs text-blue-700">Cuenta seleccionada: {effectiveAccountId || "Todas"}</p>
-          <details className="mt-2">
-            <summary className="text-xs text-blue-600 cursor-pointer">Ver transacciones crudas ({allBankTransactions.length})</summary>
-            <div className="mt-1 max-h-40 overflow-y-auto text-[10px] text-blue-800 space-y-0.5">
-              {allBankTransactions.map((t: any, i: number) => (
-                <div key={i} className="border-b border-blue-100 pb-0.5">
-                  {i+1}. {t.description} | ${t.amount} | {t.category} | {t.type} | bankId={String(t.bankAccountId)}
-                </div>
-              ))}
-            </div>
-          </details>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
@@ -378,14 +356,6 @@ export default function PersonalTransactions() {
             <Landmark className="w-4 h-4" />
             Conectar Banco
           </button>
-        </div>
-      )}
-
-      {/* Debug Error Panel */}
-      {plaidError && (
-        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-xs font-medium text-red-700">Error del banco:</p>
-          <p className="text-xs text-red-600">{plaidError}</p>
         </div>
       )}
 
