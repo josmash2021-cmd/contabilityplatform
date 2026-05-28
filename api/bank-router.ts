@@ -91,26 +91,23 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
 
   console.log(`[detectReversed] Grouped into ${byKey.size} groups`);
 
-  // Mark duplicate transactions as reversed (same merchant, same amount, same date)
-  // Strategy: if there are N transactions with the same key, mark the first N-1 as reversed
-  // The LAST one is the successful transaction
+  // Find pairs with opposite types (expense + income = same merchant, same amount, same date)
   for (const [key, group] of byKey) {
     if (group.length < 2) continue;
 
-    console.log(`[detectReversed] Group "${key}": ${group.length} items`);
+    const expenses = group.filter((tx: any) => tx.type === "expense");
+    const incomes = group.filter((tx: any) => tx.type === "income");
 
-    // Sort by date (oldest first) to keep the last one as the successful transaction
-    group.sort((a: any, b: any) => {
-      const dateA = a.transactionDate ? new Date(a.transactionDate).getTime() : 0;
-      const dateB = b.transactionDate ? new Date(b.transactionDate).getTime() : 0;
-      return dateA - dateB;
-    });
+    console.log(`[detectReversed] Group "${key}": ${group.length} items, ${expenses.length} expense, ${incomes.length} income`);
 
-    // Mark all except the LAST one as reversed
-    for (let i = 0; i < group.length - 1; i++) {
-      const txId = group[i].id || group[i].plaidTransactionId;
-      reversed.add(txId);
-      console.log(`[detectReversed] Marked as reversed: ${txId} (type was ${group[i].type})`);
+    // Match expenses with incomes (same count = reversed pairs)
+    const pairCount = Math.min(expenses.length, incomes.length);
+    for (let i = 0; i < pairCount; i++) {
+      const expId = expenses[i].id || expenses[i].plaidTransactionId;
+      const incId = incomes[i].id || incomes[i].plaidTransactionId;
+      reversed.add(expId);
+      reversed.add(incId);
+      console.log(`[detectReversed] Marked as reversed: ${expId} + ${incId}`);
     }
   }
 
@@ -122,31 +119,16 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
 
-  // ===== INCOME DETECTION (must be FIRST — before generic keyword rules) =====
-  // These detect when money is coming TO the user, regardless of merchant name
-
-  // 1. MONEY TRANSFER FROM / payment FROM someone / deposit FROM
-  const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
-  const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
-  if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
-
-  // 2. Refunds / reversals: positive plaidAmount + same merchant = money returned
-  // (handled by detectReversedTransactions later, but we can also detect here)
-
-  // 3. Zelle received
-  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
-  if (isZelleRecv) return { type: "income", category: "zelle_income" };
-
-  // ===== NOW check default rules (these force expense for known merchants) =====
+  // Check default rules first
   for (const [keyword, rule] of Object.entries(defaultCategoryRules)) {
     if (desc.includes(keyword)) return { type: rule.type as "income" | "expense", category: rule.category };
   }
 
-  // ===== EXPENSE DETECTION =====
-
-  // Zelle sent
+  // Zelle detection
   const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
+  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
   if (isZelleSent) return { type: "expense", category: "zelle_sent" };
+  if (isZelleRecv) return { type: "income", category: "zelle_income" };
 
   // Plaid categories
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";
@@ -613,22 +595,18 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
         // Log each transaction being inserted
         console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
 
-        // Detect refunds: plaidAmount > 0 on a purchase = money returned
-        const finalType = (plaidAmount > 0 && type === "expense") ? "income" : type;
-        
         const txData = {
           userId, bankAccountId: targetAccount.id,
           bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
           transactionDate: txDate, description: tx.name,
           amount: String(absAmount.toFixed(2)), plaidAmount: String(plaidAmount.toFixed(2)),
-          type: finalType, category: category as any,
+          type, category: category as any,
           subcategory: tx.personal_finance_category?.detailed || tx.category?.[1] || null,
           plaidTransactionId: tx.transaction_id,
           plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
           merchantName: normalizedMerchant,
           syncStatus: "synced" as const, lastSyncedAt: new Date(),
           reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-          balanceAfter: null,
         };
         console.log(`[SYNC] Inserting tx:`, JSON.stringify(txData));
         await db.insert(bankTransactions).values(txData);
@@ -1014,11 +992,12 @@ export const bankRouter = createRouter({
 
     // Mark reversed transactions (in memory only - no DB column needed for Railway)
     const reversedIds = detectReversedTransactions(txs);
-    const txsWithReversed = txs.map((tx: any) => {
-      const isReversed = reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId);
-      return { ...tx, isReversed };
-    });
-    const activeTxs = txsWithReversed.filter((tx: any) => !tx.isReversed);
+    for (const tx of txs) {
+      if (reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId)) {
+        (tx as any).isReversed = true;
+      }
+    }
+    const activeTxs = txs.filter((tx: any) => !tx.isReversed);
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
@@ -1103,13 +1082,11 @@ export const bankRouter = createRouter({
     const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     return {
-      transactions: txsWithReversed, income: inc.toFixed(2), expense: exp.toFixed(2),
-      topExpense: activeTxs.length > 0 ? String(Math.max(...activeTxs.map((t: any) => parseFloat(t.amount)))) : "0",
+      transactions: txs, income: inc.toFixed(2), expense: exp.toFixed(2),
+      topExpense: txs.length > 0 ? String(Math.max(...txs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
       lastSyncedAt,
       fromPlaid: plaidSource,
-      fallbackMode: txsWithReversed.length > 0 && !plaidSource,
-      plaidError,
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
@@ -1291,21 +1268,6 @@ export const bankRouter = createRouter({
     }
 
     return txs;
-  }),
-
-  // ─── CLEAR TRANSACTIONS (for re-import with corrected types) ───
-  clearTransactions: authedQuery.mutation(async ({ ctx }) => {
-    if (!ctx.user) return { success: false, message: "No user" };
-    const db = getDb();
-    try {
-      // Delete all transactions for this user (they'll be re-imported with correct types on next sync)
-      const result = await db.delete(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
-      console.log(`[clearTransactions] Deleted transactions for user ${ctx.user.id}`);
-      return { success: true, message: "Transacciones eliminadas. Haz sync para re-importar." };
-    } catch (err: any) {
-      console.error(`[clearTransactions] Error: ${err.message}`);
-      return { success: false, message: err.message };
-    }
   }),
 
   // ─── GET YEAR DATA (annual summary for selected account) ───
