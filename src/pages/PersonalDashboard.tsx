@@ -181,12 +181,6 @@ export default function PersonalDashboard() {
     return () => clearTimeout(timer);
   }, []);
 
-  // ─── Check if bank is connected ───
-  const { data: bankCheck } = trpc.bank.checkConnection.useQuery(undefined, {
-    staleTime: 60000,
-  });
-  const hasBankConnected = bankCheck?.hasBank === true;
-
   // PLAID POLLING: Auto-sync every 2 minutes for new transactions
   useEffect(() => {
     if (!hasBankConnected) return;
