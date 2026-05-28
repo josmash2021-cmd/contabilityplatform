@@ -130,7 +130,7 @@ export default function PersonalDashboard() {
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
     staleTime: 30000,
   });
-  const hasBankConnected = (bankConnection as any)?.hasBank === true;
+  const userHasBank = (bankConnection as any)?.hasBank === true;
 
   // ─── AI Auto-Categorization Agent ───
   // Silently fixes miscategorized transactions on page load
@@ -178,7 +178,7 @@ export default function PersonalDashboard() {
 
   // PLAID POLLING: Auto-sync every 2 minutes for new transactions
   useEffect(() => {
-    if (!hasBankConnected) return;
+    if (!userHasBank) return;
     const interval = setInterval(() => {
       syncMutation.mutate({
         year: parseInt(selectedYear),
@@ -186,7 +186,7 @@ export default function PersonalDashboard() {
       });
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [hasBankConnected, selectedYear, selectedMonth]);
+  }, [userHasBank, selectedYear, selectedMonth]);
 
   // Sync selected month when it changes (for past months)
   useEffect(() => {
@@ -351,7 +351,7 @@ export default function PersonalDashboard() {
       </div>
 
       {/* Full screen bank connect when no bank connected */}
-      {!hasBankConnected && !isCheckingBank && (
+      {!userHasBank && !isCheckingBank && (
         <div className="flex items-center justify-center min-h-[80vh]">
           <div className="text-center max-w-sm mx-auto px-6">
             <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
@@ -375,11 +375,11 @@ export default function PersonalDashboard() {
         </div>
       )}
 
-      {hasBankConnected && (
+      {userHasBank && (
         <>
       {/* Bank Balance Card - only when bank connected */}
-      {hasBankConnected && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
-      {hasBankConnected && !accountsLoading && (
+      {userHasBank && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
+      {userHasBank && !accountsLoading && (
         <Card className={`rounded-xl shadow-none mb-4 bg-white ${balance >= 0 ? "border-2 border-emerald-400" : "border-2 border-red-400"}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
