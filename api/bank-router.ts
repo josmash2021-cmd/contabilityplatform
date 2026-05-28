@@ -119,7 +119,12 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
 
-  // Check default rules first
+  // ===== INCOME: MONEY COMING TO USER (before generic merchant rules) =====
+  const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
+  const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
+  if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
+
+  // Check default rules (shell, doordash, etc.)
   for (const [keyword, rule] of Object.entries(defaultCategoryRules)) {
     if (desc.includes(keyword)) return { type: rule.type as "income" | "expense", category: rule.category };
   }
