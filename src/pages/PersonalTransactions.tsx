@@ -12,6 +12,8 @@ import {
   Receipt,
 } from "lucide-react";
 
+const syncRanRef = { current: false };
+
 /** Account dropdown - avoids scroll issues */
 function AccountDropdown({
   accounts,
@@ -105,6 +107,25 @@ export default function PersonalTransactions() {
 
   // Select first account on initial load (simple, no effects)
   const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
+  const utils = trpc.useUtils();
+
+  // ONE-TIME sync on page load to fix bankAccountId of existing transactions
+  // Uses a module-level ref to prevent re-execution on re-renders
+  const syncFixMutation = trpc.bank.syncTransactions.useMutation({
+    onSuccess: () => {
+      utils.bank.getMonthData.invalidate();
+    },
+  });
+
+  useEffect(() => {
+    if (hasBankConnected && !syncRanRef.current) {
+      syncRanRef.current = true;
+      syncFixMutation.mutate({
+        year: parseInt(year),
+        month: parseInt(month),
+      });
+    }
+  }, [hasBankConnected, year, month]);
 
   // Fetch bank transactions (only when bank is connected)
   const { data: monthData, isLoading: isLoadingBank } = trpc.bank.getMonthData.useQuery({
@@ -112,8 +133,6 @@ export default function PersonalTransactions() {
     month: parseInt(month),
     accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
   });
-
-  const utils = trpc.useUtils();
 
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
@@ -127,9 +146,11 @@ export default function PersonalTransactions() {
 
   const allBankTransactions = monthData?.transactions ?? [];
 
-  // ─── NO frontend filtering by accountId ───
-  // Show ALL transactions. The dropdown is only for balance display.
-  const accountFilteredTransactions = allBankTransactions;
+  // ─── Filter by selected account in frontend ───
+  const effectiveAccountIdNum = effectiveAccountId ? parseInt(effectiveAccountId) : undefined;
+  const accountFilteredTransactions = effectiveAccountIdNum
+    ? allBankTransactions.filter((t: any) => t.bankAccountId == effectiveAccountIdNum)
+    : allBankTransactions;
 
   // ─── Filter helpers ───
   const isZelleRecibido = (t: any) => t.category === "zelle_income";
@@ -394,28 +415,4 @@ export default function PersonalTransactions() {
           )}
         </div>
       )}
-    </AnimatedPage>
-  );
-}
-
-function getCategoryLabel(cat: string): string {
-  const labels: Record<string, string> = {
-    zelle_income: "Zelle Recibido",
-    zelle_sent: "Zelle Enviado",
-    deposit: "Deposito",
-    cash_deposit: "Dep. Efectivo",
-    cash_withdrawal: "Retiro ATM",
-    subscription: "Suscripcion",
-    transfer: "P2P",
-    p2p: "P2P",
-    business_expense: "Negocio",
-    gasolina: "Gasolina",
-    home_expense: "Hogar",
-    shopping: "Compras",
-    cash_income: "Efectivo",
-    sale: "Venta",
-    refund: "Devolucion",
-    other: "Otro",
-  };
-  return labels[cat] || cat;
-}
+    </AnimatedP
