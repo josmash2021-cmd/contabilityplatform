@@ -1,48 +1,103 @@
-import { useState } from "react";
+import { useState, useCallback, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Landmark, Link2, Loader2, CheckCircle } from "lucide-react";
+import { Landmark, Link2, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 
+// Load Plaid Link SDK dynamically
+function loadPlaidSdk(): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (window.Plaid) { resolve(); return; }
+    const script = document.createElement("script");
+    script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load Plaid SDK"));
+    document.head.appendChild(script);
+  });
+}
+
+declare global {
+  interface Window {
+    Plaid: any;
+  }
+}
+
 export default function PersonalBank() {
-  const [status, setStatus] = useState<"idle" | "loading" | "success">("idle");
+  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "success" | "error">("idle");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [linkToken, setLinkToken] = useState<string | null>(null);
 
   const createLinkMut = trpc.bank.createLinkToken.useMutation({
     onSuccess: (data) => {
       if (data.success && data.linkToken) {
-        setStatus("loading");
-        // Open Plaid Link in new window
-        const width = 500;
-        const height = 700;
-        const left = window.screenX + (window.outerWidth - width) / 2;
-        const top = window.screenY + (window.outerHeight - height) / 2;
-        const plaidWindow = window.open(
-          `https://cdn.plaid.com/link/v2/stable/link.html?token=${data.linkToken}`,
-          "PlaidLink",
-          `width=${width},height=${height},top=${top},left=${left}`
-        );
-
-        // Poll for window close
-        const pollTimer = setInterval(() => {
-          if (plaidWindow?.closed) {
-            clearInterval(pollTimer);
-            setStatus("success");
-            toast.success("Banco conectado exitosamente");
-            // Reload to refresh data
-            setTimeout(() => window.location.href = "/personal", 1500);
-          }
-        }, 500);
+        setLinkToken(data.linkToken);
+        setStatus("ready");
+        toast.success("Listo para conectar");
       } else {
+        setStatus("error");
+        setErrorMsg(data.error || "Error al iniciar conexion");
         toast.error(data.error || "Error al iniciar conexion");
-        setStatus("idle");
       }
     },
     onError: (err) => {
+      setStatus("error");
+      setErrorMsg(err.message);
       toast.error(err.message);
-      setStatus("idle");
     },
   });
+
+  const exchangeMut = trpc.bank.exchangePublicToken.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        setStatus("success");
+        toast.success("Banco conectado exitosamente");
+        setTimeout(() => window.location.href = "/personal", 1500);
+      } else {
+        setStatus("error");
+        setErrorMsg(data.error || "Error al conectar");
+        toast.error(data.error || "Error al conectar");
+      }
+    },
+    onError: (err) => {
+      setStatus("error");
+      setErrorMsg(err.message);
+      toast.error(err.message);
+    },
+  });
+
+  const openPlaidLink = useCallback(async () => {
+    if (!linkToken) {
+      // First get the token
+      setStatus("loading");
+      createLinkMut.mutate();
+      return;
+    }
+
+    try {
+      await loadPlaidSdk();
+      const handler = window.Plaid.create({
+        token: linkToken,
+        onSuccess: (public_token: string) => {
+          exchangeMut.mutate({ publicToken: public_token });
+        },
+        onExit: (err: any) => {
+          if (err != null) {
+            console.error("Plaid exit error:", err);
+            setStatus("idle");
+          }
+        },
+        onEvent: (eventName: string) => {
+          console.log("Plaid event:", eventName);
+        },
+      });
+      handler.open();
+    } catch (err: any) {
+      setStatus("error");
+      setErrorMsg(err.message);
+      toast.error(err.message);
+    }
+  }, [linkToken, createLinkMut, exchangeMut]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-50 p-4">
@@ -61,6 +116,14 @@ export default function PersonalBank() {
             Conecta tu cuenta bancaria para ver transacciones automaticas, balance en tiempo real y analisis de flujo de caja.
           </p>
 
+          {/* Error display */}
+          {status === "error" && (
+            <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-red-50 rounded-lg">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
+              <p className="text-xs text-red-700">{errorMsg}</p>
+            </div>
+          )}
+
           {/* Security note */}
           <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
             <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
@@ -71,15 +134,12 @@ export default function PersonalBank() {
 
           {/* Connect button */}
           <Button
-            onClick={() => {
-              setStatus("loading");
-              createLinkMut.mutate();
-            }}
-            disabled={status === "loading"}
+            onClick={openPlaidLink}
+            disabled={status === "loading" || status === "success"}
             className="w-full h-12 bg-black text-white rounded-xl hover:bg-neutral-800 text-sm font-medium"
           >
             {status === "loading" ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Conectando...</>
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Preparando...</>
             ) : status === "success" ? (
               <><CheckCircle className="w-4 h-4 mr-2" /> Conectado</>
             ) : (

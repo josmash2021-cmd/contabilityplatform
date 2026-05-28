@@ -742,9 +742,9 @@ function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: num
 
 export const bankRouter = createRouter({
   createLinkToken: authedQuery.mutation(async ({ ctx }) => {
-    if (!ctx.user) return { linkToken: null };
+    if (!ctx.user) return { linkToken: null, error: "No autenticado" };
     const client = await initPlaid();
-    if (!client) return { linkToken: null };
+    if (!client) return { linkToken: null, error: "Plaid no inicializado - verifica credenciales" };
     try {
       const res = await client.linkTokenCreate({
         user: { client_user_id: String(ctx.user.id) },
@@ -754,8 +754,12 @@ export const bankRouter = createRouter({
         language: "en",
         transactions: { days_requested: 730 },
       });
-      return { linkToken: res.data.link_token };
-    } catch { return { linkToken: null }; }
+      console.log(`[createLinkToken] Link token created for user ${ctx.user.id}`);
+      return { success: true as const, linkToken: res.data.link_token };
+    } catch (err: any) {
+      console.error(`[createLinkToken] Error: ${err.message}`);
+      return { success: false as const, linkToken: null, error: err.message || "Error al crear link token" };
+    }
   }),
 
   exchangePublicToken: authedQuery.input(z.object({ publicToken: z.string() })).mutation(async ({ input, ctx }) => {
