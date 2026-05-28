@@ -913,13 +913,16 @@ export const subscriptionRouter = createRouter({
       return { success: true, url: session.url };
     }),
 
-  // ── Admin: Grant annual access to a user by email ──
-  // Bypasses Stripe — directly inserts an active annual subscription
-  grantAnnualAccess: adminQuery
-    .input(z.object({ email: z.string().email(), note: z.string().optional() }))
+  // ── Admin: Grant subscription access to a user by email ──
+  // Bypasses Stripe — directly inserts an active subscription (monthly or annual)
+  grantSubscription: adminQuery
+    .input(z.object({ email: z.string().email(), plan: z.enum(["monthly", "annual"]).default("annual"), note: z.string().optional() }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const stripe = getStripe();
+      const plan = input.plan;
+      const amount = plan === "annual" ? "800.00" : "80.00";
+      const periodLabel = plan === "annual" ? "anual" : "mensual";
 
       try {
         // Step 1: Find user by email
@@ -937,7 +940,6 @@ export const subscriptionRouter = createRouter({
         // Step 2: Find or create Stripe customer (for consistency)
         let customerId: string | null = null;
         try {
-          // Check if user already has a Stripe customer
           const existingSubs = await db.select().from(subscriptions)
             .where(eq(subscriptions.userId, userId))
             .orderBy(desc(subscriptions.createdAt))
@@ -965,46 +967,65 @@ export const subscriptionRouter = createRouter({
           // Continue without Stripe customer — DB record is what matters
         }
 
-        // Step 3: Calculate period (1 year from now)
+        // Step 3: Calculate period
         const now = new Date();
-        const oneYearFromNow = new Date(now);
-        oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+        const periodEnd = new Date(now);
+        if (plan === "annual") {
+          periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+        } else {
+          periodEnd.setMonth(periodEnd.getMonth() + 1);
+        }
 
         // Step 4: Delete any existing subscription for this user
         await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
 
-        // Step 5: Insert new annual subscription
+        // Step 5: Insert new subscription
         await db.insert(subscriptions).values({
           userId,
           stripeCustomerId: customerId,
-          stripeSubscriptionId: `ADMIN_GRANT_${Date.now()}`, // Placeholder — not a real Stripe sub
-          plan: "annual",
+          stripeSubscriptionId: `ADMIN_GRANT_${Date.now()}`,
+          plan,
           status: "active",
           currentPeriodStart: now,
-          currentPeriodEnd: oneYearFromNow,
+          currentPeriodEnd: periodEnd,
           cancelAtPeriodEnd: false,
         });
 
         // Step 6: Record the payment
         await db.insert(subscriptionPayments).values({
           userId,
-          amount: "800.00",
-          plan: "annual",
+          amount,
+          plan,
           status: "succeeded",
           paidAt: now,
         });
 
         return {
           success: true,
-          message: `Acceso anual otorgado a ${targetUser.name || input.email}`,
+          message: `Acceso ${periodLabel} otorgado a ${targetUser.name || input.email}`,
           userId,
           email: input.email,
-          plan: "annual",
-          validUntil: oneYearFromNow.toISOString(),
+          plan,
+          validUntil: periodEnd.toISOString(),
         };
       } catch (err: any) {
-        console.error("[grantAnnualAccess] Error:", err.message);
+        console.error("[grantSubscription] Error:", err.message);
         return { success: false, error: err.message || "Error al otorgar acceso" };
+      }
+    }),
+
+  // ── Admin: Revoke subscription from a user ──
+  revokeSubscription: adminQuery
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      try {
+        // Delete subscription
+        await db.delete(subscriptions).where(eq(subscriptions.userId, input.userId));
+        return { success: true, message: "Suscripcion eliminada" };
+      } catch (err: any) {
+        console.error("[revokeSubscription] Error:", err.message);
+        return { success: false, error: err.message || "Error al revocar suscripcion" };
       }
     }),
 

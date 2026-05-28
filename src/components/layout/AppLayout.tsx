@@ -11,15 +11,16 @@ import { Logo } from "@/components/Logo";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import {
-  LayoutDashboard, ShoppingCart, Wrench, Users, Receipt,
+  LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
   Target, ArrowLeftRight, User, Tv, Shield,
+  AlertTriangle, Construction,
 } from "lucide-react";
 
 const businessNav = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
   { path: "/pos", label: "Cobrar", icon: ShoppingCart },
-  { path: "/services", label: "Servicios", icon: Wrench },
+  { path: "/services", label: "Servicios", icon: WrenchIcon },
   { path: "/customers", label: "Clientes", icon: Users },
   { path: "/transactions", label: "Transacciones", icon: Receipt },
   { path: "/bank", label: "Banco", icon: Landmark },
@@ -66,6 +67,13 @@ export function AppLayout() {
   const companyName = userMode === "personal" ? (user?.name || "Mi Cuenta") : (settings?.companyName || "Mi Empresa");
   const userInitial = useMemo(() => (user?.name || "C").charAt(0).toUpperCase(), [user?.name]);
   const displayName = useMemo(() => user?.name || "Mi Cuenta", [user?.name]);
+
+  // ── Maintenance mode check ──
+  const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, {
+    refetchInterval: 10000,
+  });
+  const isMaintenance = maintenance?.enabled === true;
+  const isOwner = user?.email?.toLowerCase() === "josmash2021@gmail.com".toLowerCase();
 
   const NavContent = memo(({ onNavigate }: { onNavigate?: () => void }) => (
     <div className="flex flex-col h-full">
@@ -127,6 +135,18 @@ export function AppLayout() {
 
   return (
     <div className="flex h-screen bg-white">
+      {/* ── Maintenance Mode Overlay ── */}
+      {isMaintenance && !isOwner && (
+        <div className="fixed inset-0 z-[100] bg-neutral-900 flex flex-col items-center justify-center p-6">
+          <Construction className="w-16 h-16 text-amber-400 mb-4 animate-pulse" />
+          <h2 className="text-xl font-semibold text-white mb-2 text-center">Bajo Mantenimiento</h2>
+          <p className="text-sm text-neutral-400 text-center max-w-sm">
+            {maintenance?.message || "Estamos realizando mejoras. Volveremos pronto."}
+          </p>
+          <p className="text-xs text-neutral-600 mt-4">Por favor intenta mas tarde.</p>
+        </div>
+      )}
+
       <aside className="hidden lg:flex flex-col w-56 border-r border-neutral-200 bg-white shrink-0">
         <NavContent />
       </aside>

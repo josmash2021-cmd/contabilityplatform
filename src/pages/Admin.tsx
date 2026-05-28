@@ -11,7 +11,7 @@ import { toast } from "sonner";
 import {
   Shield, Users, CreditCard, Ban, CheckCircle, Lock, Unlock,
   Gift, Search, TrendingUp, DollarSign, Banknote, UserX, UserCheck,
-  Crown, Calendar
+  Crown, Calendar, Trash2, AlertTriangle, Wrench, ToggleLeft, ToggleRight
 } from "lucide-react";
 
 export default function Admin() {
@@ -19,11 +19,14 @@ export default function Admin() {
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showGrantDialog, setShowGrantDialog] = useState(false);
+  const [grantPlan, setGrantPlan] = useState<"monthly" | "annual">("annual");
+  const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
 
   // Queries
   const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin });
   const { data: users, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(undefined, { enabled: isAdmin });
   const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin });
+  const { data: maintenanceStatus, refetch: refetchMaintenance } = trpc.admin.maintenanceStatus.useQuery();
 
   // Mutations
   const toggleBlock = trpc.admin.toggleUserBlock.useMutation({
@@ -38,7 +41,7 @@ export default function Admin() {
     },
   });
 
-  const grantSubscription = trpc.subscription.grantAnnualAccess.useMutation({
+  const grantSubscription = trpc.subscription.grantSubscription.useMutation({
     onSuccess: (data) => {
       if (data.success) {
         toast.success(data.message);
@@ -47,6 +50,27 @@ export default function Admin() {
         setShowGrantDialog(false);
       } else {
         toast.error(data.error);
+      }
+    },
+  });
+
+  const revokeSubscription = trpc.subscription.revokeSubscription.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message);
+        refetchUsers();
+        refetchSubs();
+      } else {
+        toast.error(data.error);
+      }
+    },
+  });
+
+  const toggleMaintenance = trpc.admin.toggleMaintenance.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.enabled ? "Modo mantenimiento ACTIVADO" : "Modo mantenimiento DESACTIVADO");
+        refetchMaintenance();
       }
     },
   });
@@ -84,12 +108,26 @@ export default function Admin() {
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <Shield className="w-6 h-6 text-black" />
-        <div>
-          <h1 className="text-xl font-semibold text-black">Panel de Administracion</h1>
-          <p className="text-sm text-neutral-400">Gestiona usuarios, membresias y accesos</p>
+      <div className="flex items-center justify-between mb-6">
+        <div className="flex items-center gap-3">
+          <Shield className="w-6 h-6 text-black" />
+          <div>
+            <h1 className="text-xl font-semibold text-black">Panel de Administracion</h1>
+            <p className="text-sm text-neutral-400">Gestiona usuarios, membresias y accesos</p>
+          </div>
         </div>
+        {/* Maintenance Toggle */}
+        <Button
+          variant={maintenanceStatus?.enabled ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => setShowMaintenanceDialog(true)}
+          className="gap-1.5"
+        >
+          <Wrench className="w-4 h-4" />
+          <span className="text-xs">
+            {maintenanceStatus?.enabled ? "Mantenimiento ON" : "Mantenimiento OFF"}
+          </span>
+        </Button>
       </div>
 
       {/* Stats Cards */}
@@ -216,19 +254,37 @@ export default function Admin() {
                             {!user.isAdmin && (
                               <>
                                 {/* Grant subscription button */}
-                                {!user.isBlocked && (
+                                {!user.isBlocked && !user.subscription && (
                                   <Button
                                     variant="ghost"
                                     size="sm"
                                     className="h-7 px-2 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50"
                                     onClick={() => {
                                       setSelectedUser(user);
+                                      setGrantPlan("annual");
                                       setShowGrantDialog(true);
                                     }}
-                                    title="Otorgar membresia anual"
+                                    title="Otorgar membresia"
                                   >
                                     <Gift className="w-3.5 h-3.5 mr-1" />
                                     <span className="text-xs">Membresia</span>
+                                  </Button>
+                                )}
+                                {/* Revoke subscription button */}
+                                {!user.isBlocked && user.subscription && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-7 px-2 text-orange-500 hover:text-orange-600 hover:bg-orange-50"
+                                    onClick={() => {
+                                      if (confirm(`Quitar suscripcion a ${user.name || user.email}?`)) {
+                                        revokeSubscription.mutate({ userId: user.id });
+                                      }
+                                    }}
+                                    title="Quitar membresia"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5 mr-1" />
+                                    <span className="text-xs">Quitar</span>
                                   </Button>
                                 )}
                                 {/* Block/Unblock button */}
@@ -371,13 +427,13 @@ export default function Admin() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <Gift className="w-5 h-5 text-emerald-600" />
-              Otorgar membresia anual
+              Otorgar membresia
             </DialogTitle>
             <DialogDescription>
-              Estas a punto de otorgar acceso anual gratuito a:
+              Selecciona el plan y confirma:
             </DialogDescription>
           </DialogHeader>
-          <div className="py-3">
+          <div className="py-3 space-y-3">
             <div className="flex items-center gap-3 p-3 bg-neutral-50 rounded-lg">
               <div className="w-10 h-10 rounded-full bg-neutral-200 flex items-center justify-center text-sm font-medium text-neutral-600">
                 {(selectedUser?.name || "?").charAt(0).toUpperCase()}
@@ -387,14 +443,33 @@ export default function Admin() {
                 <p className="text-sm text-neutral-400">{selectedUser?.email}</p>
               </div>
             </div>
-            <div className="mt-3 p-3 bg-emerald-50 rounded-lg border border-emerald-100">
-              <div className="flex items-center gap-2 text-emerald-700">
-                <CheckCircle className="w-4 h-4" />
-                <span className="text-sm font-medium">Plan Anual - $800.00</span>
-              </div>
-              <p className="text-xs text-emerald-600 mt-1">
-                Valido por 1 ano desde hoy. Se activa inmediatamente.
-              </p>
+
+            {/* Plan selector */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                onClick={() => setGrantPlan("monthly")}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  grantPlan === "monthly"
+                    ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
+                    : "border-neutral-200 hover:border-neutral-300"
+                }`}
+              >
+                <p className="text-xs font-medium text-neutral-500">Mensual</p>
+                <p className="text-lg font-semibold text-black">$80</p>
+                <p className="text-xs text-neutral-400">1 mes de acceso</p>
+              </button>
+              <button
+                onClick={() => setGrantPlan("annual")}
+                className={`p-3 rounded-lg border text-left transition-all ${
+                  grantPlan === "annual"
+                    ? "border-emerald-500 bg-emerald-50 ring-1 ring-emerald-500"
+                    : "border-neutral-200 hover:border-neutral-300"
+                }`}
+              >
+                <p className="text-xs font-medium text-neutral-500">Anual</p>
+                <p className="text-lg font-semibold text-black">$800</p>
+                <p className="text-xs text-neutral-400">1 ano de acceso</p>
+              </button>
             </div>
           </div>
           <DialogFooter>
@@ -404,13 +479,66 @@ export default function Admin() {
             <Button
               onClick={() => {
                 if (selectedUser?.email) {
-                  grantSubscription.mutate({ email: selectedUser.email });
+                  grantSubscription.mutate({ email: selectedUser.email, plan: grantPlan });
                 }
               }}
               disabled={grantSubscription.isPending}
               className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
             >
-              {grantSubscription.isPending ? "Otorgando..." : "Confirmar - Otorgar acceso"}
+              {grantSubscription.isPending ? "Otorgando..." : `Otorgar ${grantPlan === "annual" ? "anual" : "mensual"}`}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Maintenance Mode Dialog */}
+      <Dialog open={showMaintenanceDialog} onOpenChange={setShowMaintenanceDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              Modo Mantenimiento
+            </DialogTitle>
+            <DialogDescription>
+              Cuando esta activado, todos los usuarios veran un mensaje de "Bajo Mantenimiento".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <div className={`p-4 rounded-lg border ${maintenanceStatus?.enabled ? "bg-red-50 border-red-200" : "bg-emerald-50 border-emerald-200"}`}>
+              <div className="flex items-center gap-3">
+                {maintenanceStatus?.enabled ? (
+                  <>
+                    <ToggleRight className="w-8 h-8 text-red-500" />
+                    <div>
+                      <p className="font-medium text-red-700">Activado</p>
+                      <p className="text-xs text-red-600">Todos los usuarios ven "Bajo Mantenimiento"</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <ToggleLeft className="w-8 h-8 text-emerald-500" />
+                    <div>
+                      <p className="font-medium text-emerald-700">Desactivado</p>
+                      <p className="text-xs text-emerald-600">La app funciona normalmente</p>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setShowMaintenanceDialog(false)} className="text-sm">
+              Cerrar
+            </Button>
+            <Button
+              variant={maintenanceStatus?.enabled ? "default" : "destructive"}
+              onClick={() => {
+                toggleMaintenance.mutate({ enabled: !maintenanceStatus?.enabled });
+                setShowMaintenanceDialog(false);
+              }}
+              className="text-sm"
+            >
+              {maintenanceStatus?.enabled ? "Desactivar mantenimiento" : "Activar mantenimiento"}
             </Button>
           </DialogFooter>
         </DialogContent>

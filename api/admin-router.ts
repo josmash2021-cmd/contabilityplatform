@@ -1,8 +1,12 @@
 import { z } from "zod";
-import { createRouter, adminQuery } from "./middleware";
+import { createRouter, adminQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { users, subscriptions, subscriptionPayments, bankAccounts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+
+// ── Maintenance Mode (in-memory, persists until server restart) ──
+let maintenanceMode = false;
+let maintenanceMessage = "Estamos en mantenimiento. Volveremos pronto.";
 
 export const adminRouter = createRouter({
   // ── List all users with their subscription status ──
@@ -165,6 +169,30 @@ export const adminRouter = createRouter({
       annualSubscriptions: annualSubs,
       totalBankAccounts: bankAccountsCount[0]?.count || 0,
       totalRevenue: totalRevenue.toFixed(2),
+    };
+  }),
+
+  // ── Toggle maintenance mode ──
+  toggleMaintenance: adminQuery
+    .input(z.object({
+      enabled: z.boolean(),
+      message: z.string().optional(),
+    }).optional())
+    .mutation(async ({ input }) => {
+      maintenanceMode = input?.enabled ?? !maintenanceMode;
+      if (input?.message) maintenanceMessage = input.message;
+      return {
+        success: true,
+        enabled: maintenanceMode,
+        message: maintenanceMessage,
+      };
+    }),
+
+  // ── Get maintenance status (public) ──
+  maintenanceStatus: publicQuery.query(async () => {
+    return {
+      enabled: maintenanceMode,
+      message: maintenanceMessage,
     };
   }),
 });
