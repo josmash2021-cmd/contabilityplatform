@@ -76,7 +76,6 @@ export default function PersonalTransactions() {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [filterType, setFilterType] = useState("all");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const utils = trpc.useUtils();
 
   // Check if bank is connected
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
@@ -94,11 +93,6 @@ export default function PersonalTransactions() {
   // Fetch bank accounts from DB (only when bank is connected)
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
     enabled: hasBankConnected,
-    onSuccess: (data) => {
-      if (data && data.length > 0 && !selectedAccountId) {
-        setSelectedAccountId(String(data[0].id));
-      }
-    },
   });
 
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
@@ -109,6 +103,7 @@ export default function PersonalTransactions() {
       })
     : (dbAccounts ?? []);
 
+  // Select first account on initial load (simple, no effects)
   const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
 
   // Fetch bank transactions (only when bank is connected)
@@ -118,34 +113,7 @@ export default function PersonalTransactions() {
     accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
   });
 
-  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
-    onSuccess: (data) => {
-      if (data.fixed && data.fixed > 0) {
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-  });
-
-  useEffect(() => {
-    const timer = setTimeout(() => autoFixMutation.mutate(), 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // Auto-sync recent transactions on page load
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        utils.bank.getMonthData.invalidate();
-        toast.success(`${data.added} transacciones nuevas sincronizadas`);
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-
-  useEffect(() => {
-    const timer = setTimeout(() => syncRecentMutation.mutate(), 2000);
-    return () => clearTimeout(timer);
-  }, []);
+  const utils = trpc.useUtils();
 
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
