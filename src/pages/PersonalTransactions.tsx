@@ -125,6 +125,7 @@ export default function PersonalTransactions() {
   });
 
   const allBankTransactions = monthData?.transactions ?? [];
+  const plaidError = (monthData as any)?.plaidError;
 
   // ─── Filter by selected account in frontend ───
   const effectiveAccountIdNum = effectiveAccountId ? parseInt(effectiveAccountId) : undefined;
@@ -349,6 +350,14 @@ export default function PersonalTransactions() {
             <Landmark className="w-4 h-4" />
             Conectar Banco
           </button>
+        </div>
+      )}
+
+      {/* Debug Error Panel */}
+      {plaidError && (
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg">
+          <p className="text-xs font-medium text-red-700">Error del banco:</p>
+          <p className="text-xs text-red-600">{plaidError}</p>
         </div>
       )}
 
