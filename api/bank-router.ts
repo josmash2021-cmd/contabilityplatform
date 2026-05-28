@@ -900,9 +900,16 @@ export const bankRouter = createRouter({
         let plaidTxs = plaidRes.data.transactions || [];
 
         // FILTER by Plaid account_id if accountId is specified
+        let filteredPlaidTxs = plaidTxs;
         if (targetPlaidAccountId) {
-          plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
+          filteredPlaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
+          // If filter leaves 0 results, show ALL Plaid transactions instead
+          if (filteredPlaidTxs.length === 0 && plaidTxs.length > 0) {
+            console.log(`[getMonthData] Account filter returned 0, showing ALL ${plaidTxs.length} Plaid transactions`);
+            filteredPlaidTxs = plaidTxs;
+          }
         }
+        plaidTxs = filteredPlaidTxs;
 
         // Build account map
         const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
