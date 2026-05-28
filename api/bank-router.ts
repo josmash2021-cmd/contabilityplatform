@@ -937,126 +937,109 @@ export const bankRouter = createRouter({
       };
     }
 
-    // If no DB results, fetch DIRECTLY from Plaid
-    console.log(`[getMonthData] STEP 2: checking if need Plaid fetch (txs.length=${txs.length})`);
-    if (txs.length === 0) {
-      console.log(`[getMonthData] STEP 3: No DB results — fetching from Plaid...`);
-      console.log(`[getMonthData] STEP 3b: primaryAccount.token=${primaryAccount?.plaidAccessToken ? 'EXISTS' : 'MISSING'}`);
-      try {
-        const client = await initPlaid();
-        console.log(`[getMonthData] STEP 4: Plaid client=${client ? 'READY' : 'NULL'}`);
-        if (client && primaryAccount?.plaidAccessToken) {
-          console.log(`[getMonthData] STEP 5: Calling transactionsGet...`);
-          const plaidRes = await client.transactionsGet({
-            access_token: primaryAccount.plaidAccessToken,
-            start_date: startStr,
-            end_date: endStr,
-            options: { include_personal_finance_category: true, count: 500 },
-          });
-          let plaidTxs = plaidRes.data.transactions || [];
-          console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
+    // ─── ALWAYS fetch from Plaid to ensure complete data ───
+    // Merge Plaid transactions with DB transactions
+    // Plaid is the source of truth - if Plaid has it, we show it
+    console.log(`[getMonthData] STEP 2: DB has ${txs.length} transactions, now fetching from Plaid...`);
+    console.log(`[getMonthData] STEP 3b: primaryAccount.token=${primaryAccount?.plaidAccessToken ? 'EXISTS' : 'MISSING'}`);
+    try {
+      const client = await initPlaid();
+      console.log(`[getMonthData] STEP 4: Plaid client=${client ? 'READY' : 'NULL'}`);
+      if (client && primaryAccount?.plaidAccessToken) {
+        console.log(`[getMonthData] STEP 5: Calling transactionsGet...`);
+        const plaidRes = await client.transactionsGet({
+          access_token: primaryAccount.plaidAccessToken,
+          start_date: startStr,
+          end_date: endStr,
+          options: { include_personal_finance_category: true, count: 500 },
+        });
+        let plaidTxs = plaidRes.data.transactions || [];
+        console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
 
-          // NO filter by accountId here — fetch ALL Plaid transactions
-          // Each transaction will be saved with its correct bankAccountId
-          console.log(`[getMonthData] Using ALL ${plaidTxs.length} Plaid transactions`);
-
-          // Build account map from userAccounts for correct bankAccountId assignment
-          const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
-          for (const ua of userAccounts) {
-            if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
-          }
-
-          // Map Plaid transactions and deduplicate by transaction_id
-          const seenIds = new Set<string>();
-          const mappedTxs = plaidTxs.map((pt: any) => {
-            const plaidAmount = pt.amount;
-            const absAmount = Math.abs(plaidAmount);
-            const determined = determineTypeAndCategory(
-              plaidAmount,
-              pt.personal_finance_category?.detailed
-                ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
-                : pt.category || [],
-              pt.name
-            );
-            // Assign correct bankAccountId based on Plaid's account_id
-            const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
-            return {
-              id: pt.transaction_id,
-              userId: ctx.user!.id,
-              bankAccountId: targetAcc.id,  // ← CORRECT bankAccountId per account
-              bankName: targetAcc.bankName,
-              accountNumber: targetAcc.accountNumber,
-              transactionDate: pt.date ? new Date(pt.date) : new Date(),
-              transactionTime: null,
-              description: pt.name,
-              amount: String(absAmount.toFixed(2)),
-              type: determined.type as any,
-              category: determined.category as any,
-              subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
-              reference: pt.transaction_id,
-              plaidAmount: String(plaidAmount.toFixed(2)),
-              plaidTransactionId: pt.transaction_id,
-              plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
-              merchantName: pt.merchant_name || pt.name,
-              isDuplicate: false,
-              lastSyncedAt: new Date(),
-              isReconciled: false,
-              createdAt: new Date(),
-            };
-          }).filter((tx: any) => {
-            if (seenIds.has(tx.id)) return false;
-            seenIds.add(tx.id);
-            return true;
-          });
-
-          // Save ALL transactions to DB with correct bankAccountId
-          // onDuplicateKeyUpdate also updates bankAccountId for existing transactions
-          if (mappedTxs.length > 0) {
-            try {
-              for (const mtx of mappedTxs) {
-                await db.insert(bankTransactions).values(mtx).onDuplicateKeyUpdate({
-                  set: {
-                    bankAccountId: mtx.bankAccountId,
-                    bankName: mtx.bankName,
-                    lastSyncedAt: new Date(),
-                  },
-                });
-              }
-              console.log(`[getMonthData] Saved ${mappedTxs.length} transactions to DB`);
-            } catch (saveErr: any) {
-              console.error(`[getMonthData] Save error: ${saveErr.message}`);
-            }
-          }
-
-          // Filter to return only transactions for the selected account
-          if (accountId) {
-            txs = mappedTxs.filter((tx: any) => tx.bankAccountId === accountId);
-            console.log(`[getMonthData] Filtered to ${txs.length} transactions for accountId=${accountId}`);
-          } else {
-            txs = mappedTxs;
-          }
-          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend (from ${plaidTxs.length} total)`);
+        // Build account map from userAccounts for correct bankAccountId assignment
+        const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
+        for (const ua of userAccounts) {
+          if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
         }
-      } catch (plaidErr: any) {
-        const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
-        console.error(`[getMonthData] Plaid error: ${errMsg}`);
-        // Return error to frontend so user can see what's wrong
-        return {
-          transactions: [], income: "0", expense: "0", topExpense: "0",
-          liveBalance: "0", monthName: `${month}/${year}`,
-          plaidError: errMsg,
-        };
-      }
 
-      // Fallback: any month from DB
-      if (txs.length === 0) {
-        const allTxs = await db.select().from(bankTransactions)
-          .where(eq(bankTransactions.userId, ctx.user.id))
-          .orderBy(desc(bankTransactions.transactionDate))
-          .limit(100);
-        txs = allTxs;
-        console.log(`[getMonthData] Fallback: ${txs.length} transactions from other months`);
+        // Build existing transaction ID set for dedup
+        const existingIds = new Set<string>();
+        for (const t of txs) {
+          if (t.plaidTransactionId) existingIds.add(t.plaidTransactionId);
+          if (t.reference) existingIds.add(t.reference);
+        }
+
+        // Map Plaid transactions - include ALL, even if already in DB
+        const seenIds = new Set<string>();
+        const plaidMapped = plaidTxs.map((pt: any) => {
+          const plaidAmount = pt.amount;
+          const absAmount = Math.abs(plaidAmount);
+          const determined = determineTypeAndCategory(
+            plaidAmount,
+            pt.personal_finance_category?.detailed
+              ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
+              : pt.category || [],
+            pt.name
+          );
+          const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
+          return {
+            id: pt.transaction_id,
+            userId: ctx.user!.id,
+            bankAccountId: targetAcc.id,
+            bankName: targetAcc.bankName,
+            accountNumber: targetAcc.accountNumber,
+            transactionDate: pt.date ? new Date(pt.date) : new Date(),
+            transactionTime: null,
+            description: pt.name,
+            amount: String(absAmount.toFixed(2)),
+            type: determined.type as any,
+            category: determined.category as any,
+            subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
+            reference: pt.transaction_id,
+            plaidAmount: String(plaidAmount.toFixed(2)),
+            plaidTransactionId: pt.transaction_id,
+            plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
+            merchantName: pt.merchant_name || pt.name,
+            isDuplicate: false,
+            lastSyncedAt: new Date(),
+            isReconciled: false,
+            createdAt: new Date(),
+          };
+        }).filter((tx: any) => {
+          if (seenIds.has(tx.id)) return false;
+          seenIds.add(tx.id);
+          return true;
+        });
+
+        // Save ALL Plaid transactions to DB (upsert)
+        if (plaidMapped.length > 0) {
+          try {
+            for (const mtx of plaidMapped) {
+              await db.insert(bankTransactions).values(mtx).onDuplicateKeyUpdate({
+                set: {
+                  bankAccountId: mtx.bankAccountId,
+                  bankName: mtx.bankName,
+                  lastSyncedAt: new Date(),
+                },
+              });
+            }
+            console.log(`[getMonthData] Saved ${plaidMapped.length} transactions to DB`);
+          } catch (saveErr: any) {
+            console.error(`[getMonthData] Save error: ${saveErr.message}`);
+          }
+        }
+
+        // ─── MERGE: Use Plaid data as source of truth ───
+        // Start with ALL Plaid transactions, then add DB-only ones
+        const plaidIdSet = new Set(plaidMapped.map((p: any) => p.plaidTransactionId));
+        const dbOnlyTxs = txs.filter((t: any) => t.plaidTransactionId && !plaidIdSet.has(t.plaidTransactionId));
+        txs = [...plaidMapped, ...dbOnlyTxs];
+        console.log(`[getMonthData] Merged: ${plaidMapped.length} from Plaid + ${dbOnlyTxs.length} DB-only = ${txs.length} total`);
       }
+    } catch (plaidErr: any) {
+      const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
+      console.error(`[getMonthData] Plaid error: ${errMsg}`);
+      // Continue with DB data only - don't fail the request
     }
 
     // Mark reversed transactions (in memory only - no DB column needed for Railway)
