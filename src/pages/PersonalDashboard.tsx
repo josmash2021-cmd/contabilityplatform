@@ -349,8 +349,11 @@ export default function PersonalDashboard() {
         </div>
       </div>
 
-      {/* Full screen bank connect when no bank connected */}
-      {!userHasBank && !isCheckingBank && (
+      {/* Loading state */}
+      {isCheckingBank && <Skeleton className="h-28 rounded-xl mb-4" />}
+
+      {/* Bank disconnected - show connect prompt */}
+      {!isCheckingBank && !userHasBank && (
         <div className="flex items-center justify-center min-h-[80vh]">
           <div className="text-center max-w-sm mx-auto px-6">
             <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
@@ -374,11 +377,12 @@ export default function PersonalDashboard() {
         </div>
       )}
 
-      {userHasBank && (
+      {/* Bank connected - show normal content */}
+      {!isCheckingBank && userHasBank && (
         <>
-      {/* Bank Balance Card - only when bank connected */}
-      {userHasBank && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
-      {userHasBank && !accountsLoading && (
+      {/* Bank Balance Card */}
+      {(isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
+      {!isLoading && !accountsLoading && (
         <Card className={`rounded-xl shadow-none mb-4 bg-white ${balance >= 0 ? "border-2 border-emerald-400" : "border-2 border-red-400"}`}>
           <CardContent className="p-5">
             <div className="flex items-center justify-between">
