@@ -237,6 +237,18 @@ export const subscriptionRouter = createRouter({
     let sub = subs[0];
     if (!sub) return { active: false, plan: null, status: "no_subscription", currentPeriodEnd: null };
 
+    // ── Admin-granted subscriptions: skip Stripe verification ──
+    // These have stripeSubscriptionId starting with ADMIN_GRANT_
+    if (sub.stripeSubscriptionId?.startsWith("ADMIN_GRANT_")) {
+      return {
+        active: sub.status === "active" || sub.status === "trialing",
+        plan: sub.plan,
+        status: sub.status,
+        currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || null,
+        cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      };
+    }
+
     // Step 3: Verify with Stripe — ALWAYS check ALL subscriptions for this customer
     try {
       const stripe = getStripe();

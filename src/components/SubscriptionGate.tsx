@@ -127,6 +127,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<"checking" | "connect_bank" | "subscribe" | "active">("checking");
   const [dismissed, setDismissed] = useState(false);
+  const [checkTimedOut, setCheckTimedOut] = useState(false);
 
   const { user } = useAuth();
   const userMode = user?.modePreference || "business";
@@ -140,6 +141,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   const hasSubscription = status?.active === true;
   const hasBank = bankConnection?.hasBank === true;
+
+  // Timeout: don't stay in "checking" forever
+  useEffect(() => {
+    const timer = setTimeout(() => setCheckTimedOut(true), 8000);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Checkout mutation — goes directly to Stripe
   const checkoutMut = trpc.subscription.createCheckout.useMutation({
@@ -167,6 +174,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   if (dismissed) return <>{children}</>;
   if (phase === "active") return <>{children}</>;
+
+  // If check timed out, show content instead of blocking forever
+  if (phase === "checking" && checkTimedOut) return <>{children}</>;
 
   if (phase === "checking") {
     return (
@@ -342,13 +352,16 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 export function SubscriptionPageGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const { user } = useAuth();
-  const { data: status } = trpc.subscription.status.useQuery(undefined, {
+  const { data: status, isLoading } = trpc.subscription.status.useQuery(undefined, {
     refetchInterval: 10000,
   });
 
   const userMode = user?.modePreference || "business";
   const hasSubscription = status?.active === true;
   const currentPath = location.pathname;
+
+  // While loading, show content (don't block)
+  if (isLoading) return <>{children}</>;
 
   if (hasSubscription) return <>{children}</>;
 
