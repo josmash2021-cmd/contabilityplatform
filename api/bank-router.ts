@@ -894,16 +894,17 @@ export const bankRouter = createRouter({
     const targetPlaidAccountId = selectedAccount?.plaidAccountId;
     console.log(`[getMonthData] Filtering for accountId=${accountId}, plaidAccountId=${targetPlaidAccountId || 'ALL'}`);
 
-    // Get user transactions for the month — filter by accountId if selected
+    // Get ALL user transactions for the month — NOT filtered by accountId
+    // Plaid assigns transactions to different internal bankAccountIds,
+    // so filtering by accountId would hide valid transactions.
+    // The accountId param is only used for balance display, not transaction filtering.
     let txs: any[] = [];
     try {
       const whereConditions: any[] = [
         eq(bankTransactions.userId, ctx.user.id),
         sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
       ];
-      if (accountId) {
-        whereConditions.push(eq(bankTransactions.bankAccountId, accountId));
-      }
+      // REMOVED: bankAccountId filter - was hiding transactions assigned to other internal accounts
       txs = await db.select().from(bankTransactions)
         .where(and(...whereConditions))
         .orderBy(desc(bankTransactions.transactionDate));
@@ -936,11 +937,10 @@ export const bankRouter = createRouter({
           let plaidTxs = plaidRes.data.transactions || [];
           console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
 
-          // Filter by selected account if accountId is specified
-          if (targetPlaidAccountId) {
-            plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
-            console.log(`[getMonthData] Filtered to ${plaidTxs.length} transactions for account ${targetPlaidAccountId}`);
-          }
+          // REMOVED: Plaid account_id filter - was hiding transactions from other accounts
+          // When fetching directly from Plaid, we want ALL user transactions.
+          // The accountId param is only used for balance display.
+          console.log(`[getMonthData] Using ALL ${plaidTxs.length} Plaid transactions (no account filter)`);
 
           // Map Plaid transactions and deduplicate by transaction_id
           const seenIds = new Set<string>();
