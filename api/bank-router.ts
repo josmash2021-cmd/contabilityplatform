@@ -149,7 +149,12 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   for (const [keyword, rule] of Object.entries(defaultCategoryRules)) {
     if (desc.includes(keyword)) {
       if (plaidAmount < 0) {
-        // Money entering account: this is a REFUND/REVERSAL of a known merchant
+        // Money entering account
+        // Gig economy payments (DoorDash, Uber, Lyft) = income for work done
+        if (keyword === "doordash" || keyword === "grubhub" || keyword === "instacart" || keyword === "uber" || keyword === "lyft") {
+          return { type: "income", category: "transfer_income" };
+        }
+        // Otherwise: this is a REFUND/REVERSAL of a known merchant
         return { type: "income", category: rule.category };
       }
       // Money leaving account: normal expense
