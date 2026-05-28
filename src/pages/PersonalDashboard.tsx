@@ -11,7 +11,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Landmark, RefreshCw,
   ArrowUpRight, ArrowDownRight, Building2, Zap, CircleDollarSign, ChevronDown,
   ShoppingBag, Utensils, Fuel, Tv, Banknote,
-  Send, Receipt, LogOut, Star,
+  Send, Receipt, LogOut, Star, CheckCircle,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 
@@ -506,4 +506,3 @@ export default function PersonalDashboard() {
     </AnimatedPage>
   );
 }
-// FORCE REBUILD 1779994103
