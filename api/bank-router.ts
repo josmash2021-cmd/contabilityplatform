@@ -900,9 +900,12 @@ export const bankRouter = createRouter({
         let plaidTxs = plaidRes.data.transactions || [];
 
         // NO FILTER by Plaid account_id - show ALL transactions from ALL accounts
-        // The user may have multiple accounts (checking, savings) and wants to see
-        // all transactions together. The dropdown is for balance display only.
-        console.log(`[getMonthData] Fetching ALL ${plaidTxs.length} Plaid transactions (no account filter)`);
+        console.log(`[getMonthData] Plaid returned ${plaidTxs.length} raw transactions:`);
+        for (const pt of plaidTxs.slice(0, 20)) {
+          console.log(`  - ${pt.name} | $${pt.amount} | cat=${pt.category?.join(',')} | date=${pt.date}`);
+        }
+
+        // Build account map
 
         // Build account map
         const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
