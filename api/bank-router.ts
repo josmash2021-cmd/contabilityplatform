@@ -899,17 +899,10 @@ export const bankRouter = createRouter({
         });
         let plaidTxs = plaidRes.data.transactions || [];
 
-        // FILTER by Plaid account_id if accountId is specified
-        let filteredPlaidTxs = plaidTxs;
-        if (targetPlaidAccountId) {
-          filteredPlaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
-          // If filter leaves 0 results, show ALL Plaid transactions instead
-          if (filteredPlaidTxs.length === 0 && plaidTxs.length > 0) {
-            console.log(`[getMonthData] Account filter returned 0, showing ALL ${plaidTxs.length} Plaid transactions`);
-            filteredPlaidTxs = plaidTxs;
-          }
-        }
-        plaidTxs = filteredPlaidTxs;
+        // NO FILTER by Plaid account_id - show ALL transactions from ALL accounts
+        // The user may have multiple accounts (checking, savings) and wants to see
+        // all transactions together. The dropdown is for balance display only.
+        console.log(`[getMonthData] Fetching ALL ${plaidTxs.length} Plaid transactions (no account filter)`);
 
         // Build account map
         const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
@@ -991,6 +984,7 @@ export const bankRouter = createRouter({
             }
           }
           if (targetPlaidAccountId) {
+            // For a specific account, show that account's balance
             liveBalance = freshBalances.get(targetPlaidAccountId) ?? selectedAccount?.currentBalance ?? "0";
           } else {
             let total = 0;
