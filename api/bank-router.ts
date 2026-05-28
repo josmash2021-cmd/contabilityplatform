@@ -894,38 +894,15 @@ export const bankRouter = createRouter({
     const targetPlaidAccountId = selectedAccount?.plaidAccountId;
     console.log(`[getMonthData] Filtering for accountId=${accountId}, plaidAccountId=${targetPlaidAccountId || 'ALL'}`);
 
-    // Get user transactions for the month
-    // When accountId is provided, filter by that specific account
-    // to show only transactions from the selected account.
-    // When accountId is undefined/null, show ALL user transactions.
+    // Get ALL user transactions for the month (no account filter in DB)
+    // We fetch everything, then merge with Plaid, then filter by account in JS
     let txs: any[] = [];
     try {
-      const whereConditions: any[] = [
-        eq(bankTransactions.userId, ctx.user.id),
-        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
-      ];
-      // Filter by selected account (only when accountId is provided)
-      if (accountId) {
-        // Find user's primary account for orphan assignment
-        const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-        const primaryAccount = userAccounts[0];
-        // First: auto-assign orphaned transactions (bankAccountId IS NULL) to primary account
-        if (primaryAccount) {
-          try {
-            await db.update(bankTransactions)
-              .set({ bankAccountId: primaryAccount.id, bankName: primaryAccount.bankName })
-              .where(and(
-                eq(bankTransactions.userId, ctx.user.id),
-                sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
-                sql`${bankTransactions.bankAccountId} IS NULL`
-              ));
-          } catch { /* ignore orphan assignment errors */ }
-        }
-        // Now query with the account filter
-        whereConditions.push(eq(bankTransactions.bankAccountId, accountId));
-      }
       txs = await db.select().from(bankTransactions)
-        .where(and(...whereConditions))
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+        ))
         .orderBy(desc(bankTransactions.transactionDate));
       console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
     } catch (dbErr: any) {
@@ -1051,11 +1028,28 @@ export const bankRouter = createRouter({
     }
     const activeTxs = txs.filter((tx: any) => !tx.isReversed);
 
+    // ─── Filter by accountId AFTER merge (not in DB query) ───
+    // This ensures ALL transactions are fetched, then filtered correctly
+    let filteredTxs = activeTxs;
+    if (accountId) {
+      // Assign orphaned transactions (bankAccountId=null) to primary account
+      const primaryAcc = userAccounts[0];
+      for (const tx of filteredTxs) {
+        if (tx.bankAccountId == null && primaryAcc) {
+          tx.bankAccountId = primaryAcc.id;
+          tx.bankName = primaryAcc.bankName;
+        }
+      }
+      // Now filter by selected account
+      filteredTxs = filteredTxs.filter((tx: any) => tx.bankAccountId === accountId);
+      console.log(`[getMonthData] Filtered to ${filteredTxs.length} transactions for accountId=${accountId}`);
+    }
+
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
     // Only count NON-REVERSED transactions in the totals
     let inc = 0, exp = 0;
-    for (const t of activeTxs) {
+    for (const t of filteredTxs) {
       const amt = parseFloat(t.amount ?? "0");
       if (amt <= 0) continue; // Skip zero/negative amounts
       // Use plaidAmount if available (negative = income, positive = expense)
@@ -1134,8 +1128,8 @@ export const bankRouter = createRouter({
     const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     return {
-      transactions: txs, income: inc.toFixed(2), expense: exp.toFixed(2),
-      topExpense: txs.length > 0 ? String(Math.max(...txs.map((t: any) => parseFloat(t.amount)))) : "0",
+      transactions: filteredTxs, income: inc.toFixed(2), expense: exp.toFixed(2),
+      topExpense: filteredTxs.length > 0 ? String(Math.max(...filteredTxs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
       lastSyncedAt,
       fromPlaid: plaidSource,
