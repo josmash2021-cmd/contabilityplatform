@@ -127,11 +127,8 @@ export default function PersonalTransactions() {
   const allBankTransactions = monthData?.transactions ?? [];
   const plaidError = (monthData as any)?.plaidError;
 
-  // ─── Filter by selected account in frontend ───
-  const effectiveAccountIdNum = effectiveAccountId ? parseInt(effectiveAccountId) : undefined;
-  const accountFilteredTransactions = effectiveAccountIdNum
-    ? allBankTransactions.filter((t: any) => t.bankAccountId == effectiveAccountIdNum)
-    : allBankTransactions;
+  // Show ALL transactions from backend (no frontend account filtering)
+  const accountFilteredTransactions = allBankTransactions;
 
   // ─── Filter helpers ───
   const isZelleRecibido = (t: any) => t.category === "zelle_income";
