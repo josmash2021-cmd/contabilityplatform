@@ -159,6 +159,16 @@ export default function PersonalTransactions() {
 
   const allBankTransactions = monthData?.transactions ?? [];
 
+  // ─── Filter by selected account in frontend ───
+  // Backend now returns ALL transactions, we filter here by bankAccountId
+  const effectiveAccountIdNum = effectiveAccountId ? parseInt(effectiveAccountId) : undefined;
+  const accountFilteredTransactions = effectiveAccountIdNum
+    ? allBankTransactions.filter((t: any) => {
+        // Loose comparison for bigint vs number
+        return t.bankAccountId == effectiveAccountIdNum;
+      })
+    : allBankTransactions;
+
   // ─── Filter helpers ───
   const isZelleRecibido = (t: any) => t.category === "zelle_income";
   const isZelleEnviado = (t: any) => t.category === "zelle_sent";
@@ -193,26 +203,26 @@ export default function PersonalTransactions() {
     return false;
   };
 
-  // ─── Apply bank filters ───
+  // ─── Apply bank filters on account-filtered transactions ───
   const filteredBankTransactions =
-    filterType === "all" ? allBankTransactions :
-    filterType === "income" ? allBankTransactions.filter((t: any) => t.type === "income") :
-    filterType === "expense" ? allBankTransactions.filter((t: any) => t.type === "expense") :
-    filterType === "devoluciones" ? allBankTransactions.filter((t: any) => isDevolucion(t)) :
-    filterType === "zelle_in" ? allBankTransactions.filter((t: any) => isZelleRecibido(t)) :
-    filterType === "zelle_out" ? allBankTransactions.filter((t: any) => isZelleEnviado(t)) :
-    filterType === "cash_deposit" ? allBankTransactions.filter((t: any) => isCashDeposit(t)) :
-    filterType === "cash_withdrawal" ? allBankTransactions.filter((t: any) => isCashWithdrawal(t)) :
-    filterType === "gasolina" ? allBankTransactions.filter((t: any) => isGas(t)) :
-    filterType === "p2p" ? allBankTransactions.filter((t: any) => isP2P(t)) :
-    allBankTransactions;
+    filterType === "all" ? accountFilteredTransactions :
+    filterType === "income" ? accountFilteredTransactions.filter((t: any) => t.type === "income") :
+    filterType === "expense" ? accountFilteredTransactions.filter((t: any) => t.type === "expense") :
+    filterType === "devoluciones" ? accountFilteredTransactions.filter((t: any) => isDevolucion(t)) :
+    filterType === "zelle_in" ? accountFilteredTransactions.filter((t: any) => isZelleRecibido(t)) :
+    filterType === "zelle_out" ? accountFilteredTransactions.filter((t: any) => isZelleEnviado(t)) :
+    filterType === "cash_deposit" ? accountFilteredTransactions.filter((t: any) => isCashDeposit(t)) :
+    filterType === "cash_withdrawal" ? accountFilteredTransactions.filter((t: any) => isCashWithdrawal(t)) :
+    filterType === "gasolina" ? accountFilteredTransactions.filter((t: any) => isGas(t)) :
+    filterType === "p2p" ? accountFilteredTransactions.filter((t: any) => isP2P(t)) :
+    accountFilteredTransactions;
 
   const displayTransactions = hasBankConnected ? filteredBankTransactions : [];
 
-  const totalIncome = allBankTransactions
+  const totalIncome = accountFilteredTransactions
     .filter((t: any) => t.type === "income")
     .reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const totalExpense = allBankTransactions
+  const totalExpense = accountFilteredTransactions
     .filter((t: any) => t.type === "expense")
     .reduce((s: number, t: any) => s + Number(t.amount), 0);
 
@@ -253,7 +263,7 @@ export default function PersonalTransactions() {
         <div>
           <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
           <p className="text-xs text-neutral-500">
-            {allBankTransactions.length} registros · {monthData?.monthName ?? ""}
+            {accountFilteredTransactions.length} registros · {monthData?.monthName ?? ""}
           </p>
         </div>
       </div>

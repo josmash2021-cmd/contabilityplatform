@@ -1028,22 +1028,17 @@ export const bankRouter = createRouter({
     }
     const activeTxs = txs.filter((tx: any) => !tx.isReversed);
 
-    // ─── Filter by accountId AFTER merge (not in DB query) ───
-    // CRITICAL: Use == (loose equality) because bankAccountId is bigint from MySQL
-    // bigint === number always returns false in JS. bigint == number works.
-    let filteredTxs = activeTxs;
-    if (accountId) {
-      // Assign orphaned transactions (bankAccountId=null) to primary account
-      const primaryAcc = userAccounts[0];
-      for (const tx of filteredTxs) {
-        if (tx.bankAccountId == null && primaryAcc) {
-          tx.bankAccountId = primaryAcc.id;
-          tx.bankName = primaryAcc.bankName;
-        }
+    // ─── NO backend filtering by accountId ───
+    // Return ALL user transactions. Frontend will filter by account if needed.
+    // Just assign orphaned transactions (bankAccountId=null) to primary account
+    // so frontend can filter correctly.
+    const filteredTxs = activeTxs;
+    const primaryAcc = userAccounts[0];
+    for (const tx of filteredTxs) {
+      if (tx.bankAccountId == null && primaryAcc) {
+        tx.bankAccountId = primaryAcc.id;
+        tx.bankName = primaryAcc.bankName;
       }
-      // Now filter by selected account - use loose == for bigint comparison
-      filteredTxs = filteredTxs.filter((tx: any) => tx.bankAccountId == accountId);
-      console.log(`[getMonthData] Filtered to ${filteredTxs.length} transactions for accountId=${accountId}`);
     }
 
     // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
