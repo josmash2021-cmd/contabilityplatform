@@ -1,7 +1,7 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, publicQuery, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { subscriptions, subscriptionPayments } from "@db/schema";
+import { subscriptions, subscriptionPayments, users } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 
@@ -899,6 +899,101 @@ export const subscriptionRouter = createRouter({
       }
 
       return { success: true, url: session.url };
+    }),
+
+  // ── Admin: Grant annual access to a user by email ──
+  // Bypasses Stripe — directly inserts an active annual subscription
+  grantAnnualAccess: adminQuery
+    .input(z.object({ email: z.string().email(), note: z.string().optional() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const stripe = getStripe();
+
+      try {
+        // Step 1: Find user by email
+        const userRows = await db.select().from(users)
+          .where(eq(users.email, input.email))
+          .limit(1);
+
+        if (userRows.length === 0) {
+          return { success: false, error: `Usuario con email ${input.email} no encontrado` };
+        }
+
+        const targetUser = userRows[0];
+        const userId = targetUser.id;
+
+        // Step 2: Find or create Stripe customer (for consistency)
+        let customerId: string | null = null;
+        try {
+          // Check if user already has a Stripe customer
+          const existingSubs = await db.select().from(subscriptions)
+            .where(eq(subscriptions.userId, userId))
+            .orderBy(desc(subscriptions.createdAt))
+            .limit(1);
+
+          if (existingSubs[0]?.stripeCustomerId) {
+            customerId = existingSubs[0].stripeCustomerId;
+          } else {
+            // Search Stripe by email
+            const stripeCustomers = await stripe.customers.list({ email: input.email, limit: 1 });
+            if (stripeCustomers.data.length > 0) {
+              customerId = stripeCustomers.data[0].id;
+            } else {
+              // Create a new Stripe customer
+              const customer = await stripe.customers.create({
+                email: input.email,
+                name: targetUser.name || undefined,
+                metadata: { platformUserId: String(userId), grantedBy: String(ctx.user.id) },
+              });
+              customerId = customer.id;
+            }
+          }
+        } catch (stripeErr: any) {
+          console.error("[grantAnnualAccess] Stripe customer error:", stripeErr.message);
+          // Continue without Stripe customer — DB record is what matters
+        }
+
+        // Step 3: Calculate period (1 year from now)
+        const now = new Date();
+        const oneYearFromNow = new Date(now);
+        oneYearFromNow.setFullYear(oneYearFromNow.getFullYear() + 1);
+
+        // Step 4: Delete any existing subscription for this user
+        await db.delete(subscriptions).where(eq(subscriptions.userId, userId));
+
+        // Step 5: Insert new annual subscription
+        await db.insert(subscriptions).values({
+          userId,
+          stripeCustomerId: customerId,
+          stripeSubscriptionId: `ADMIN_GRANT_${Date.now()}`, // Placeholder — not a real Stripe sub
+          plan: "annual",
+          status: "active",
+          currentPeriodStart: now,
+          currentPeriodEnd: oneYearFromNow,
+          cancelAtPeriodEnd: false,
+        });
+
+        // Step 6: Record the payment
+        await db.insert(subscriptionPayments).values({
+          userId,
+          amount: "800.00",
+          plan: "annual",
+          status: "succeeded",
+          paidAt: now,
+        });
+
+        return {
+          success: true,
+          message: `Acceso anual otorgado a ${targetUser.name || input.email}`,
+          userId,
+          email: input.email,
+          plan: "annual",
+          validUntil: oneYearFromNow.toISOString(),
+        };
+      } catch (err: any) {
+        console.error("[grantAnnualAccess] Error:", err.message);
+        return { success: false, error: err.message || "Error al otorgar acceso" };
+      }
     }),
 
 });
