@@ -11,6 +11,7 @@ import {
   RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
   Receipt, CheckCircle,
 } from "lucide-react";
+import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 
 /** Account dropdown - avoids scroll issues */
 function AccountDropdown({
@@ -86,6 +87,7 @@ export default function PersonalTransactions() {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [filterType, setFilterType] = useState("all");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const utils = trpc.useUtils();
 
   // Check if bank is connected
@@ -224,6 +226,31 @@ export default function PersonalTransactions() {
 
   const isLoading = isLoadingBank;
 
+  // ─── NOT CONNECTED: Early return, same as business Bank.tsx ───
+  if (!hasBankConnected) {
+    return (
+      <div className="max-w-5xl mx-auto p-6 lg:p-10">
+        <div className="mb-8">
+          <h1 className="text-2xl font-semibold text-black">Transacciones</h1>
+          <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
+        </div>
+        <Card className="border-neutral-200 rounded-xl shadow-none">
+          <CardContent className="p-16 flex flex-col items-center justify-center text-center">
+            <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
+              <Landmark className="w-8 h-8 text-neutral-400" />
+            </div>
+            <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
+            <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
+            <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6">
+              <Landmark className="w-4 h-4 mr-2" /> Conectar Banco
+            </Button>
+          </CardContent>
+        </Card>
+        {showPlaidOverlay && <PlaidLinkOverlay onClose={() => setShowPlaidOverlay(false)} />}
+      </div>
+    );
+  }
+
   return (
     <AnimatedPage className="p-4 lg:p-6">
       {/* Header */}
@@ -236,35 +263,7 @@ export default function PersonalTransactions() {
         </div>
       </div>
 
-      {/* ─── NOT CONNECTED: Same as business Bank.tsx ─── */}
-      {!hasBankConnected && !isCheckingBank && (
-        <>
-          <div className="mb-8">
-            <h1 className="text-2xl font-semibold text-black">Transacciones</h1>
-            <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
-          </div>
-          <Card className="border-neutral-200 rounded-xl shadow-none">
-            <CardContent className="p-16 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
-                <Landmark className="w-8 h-8 text-neutral-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-              <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
-              <Button
-                onClick={() => window.location.href = "/personal/bank"}
-                className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6"
-              >
-                <Landmark className="w-4 h-4 mr-2" /> Conectar Banco
-              </Button>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {/* ─── CONNECTED: All bank content ─── */}
-      {hasBankConnected && (
-        <>
-          {/* Controls: dropdown, month, year, sync */}
+      {/* Controls: dropdown, month, year, sync */}
           <div className="flex items-center gap-2 mb-3 flex-wrap">
             {(accounts ?? []).length > 0 && (
               <AccountDropdown
@@ -404,8 +403,6 @@ export default function PersonalTransactions() {
               })
             )}
           </div>
-        </>
-      )}
     </AnimatedPage>
   );
 }
