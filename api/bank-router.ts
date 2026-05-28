@@ -1025,12 +1025,34 @@ export const bankRouter = createRouter({
           }
         } catch { liveBalance = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0"; }
 
+        // Filter by accountId if a specific account is selected
+        let filteredMapped = mapped;
+        if (accountId) {
+          filteredMapped = mapped.filter((t: any) => String(t.bankAccountId) === String(accountId));
+          console.log(`[getMonthData] Filtered to ${filteredMapped.length} transactions for accountId=${accountId}`);
+        }
+
+        // Recalculate income/expense from filtered data
+        let filteredInc = 0, filteredExp = 0;
+        for (const t of filteredMapped) {
+          const amt = parseFloat(t.amount ?? "0");
+          if (amt <= 0) continue;
+          const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+          if (plaidAmt !== null) {
+            if (plaidAmt < 0) filteredInc += amt;
+            else filteredExp += amt;
+          } else {
+            if (t.type === "income") filteredInc += amt;
+            else filteredExp += amt;
+          }
+        }
+
         // Plaid worked — return mapped transactions directly (no DB round-trip)
-        console.log(`[getMonthData] Returning ${mapped.length} Plaid transactions directly`);
+        console.log(`[getMonthData] Returning ${filteredMapped.length} Plaid transactions directly`);
         const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
         return {
-          transactions: mapped, income: String(inc.toFixed(2)), expense: String(exp.toFixed(2)),
-          topExpense: mapped.length > 0 ? String(Math.max(...mapped.map((t: any) => parseFloat(t.amount)))) : "0",
+          transactions: filteredMapped, income: String(filteredInc.toFixed(2)), expense: String(filteredExp.toFixed(2)),
+          topExpense: filteredMapped.length > 0 ? String(Math.max(...filteredMapped.map((t: any) => parseFloat(t.amount)))) : "0",
           liveBalance, lastSyncedAt: new Date().toISOString(), fromPlaid: true,
           monthName: `${monthNames[month]} ${year}`,
         };
@@ -1042,11 +1064,16 @@ export const bankRouter = createRouter({
     // ─── FALLBACK: Query DB when Plaid fails ───
     let fallbackTxs: any[] = [];
     try {
+      const conditions = [
+        eq(bankTransactions.userId, ctx.user.id),
+        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+      ];
+      // Filter by accountId when a specific account is selected
+      if (accountId) {
+        conditions.push(eq(bankTransactions.bankAccountId, accountId));
+      }
       fallbackTxs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
-        ))
+        .where(and(...conditions))
         .orderBy(desc(bankTransactions.transactionDate));
     } catch (dbErr: any) {
       console.error(`[getMonthData] DB fallback error: ${dbErr.message}`);

@@ -109,10 +109,13 @@ export default function PersonalTransactions() {
   });
 
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
+  // Use DB account IDs (not Plaid IDs) so filtering works correctly
+  // bankTransactions.bankAccountId references the DB account id
   const accounts = plaidAccounts.length > 0
     ? plaidAccounts.map((pa: any) => {
         const dbMatch = (dbAccounts ?? []).find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
-        return dbMatch ? { ...pa, currentBalance: dbMatch.currentBalance } : pa;
+        // Return with DB id so selectedAccountId matches bankTransactions.bankAccountId
+        return dbMatch ? { ...pa, id: dbMatch.id, plaidAccountId: pa.plaidAccountId, currentBalance: dbMatch.currentBalance } : pa;
       })
     : (dbAccounts ?? []);
 
