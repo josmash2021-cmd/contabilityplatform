@@ -875,83 +875,40 @@ export const bankRouter = createRouter({
 
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
-    // Guard: no active bank = no data
     if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
     const { year, month, accountId } = input;
-    console.log(`[getMonthData] Request: user=${ctx.user.id}, year=${year}, month=${month}, accountId=${accountId || 'ALL'}`);
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
-    // Get user accounts for Plaid access token (needed for live balance)
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    console.log(`[getMonthData] Accounts:`, userAccounts.map(a => `id=${a.id} name=${a.bankName} plaid=${a.plaidAccountId?.slice(0,8)}`));
     const primaryAccount = userAccounts[0];
-
-    // Find the selected account to filter by its plaidAccountId
     const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
-    const targetPlaidAccountId = selectedAccount?.plaidAccountId;
-    console.log(`[getMonthData] Filtering for accountId=${accountId}, plaidAccountId=${targetPlaidAccountId || 'ALL'}`);
 
-    // Get ALL user transactions for the month (no account filter in DB)
-    // We fetch everything, then merge with Plaid, then filter by account in JS
-    let txs: any[] = [];
-    try {
-      txs = await db.select().from(bankTransactions)
-        .where(and(
-          eq(bankTransactions.userId, ctx.user.id),
-          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
-        ))
-        .orderBy(desc(bankTransactions.transactionDate));
-      console.log(`[getMonthData] STEP 1: DB query returned ${txs.length} transactions`);
-    } catch (dbErr: any) {
-      console.error(`[getMonthData] DB QUERY ERROR: ${dbErr.message?.substring(0, 300)}`);
-      return {
-        transactions: [], income: "0", expense: "0", topExpense: "0",
-        liveBalance: "0", monthName: `${month}/${year}`,
-        plaidError: `DB Error: ${dbErr.message?.substring(0, 200)}`,
-      };
-    }
-
-    // ─── ALWAYS fetch from Plaid to ensure complete data ───
-    // Merge Plaid transactions with DB transactions
-    // Plaid is the source of truth - if Plaid has it, we show it
-    console.log(`[getMonthData] STEP 2: DB has ${txs.length} transactions, now fetching from Plaid...`);
-    console.log(`[getMonthData] STEP 3b: primaryAccount.token=${primaryAccount?.plaidAccessToken ? 'EXISTS' : 'MISSING'}`);
+    // ─── STEP 1: Always fetch from Plaid first ───
+    // This ensures all transactions have correct bankAccountId
     try {
       const client = await initPlaid();
-      console.log(`[getMonthData] STEP 4: Plaid client=${client ? 'READY' : 'NULL'}`);
       if (client && primaryAccount?.plaidAccessToken) {
-        console.log(`[getMonthData] STEP 5: Calling transactionsGet...`);
         const plaidRes = await client.transactionsGet({
           access_token: primaryAccount.plaidAccessToken,
-          start_date: startStr,
-          end_date: endStr,
+          start_date: startStr, end_date: endStr,
           options: { include_personal_finance_category: true, count: 500 },
         });
-        let plaidTxs = plaidRes.data.transactions || [];
-        console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
+        const plaidTxs = plaidRes.data.transactions || [];
 
-        // Build account map from userAccounts for correct bankAccountId assignment
+        // Build account map
         const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
         for (const ua of userAccounts) {
           if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
         }
 
-        // Build existing transaction ID set for dedup
-        const existingIds = new Set<string>();
-        for (const t of txs) {
-          if (t.plaidTransactionId) existingIds.add(t.plaidTransactionId);
-          if (t.reference) existingIds.add(t.reference);
-        }
-
-        // Map Plaid transactions - include ALL, even if already in DB
-        const seenIds = new Set<string>();
-        const plaidMapped = plaidTxs.map((pt: any) => {
+        // Map and save ALL Plaid transactions with correct bankAccountId
+        for (const pt of plaidTxs) {
           const plaidAmount = pt.amount;
           const absAmount = Math.abs(plaidAmount);
-          const determined = determineTypeAndCategory(
+          const { type, category } = determineTypeAndCategory(
             plaidAmount,
             pt.personal_finance_category?.detailed
               ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
@@ -959,67 +916,51 @@ export const bankRouter = createRouter({
             pt.name
           );
           const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
-          return {
-            id: pt.transaction_id,
+          await db.insert(bankTransactions).values({
             userId: ctx.user!.id,
             bankAccountId: targetAcc.id,
             bankName: targetAcc.bankName,
             accountNumber: targetAcc.accountNumber,
             transactionDate: pt.date ? new Date(pt.date) : new Date(),
-            transactionTime: null,
             description: pt.name,
             amount: String(absAmount.toFixed(2)),
-            type: determined.type as any,
-            category: determined.category as any,
+            type: type as any,
+            category: category as any,
             subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
-            reference: pt.transaction_id,
-            plaidAmount: String(plaidAmount.toFixed(2)),
             plaidTransactionId: pt.transaction_id,
+            plaidAmount: String(plaidAmount.toFixed(2)),
             plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
             merchantName: pt.merchant_name || pt.name,
-            isDuplicate: false,
+            reference: pt.transaction_id,
             lastSyncedAt: new Date(),
             isReconciled: false,
-            createdAt: new Date(),
-          };
-        }).filter((tx: any) => {
-          if (seenIds.has(tx.id)) return false;
-          seenIds.add(tx.id);
-          return true;
-        });
-
-        // Save ALL Plaid transactions to DB (upsert)
-        if (plaidMapped.length > 0) {
-          try {
-            for (const mtx of plaidMapped) {
-              await db.insert(bankTransactions).values(mtx).onDuplicateKeyUpdate({
-                set: {
-                  bankAccountId: mtx.bankAccountId,
-                  bankName: mtx.bankName,
-                  lastSyncedAt: new Date(),
-                },
-              });
-            }
-            console.log(`[getMonthData] Saved ${plaidMapped.length} transactions to DB`);
-          } catch (saveErr: any) {
-            console.error(`[getMonthData] Save error: ${saveErr.message}`);
-          }
+          }).onDuplicateKeyUpdate({
+            set: { bankAccountId: targetAcc.id, bankName: targetAcc.bankName, lastSyncedAt: new Date() },
+          });
         }
-
-        // ─── MERGE: Use Plaid data as source of truth ───
-        // Start with ALL Plaid transactions, then add DB-only ones
-        const plaidIdSet = new Set(plaidMapped.map((p: any) => p.plaidTransactionId));
-        const dbOnlyTxs = txs.filter((t: any) => t.plaidTransactionId && !plaidIdSet.has(t.plaidTransactionId));
-        txs = [...plaidMapped, ...dbOnlyTxs];
-        console.log(`[getMonthData] Merged: ${plaidMapped.length} from Plaid + ${dbOnlyTxs.length} DB-only = ${txs.length} total`);
       }
     } catch (plaidErr: any) {
-      const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
-      console.error(`[getMonthData] Plaid error: ${errMsg}`);
-      // Continue with DB data only - don't fail the request
+      console.error(`[getMonthData] Plaid error: ${plaidErr.message}`);
     }
 
-    // Mark reversed transactions (in memory only - no DB column needed for Railway)
+    // ─── STEP 2: Query DB with account filter ───
+    // Now that all transactions have correct bankAccountId, filter works
+    let txs: any[] = [];
+    try {
+      const conditions: any[] = [
+        eq(bankTransactions.userId, ctx.user.id),
+        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+      ];
+      if (accountId) {
+        conditions.push(eq(bankTransactions.bankAccountId, accountId));
+      }
+      txs = await db.select().from(bankTransactions)
+        .where(and(...conditions))
+        .orderBy(desc(bankTransactions.transactionDate));
+    } catch (dbErr: any) {
+      console.error(`[getMonthData] DB error: ${dbErr.message}`);
+    }
+
     const reversedIds = detectReversedTransactions(txs);
     for (const tx of txs) {
       if (reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId)) {
@@ -1027,14 +968,8 @@ export const bankRouter = createRouter({
       }
     }
     const activeTxs = txs.filter((tx: any) => !tx.isReversed);
-
-    // ─── NO backend filtering by accountId ───
-    // Return ALL user transactions. Frontend will filter by account if needed.
-    // Just assign orphaned transactions (bankAccountId=null) to primary account
-    // so frontend can filter correctly.
-    const filteredTxs = activeTxs;
     const primaryAcc = userAccounts[0];
-    for (const tx of filteredTxs) {
+    for (const tx of activeTxs) {
       if (tx.bankAccountId == null && primaryAcc) {
         tx.bankAccountId = primaryAcc.id;
         tx.bankName = primaryAcc.bankName;
@@ -1045,7 +980,7 @@ export const bankRouter = createRouter({
     // In Plaid: negative = money entering (income), positive = money leaving (expense)
     // Only count NON-REVERSED transactions in the totals
     let inc = 0, exp = 0;
-    for (const t of filteredTxs) {
+    for (const t of activeTxs) {
       const amt = parseFloat(t.amount ?? "0");
       if (amt <= 0) continue; // Skip zero/negative amounts
       // Use plaidAmount if available (negative = income, positive = expense)
@@ -1124,8 +1059,8 @@ export const bankRouter = createRouter({
     const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     return {
-      transactions: filteredTxs, income: inc.toFixed(2), expense: exp.toFixed(2),
-      topExpense: filteredTxs.length > 0 ? String(Math.max(...filteredTxs.map((t: any) => parseFloat(t.amount)))) : "0",
+      transactions: activeTxs, income: inc.toFixed(2), expense: exp.toFixed(2),
+      topExpense: activeTxs.length > 0 ? String(Math.max(...activeTxs.map((t: any) => parseFloat(t.amount)))) : "0",
       liveBalance,
       lastSyncedAt,
       fromPlaid: plaidSource,
