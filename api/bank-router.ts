@@ -1289,6 +1289,21 @@ export const bankRouter = createRouter({
     return txs;
   }),
 
+  // ─── CLEAR TRANSACTIONS (for re-import with corrected types) ───
+  clearTransactions: authedQuery.mutation(async ({ ctx }) => {
+    if (!ctx.user) return { success: false, message: "No user" };
+    const db = getDb();
+    try {
+      // Delete all transactions for this user (they'll be re-imported with correct types on next sync)
+      const result = await db.delete(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
+      console.log(`[clearTransactions] Deleted transactions for user ${ctx.user.id}`);
+      return { success: true, message: "Transacciones eliminadas. Haz sync para re-importar." };
+    } catch (err: any) {
+      console.error(`[clearTransactions] Error: ${err.message}`);
+      return { success: false, message: err.message };
+    }
+  }),
+
   // ─── GET YEAR DATA (annual summary for selected account) ───
   getYearData: authedQuery.input(z.object({ year: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { income: "0", expense: "0", transactionCount: 0 };
@@ -2155,4 +2170,4 @@ export const bankRouter = createRouter({
     }
     return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
   }),
-});                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             
+});

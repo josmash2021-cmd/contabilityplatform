@@ -356,6 +356,19 @@ export default function Bank() {
   const handleSuccess = useCallback(() => { utils.invalidate(); }, [utils]);
 
   // ─── ALL MUTATIONS MUST BE DECLARED BEFORE ANY useEffect THAT USES THEM ───
+  const clearTransactionsMutation = trpc.bank.clearTransactions.useMutation({
+    onSuccess: (data) => {
+      if (data.success) {
+        toast.success(data.message);
+        // Auto-sync after clearing
+        setTimeout(() => handleSync(), 1000);
+      } else {
+        toast.error(data.message);
+      }
+    },
+    onError: (err: { message: string }) => toast.error(err.message),
+  });
+
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
@@ -663,6 +676,9 @@ export default function Bank() {
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
             <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
               <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
+            </Button>
+            <Button onClick={() => { if (confirm("Esto borra todas las transacciones y las re-importa. Continuar?")) clearTransactionsMutation.mutate(); }} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-red-200 text-red-600 hover:bg-red-50" title="Limpiar y re-importar transacciones">
+              <Trash2 className="w-3 h-3" />
             </Button>
             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
             <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title="Importar estado de cuenta CSV">
