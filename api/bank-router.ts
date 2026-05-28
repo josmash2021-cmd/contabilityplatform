@@ -906,6 +906,22 @@ export const bankRouter = createRouter({
       ];
       // Filter by selected account (only when accountId is provided)
       if (accountId) {
+        // Find user's primary account for orphan assignment
+        const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+        const primaryAccount = userAccounts[0];
+        // First: auto-assign orphaned transactions (bankAccountId IS NULL) to primary account
+        if (primaryAccount) {
+          try {
+            await db.update(bankTransactions)
+              .set({ bankAccountId: primaryAccount.id, bankName: primaryAccount.bankName })
+              .where(and(
+                eq(bankTransactions.userId, ctx.user.id),
+                sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+                sql`${bankTransactions.bankAccountId} IS NULL`
+              ));
+          } catch { /* ignore orphan assignment errors */ }
+        }
+        // Now query with the account filter
         whereConditions.push(eq(bankTransactions.bankAccountId, accountId));
       }
       txs = await db.select().from(bankTransactions)
