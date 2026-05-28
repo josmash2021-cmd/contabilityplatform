@@ -91,23 +91,26 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
 
   console.log(`[detectReversed] Grouped into ${byKey.size} groups`);
 
-  // Find pairs with opposite types (expense + income = same merchant, same amount, same date)
+  // Mark duplicate transactions as reversed (same merchant, same amount, same date)
+  // Strategy: if there are N transactions with the same key, mark the first N-1 as reversed
+  // The LAST one is the successful transaction
   for (const [key, group] of byKey) {
     if (group.length < 2) continue;
 
-    const expenses = group.filter((tx: any) => tx.type === "expense");
-    const incomes = group.filter((tx: any) => tx.type === "income");
+    console.log(`[detectReversed] Group "${key}": ${group.length} items`);
 
-    console.log(`[detectReversed] Group "${key}": ${group.length} items, ${expenses.length} expense, ${incomes.length} income`);
+    // Sort by date (oldest first) to keep the last one as the successful transaction
+    group.sort((a: any, b: any) => {
+      const dateA = a.transactionDate ? new Date(a.transactionDate).getTime() : 0;
+      const dateB = b.transactionDate ? new Date(b.transactionDate).getTime() : 0;
+      return dateA - dateB;
+    });
 
-    // Match expenses with incomes (same count = reversed pairs)
-    const pairCount = Math.min(expenses.length, incomes.length);
-    for (let i = 0; i < pairCount; i++) {
-      const expId = expenses[i].id || expenses[i].plaidTransactionId;
-      const incId = incomes[i].id || incomes[i].plaidTransactionId;
-      reversed.add(expId);
-      reversed.add(incId);
-      console.log(`[detectReversed] Marked as reversed: ${expId} + ${incId}`);
+    // Mark all except the LAST one as reversed
+    for (let i = 0; i < group.length - 1; i++) {
+      const txId = group[i].id || group[i].plaidTransactionId;
+      reversed.add(txId);
+      console.log(`[detectReversed] Marked as reversed: ${txId} (type was ${group[i].type})`);
     }
   }
 
