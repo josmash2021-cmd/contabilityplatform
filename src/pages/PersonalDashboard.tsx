@@ -14,7 +14,6 @@ import {
   Send, Receipt, LogOut, Star,
 } from "lucide-react";
 import { useNavigate } from "react-router";
-import BankConnectPrompt from "@/components/BankConnectPrompt";
 
 const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
   zelle_income: { label: "Zelle Recibidos", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
