@@ -33,6 +33,28 @@ async function initPlaid() {
   } catch { return null; }
 }
 
+// ─── Gas Station Detection — ALL brands ───
+const GAS_BRANDS_ALL = [
+  "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway",
+  "valero","citgo","phillips 66","circle k","sinclair","gulf","esso","arco",
+  "76","union 76","kum & go","kum and go","quik trip","quiktrip","race trac",
+  "racetrac","sheetz","wawa","pilot","flying j","love's","maverik","thorntons",
+  "stripes","murphy usa","casey's","holiday","cumberland farms","royal farms",
+  "getgo","parkers","quick chek","stewart's","oncue","p66","sam's club gas",
+  "costco gas","walmart gas","kennedy",
+];
+function isGasStation(desc: string): boolean {
+  const d = desc.toLowerCase();
+  // Check all known brands
+  for (const brand of GAS_BRANDS_ALL) {
+    if (d.includes(brand)) return true;
+  }
+  // Generic gas keywords
+  if (d.includes("gas station") || d.includes("gasoline") || d.includes("gas sta")) return true;
+  // Plaid categories often contain gas info
+  return false;
+}
+
 // ─── Smart Category Rules (in-memory for now, DB later) ───
 const defaultCategoryRules: Record<string, { category: string; type: string }> = {
   // NOTE: Do NOT put "zelle" here - it catches "zelle from" too
@@ -55,12 +77,6 @@ const defaultCategoryRules: Record<string, { category: string; type: string }> =
   "instacart": { category: "food_delivery", type: "expense" },
   "mcdonald": { category: "fast_food", type: "expense" },
   "starbucks": { category: "coffee", type: "expense" },
-  "shell": { category: "gasolina", type: "expense" },
-  "exxon": { category: "gasolina", type: "expense" },
-  "chevron": { category: "gasolina", type: "expense" },
-  "bp ": { category: "gasolina", type: "expense" },
-  "speedway": { category: "gasolina", type: "expense" },
-  "gas station": { category: "gasolina", type: "expense" },
 };
 
 /**
@@ -126,7 +142,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
   if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
 
-  // Check default rules (shell, doordash, etc.)
+  // Check default rules (doordash, etc.)
   // CRITICAL: plaidAmount direction determines if it's expense or income:
   //   plaidAmount > 0 = money LEAVING account = expense
   //   plaidAmount < 0 = money ENTERING account = income (refunds, reversals)
@@ -134,12 +150,17 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
     if (desc.includes(keyword)) {
       if (plaidAmount < 0) {
         // Money entering account: this is a REFUND/REVERSAL of a known merchant
-        // Keep the same category but mark as income (e.g., Shell refund = gasolina income)
         return { type: "income", category: rule.category };
       }
       // Money leaving account: normal expense
       return { type: rule.type as "income" | "expense", category: rule.category };
     }
+  }
+
+  // ─── GAS STATIONS: ALL brands (shell, chevron, exxon, bp, mobil, etc.) ───
+  if (isGasStation(desc)) {
+    if (plaidAmount < 0) return { type: "income", category: "gasolina" };
+    return { type: "expense", category: "gasolina" };
   }
 
   // Zelle detection
@@ -213,8 +234,8 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   // Food
   if (detailed.includes("FOOD") || desc.includes("food")) return { type: "expense", category: "food" };
 
-  // Gas
-  if (detailed.includes("GASOLINE") || desc.includes("gas ")) return { type: "expense", category: "gasolina" };
+  // Gas — Plaid category + generic fallback (now also covered by isGasStation above)
+  if (detailed.includes("GASOLINE") || desc.includes("gas ") || desc.includes("fuel")) return { type: "expense", category: "gasolina" };
 
   // Medical
   if (detailed.includes("MEDICAL") || desc.includes("medical")) return { type: "expense", category: "medical" };

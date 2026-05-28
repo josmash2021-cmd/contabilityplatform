@@ -154,16 +154,20 @@ export default function PersonalTransactions() {
     return t.category === "transfer" || P2P_KEYWORDS.some(k => n.includes(k));
   };
   const GAS_BRANDS = [
-    "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway","sheetz",
-    "wawa","valero","citgo","phillips 66","circle k","costco gas","walmart gas",
-    "7-eleven gas","7 eleven gas","sam's club gas","buc-ee's","bucees","quik trip","quiktrip",
-    "race trac","racetrac","love's","loves travel","pilot flying j","pilot","flying j",
-    "ta travel","travelcenters","petro","ambest","casey's","caseys","kum & go","kum and go",
-    "stripes","murphy usa","murphy express","thorntons","maverik","sinclair","gulf",
-    "union 76","esso","arco","kwik trip","kwik star",
-    "holiday","cumberland farms","royal farms","ritter's","ritters","getgo","get-go",
-    "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66",
-    "76 gas","gasoline","petrol","fuel","gas station","gas sta","gasoline station"];
+    // Major brands
+    "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway",
+    "valero","citgo","phillips 66","sinclair","gulf","esso","arco",
+    // Regional chains
+    "76","union 76","kum & go","kum and go","quik trip","quiktrip","race trac",
+    "racetrac","sheetz","wawa","pilot","flying j","love's","maverik","thorntons",
+    "stripes","murphy usa","casey's","caseys","holiday","cumberland farms",
+    "royal farms","getgo","parkers","parker's","quick chek","quickchek",
+    "stewart's","stewarts","oncue","p66","kennedy",
+    // Warehouse/club gas
+    "costco gas","walmart gas","sam's club gas","buc-ee's","bucees",
+    "7-eleven gas","7 eleven gas",
+    // Generic keywords
+    "gasoline","petrol","fuel","gas station","gas sta","gasoline station"];
   const isGas = (t: any) => {
     // If backend already categorized as gasolina, include it regardless of description
     if (t.category === "gasolina") return true;
