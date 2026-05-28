@@ -129,7 +129,7 @@ export default function PersonalDashboard() {
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
     staleTime: 30000,
   });
-  const userHasBank = (bankConnection as any)?.hasBank === true;
+  const userHasBank = (bankConnection as any)?.hasBank === true; // bank connection status
 
   // ─── AI Auto-Categorization Agent ───
   // Silently fixes miscategorized transactions on page load
