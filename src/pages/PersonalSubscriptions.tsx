@@ -224,8 +224,6 @@ export default function PersonalSubscriptions() {
         </div>
       </div>
 
-      {
-        <>
       {/* System Update Banner */}
       {migrationStatus && !migrationStatus.applied && (
         <Card className="border-amber-200 rounded-xl shadow-none mb-4 bg-amber-50/50">
