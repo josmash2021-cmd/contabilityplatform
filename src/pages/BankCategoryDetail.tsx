@@ -11,6 +11,7 @@ import { ArrowLeft, Trash2, Calendar, LayoutList, RotateCcw } from "lucide-react
 
 const categoryMeta: Record<string, { label: string; type: "income" | "expense" }> = {
   zelle_income: { label: "Zelle Recibidos", type: "income" },
+  transfer_income: { label: "Transferencias", type: "income" },
   deposit: { label: "Depositos", type: "income" },
   cash_deposit: { label: "Depositos de Efectivo", type: "income" },
   cash_withdrawal: { label: "Retiros de Efectivo", type: "expense" },

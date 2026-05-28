@@ -89,8 +89,9 @@ const PIE_COLORS = ["#22c55e", "#86efac", "#a3a3a3", "#d4d4d4", "#e5e5e5", "#f5f
 const CATEGORY_LABELS: Record<string, string> = {
   zelle_income: "Zelle Recibidos", zelle_sent: "Zelle Enviados", deposit: "Depositos",
   cash_deposit: "Depositos de Efectivo", cash_withdrawal: "Retiros de Efectivo",
-  subscription: "Suscripciones", transfer: "Transferencias", business_expense: "Gastos de Negocio",
-  home_expense: "Gastos del Hogar", shopping: "Compras", cash_income: "Efectivo Recibido", other: "Otros",
+  subscription: "Suscripciones", transfer: "Transferencias", transfer_income: "Transferencias",
+  business_expense: "Gastos de Negocio", home_expense: "Gastos del Hogar", shopping: "Compras",
+  cash_income: "Efectivo Recibido", other: "Otros",
 };
 
 // Build local date strings + timezone offset for backend queries

@@ -128,8 +128,9 @@ const CATEGORY_COLORS: Record<string, string> = {
 const CATEGORY_LABELS: Record<string, string> = {
   zelle_income: "Zelle Recibidos", zelle_sent: "Zelle Enviados", deposit: "Depositos",
   cash_deposit: "Depositos de Efectivo", cash_withdrawal: "Retiros de Efectivo",
-  subscription: "Suscripciones", transfer: "Transferencias", business_expense: "Gastos de Negocio",
-  home_expense: "Gastos del Hogar", shopping: "Compras", cash_income: "Efectivo Recibido", other: "Otros",
+  subscription: "Suscripciones", transfer: "Transferencias", transfer_income: "Transferencias",
+  business_expense: "Gastos de Negocio", home_expense: "Gastos del Hogar", shopping: "Compras",
+  cash_income: "Efectivo Recibido", other: "Otros",
 };
 
 /* Plaid Link Button */
