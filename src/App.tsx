@@ -18,6 +18,7 @@ import PersonalDashboard from "@/pages/PersonalDashboard";
 import PersonalTransactions from "@/pages/PersonalTransactions";
 import PersonalGoals from "@/pages/PersonalGoals";
 import PersonalSubscriptions from "@/pages/PersonalSubscriptions";
+import PersonalBank from "@/pages/PersonalBank";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -78,6 +79,7 @@ export default function App() {
         <Route path="/admin" element={<Admin />} />
         {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
         <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
+        <Route path="/personal/bank" element={<PersonalBank />} />
         <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />
         <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
         <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
