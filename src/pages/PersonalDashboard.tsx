@@ -350,9 +350,33 @@ export default function PersonalDashboard() {
         </div>
       </div>
 
-      {/* Show connect prompt when no bank connected */}
-      {!hasBankConnected && !isCheckingBank && <BankConnectPrompt />}
+      {/* Full screen bank connect when no bank connected */}
+      {!hasBankConnected && !isCheckingBank && (
+        <div className="flex items-center justify-center min-h-[80vh]">
+          <div className="text-center max-w-sm mx-auto px-6">
+            <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
+              <Landmark className="w-10 h-10 text-neutral-400" />
+            </div>
+            <h1 className="text-xl font-semibold text-black mb-3">Conectar tu banco</h1>
+            <p className="text-sm text-neutral-400 mb-8 leading-relaxed">
+              Conecta tu cuenta bancaria para ver transacciones automaticas, balance en tiempo real y analisis de flujo de caja.
+            </p>
+            <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
+              <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+              <p className="text-xs text-emerald-700">Tus datos estan protegidos con encriptacion de nivel bancario</p>
+            </div>
+            <button
+              onClick={() => navigate("/personal/bank")}
+              className="w-full h-12 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Conectar Banco
+            </button>
+          </div>
+        </div>
+      )}
 
+      {hasBankConnected && (
+        <>
       {/* Bank Balance Card - only when bank connected */}
       {hasBankConnected && (isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
       {hasBankConnected && !accountsLoading && (
@@ -474,6 +498,8 @@ export default function PersonalDashboard() {
           </div>
         </CardContent>
       </Card>
+        </>
+      )}
     </AnimatedPage>
   );
 }

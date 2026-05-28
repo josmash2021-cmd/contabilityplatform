@@ -239,55 +239,78 @@ export default function PersonalTransactions() {
         </div>
       </div>
 
-      {/* Show connect prompt when no bank connected */}
-      {!hasBankConnected && !isCheckingBank && <BankConnectPrompt />}
-
-      {/* Controls: dropdown, month, year, sync - ONLY when bank connected */}
-      {hasBankConnected && (
-        <div className="flex items-center gap-2 mb-3 flex-wrap">
-          {(accounts ?? []).length > 0 && (
-            <AccountDropdown
-              accounts={accounts ?? []}
-              selectedId={effectiveAccountId}
-              onChange={setSelectedAccountId}
-            />
-          )}
-          <Select value={month} onValueChange={setMonth}>
-            <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {(() => {
-                const currentYear = new Date().getFullYear();
-                const currentMonth = new Date().getMonth() + 1;
-                const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
-                return Array.from({ length: maxMonth }, (_, i) => (
-                  <SelectItem key={i + 1} value={String(i + 1)}>
-                    {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
-                  </SelectItem>
-                ));
-              })()}
-            </SelectContent>
-          </Select>
-          <Select value={year} onValueChange={setYear}>
-            <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-            <SelectContent>
-              {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-            </SelectContent>
-          </Select>
-          <Button
-            onClick={() => syncMutation.mutate({
-              year: parseInt(year),
-              month: parseInt(month),
-              accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-            })}
-            disabled={syncMutation.isPending}
-            variant="outline"
-            size="sm"
-            className="h-8 px-2 border-neutral-200"
-          >
-            {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          </Button>
+      {/* Full screen bank connect when no bank connected */}
+      {!hasBankConnected && !isCheckingBank && (
+        <div className="flex items-center justify-center min-h-[80vh]">
+          <div className="text-center max-w-sm mx-auto px-6">
+            <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
+              <Landmark className="w-10 h-10 text-neutral-400" />
+            </div>
+            <h1 className="text-xl font-semibold text-black mb-3">Conectar tu banco</h1>
+            <p className="text-sm text-neutral-400 mb-8 leading-relaxed">
+              Conecta tu cuenta bancaria para ver transacciones automaticas, balance en tiempo real y analisis de flujo de caja.
+            </p>
+            <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
+              <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+              <p className="text-xs text-emerald-700">Tus datos estan protegidos con encriptacion de nivel bancario</p>
+            </div>
+            <button
+              onClick={() => window.location.href = "/personal/bank"}
+              className="w-full h-12 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
+            >
+              Conectar Banco
+            </button>
+          </div>
         </div>
       )}
+
+      {hasBankConnected && (
+        <>
+      {/* Controls: dropdown, month, year, sync - ONLY when bank connected */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        {(accounts ?? []).length > 0 && (
+          <AccountDropdown
+            accounts={accounts ?? []}
+            selectedId={effectiveAccountId}
+            onChange={setSelectedAccountId}
+          />
+        )}
+        <Select value={month} onValueChange={setMonth}>
+          <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {(() => {
+              const currentYear = new Date().getFullYear();
+              const currentMonth = new Date().getMonth() + 1;
+              const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
+              return Array.from({ length: maxMonth }, (_, i) => (
+                <SelectItem key={i + 1} value={String(i + 1)}>
+                  {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                </SelectItem>
+              ));
+            })()}
+          </SelectContent>
+        </Select>
+        <Select value={year} onValueChange={setYear}>
+          <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+          <SelectContent>
+            {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Button
+          onClick={() => syncMutation.mutate({
+            year: parseInt(year),
+            month: parseInt(month),
+            accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+          })}
+          disabled={syncMutation.isPending}
+          variant="outline"
+          size="sm"
+          className="h-8 px-2 border-neutral-200"
+        >
+          {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+        </Button>
+      </div>
+      </>)}
 
       {/* Filter buttons - horizontal scroll carousel */}
       <div
@@ -405,6 +428,8 @@ export default function PersonalTransactions() {
             })
           )}
         </div>
+      )}
+    </>
       )}
     </AnimatedPage>
   );
