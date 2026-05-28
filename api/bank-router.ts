@@ -1004,16 +1004,21 @@ export const bankRouter = createRouter({
           }
         } catch { liveBalance = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0"; }
 
-        // Plaid saved transactions to DB. Now query DB to get ALL transactions
-        // (Plaid-only + existing DB transactions merged)
-        console.log(`[getMonthData] Plaid saved ${mapped.length} transactions. Now querying DB for merged results...`);
+        // Plaid worked — return mapped transactions directly (no DB round-trip)
+        console.log(`[getMonthData] Returning ${mapped.length} Plaid transactions directly`);
+        const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        return {
+          transactions: mapped, income: String(inc.toFixed(2)), expense: String(exp.toFixed(2)),
+          topExpense: mapped.length > 0 ? String(Math.max(...mapped.map((t: any) => parseFloat(t.amount)))) : "0",
+          liveBalance, lastSyncedAt: new Date().toISOString(), fromPlaid: true,
+          monthName: `${monthNames[month]} ${year}`,
+        };
       }
     } catch (plaidErr: any) {
       console.error(`[getMonthData] Plaid error: ${plaidErr.message}`);
     }
 
-    // ─── QUERY DB: Returns ALL transactions (Plaid + existing merged) ───
-    // Simple DB query without account filter
+    // ─── FALLBACK: Query DB when Plaid fails ───
     let fallbackTxs: any[] = [];
     try {
       fallbackTxs = await db.select().from(bankTransactions)
