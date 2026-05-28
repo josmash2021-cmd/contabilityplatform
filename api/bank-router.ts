@@ -885,9 +885,10 @@ export const bankRouter = createRouter({
     const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
     const primaryAccount = userAccounts[0];
     const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
+    const targetPlaidAccountId = selectedAccount?.plaidAccountId;
 
-    // ─── STEP 1: Always fetch from Plaid first ───
-    // This ensures all transactions have correct bankAccountId
+    // ─── PLAID FIRST: Fetch, filter, classify, and return ───
+    // Plaid is the ONLY source of truth. DB is cache only.
     try {
       const client = await initPlaid();
       if (client && primaryAccount?.plaidAccessToken) {
@@ -896,7 +897,12 @@ export const bankRouter = createRouter({
           start_date: startStr, end_date: endStr,
           options: { include_personal_finance_category: true, count: 500 },
         });
-        const plaidTxs = plaidRes.data.transactions || [];
+        let plaidTxs = plaidRes.data.transactions || [];
+
+        // FILTER by Plaid account_id if accountId is specified
+        if (targetPlaidAccountId) {
+          plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
+        }
 
         // Build account map
         const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
@@ -904,7 +910,8 @@ export const bankRouter = createRouter({
           if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
         }
 
-        // Map and save ALL Plaid transactions with correct bankAccountId
+        // Map and save to DB (best effort)
+        const mapped: any[] = [];
         for (const pt of plaidTxs) {
           const plaidAmount = pt.amount;
           const absAmount = Math.abs(plaidAmount);
@@ -916,7 +923,7 @@ export const bankRouter = createRouter({
             pt.name
           );
           const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
-          await db.insert(bankTransactions).values({
+          const txRow = {
             userId: ctx.user!.id,
             bankAccountId: targetAcc.id,
             bankName: targetAcc.bankName,
@@ -934,136 +941,95 @@ export const bankRouter = createRouter({
             reference: pt.transaction_id,
             lastSyncedAt: new Date(),
             isReconciled: false,
-          }).onDuplicateKeyUpdate({
-            set: { bankAccountId: targetAcc.id, bankName: targetAcc.bankName, lastSyncedAt: new Date() },
-          });
+          };
+          mapped.push(txRow);
+          // Save to DB (cache) - ignore errors
+          try {
+            await db.insert(bankTransactions).values(txRow).onDuplicateKeyUpdate({
+              set: { bankAccountId: targetAcc.id, bankName: targetAcc.bankName, lastSyncedAt: new Date() },
+            });
+          } catch { /* ignore */ }
         }
+
+        // Income/expense from Plaid data
+        let inc = 0, exp = 0;
+        for (const t of mapped) {
+          const amt = parseFloat(t.amount ?? "0");
+          if (amt <= 0) continue;
+          const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+          if (plaidAmt !== null) {
+            if (plaidAmt < 0) inc += amt;
+            else exp += amt;
+          } else {
+            if (t.type === "income") inc += amt;
+            else exp += amt;
+          }
+        }
+
+        // Live balance from Plaid
+        let liveBalance = "0";
+        try {
+          const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
+          const freshBalances = new Map<string, string>();
+          for (const plaidAcc of accountsRes.data.accounts || []) {
+            const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
+            if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
+          }
+          // Update DB balances
+          for (const dbAccount of userAccounts) {
+            if (!dbAccount.plaidAccountId) continue;
+            const freshBal = freshBalances.get(dbAccount.plaidAccountId);
+            if (freshBal != null) {
+              await db.update(bankAccounts).set({ currentBalance: freshBal, lastSyncedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
+            }
+          }
+          if (targetPlaidAccountId) {
+            liveBalance = freshBalances.get(targetPlaidAccountId) ?? selectedAccount?.currentBalance ?? "0";
+          } else {
+            let total = 0;
+            for (const a of userAccounts) {
+              const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
+              total += parseFloat(bal ?? "0");
+            }
+            liveBalance = String(total.toFixed(2));
+          }
+        } catch { liveBalance = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0"; }
+
+        const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        return {
+          transactions: mapped, income: inc.toFixed(2), expense: exp.toFixed(2),
+          topExpense: mapped.length > 0 ? String(Math.max(...mapped.map((t: any) => parseFloat(t.amount)))) : "0",
+          liveBalance, lastSyncedAt: new Date().toISOString(), fromPlaid: true,
+          monthName: `${monthNames[month]} ${year}`,
+        };
       }
     } catch (plaidErr: any) {
       console.error(`[getMonthData] Plaid error: ${plaidErr.message}`);
     }
 
-    // ─── STEP 2: Query DB with account filter ───
-    // Now that all transactions have correct bankAccountId, filter works
-    let txs: any[] = [];
+    // ─── FALLBACK: Only if Plaid fails ───
+    // Simple DB query without account filter
+    let fallbackTxs: any[] = [];
     try {
-      const conditions: any[] = [
-        eq(bankTransactions.userId, ctx.user.id),
-        sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
-      ];
-      if (accountId) {
-        conditions.push(eq(bankTransactions.bankAccountId, accountId));
-      }
-      txs = await db.select().from(bankTransactions)
-        .where(and(...conditions))
+      fallbackTxs = await db.select().from(bankTransactions)
+        .where(and(
+          eq(bankTransactions.userId, ctx.user.id),
+          sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+        ))
         .orderBy(desc(bankTransactions.transactionDate));
     } catch (dbErr: any) {
-      console.error(`[getMonthData] DB error: ${dbErr.message}`);
+      console.error(`[getMonthData] DB fallback error: ${dbErr.message}`);
     }
 
-    const reversedIds = detectReversedTransactions(txs);
-    for (const tx of txs) {
-      if (reversedIds.has(tx.id) || reversedIds.has(tx.plaidTransactionId)) {
-        (tx as any).isReversed = true;
-      }
-    }
-    const activeTxs = txs.filter((tx: any) => !tx.isReversed);
-    const primaryAcc = userAccounts[0];
-    for (const tx of activeTxs) {
-      if (tx.bankAccountId == null && primaryAcc) {
-        tx.bankAccountId = primaryAcc.id;
-        tx.bankName = primaryAcc.bankName;
-      }
-    }
-
-    // INCOME/EXPENSE CALCULATION: Use plaidAmount (original Plaid value) for accuracy
-    // In Plaid: negative = money entering (income), positive = money leaving (expense)
-    // Only count NON-REVERSED transactions in the totals
-    let inc = 0, exp = 0;
-    for (const t of activeTxs) {
-      const amt = parseFloat(t.amount ?? "0");
-      if (amt <= 0) continue; // Skip zero/negative amounts
-      // Use plaidAmount if available (negative = income, positive = expense)
-      // Fallback to stored type if plaidAmount is null
-      const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
-      if (plaidAmt !== null) {
-        if (plaidAmt < 0) inc += amt; // Money entering = income
-        else exp += amt; // Money leaving = expense
-      } else {
-        // Fallback: use stored type
-        if (t.type === "income") inc += amt;
-        else exp += amt;
-      }
-    }
-
-    // Get LIVE balance from Plaid (not cached DB value)
-    let liveBalance = "0";
-    let lastSyncedAt: string | null = null;
-    let plaidSource = false;
-    try {
-      const client = await initPlaid();
-      if (client && primaryAccount?.plaidAccessToken) {
-        console.log(`[getMonthData] Fetching fresh balance from Plaid for user ${ctx.user.id}, account ${accountId || 'all'}`);
-        const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
-        const freshBalances = new Map<string, string>();
-        for (const plaidAcc of accountsRes.data.accounts || []) {
-          const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
-          if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
-          console.log(`[getMonthData] Plaid account ${plaidAcc.name} (${plaidAcc.account_id}): available=${plaidAcc.balances.available}, current=${plaidAcc.balances.current}`);
-        }
-        // Update DB with fresh balances
-        for (const dbAccount of userAccounts) {
-          if (!dbAccount.plaidAccountId) continue;
-          const freshBal = freshBalances.get(dbAccount.plaidAccountId);
-          if (freshBal != null) {
-            await db.update(bankAccounts).set({ currentBalance: freshBal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
-          }
-        }
-        // Calculate result
-        if (accountId) {
-          const targetAcc = userAccounts.find((a: any) => a.id == accountId);
-          liveBalance = targetAcc?.plaidAccountId ? (freshBalances.get(targetAcc.plaidAccountId) ?? targetAcc?.currentBalance ?? "0") : (targetAcc?.currentBalance ?? "0");
-          console.log(`[getMonthData] Account ${accountId} balance: ${liveBalance} (from Plaid: ${targetAcc?.plaidAccountId ? 'yes' : 'no'})`);
-        } else {
-          let total = 0;
-          for (const a of userAccounts) {
-            const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
-            total += parseFloat(bal ?? "0");
-          }
-          liveBalance = String(total.toFixed(2));
-        }
-        plaidSource = true;
-        lastSyncedAt = new Date().toISOString();
-      } else {
-        console.log(`[getMonthData] Cannot fetch from Plaid: client=${!!client}, token=${!!primaryAccount?.plaidAccessToken}`);
-      }
-    } catch (plaidErr: any) {
-      console.error("[getMonthData] Plaid balance error:", plaidErr.message);
-    }
-
-    // If Plaid didn't work, fallback to DB
-    if (!plaidSource) {
-      console.log(`[getMonthData] Using DB fallback for balance`);
-      if (accountId) {
-        const acc = await db.select({ currentBalance: bankAccounts.currentBalance, lastSyncedAt: bankAccounts.lastSyncedAt }).from(bankAccounts).where(and(eq(bankAccounts.id, accountId), eq(bankAccounts.userId, ctx.user.id)));
-        liveBalance = acc[0]?.currentBalance ? String(parseFloat(acc[0].currentBalance).toFixed(2)) : "0";
-        lastSyncedAt = acc[0]?.lastSyncedAt ? new Date(acc[0].lastSyncedAt).toISOString() : null;
-      } else {
-        const allAccs = await db.select({ currentBalance: bankAccounts.currentBalance, lastSyncedAt: bankAccounts.lastSyncedAt }).from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-        const totalBal = allAccs.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
-        liveBalance = String(totalBal.toFixed(2));
-        lastSyncedAt = allAccs[0]?.lastSyncedAt ? new Date(allAccs[0].lastSyncedAt).toISOString() : null;
-      }
-    }
-
+    const fbInc = fallbackTxs.filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + parseFloat(t.amount ?? "0"), 0);
+    const fbExp = fallbackTxs.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + parseFloat(t.amount ?? "0"), 0);
+    const fbBal = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0";
     const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
     return {
-      transactions: activeTxs, income: inc.toFixed(2), expense: exp.toFixed(2),
-      topExpense: activeTxs.length > 0 ? String(Math.max(...activeTxs.map((t: any) => parseFloat(t.amount)))) : "0",
-      liveBalance,
-      lastSyncedAt,
-      fromPlaid: plaidSource,
+      transactions: fallbackTxs, income: String(fbInc.toFixed(2)), expense: String(fbExp.toFixed(2)),
+      topExpense: fallbackTxs.length > 0 ? String(Math.max(...fallbackTxs.map((t: any) => parseFloat(t.amount)))) : "0",
+      liveBalance: fbBal, lastSyncedAt: null, fromPlaid: false,
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
