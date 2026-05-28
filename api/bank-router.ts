@@ -940,17 +940,19 @@ export const bankRouter = createRouter({
           let plaidTxs = plaidRes.data.transactions || [];
           console.log(`[getMonthData] STEP 6: Plaid returned ${plaidTxs.length} total transactions`);
 
-          // Filter by selected account's plaidAccountId when accountId is provided
-          if (targetPlaidAccountId && plaidTxs.length > 0) {
-            plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
-            console.log(`[getMonthData] Filtered to ${plaidTxs.length} transactions for account ${targetPlaidAccountId}`);
-          } else {
-            console.log(`[getMonthData] Using ALL ${plaidTxs.length} Plaid transactions (no account filter)`);
+          // NO filter by accountId here — fetch ALL Plaid transactions
+          // Each transaction will be saved with its correct bankAccountId
+          console.log(`[getMonthData] Using ALL ${plaidTxs.length} Plaid transactions`);
+
+          // Build account map from userAccounts for correct bankAccountId assignment
+          const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
+          for (const ua of userAccounts) {
+            if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
           }
 
           // Map Plaid transactions and deduplicate by transaction_id
           const seenIds = new Set<string>();
-          txs = plaidTxs.map((pt: any) => {
+          const mappedTxs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
             const absAmount = Math.abs(plaidAmount);
             const determined = determineTypeAndCategory(
@@ -960,12 +962,14 @@ export const bankRouter = createRouter({
                 : pt.category || [],
               pt.name
             );
+            // Assign correct bankAccountId based on Plaid's account_id
+            const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
             return {
               id: pt.transaction_id,
               userId: ctx.user!.id,
-              bankAccountId: null,
-              bankName: primaryAccount.bankName,
-              accountNumber: null,
+              bankAccountId: targetAcc.id,  // ← CORRECT bankAccountId per account
+              bankName: targetAcc.bankName,
+              accountNumber: targetAcc.accountNumber,
               transactionDate: pt.date ? new Date(pt.date) : new Date(),
               transactionTime: null,
               description: pt.name,
@@ -988,7 +992,29 @@ export const bankRouter = createRouter({
             seenIds.add(tx.id);
             return true;
           });
-          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend (deduped from ${plaidTxs.length})`);
+
+          // Save ALL transactions to DB with correct bankAccountId
+          if (mappedTxs.length > 0) {
+            try {
+              for (const mtx of mappedTxs) {
+                await db.insert(bankTransactions).values(mtx).onDuplicateKeyUpdate({
+                  set: { lastSyncedAt: new Date() },
+                });
+              }
+              console.log(`[getMonthData] Saved ${mappedTxs.length} transactions to DB`);
+            } catch (saveErr: any) {
+              console.error(`[getMonthData] Save error: ${saveErr.message}`);
+            }
+          }
+
+          // Filter to return only transactions for the selected account
+          if (accountId) {
+            txs = mappedTxs.filter((tx: any) => tx.bankAccountId === accountId);
+            console.log(`[getMonthData] Filtered to ${txs.length} transactions for accountId=${accountId}`);
+          } else {
+            txs = mappedTxs;
+          }
+          console.log(`[getMonthData] Mapped ${txs.length} Plaid transactions for frontend (from ${plaidTxs.length} total)`);
         }
       } catch (plaidErr: any) {
         const errMsg = plaidErr.message?.substring(0, 300) || String(plaidErr);
