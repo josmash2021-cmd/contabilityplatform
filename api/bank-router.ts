@@ -994,11 +994,16 @@ export const bankRouter = createRouter({
           });
 
           // Save ALL transactions to DB with correct bankAccountId
+          // onDuplicateKeyUpdate also updates bankAccountId for existing transactions
           if (mappedTxs.length > 0) {
             try {
               for (const mtx of mappedTxs) {
                 await db.insert(bankTransactions).values(mtx).onDuplicateKeyUpdate({
-                  set: { lastSyncedAt: new Date() },
+                  set: {
+                    bankAccountId: mtx.bankAccountId,
+                    bankName: mtx.bankName,
+                    lastSyncedAt: new Date(),
+                  },
                 });
               }
               console.log(`[getMonthData] Saved ${mappedTxs.length} transactions to DB`);
@@ -1234,6 +1239,10 @@ export const bankRouter = createRouter({
         const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
         const targetPlaidAccountId = selectedAccount?.plaidAccountId;
 
+        // Build account map for correct bankAccountId
+        const plaidToDbAccount2 = new Map<string, typeof userAccounts[0]>();
+        for (const ua of userAccounts) { if (ua.plaidAccountId) plaidToDbAccount2.set(ua.plaidAccountId, ua); }
+
         const client = await initPlaid();
         if (client && primaryAccount?.plaidAccessToken && startStr && endStr) {
           const plaidRes = await client.transactionsGet({
@@ -1243,11 +1252,6 @@ export const bankRouter = createRouter({
             options: { include_personal_finance_category: true, count: 500 },
           });
           let plaidTxs = plaidRes.data.transactions || [];
-
-          // Filter by account
-          if (targetPlaidAccountId) {
-            plaidTxs = plaidTxs.filter((pt: any) => pt.account_id === targetPlaidAccountId);
-          }
 
           // Filter by category
           const { category: determinedCat } = determineTypeAndCategory(0, [category], "");
@@ -1262,7 +1266,7 @@ export const bankRouter = createRouter({
             return ptCat === category;
           });
 
-          // Deduplicate by transaction_id
+          // Deduplicate by transaction_id and assign correct bankAccountId
           const seenIds2 = new Set<string>();
           txs = plaidTxs.map((pt: any) => {
             const plaidAmount = pt.amount;
@@ -1274,12 +1278,13 @@ export const bankRouter = createRouter({
                 : pt.category || [],
               pt.name
             );
+            const targetAcc = plaidToDbAccount2.get(pt.account_id) || primaryAccount;
             return {
               id: pt.transaction_id,
               userId: ctx.user!.id,
-              bankAccountId: null,
-              bankName: primaryAccount.bankName,
-              accountNumber: null,
+              bankAccountId: targetAcc.id,  // ← CORRECT bankAccountId
+              bankName: targetAcc.bankName,
+              accountNumber: targetAcc.accountNumber,
               transactionDate: pt.date ? new Date(pt.date) : new Date(),
               transactionTime: null,
               description: pt.name,
@@ -1303,6 +1308,17 @@ export const bankRouter = createRouter({
             seenIds2.add(tx.id);
             return true;
           });
+
+          // Save to DB with correct bankAccountId
+          if (txs.length > 0) {
+            try {
+              for (const tx of txs) {
+                await db.insert(bankTransactions).values(tx).onDuplicateKeyUpdate({
+                  set: { bankAccountId: tx.bankAccountId, bankName: tx.bankName, lastSyncedAt: new Date() },
+                });
+              }
+            } catch { /* ignore */ }
+          }
         }
       } catch { /* ignore Plaid errors */ }
     }
