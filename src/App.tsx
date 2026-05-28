@@ -25,6 +25,7 @@ import Onboarding from "@/pages/Onboarding";
 import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
 import Diagnostico from "@/pages/Diagnostico";
+import Admin from "@/pages/Admin";
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -73,6 +74,7 @@ export default function App() {
         <Route path="/bank/transactions" element={<BankTransactions />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
+        <Route path="/admin" element={<Admin />} />
         {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
         <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
         <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />

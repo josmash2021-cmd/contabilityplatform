@@ -13,7 +13,7 @@ import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import {
   LayoutDashboard, ShoppingCart, Wrench, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
-  Target, ArrowLeftRight, User, Tv,
+  Target, ArrowLeftRight, User, Tv, Shield,
 } from "lucide-react";
 
 const businessNav = [
@@ -39,7 +39,7 @@ export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
   const userMode = user?.modePreference || "business";
   useAutoRepair(); // Auto-repair accounting on login (silent)
   const { data: settings } = trpc.settings.get.useQuery(undefined, {
@@ -90,6 +90,20 @@ export function AppLayout() {
             </button>
           );
         })}
+        {isAdmin && (
+          <button
+            onClick={() => { navigate("/admin"); onNavigate?.(); }}
+            className={cn(
+              "flex items-center gap-3 w-full px-3 py-2 rounded-md transition-colors duration-150",
+              isActive("/admin")
+                ? "bg-neutral-100 text-black font-medium"
+                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
+            )}
+          >
+            <Shield className="w-4 h-4 shrink-0" strokeWidth={isActive("/admin") ? 2 : 1.5} />
+            <span className="text-sm">Admin</span>
+          </button>
+        )}
       </nav>
       <div className="p-3 mt-auto border-t border-neutral-100">
         <div className="flex items-center gap-2.5 px-3 py-2">

@@ -15,6 +15,7 @@ import { periodRouter } from "./period-router";
 import { exportRouter } from "./export-router";
 import { personalRouter } from "./personal-router";
 import { setupRouter } from "./setup-router";
+import { adminRouter } from "./admin-router";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales } from "@db/schema";
@@ -39,6 +40,7 @@ export const appRouter = createRouter({
   export: exportRouter,
   personal: personalRouter,
   setup: setupRouter,
+  admin: adminRouter,
   debug: createRouter({
     myData: authedQuery.query(async ({ ctx }) => {
       const db = getDb();
