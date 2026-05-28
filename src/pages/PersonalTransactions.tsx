@@ -7,10 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import BankConnectPrompt from "@/components/BankConnectPrompt";
 import {
   RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Receipt,
+  Receipt, CheckCircle,
 } from "lucide-react";
 
 /** Account dropdown - avoids scroll issues */
@@ -48,7 +47,6 @@ function AccountDropdown({
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-          {/* All accounts option */}
           <button
             onClick={() => { onChange(""); setOpen(false); }}
             className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${
@@ -88,6 +86,7 @@ export default function PersonalTransactions() {
   const [month, setMonth] = useState(String(now.getMonth() + 1));
   const [filterType, setFilterType] = useState("all");
   const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const utils = trpc.useUtils();
 
   // Check if bank is connected
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
@@ -117,7 +116,6 @@ export default function PersonalTransactions() {
 
   // NO default account selection - user chooses or "All accounts" shows everything
   const effectiveAccountId = selectedAccountId;
-  const utils = trpc.useUtils();
 
   // Fetch bank transactions (only when bank is connected)
   const { data: monthData, isLoading: isLoadingBank } = trpc.bank.getMonthData.useQuery({
@@ -137,7 +135,6 @@ export default function PersonalTransactions() {
   });
 
   const allBankTransactions = monthData?.transactions ?? [];
-  // Show ALL transactions from backend (no frontend account filtering)
   const accountFilteredTransactions = allBankTransactions;
 
   // ─── Filter helpers ───
@@ -174,7 +171,7 @@ export default function PersonalTransactions() {
     return false;
   };
 
-  // ─── Apply bank filters on account-filtered transactions ───
+  // ─── Apply bank filters ───
   const filteredBankTransactions =
     filterType === "all" ? accountFilteredTransactions :
     filterType === "income" ? accountFilteredTransactions.filter((t: any) => t.type === "income") :
@@ -239,7 +236,7 @@ export default function PersonalTransactions() {
         </div>
       </div>
 
-      {/* Full screen bank connect when no bank connected */}
+      {/* ─── NOT CONNECTED: Full screen bank connect ─── */}
       {!hasBankConnected && !isCheckingBank && (
         <div className="flex items-center justify-center min-h-[80vh]">
           <div className="text-center max-w-sm mx-auto px-6">
@@ -264,172 +261,150 @@ export default function PersonalTransactions() {
         </div>
       )}
 
+      {/* ─── CONNECTED: All bank content ─── */}
       {hasBankConnected && (
         <>
-      {/* Controls: dropdown, month, year, sync - ONLY when bank connected */}
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        {(accounts ?? []).length > 0 && (
-          <AccountDropdown
-            accounts={accounts ?? []}
-            selectedId={effectiveAccountId}
-            onChange={setSelectedAccountId}
-          />
-        )}
-        <Select value={month} onValueChange={setMonth}>
-          <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {(() => {
-              const currentYear = new Date().getFullYear();
-              const currentMonth = new Date().getMonth() + 1;
-              const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
-              return Array.from({ length: maxMonth }, (_, i) => (
-                <SelectItem key={i + 1} value={String(i + 1)}>
-                  {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
-                </SelectItem>
-              ));
-            })()}
-          </SelectContent>
-        </Select>
-        <Select value={year} onValueChange={setYear}>
-          <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-          </SelectContent>
-        </Select>
-        <Button
-          onClick={() => syncMutation.mutate({
-            year: parseInt(year),
-            month: parseInt(month),
-            accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-          })}
-          disabled={syncMutation.isPending}
-          variant="outline"
-          size="sm"
-          className="h-8 px-2 border-neutral-200"
-        >
-          {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-        </Button>
-      </div>
-      </>)}
-
-      {/* Filter buttons - horizontal scroll carousel */}
-      <div
-        className="flex bg-gray-100 rounded-xl p-1 mb-4 gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
-        style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
-      >
-        <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
-        {(filterButtons as const).map((f: any) => (
-          <button
-            key={f.key}
-            onClick={() => setFilterType(f.key)}
-            className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
-          >
-            {f.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Summary Cards - bank KPIs ONLY when bank connected */}
-      {hasBankConnected && (
-        <div className="grid grid-cols-3 gap-3 mb-4">
-          <Card className="border-emerald-200 rounded-xl shadow-none">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
-                  <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                </div>
-                <p className="text-[10px] text-neutral-500">Ingresos</p>
-              </div>
-              <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-rose-200 rounded-xl shadow-none">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
-                  <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
-                </div>
-                <p className="text-[10px] text-neutral-500">Gastos</p>
-              </div>
-              <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
-            </CardContent>
-          </Card>
-          <Card className="border-sky-200 rounded-xl shadow-none">
-            <CardContent className="p-3">
-              <div className="flex items-center gap-1.5 mb-1">
-                <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
-                  <Wallet className="w-3.5 h-3.5 text-sky-600" />
-                </div>
-                <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
-              </div>
-              <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
-            </CardContent>
-          </Card>
-        </div>
-      )}
-
-      {/* No bank connected */}
-      {!hasBankConnected && !isCheckingBank && (
-        <div className="flex flex-col items-center justify-center py-16 border border-neutral-200 rounded-xl bg-white">
-          <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
-            <Landmark className="w-8 h-8 text-neutral-400" />
+          {/* Controls: dropdown, month, year, sync */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            {(accounts ?? []).length > 0 && (
+              <AccountDropdown
+                accounts={accounts ?? []}
+                selectedId={effectiveAccountId}
+                onChange={setSelectedAccountId}
+              />
+            )}
+            <Select value={month} onValueChange={setMonth}>
+              <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {(() => {
+                  const currentYear = new Date().getFullYear();
+                  const currentMonth = new Date().getMonth() + 1;
+                  const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
+                  return Array.from({ length: maxMonth }, (_, i) => (
+                    <SelectItem key={i + 1} value={String(i + 1)}>
+                      {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                    </SelectItem>
+                  ));
+                })()}
+              </SelectContent>
+            </Select>
+            <Select value={year} onValueChange={setYear}>
+              <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+              </SelectContent>
+            </Select>
+            <Button
+              onClick={() => syncMutation.mutate({
+                year: parseInt(year),
+                month: parseInt(month),
+                accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
+              })}
+              disabled={syncMutation.isPending}
+              variant="outline"
+              size="sm"
+              className="h-8 px-2 border-neutral-200"
+            >
+              {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            </Button>
           </div>
-          <h3 className="text-base font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-          <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">Conecta tu cuenta bancaria para ver transacciones automaticas, saldo en tiempo real y analisis de flujo de caja.</p>
-          <button
-            onClick={() => window.location.href = "/personal/bank"}
-            className="flex items-center gap-2 h-10 px-5 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
-          >
-            <Landmark className="w-4 h-4" />
-            Conectar Banco
-          </button>
-        </div>
-      )}
 
-      {/* Transaction List */}
-      {hasBankConnected && (
-        <div className="space-y-0">
-          {isLoading ? (
-            <div className="space-y-2 py-4">
-              {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
-            </div>
-          ) : displayTransactions.length === 0 ? (
-            <div className="text-center py-10">
-              <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-              <p className="text-sm text-neutral-400">No hay transacciones este mes</p>
-              <p className="text-xs text-neutral-400 mt-1">Presiona sincronizar para traer datos del banco</p>
-            </div>
-          ) : (
-            displayTransactions.map((tx: any) => {
-              const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
-              const dateStr = txDate ? txDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
-              const timeStr = txDate ? txDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-              return (
-                <div
-                  key={tx.id}
-                  className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-normal text-black truncate">{tx.description}</p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
-                      <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
-                        {getCategoryLabel(tx.category ?? "")}
-                      </span>
-                    </div>
+          {/* Filter buttons */}
+          <div
+            className="flex bg-gray-100 rounded-xl p-1 mb-4 gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
+            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
+          >
+            <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
+            {(filterButtons as const).map((f: any) => (
+              <button
+                key={f.key}
+                onClick={() => setFilterType(f.key)}
+                className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+
+          {/* Summary Cards */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            <Card className="border-emerald-200 rounded-xl shadow-none">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                   </div>
-                  <span className={`text-sm font-medium shrink-0 ml-3 ${
-                    tx.type === "income" ? "text-emerald-600" : "text-rose-600"
-                  }`}>
-                    {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
-                  </span>
+                  <p className="text-[10px] text-neutral-500">Ingresos</p>
                 </div>
-              );
-            })
-          )}
-        </div>
-      )}
-    </>
+                <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-rose-200 rounded-xl shadow-none">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
+                    <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                  </div>
+                  <p className="text-[10px] text-neutral-500">Gastos</p>
+                </div>
+                <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
+              </CardContent>
+            </Card>
+            <Card className="border-sky-200 rounded-xl shadow-none">
+              <CardContent className="p-3">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
+                    <Wallet className="w-3.5 h-3.5 text-sky-600" />
+                  </div>
+                  <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
+                </div>
+                <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Transaction List */}
+          <div className="space-y-0">
+            {isLoading ? (
+              <div className="space-y-2 py-4">
+                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
+              </div>
+            ) : displayTransactions.length === 0 ? (
+              <div className="text-center py-10">
+                <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
+                <p className="text-sm text-neutral-400">No hay transacciones este mes</p>
+                <p className="text-xs text-neutral-400 mt-1">Presiona sincronizar para traer datos del banco</p>
+              </div>
+            ) : (
+              displayTransactions.map((tx: any) => {
+                const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
+                const dateStr = txDate ? txDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
+                const timeStr = txDate ? txDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                return (
+                  <div
+                    key={tx.id}
+                    className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-normal text-black truncate">{tx.description}</p>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
+                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
+                          {getCategoryLabel(tx.category ?? "")}
+                        </span>
+                      </div>
+                    </div>
+                    <span className={`text-sm font-medium shrink-0 ml-3 ${
+                      tx.type === "income" ? "text-emerald-600" : "text-rose-600"
+                    }`}>
+                      {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
       )}
     </AnimatedPage>
   );
