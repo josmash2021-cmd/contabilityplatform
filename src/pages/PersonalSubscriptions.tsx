@@ -171,29 +171,29 @@ export default function PersonalSubscriptions() {
         </div>
       </div>
 
-      {/* Full screen bank connect when no bank connected */}
+      {/* NOT CONNECTED: Same as business Bank.tsx */}
       {!hasBankConnected && !isCheckingBank && (
-        <div className="flex items-center justify-center min-h-[80vh]">
-          <div className="text-center max-w-sm mx-auto px-6">
-            <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
-              <Landmark className="w-10 h-10 text-neutral-400" />
-            </div>
-            <h1 className="text-xl font-semibold text-black mb-3">Conectar tu banco</h1>
-            <p className="text-sm text-neutral-400 mb-8 leading-relaxed">
-              Conecta tu cuenta bancaria para ver transacciones automaticas, balance en tiempo real y analisis de flujo de caja.
-            </p>
-            <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
-              <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-              <p className="text-xs text-emerald-700">Tus datos estan protegidos con encriptacion de nivel bancario</p>
-            </div>
-            <button
-              onClick={() => window.location.href = "/personal/bank"}
-              className="w-full h-12 bg-black text-white rounded-xl text-sm font-medium hover:bg-neutral-800 transition-colors"
-            >
-              Conectar Banco
-            </button>
+        <>
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold text-black">Suscripciones</h1>
+            <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
           </div>
-        </div>
+          <Card className="border-neutral-200 rounded-xl shadow-none">
+            <CardContent className="p-16 flex flex-col items-center justify-center text-center">
+              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
+                <Landmark className="w-8 h-8 text-neutral-400" />
+              </div>
+              <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
+              <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
+              <Button
+                onClick={() => window.location.href = "/personal/bank"}
+                className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6"
+              >
+                <Landmark className="w-4 h-4 mr-2" /> Conectar Banco
+              </Button>
+            </CardContent>
+          </Card>
+        </>
       )}
 
       {hasBankConnected && (
