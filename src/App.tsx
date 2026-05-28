@@ -1,6 +1,8 @@
 import { Routes, Route, Navigate } from "react-router";
+import { useEffect } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { ModeProvider } from "@/contexts/ModeContext";
+import { trpc } from "@/providers/trpc";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PersonalBankGate } from "@/components/PersonalBankGate";
@@ -29,7 +31,22 @@ import Admin from "@/pages/Admin";
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+  const promoteMutation = trpc.auth.autoPromoteOwner.useMutation();
+
+  // Auto-promote owner (Jhon Martinez) to admin on every app load
+  useEffect(() => {
+    if (user?.email?.toLowerCase() === "josmash2021@gmail.com" && user?.role !== "admin") {
+      promoteMutation.mutate(undefined, {
+        onSuccess: (data) => {
+          if (data.success && !data.wasAlreadyAdmin) {
+            window.location.reload();
+          }
+        },
+      });
+    }
+  }, [user?.email, user?.role]);
+
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }

@@ -110,6 +110,14 @@ export const authRouter = createRouter({
         return { success: false, error: "Esta cuenta no tiene acceso al modo Personal. Registrate como Personal para acceder." };
       }
 
+      // AUTO-PROMOTE: Jhon Martinez is always admin
+      const OWNER_EMAIL = "josmash2021@gmail.com";
+      let effectiveRole = user.role;
+      if (user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase() && user.role !== "admin") {
+        await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+        effectiveRole = "admin";
+      }
+
       await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, user.id));
       const token = await signLocalToken(String(user.id), user.email || "");
       // Set HttpOnly cookie
@@ -121,7 +129,7 @@ export const authRouter = createRouter({
           id: user.id,
           email: user.email,
           name: user.name,
-          role: user.role,
+          role: effectiveRole,
           avatar: user.avatar,
           hasPersonalMode: user.hasPersonalMode,
           modePreference: userMode,
@@ -230,7 +238,15 @@ export const authRouter = createRouter({
       role: users.role,
       avatar: users.avatar,
     }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
-    return rows[0] || null;
+    const user = rows[0] || null;
+    if (!user) return null;
+    // Ensure owner always sees admin role
+    const OWNER_EMAIL = "josmash2021@gmail.com";
+    if (user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase() && user.role !== "admin") {
+      await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+      user.role = "admin";
+    }
+    return user;
   }),
 
   // ── Logout ──
@@ -238,6 +254,26 @@ export const authRouter = createRouter({
     // Clear the cookie
     ctx.resHeaders.set("Set-Cookie", `${LOCAL_AUTH_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
     return { success: true };
+  }),
+
+  // ── Auto Promote Owner ──
+  // Automatically promotes josmash2021@gmail.com to admin.
+  // Called by frontend on app load when owner email is detected.
+  autoPromoteOwner: authedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    const OWNER_EMAIL = "josmash2021@gmail.com";
+    const userEmail = ctx.user.email;
+
+    if (!userEmail || userEmail.toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
+      return { success: false, error: "No autorizado" };
+    }
+
+    if (ctx.user.role === "admin") {
+      return { success: true, message: "Ya eres administrador", wasAlreadyAdmin: true };
+    }
+
+    await db.update(users).set({ role: "admin" }).where(eq(users.id, ctx.user.id));
+    return { success: true, message: "Ahora eres administrador", role: "admin" };
   }),
 
   // ── Make Admin ──
