@@ -2169,4 +2169,9 @@ export const bankRouter = createRouter({
           plaidAccounts,
         });
       } catch (e: any) {
-        results.push({ dbBankName: acc.bankName, error: e.message, code
+        results.push({ dbBankName: acc.bankName, error: e.message, code: e.code });
+      }
+    }
+    return { results, plaidEnv: process.env.PLAID_ENV || "sandbox" };
+  }),
+});
