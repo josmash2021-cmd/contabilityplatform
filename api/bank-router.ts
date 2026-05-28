@@ -343,23 +343,38 @@ function checkKeywords(keywords: string[], name: string, desc: string): boolean 
 
 // MEMBERSHIPS: Entertainment, gym, software, cloud, gaming, dating, news
 const MEMBERSHIP_KEYWORDS = [
+  // Streaming
   "netflix", "spotify", "disney", "hulu", "hbo", "paramount", "peacock",
   "prime video", "youtube premium", "youtube tv", "crunchyroll", "twitch",
   "starz", "showtime", "amc+",
+  // Apple services
   "apple music", "apple tv", "apple arcade", "icloud", "itunes",
+  // Gyms & fitness
   "planet fitness", "la fitness", "equinox", "crunch fitness", "ymca",
   "orange theory", "soulcycle", "peloton", "24 hour fitness", "gold gym",
+  "gym", "fitness",
+  // AI services
+  "chatgpt", "openai", "midjourney", "claude", "kimi", "anthropic",
+  // Car washes
+  "car wash", "autowash", "tunnel wash", "self serve wash", "quick quack",
+  "zips car wash", "mister car wash", "brown bear", "super wash",
+  // Software
   "adobe", "creative cloud", "photoshop", "premiere",
   "microsoft 365", "office 365",
   "google one", "google workspace",
   "dropbox", "notion", "slack", "zoom", "canva", "grammarly",
-  "chatgpt", "openai", "midjourney", "claude",
+  // News & reading
   "nytimes", "new york times", "washington post", "wall street journal",
   "substack", "patreon", "medium", "kindle unlimited", "audible",
+  // Gaming
   "xbox", "playstation", "ps plus", "nintendo", "steam", "epic games",
+  // Dating
   "tinder", "bumble", "hinge", "match.com",
+  // Learning & wellness
   "calm", "headspace", "duolingo", "masterclass", "skillshare", "coursera",
+  // Meal kits
   "hellofresh", "blue apron", "home chef",
+  // Memberships
   "costco", "sam club", "amazon prime",
 ];
 

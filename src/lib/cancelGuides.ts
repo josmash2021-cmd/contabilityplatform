@@ -252,6 +252,56 @@ const GUIDES: Record<string, CancelGuide> = {
     linkLabel: "myaccount.nytimes.com",
     estimatedTime: "3 minutos",
   },
+  chatgpt: {
+    steps: [
+      "Ve a chatgpt.com e inicia sesion",
+      "Haz click en tu perfil (arriba a la derecha)",
+      "Selecciona 'Mi plan' o 'My plan'",
+      "Haz click en 'Gestionar mi suscripcion'",
+      "Selecciona 'Cancelar plan'",
+      "Confirma la cancelacion",
+    ],
+    link: "https://chat.openai.com/account",
+    linkLabel: "chat.openai.com/account",
+    estimatedTime: "3 minutos",
+  },
+  claude: {
+    steps: [
+      "Ve a claude.ai e inicia sesion",
+      "Haz click en tu perfil (arriba a la derecha)",
+      "Selecciona 'Configuracion' o 'Settings'",
+      "Ve a 'Plan' o 'Billing'",
+      "Haz click en 'Cancelar suscripcion'",
+      "Confirma la cancelacion",
+    ],
+    link: "https://claude.ai/settings",
+    linkLabel: "claude.ai/settings",
+    estimatedTime: "3 minutos",
+  },
+  kimi: {
+    steps: [
+      "Ve a kimi.moonshot.cn e inicia sesion",
+      "Ve a tu perfil o configuracion de cuenta",
+      "Busca 'Suscripcion' o 'Plan de pago'",
+      "Haz click en 'Cancelar suscripcion'",
+      "Confirma la cancelacion",
+    ],
+    link: "https://kimi.moonshot.cn",
+    linkLabel: "kimi.moonshot.cn",
+    estimatedTime: "3 minutos",
+  },
+  "amazon prime": {
+    steps: [
+      "Ve a amazon.com e inicia sesion",
+      "Ve a 'Tu Cuenta' > 'Gestionar membresia de Prime'",
+      "Selecciona 'Actualizar, cancelar y mas'",
+      "Haz click en 'Finalizar membresia'",
+      "Sigue los pasos para confirmar",
+    ],
+    link: "https://www.amazon.com/gp/primecentral",
+    linkLabel: "amazon.com/primecentral",
+    estimatedTime: "3 minutos",
+  },
 };
 
 export function getCancelGuide(merchantName: string): CancelGuide {
