@@ -1029,7 +1029,8 @@ export const bankRouter = createRouter({
     const activeTxs = txs.filter((tx: any) => !tx.isReversed);
 
     // ─── Filter by accountId AFTER merge (not in DB query) ───
-    // This ensures ALL transactions are fetched, then filtered correctly
+    // CRITICAL: Use == (loose equality) because bankAccountId is bigint from MySQL
+    // bigint === number always returns false in JS. bigint == number works.
     let filteredTxs = activeTxs;
     if (accountId) {
       // Assign orphaned transactions (bankAccountId=null) to primary account
@@ -1040,8 +1041,8 @@ export const bankRouter = createRouter({
           tx.bankName = primaryAcc.bankName;
         }
       }
-      // Now filter by selected account
-      filteredTxs = filteredTxs.filter((tx: any) => tx.bankAccountId === accountId);
+      // Now filter by selected account - use loose == for bigint comparison
+      filteredTxs = filteredTxs.filter((tx: any) => tx.bankAccountId == accountId);
       console.log(`[getMonthData] Filtered to ${filteredTxs.length} transactions for accountId=${accountId}`);
     }
 
@@ -1090,7 +1091,7 @@ export const bankRouter = createRouter({
         }
         // Calculate result
         if (accountId) {
-          const targetAcc = userAccounts.find((a: any) => a.id === accountId);
+          const targetAcc = userAccounts.find((a: any) => a.id == accountId);
           liveBalance = targetAcc?.plaidAccountId ? (freshBalances.get(targetAcc.plaidAccountId) ?? targetAcc?.currentBalance ?? "0") : (targetAcc?.currentBalance ?? "0");
           console.log(`[getMonthData] Account ${accountId} balance: ${liveBalance} (from Plaid: ${targetAcc?.plaidAccountId ? 'yes' : 'no'})`);
         } else {
@@ -1565,7 +1566,7 @@ export const bankRouter = createRouter({
       // Calculate result
       let resultBalance = "0";
       if (input?.accountId) {
-        const targetAcc = userAccounts.find((a: any) => a.id === input.accountId);
+        const targetAcc = userAccounts.find((a: any) => a.id == input.accountId);
         const plaidId = targetAcc?.plaidAccountId;
         const freshBal = plaidId ? freshBalances.get(plaidId) : null;
         resultBalance = freshBal ?? targetAcc?.currentBalance ?? "0";
