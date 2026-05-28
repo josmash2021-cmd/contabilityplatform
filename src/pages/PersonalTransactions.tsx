@@ -165,6 +165,8 @@ export default function PersonalTransactions() {
     "parkers","parker's","quick chek","quickchek","stewart's","stewarts","oncue","p66",
     "76 gas","gasoline","petrol","fuel","gas station","gas sta","gasoline station"];
   const isGas = (t: any) => {
+    // If backend already categorized as gasolina, include it regardless of description
+    if (t.category === "gasolina") return true;
     const n = (t.description || "").toLowerCase();
     for (const b of GAS_BRANDS) {
       const regex = new RegExp(`\\b${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");

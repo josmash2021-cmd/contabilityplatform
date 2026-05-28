@@ -200,6 +200,8 @@ export default function Transactions() {
     "sheetz","wawa","racetrac","speedway","marathon","valero","citgo","phillips 66",
     "love's travel","pilot truck","ta truck","ambest","maverik","quiktrip"];
   const isGas = (t: any) => {
+    // If backend already categorized as gasolina, include it regardless of description
+    if (t.category === "gasolina") return true;
     const n = (t.description || "").toLowerCase();
     // Use word-boundary matching to avoid false positives like "arco" inside "alarcon"
     for (const b of GAS_BRANDS) {
