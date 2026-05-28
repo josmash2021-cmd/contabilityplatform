@@ -33,7 +33,7 @@ function AccountDropdown({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
 
-  const selected = accounts.find((a) => String(a.id) === selectedId);
+  const selected = selectedId ? accounts.find((a) => String(a.id) === selectedId) : null;
 
   return (
     <div ref={ref} className="relative">
@@ -42,11 +42,22 @@ function AccountDropdown({
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
+        <span className="truncate max-w-[90px]">{selected ? selected.bankName : "Todas las cuentas"}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
+          {/* All accounts option */}
+          <button
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${
+              !selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            <Landmark className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+            <span>Todas las cuentas</span>
+          </button>
+          <div className="border-t border-neutral-100 my-1" />
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -103,8 +114,8 @@ export default function PersonalTransactions() {
       })
     : (dbAccounts ?? []);
 
-  // Select first account on initial load (simple, no effects)
-  const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
+  // NO default account selection - user chooses or "All accounts" shows everything
+  const effectiveAccountId = selectedAccountId;
   const utils = trpc.useUtils();
 
   // Fetch bank transactions (only when bank is connected)
