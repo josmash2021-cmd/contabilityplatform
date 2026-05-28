@@ -7,14 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
-import { useSearchParams } from "react-router";
 import {
-  ArrowUpRight, ArrowDownRight, RefreshCw, Landmark,
-  ChevronDown, TrendingUp, TrendingDown, Wallet,
+  RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
   Receipt,
 } from "lucide-react";
 
-/** Account dropdown with "All accounts" option */
+/** Account dropdown - avoids scroll issues */
 function AccountDropdown({
   accounts,
   selectedId,
@@ -44,24 +42,11 @@ function AccountDropdown({
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Todas"}</span>
+        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
         <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-          {/* All accounts option */}
-          <button
-            onClick={() => { onChange(""); setOpen(false); }}
-            className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
-              !selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            <div className="flex items-center gap-2 min-w-0">
-              <Landmark className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-              <span>Todas las cuentas</span>
-            </div>
-          </button>
-          <div className="border-t border-neutral-100 my-1" />
           {accounts.map((acc: any) => (
             <button
               key={acc.id}
@@ -86,29 +71,11 @@ function AccountDropdown({
 }
 
 export default function PersonalTransactions() {
-  const [searchParams] = useSearchParams();
   const now = new Date();
-  const qpFilter = searchParams.get("filter");
-  const qpMonth = searchParams.get("month");
-  const qpYear = searchParams.get("year");
-  const qpAccount = searchParams.get("account");
-
-  const categoryToFilter: Record<string, string> = {
-    zelle_income: "zelle_in",
-    zelle_sent: "zelle_out",
-    cash_deposit: "cash_deposit",
-    cash_withdrawal: "cash_withdrawal",
-    deposit: "income",
-    income: "income",
-    expense: "expense",
-    gasolina: "gasolina",
-  };
-  const initialFilter = qpFilter && categoryToFilter[qpFilter] ? categoryToFilter[qpFilter] : "all";
-
-  const [year, setYear] = useState(qpYear ?? String(now.getFullYear()));
-  const [month, setMonth] = useState(qpMonth ?? String(now.getMonth() + 1));
-  const [filterType, setFilterType] = useState(initialFilter);
-  const [selectedAccountId, setSelectedAccountId] = useState<string>(qpAccount ?? "");
+  const [year, setYear] = useState(String(now.getFullYear()));
+  const [month, setMonth] = useState(String(now.getMonth() + 1));
+  const [filterType, setFilterType] = useState("all");
+  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
   const utils = trpc.useUtils();
 
   // Check if bank is connected
@@ -118,17 +85,17 @@ export default function PersonalTransactions() {
   });
   const hasBankConnected = bankConnection?.hasBank === true;
 
-  // Fetch ALL accounts from Plaid
+  // Fetch ALL accounts from Plaid (only when bank is connected)
   const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
     staleTime: 60000,
     enabled: hasBankConnected,
   });
 
-  // Fetch bank accounts from DB
+  // Fetch bank accounts from DB (only when bank is connected)
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
     enabled: hasBankConnected,
     onSuccess: (data) => {
-      if (data && data.length > 0 && !selectedAccountId && !qpAccount) {
+      if (data && data.length > 0 && !selectedAccountId) {
         setSelectedAccountId(String(data[0].id));
       }
     },
@@ -144,7 +111,7 @@ export default function PersonalTransactions() {
 
   const effectiveAccountId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
 
-  // Fetch transactions
+  // Fetch bank transactions (only when bank is connected)
   const { data: monthData, isLoading: isLoadingBank } = trpc.bank.getMonthData.useQuery({
     year: parseInt(year),
     month: parseInt(month),
@@ -192,7 +159,7 @@ export default function PersonalTransactions() {
 
   const allBankTransactions = monthData?.transactions ?? [];
 
-  // ─── Filter helpers (SAME as business) ───
+  // ─── Filter helpers ───
   const isZelleRecibido = (t: any) => t.category === "zelle_income";
   const isZelleEnviado = (t: any) => t.category === "zelle_sent";
   const isCashDeposit = (t: any) => t.category === "cash_deposit";
@@ -226,7 +193,7 @@ export default function PersonalTransactions() {
     return false;
   };
 
-  // ─── Apply filters (SAME as business) ───
+  // ─── Apply bank filters ───
   const filteredBankTransactions =
     filterType === "all" ? allBankTransactions :
     filterType === "income" ? allBankTransactions.filter((t: any) => t.type === "income") :
@@ -252,7 +219,6 @@ export default function PersonalTransactions() {
   const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
   const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
 
-  // Filter buttons (SAME as business, minus "ventas" since personal doesn't have POS)
   const filterButtons = [
     { key: "all", label: "Todos" },
     { key: "income", label: "Ingresos" },
@@ -292,7 +258,7 @@ export default function PersonalTransactions() {
         </div>
       </div>
 
-      {/* Controls: dropdown, month, year, sync */}
+      {/* Controls: dropdown, month, year, sync - ONLY when bank connected */}
       {hasBankConnected && (
         <div className="flex items-center gap-2 mb-3 flex-wrap">
           {(accounts ?? []).length > 0 && (
@@ -339,7 +305,7 @@ export default function PersonalTransactions() {
         </div>
       )}
 
-      {/* Filter buttons — horizontal scroll carousel */}
+      {/* Filter buttons - horizontal scroll carousel */}
       <div
         className="flex bg-gray-100 rounded-xl p-1 mb-4 gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
         style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
@@ -356,7 +322,7 @@ export default function PersonalTransactions() {
         ))}
       </div>
 
-      {/* Summary Cards */}
+      {/* Summary Cards - bank KPIs ONLY when bank connected */}
       {hasBankConnected && (
         <div className="grid grid-cols-3 gap-3 mb-4">
           <Card className="border-emerald-200 rounded-xl shadow-none">
@@ -404,7 +370,7 @@ export default function PersonalTransactions() {
           <h3 className="text-base font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
           <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">Conecta tu cuenta bancaria para ver transacciones automaticas, saldo en tiempo real y analisis de flujo de caja.</p>
           <button
-            onClick={() => window.location.href = "/bank"}
+            onClick={() => window.location.href = "/personal/bank"}
             className="flex items-center gap-2 h-10 px-5 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
           >
             <Landmark className="w-4 h-4" />
