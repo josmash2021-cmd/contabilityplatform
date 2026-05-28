@@ -800,9 +800,9 @@ export const bankRouter = createRouter({
   listAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
     try {
-      const all = await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.connectedAt));
-      // Only return active accounts (same filter as checkConnection)
-      return all.filter((a: any) => a.plaidAccessToken && a.isActive);
+      // Return ALL accounts (active and inactive) with their last known balance
+      // This allows users to see their data even after disconnecting the bank
+      return await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.connectedAt));
     } catch (err) {
       console.error("[listAccounts] error:", err);
       return [];
@@ -877,8 +877,8 @@ export const bankRouter = createRouter({
 
   getMonthData: authedQuery.input(z.object({ year: z.number(), month: z.number(), accountId: z.number().optional() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
-    if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
+    // Note: We DON'T check hasActiveBank here. Even if disconnected, we show cached DB data.
     const { year, month, accountId } = input;
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
@@ -889,8 +889,10 @@ export const bankRouter = createRouter({
     const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
     const targetPlaidAccountId = selectedAccount?.plaidAccountId;
 
-    // ─── PLAID FIRST: Fetch, filter, classify, and return ───
-    // Plaid is the ONLY source of truth. DB is cache only.
+    // ─── PLAID: Only fetch if bank is still connected ───
+    // If disconnected, we skip Plaid and use cached DB data below
+    const bankConnected = await hasActiveBank(ctx.user.id);
+    if (bankConnected) {
     try {
       const client = await initPlaid();
       if (client && primaryAccount?.plaidAccessToken) {
@@ -1008,8 +1010,9 @@ export const bankRouter = createRouter({
     } catch (plaidErr: any) {
       console.error(`[getMonthData] Plaid error: ${plaidErr.message}`);
     }
+    } // end if (bankConnected)
 
-    // ─── QUERY DB: Returns ALL transactions (Plaid + existing merged) ───
+    // ─── QUERY DB: Returns ALL transactions (cached, works when disconnected) ───
     // Simple DB query without account filter
     let fallbackTxs: any[] = [];
     try {
