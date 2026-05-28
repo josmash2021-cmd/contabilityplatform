@@ -239,4 +239,49 @@ export const authRouter = createRouter({
     ctx.resHeaders.set("Set-Cookie", `${LOCAL_AUTH_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
     return { success: true };
   }),
+
+  // ── Make Admin (protected by setup secret) ──
+  // Use this endpoint ONCE to promote Angel Tosta (or any user) to admin.
+  // Requires ADMIN_SETUP_SECRET env var to be set.
+  makeAdmin: publicQuery
+    .input(z.object({
+      email: z.string().email("Email invalido"),
+      setupKey: z.string().min(1, "Setup key requerida"),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+
+      // Step 1: Verify the setup key matches the env var
+      const expectedKey = process.env.ADMIN_SETUP_SECRET;
+      if (!expectedKey || expectedKey.length < 8) {
+        return { success: false, error: "ADMIN_SETUP_SECRET no configurada en el servidor. Contacta al desarrollador." };
+      }
+      if (input.setupKey !== expectedKey) {
+        return { success: false, error: "Setup key incorrecta" };
+      }
+
+      // Step 2: Find the user
+      const rows = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
+      if (rows.length === 0) {
+        return { success: false, error: `Usuario con email ${input.email} no encontrado. Debe registrarse primero.` };
+      }
+
+      const user = rows[0];
+
+      // Step 3: Already admin?
+      if (user.role === "admin") {
+        return { success: true, message: `${user.name || input.email} ya es administrador`, wasAlreadyAdmin: true };
+      }
+
+      // Step 4: Promote to admin
+      await db.update(users).set({ role: "admin" }).where(eq(users.id, user.id));
+
+      return {
+        success: true,
+        message: `${user.name || input.email} ahora es administrador`,
+        userId: user.id,
+        email: input.email,
+        role: "admin",
+      };
+    }),
 });
