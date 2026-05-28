@@ -12,9 +12,11 @@ import { join } from "path";
 
 let plaidClient: any = null;
 
-// Use PLAID_ENV only — Railway env vars should NOT force production Plaid
-// Default to sandbox for safety. Set PLAID_ENV=production explicitly when ready.
-const isProductionEnv = process.env.PLAID_ENV === "production";
+// Auto-detect Plaid environment based on secret format
+// Production secrets are longer and have a different format than sandbox
+const plaidSecret = process.env.PLAID_SECRET || "";
+const isProductionSecret = plaidSecret.length > 30 && !plaidSecret.startsWith("sk-");
+const isProductionEnv = process.env.PLAID_ENV === "production" || isProductionSecret;
 
 async function initPlaid() {
   if (plaidClient) return plaidClient;
