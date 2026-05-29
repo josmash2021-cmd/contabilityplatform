@@ -174,40 +174,9 @@ export default function PersonalSubscriptions() {
     );
   }
 
-  // No bank connected — show empty state with Plaid overlay (same as business Bank.tsx)
-  if (!hasBankConnected) {
-    return (
-      <div className="max-w-5xl mx-auto p-6 lg:p-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">Suscripciones</h1>
-          <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
-        </div>
-        {showPlaidOverlay && (
-          <PlaidLinkOverlay
-            onSuccess={() => { setShowPlaidOverlay(false); utils.invalidate(); }}
-            onClose={() => setShowPlaidOverlay(false)}
-          />
-        )}
-        {!showPlaidOverlay && (
-          <Card className="border-neutral-200 rounded-xl shadow-none">
-            <CardContent className="p-16 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
-                <Landmark className="w-8 h-8 text-neutral-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-              <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
-              <Button
-                onClick={() => setShowPlaidOverlay(true)}
-                className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6"
-              >
-                <Link2 className="w-4 h-4 mr-2" /> Conectar Banco
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  }
+  // ─── NOT CONNECTED banner (non-blocking) ───
+  // Only show if no bank AND no data available — never block users who have data
+  const showConnectBanner = !isCheckingBank && !hasBankConnected && (accounts ?? []).length === 0;
 
   return (
     <AnimatedPage className="p-4 lg:p-6">
@@ -226,6 +195,25 @@ export default function PersonalSubscriptions() {
           </Button>
         </div>
       </div>
+
+      {/* Connect bank banner — only when no bank AND no data */}
+      {showConnectBanner && (
+        <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
+          <CardContent className="p-8 flex flex-col items-center justify-center text-center">
+            <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-3">
+              <Landmark className="w-6 h-6 text-neutral-400" />
+            </div>
+            <h3 className="text-base font-semibold text-black mb-1">Sin cuenta bancaria conectada</h3>
+            <p className="text-xs text-neutral-400 max-w-sm mb-4">Conecta tu cuenta bancaria para sincronizar transacciones automaticas.</p>
+            <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-9 px-5 text-xs">
+              <Link2 className="w-3.5 h-3.5 mr-2" /> Conectar Banco
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+      {showConnectBanner && showPlaidOverlay && (
+        <PlaidLinkOverlay onSuccess={() => { setShowPlaidOverlay(false); utils.invalidate(); }} onClose={() => setShowPlaidOverlay(false)} />
+      )}
 
       {/* System Update Banner */}
       {migrationStatus && !migrationStatus.applied && (
