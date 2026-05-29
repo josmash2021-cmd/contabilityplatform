@@ -323,7 +323,6 @@ export default function Reports() {
           {[
             { key: "monthly", label: "Ventas del Mes" },
             { key: "income", label: "Ingresos y Gastos" },
-            { key: "bank", label: "Banco" },
             { key: "journal", label: "Movimientos Detallados" },
           ].map((t) => (
             <button
@@ -541,110 +540,6 @@ export default function Reports() {
                 </div>
               </AnimatedCard>
             </div>
-          )}
-        </TabsContent>
-
-        {/* CONTABILIDAD BANCARIA */}
-        <TabsContent value="bank" className="mt-6 space-y-4">
-          {/* Account selector OUTSIDE AnimatedPage to avoid overflow:hidden clipping */}
-          {hasBankConnected && allBankAccounts.length > 0 && (
-            <div className="w-full max-w-xs">
-              <AccountDropdown
-                accounts={allBankAccounts}
-                selectedId={effectiveBankId}
-                onChange={setSelectedBankAccount}
-              />
-            </div>
-          )}
-
-          <AnimatedPage>
-            {!hasBankConnected ? (
-              /* No bank connected state */
-              <div className="flex flex-col items-center gap-3 py-8 border border-dashed border-neutral-200 rounded-xl bg-neutral-50">
-                <Landmark className="w-10 h-10 text-neutral-300" />
-                <p className="text-sm text-neutral-500">No hay cuenta bancaria conectada</p>
-                <Link to="/bank" className="text-xs bg-black text-white px-4 py-2 rounded-full hover:bg-neutral-800 transition-colors">
-                  Conectar Banco
-                </Link>
-              </div>
-            ) : allBankAccounts.length === 0 ? (
-              /* Loading accounts */
-              <div className="py-4">
-                <span className="text-xs text-neutral-400">Cargando cuentas...</span>
-              </div>
-            ) : null}
-          </AnimatedPage>
-
-          {hasBankConnected && monthBankData && (
-            <>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {[
-                { label: "Balance", value: formatCurrency(bankBalance), icon: Landmark, color: "bg-green-50 text-green-600" },
-                { label: "Ingresos", value: formatCurrency(bankIncome), icon: TrendingUp, color: "bg-green-50 text-green-600" },
-                { label: "Gastos", value: formatCurrency(bankExpense), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-                { label: "Transacciones", value: String(bankTxCount), icon: Receipt, color: "bg-neutral-50 text-neutral-600" },
-              ].map((s, i) => (
-                <AnimatedCard key={s.label} delay={i * 60}>
-                  <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
-                    <CardContent className="p-3 flex items-center gap-2.5 h-full">
-                      <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
-                      <div className="min-w-0 flex-1">
-                        <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
-                        <p className="text-base font-semibold text-black truncate">{s.value}</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </AnimatedCard>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <AnimatedCard delay={200} className="lg:col-span-2">
-              <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Categorias</CardTitle></CardHeader>
-                <CardContent className="p-5">
-                  {bankCategories.length > 0 ? (
-                    <div className="space-y-2">
-                      {bankCategories.map((cat: any) => (
-                        <div key={cat.category} className="flex items-center justify-between py-2 border-b border-neutral-100 last:border-0">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-[10px] ${cat.type === "income" ? "text-green-600 border-green-200" : "text-red-500 border-red-200"}`}>{cat.type === "income" ? "Ingreso" : "Gasto"}</Badge>
-                            <span className="text-sm text-neutral-600">{CATEGORY_LABELS[cat.category] || cat.category.replace(/_/g, " ")}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-medium text-black">{formatCurrency(cat.total)}</span>
-                            <span className="text-[10px] text-neutral-400 ml-1">({cat.count})</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm text-neutral-400 text-center py-8">{effectiveBankId ? "Sin transacciones para esta cuenta" : "Selecciona una cuenta para ver categorias"}</p>
-                  )}
-                </CardContent>
-              </Card>
-            </AnimatedCard>
-
-            <AnimatedCard delay={280}>
-              <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-                <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold text-black">Conciliacion</CardTitle></CardHeader>
-                <CardContent className="p-5 space-y-4">
-                  {balanceData_ ? (
-                    <>
-                      <div className="flex items-center gap-2"><Link2 className="w-4 h-4 text-green-500" /><span className="text-xs text-neutral-600">Conectado a Plaid</span></div>
-                      <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Banco</span><span className="font-medium text-black">{formatCurrency(balanceData_.liveBalance ?? 0)}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Saldo Libros</span><span className="font-medium text-black">{formatCurrency(balanceData_.bookBalance ?? 0)}</span></div>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="flex flex-col items-center gap-2 py-4"><Unlink className="w-8 h-8 text-neutral-300" /><p className="text-xs text-neutral-400">Cargando datos de conciliacion...</p></div>
-                  )}
-                </CardContent>
-              </Card>
-            </AnimatedCard>
-          </div>
-          </>
           )}
         </TabsContent>
 
