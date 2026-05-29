@@ -473,4 +473,3 @@ function getCategoryLabel(cat: string): string {
   };
   return labels[cat] || cat;
 }
-      
