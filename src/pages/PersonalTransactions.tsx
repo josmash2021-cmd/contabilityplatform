@@ -262,8 +262,9 @@ export default function PersonalTransactions() {
 
   const isLoading = isLoadingBank;
 
-  // ─── NOT CONNECTED: Early return, same as business Bank.tsx ───
-  if (!hasBankConnected) {
+  // ─── NOT CONNECTED: Early return ONLY after checking is done ───
+  // Must wait for isCheckingBank to finish before deciding
+  if (!isCheckingBank && !hasBankConnected) {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
