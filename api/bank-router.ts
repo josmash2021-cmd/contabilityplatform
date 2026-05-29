@@ -721,7 +721,7 @@ function formatCurrencyVal(val: number): string {
 async function hasActiveBank(userId: number): Promise<boolean> {
   const db = getDb();
   const allAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
-  return allAccounts.some((a: any) => a.plaidAccessToken && a.isActive);
+  return allAccounts.some((a: any) => a.plaidAccessToken);
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -864,9 +864,10 @@ export const bankRouter = createRouter({
     if (!ctx.user) return { hasBank: false, accountCount: 0 };
     const db = getDb();
     const allAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    const activeAccounts = allAccounts.filter((a: any) => a.plaidAccessToken && a.isActive);
+    // Consider active if it has a plaidAccessToken (regardless of isActive flag)
+    const activeAccounts = allAccounts.filter((a: any) => a.plaidAccessToken);
     if (activeAccounts.length > 0) return { hasBank: true, accountCount: activeAccounts.length };
-    return { hasBank: false, accountCount: 0, message: allAccounts.length > 0 ? "Cuenta inactiva" : "No hay cuenta" };
+    return { hasBank: false, accountCount: 0, message: allAccounts.length > 0 ? "Cuenta sin token" : "No hay cuenta" };
   }),
 
   syncTransactions: authedQuery.input(z.object({ year: z.number().optional(), month: z.number().optional(), accountId: z.number().optional(), days: z.number().optional() }).optional())
