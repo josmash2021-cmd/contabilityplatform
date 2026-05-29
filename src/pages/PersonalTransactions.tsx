@@ -98,15 +98,14 @@ export default function PersonalTransactions() {
   });
   const hasBankConnected = bankConnection?.hasBank === true;
 
-  // Fetch ALL accounts from Plaid (only when bank is connected)
+  // Fetch ALL accounts from Plaid (always try — if it fails we still have DB accounts)
   const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
     staleTime: 60000,
-    enabled: hasBankConnected,
   });
 
-  // Fetch bank accounts from DB (only when bank is connected)
+  // Fetch bank accounts from DB (ALWAYS — if accounts exist, user has a bank)
   const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
-    enabled: hasBankConnected,
+    staleTime: 30000,
   });
 
   const plaidAccounts = plaidAccountsData?.accounts ?? [];
@@ -221,7 +220,7 @@ export default function PersonalTransactions() {
       )
     : filteredBankTransactions;
 
-  const displayTransactions = hasBankConnected ? searchFilteredTransactions : [];
+  const displayTransactions = accounts.length > 0 ? searchFilteredTransactions : [];
 
   const totalIncome = accountFilteredTransactions
     .filter((t: any) => t.type === "income")
@@ -263,8 +262,8 @@ export default function PersonalTransactions() {
   const isLoading = isLoadingBank;
 
   // ─── NOT CONNECTED banner (non-blocking) ───
-  // Only show if no bank AND no data available — never block users who have data
-  const showConnectBanner = !isCheckingBank && !hasBankConnected && accounts.length === 0;
+  // Only show if NO accounts exist — if there are accounts, user has a bank connected
+  const showConnectBanner = accounts.length === 0;
 
   return (
     <AnimatedPage className="p-4 lg:p-6">
@@ -474,3 +473,4 @@ function getCategoryLabel(cat: string): string {
   };
   return labels[cat] || cat;
 }
+      

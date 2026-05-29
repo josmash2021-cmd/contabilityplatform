@@ -94,7 +94,6 @@ export default function PersonalSubscriptions() {
   const hasBankConnected = bankConnection?.hasBank === true;
 
   const { data: accounts } = trpc.bank.listAccounts.useQuery(undefined, {
-    enabled: hasBankConnected,
     onSuccess: (d) => { if (d?.length && !selectedAccountId) setSelectedAccountId(String(d[0].id)); },
   });
   const effectiveAccountId = selectedAccountId || (accounts?.[0] ? String(accounts[0].id) : "");
@@ -175,8 +174,8 @@ export default function PersonalSubscriptions() {
   }
 
   // ─── NOT CONNECTED banner (non-blocking) ───
-  // Only show if no bank AND no data available — never block users who have data
-  const showConnectBanner = !isCheckingBank && !hasBankConnected && (accounts ?? []).length === 0;
+  // Only show if NO accounts exist — if there are accounts, user has a bank connected
+  const showConnectBanner = (accounts ?? []).length === 0;
 
   return (
     <AnimatedPage className="p-4 lg:p-6">
