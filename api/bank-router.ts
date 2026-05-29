@@ -45,13 +45,22 @@ const GAS_BRANDS_ALL = [
 ];
 function isGasStation(desc: string): boolean {
   const d = desc.toLowerCase();
-  // Check all known brands
+  // Check all known brands with word-boundary to avoid substring matches
+  // (e.g., "alarcon" should NOT match "arco", "mobile" should NOT match "mobil")
   for (const brand of GAS_BRANDS_ALL) {
-    if (d.includes(brand)) return true;
+    // Escape special regex chars in brand name
+    const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // Use word boundary for short brands (< 5 chars) to avoid false positives
+    if (brand.length < 5) {
+      const regex = new RegExp(`\\b${escaped}\\b`, "i");
+      if (regex.test(d)) return true;
+    } else {
+      // For longer brands, includes() is safe enough
+      if (d.includes(brand)) return true;
+    }
   }
   // Generic gas keywords
   if (d.includes("gas station") || d.includes("gasoline") || d.includes("gas sta")) return true;
-  // Plaid categories often contain gas info
   return false;
 }
 
@@ -162,17 +171,17 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
     }
   }
 
+  // ─── ZELLE detection (BEFORE isGasStation to avoid "alarcon" matching "arco") ───
+  const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
+  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
+  if (isZelleSent) return { type: "expense", category: "zelle_sent" };
+  if (isZelleRecv) return { type: "income", category: "zelle_income" };
+
   // ─── GAS STATIONS: ALL brands (shell, chevron, exxon, bp, mobil, etc.) ───
   if (isGasStation(desc)) {
     if (plaidAmount < 0) return { type: "income", category: "gasolina" };
     return { type: "expense", category: "gasolina" };
   }
-
-  // Zelle detection
-  const isZelleSent = desc.includes("zelle payment") || desc.includes("zelle money sent") || desc.includes("zelle pay") || desc.includes("zelle to") || (desc.includes("zelle") && !desc.includes("from"));
-  const isZelleRecv = desc.includes("zelle from") || desc.includes("zelle money received") || desc.includes("zelle payment from") || desc.includes("zelle for");
-  if (isZelleSent) return { type: "expense", category: "zelle_sent" };
-  if (isZelleRecv) return { type: "income", category: "zelle_income" };
 
   // Plaid categories
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";

@@ -203,9 +203,11 @@ export default function Transactions() {
     // Generic keywords
     "gasoline","petrol","fuel","gas station","gas sta","gasoline station"];
   const isGas = (t: any) => {
-    // If backend already categorized as gasolina, include it regardless of description
-    if (t.category === "gasolina") return true;
     const n = (t.description || "").toLowerCase();
+    // Safety: Zelle transactions are NEVER gas — even if backend mis-categorized
+    if (n.includes("zelle")) return false;
+    // If backend already categorized as gasolina, include it
+    if (t.category === "gasolina") return true;
     // Use word-boundary matching to avoid false positives like "arco" inside "alarcon"
     for (const b of GAS_BRANDS) {
       const regex = new RegExp(`\\b${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
