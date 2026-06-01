@@ -1,5 +1,5 @@
 import { useState, useMemo, memo, useEffect } from "react";
-import { Outlet, useLocation, useNavigate } from "react-router";
+import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
 import { trpc } from "@/providers/trpc";
@@ -149,6 +149,11 @@ export function AppLayout() {
 
       <aside className="hidden lg:flex flex-col w-56 border-r border-neutral-200 bg-white shrink-0">
         <NavContent />
+        <div className="mt-auto px-4 py-3 border-t border-neutral-100">
+          <Link to="/privacy" className="text-[10px] text-neutral-400 hover:text-neutral-600 transition-colors">
+            Politica de Privacidad
+          </Link>
+        </div>
       </aside>
 
       {/* Mobile Header */}

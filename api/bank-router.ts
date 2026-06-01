@@ -851,6 +851,35 @@ export const bankRouter = createRouter({
     }
   }),
 
+  // ── Update Plaid tokens manually (for admin/token recovery) ──
+  updatePlaidTokens: authedQuery
+    .input(z.object({
+      accountId: z.number(),
+      plaidAccessToken: z.string().optional(),
+      plaidItemId: z.string().optional(),
+      plaidAccountId: z.string().optional(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      if (!ctx.user) return { success: false, error: "No autenticado" };
+      const db = getDb();
+      try {
+        // Verify account belongs to user
+        const existing = await db.select().from(bankAccounts)
+          .where(and(eq(bankAccounts.id, input.accountId), eq(bankAccounts.userId, ctx.user.id)));
+        if (existing.length === 0) return { success: false, error: "Cuenta no encontrada" };
+
+        const updateData: any = { updatedAt: new Date() };
+        if (input.plaidAccessToken !== undefined) updateData.plaidAccessToken = input.plaidAccessToken;
+        if (input.plaidItemId !== undefined) updateData.plaidItemId = input.plaidItemId;
+        if (input.plaidAccountId !== undefined) updateData.plaidAccountId = input.plaidAccountId;
+
+        await db.update(bankAccounts).set(updateData).where(eq(bankAccounts.id, input.accountId));
+        return { success: true, message: "Tokens actualizados" };
+      } catch (err: any) {
+        return { success: false, error: err.message };
+      }
+    }),
+
   listAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return [];
     try {

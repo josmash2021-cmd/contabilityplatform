@@ -27,6 +27,7 @@ import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
 import Diagnostico from "@/pages/Diagnostico";
 import Admin from "@/pages/Admin";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -62,6 +63,9 @@ export default function App() {
 
       {/* Diagnostico - hidden page for debugging */}
       <Route path="/diagnostico" element={<Diagnostico />} />
+
+      {/* Privacy Policy - public, required by Plaid */}
+      <Route path="/privacy" element={<PrivacyPolicy />} />
 
       {/* Protected routes with ModeProvider */}
       <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>
