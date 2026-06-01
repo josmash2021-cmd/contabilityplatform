@@ -81,7 +81,28 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">5. Seguridad</h2>
+            <h2 className="text-base font-semibold text-black mb-2">5. Retencion y Eliminacion de Datos</h2>
+            <p>
+              <strong>Retencion:</strong> Conservamos tus datos financieros y personales mientras mantengas una cuenta activa en nuestra plataforma. 
+              Los datos bancarios obtenidos a traves de Plaid se sincronizan y almacenan para mostrar reportes historicos.
+            </p>
+            <p className="mt-2">
+              <strong>Eliminacion:</strong> Cuando eliminas tu cuenta:
+            </p>
+            <ul className="list-disc ml-5 mt-2 space-y-1">
+              <li>Todos tus datos personales y financieros se eliminan permanentemente de nuestra base de datos dentro de <strong>30 dias</strong>.</li>
+              <li>Los tokens de acceso a Plaid se revocan inmediatamente.</li>
+              <li>Las transacciones bancarias almacenadas se borran completamente (no se mantienen copias de respaldo con datos personales).</li>
+              <li>Puedes solicitar la eliminacion de datos enviando un correo a <strong>josmash2021@gmail.com</strong>.</li>
+            </ul>
+            <p className="mt-2">
+              <strong>Revision periodica:</strong> Revisamos nuestra politica de retencion de datos cada <strong>6 meses</strong> 
+              para asegurar el cumplimiento con las leyes de privacidad aplicables (CCPA, GDPR donde aplique).
+            </p>
+          </section>
+
+          <section>
+            <h2 className="text-base font-semibold text-black mb-2">7. Seguridad</h2>
             <p>
               Implementamos medidas de seguridad tecnicas y organizativas para proteger tus datos, 
               incluyendo encriptacion en transito y en reposo, autenticacion segura y acceso restringido 
@@ -90,7 +111,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">6. Tus derechos</h2>
+            <h2 className="text-base font-semibold text-black mb-2">8. Tus derechos</h2>
             <p>Puedes:</p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
               <li>Acceder a tus datos personales en cualquier momento.</li>
@@ -101,7 +122,7 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">7. Contacto</h2>
+            <h2 className="text-base font-semibold text-black mb-2">9. Contacto</h2>
             <p>
               Si tienes preguntas sobre esta politica de privacidad, contactanos a{" "}
               <strong>josmash2021@gmail.com</strong>.
