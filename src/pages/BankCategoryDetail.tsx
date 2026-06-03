@@ -18,6 +18,11 @@ const categoryMeta: Record<string, { label: string; type: "income" | "expense" }
   zelle_sent: { label: "Zelle Enviados", type: "expense" },
   subscription: { label: "Suscripciones", type: "expense" },
   transfer: { label: "Transferencias", type: "expense" },
+  expense: { label: "Compras", type: "expense" },
+  medical: { label: "Farmacia", type: "expense" },
+  food: { label: "Comida", type: "expense" },
+  shopping: { label: "Compras", type: "expense" },
+  gasolina: { label: "Gasolina", type: "expense" },
 };
 
 function getCategoryMeta(category: string): { label: string; type: "income" | "expense" } {
