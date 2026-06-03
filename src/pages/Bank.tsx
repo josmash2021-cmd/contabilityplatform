@@ -957,6 +957,24 @@ export default function Bank() {
                   <span className="text-sm text-neutral-500">Transacciones</span>
                   <span className="text-sm text-black font-medium">{yearData?.transactionCount ?? (monthData?.transactions ?? []).length}</span>
                 </div>
+
+                {/* Monthly breakdown */}
+                {yearData?.monthly && (
+                  <div className="pt-3 border-t border-neutral-100 space-y-2">
+                    {yearData.monthly
+                      .filter((m: any) => m.transactionCount > 0)
+                      .map((m: any) => (
+                        <div key={m.monthNum} className="flex justify-between items-center">
+                          <span className="text-xs text-neutral-500">{m.month}</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-emerald-600">+{formatCurrency(m.income)}</span>
+                            <span className="text-xs text-red-500">-{formatCurrency(m.expense)}</span>
+                          </div>
+                        </div>
+                      ))}
+                  </div>
+                )}
+
                 <div className="pt-2 border-t border-neutral-100">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium text-black">Saldo en Banco</span>

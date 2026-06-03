@@ -1380,6 +1380,9 @@ export const bankRouter = createRouter({
     }
 
     let inc = 0, exp = 0;
+    const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    const monthly: { month: string; monthNum: number; income: string; expense: string; transactionCount: number }[] = [];
+
     for (const t of txs) {
       const amt = parseFloat(t.amount ?? "0");
       if (amt <= 0) continue;
@@ -1393,10 +1396,39 @@ export const bankRouter = createRouter({
       }
     }
 
+    // Monthly breakdown
+    for (let m = 1; m <= 12; m++) {
+      const monthTxs = txs.filter((t: any) => {
+        const d = new Date(t.transactionDate);
+        return d.getMonth() + 1 === m;
+      });
+      let mInc = 0, mExp = 0;
+      monthTxs.forEach((t: any) => {
+        const amt = parseFloat(t.amount ?? "0");
+        if (amt <= 0) return;
+        const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+        if (plaidAmt !== null) {
+          if (plaidAmt < 0) mInc += amt;
+          else mExp += amt;
+        } else {
+          if (t.type === "income") mInc += amt;
+          else mExp += amt;
+        }
+      });
+      monthly.push({
+        month: monthNames[m - 1],
+        monthNum: m,
+        income: mInc.toFixed(2),
+        expense: mExp.toFixed(2),
+        transactionCount: monthTxs.length,
+      });
+    }
+
     return {
       income: inc.toFixed(2),
       expense: exp.toFixed(2),
       transactionCount: txs.length,
+      monthly,
     };
   }),
 
