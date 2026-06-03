@@ -176,6 +176,12 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (isZelleSent) return { type: "expense", category: "zelle_sent" };
   if (isZelleRecv) return { type: "income", category: "zelle_income" };
 
+  // ─── Social media / online purchases (Facebook, Meta, etc.) ───
+  if (desc.includes("facebk") || desc.includes("facebook") || desc.includes("meta pay") || desc.includes("fb.me")) {
+    if (plaidAmount < 0) return { type: "income", category: "refund" };
+    return { type: "expense", category: "shopping" };
+  }
+
   // ─── GAS STATIONS: ALL brands (shell, chevron, exxon, bp, mobil, etc.) ───
   if (isGasStation(desc)) {
     if (plaidAmount < 0) return { type: "income", category: "gasolina" };
