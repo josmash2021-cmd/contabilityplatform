@@ -370,11 +370,21 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
   if (hasSubscription) return <>{children}</>;
 
   if (userMode === "business" && currentPath !== "/settings") {
-    return <SubscriptionOverlayOnly />;
+    return (
+      <>
+        <div className="relative">{children}</div>
+        <SubscriptionOverlayOnly />
+      </>
+    );
   }
 
   if (userMode === "personal" && currentPath !== "/settings") {
-    return <SubscriptionOverlayOnly />;
+    return (
+      <>
+        <div className="relative">{children}</div>
+        <SubscriptionOverlayOnly />
+      </>
+    );
   }
 
   return <>{children}</>;
@@ -407,9 +417,9 @@ function SubscriptionOverlayOnly() {
   return (
     <>
       <style>{SHIMMER_STYLES}</style>
-      <div className="fixed inset-0 z-[99998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-4 border-b border-neutral-100">
+      <div className="fixed inset-0 z-[99998] bg-white/60 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+        <div className="bg-white/95 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          <div className="sticky top-0 bg-white/95 z-10 flex items-center justify-between p-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
                 <Crown className="w-4 h-4 text-yellow-500" />
