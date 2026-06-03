@@ -206,7 +206,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     );
   }
 
-  // ── SUBSCRIBE FULL-SCREEN OVERLAY ──
+  // ── SUBSCRIBE FULL-SCREEN OVERLAY — Glassmorphism, shows page behind ──
   const isBusiness = userMode === "business";
   const monthlyPlan = isBusiness ? BIZ_MONTHLY : PERS_MONTHLY;
   const annualPlan = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
@@ -214,9 +214,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   return (
     <>
+      {/* Render children behind the overlay so the page is visible through glass */}
+      <div className="relative">
+        {children}
+      </div>
       <style>{SHIMMER_STYLES}</style>
-      <div className="fixed inset-0 z-[99998] bg-black/70 backdrop-blur-sm flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+      <div className="fixed inset-0 z-[99998] bg-white/60 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+        <div className="bg-white/95 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
           {/* Header with close X */}
           <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-4 border-b border-neutral-100">
             <div className="flex items-center gap-2">
