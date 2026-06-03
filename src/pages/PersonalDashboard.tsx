@@ -11,7 +11,7 @@ import {
   TrendingUp, TrendingDown, Wallet, Landmark, RefreshCw,
   ArrowUpRight, ArrowDownRight, Building2, Zap, CircleDollarSign, ChevronDown,
   ShoppingBag, Utensils, Fuel, Tv, Banknote,
-  Send, Receipt, LogOut, Star, CheckCircle,
+  Send, Receipt, LogOut, Star, CheckCircle, HeartPulse,
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
@@ -37,7 +37,9 @@ const EXPENSE_CATS: Record<string, { label: string; icon: typeof TrendingDown; i
   gasolina: { label: "Gasolina", icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
   transfer: { label: "Transferencias", icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
   other: { label: "Otros", icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
-  expense: { label: "Gastos", icon: TrendingDown, iconBg: "bg-rose-100", iconColor: "text-rose-600" },
+  expense: { label: "Compras", icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
+  medical: { label: "Farmacia", icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
+  food: { label: "Comida", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
 };
 
 function buildBreakdown(
