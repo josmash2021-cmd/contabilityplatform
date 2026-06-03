@@ -131,7 +131,7 @@ const CATEGORY_LABELS: Record<string, string> = {
   subscription: "Suscripciones", transfer: "Transferencias", transfer_income: "Transferencias",
   business_expense: "Gastos de Negocio", home_expense: "Gastos del Hogar", shopping: "Compras",
   cash_income: "Efectivo Recibido", other: "Otros",
-  expense: "Compras", medical: "Farmacia", food: "Comida",
+  medical: "Farmacia", food: "Comida",
 };
 
 /* Plaid Link Button */

@@ -261,7 +261,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
 
   // Default: In Plaid, positive amount = money LEAVING (expense), negative = money ENTERING (income)
   if (plaidAmount < 0) return { type: "income", category: "income" };
-  return { type: "expense", category: "expense" };
+  return { type: "expense", category: "shopping" };
 }
 
 // ─── MERCHANT ALIASES ───
