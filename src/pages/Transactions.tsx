@@ -300,20 +300,30 @@ export default function Transactions() {
   const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
   const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
 
-  // Static filter buttons — always show (no dynamic hiding)
+  // Only show filter buttons if transactions exist for that category
+  const hasIncome = allBankTransactions.some((t: any) => t.type === "income");
+  const hasExpense = allBankTransactions.some((t: any) => t.type === "expense");
+  const hasDevoluciones = allBankTransactions.some((t: any) => isDevolucion(t));
+  const hasZelleIn = allBankTransactions.some((t: any) => isZelleRecibido(t));
+  const hasZelleOut = allBankTransactions.some((t: any) => isZelleEnviado(t));
+  const hasCashDeposit = allBankTransactions.some((t: any) => isCashDeposit(t));
+  const hasCashWithdrawal = allBankTransactions.some((t: any) => isCashWithdrawal(t));
+  const hasGas = allBankTransactions.some((t: any) => isGas(t));
+  const hasStreaming = allBankTransactions.some((t: any) => isStreaming(t));
+  const hasP2P = allBankTransactions.some((t: any) => isP2P(t));
+
   const bankFilters = [
     { key: "all", label: "Todos" },
-    { key: "income", label: "Ingresos" },
-    { key: "expense", label: "Gastos" },
-    { key: "ventas", label: "Ventas" },
-    { key: "devoluciones", label: "Devoluciones" },
-    { key: "zelle_in", label: "Zelle Recibidos" },
-    { key: "zelle_out", label: "Zelle Enviados" },
-    { key: "cash_deposit", label: "Dep. Efectivo" },
-    { key: "cash_withdrawal", label: "Ret. Efectivo" },
-    { key: "gasolina", label: "Gasolina" },
-    { key: "streaming", label: "Streaming" },
-    { key: "p2p", label: "P2P" },
+    ...(hasIncome ? [{ key: "income", label: "Ingresos" }] : []),
+    ...(hasExpense ? [{ key: "expense", label: "Gastos" }] : []),
+    ...(hasDevoluciones ? [{ key: "devoluciones", label: "Devoluciones" }] : []),
+    ...(hasZelleIn ? [{ key: "zelle_in", label: "Zelle Recibidos" }] : []),
+    ...(hasZelleOut ? [{ key: "zelle_out", label: "Zelle Enviados" }] : []),
+    ...(hasCashDeposit ? [{ key: "cash_deposit", label: "Dep. Efectivo" }] : []),
+    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: "Ret. Efectivo" }] : []),
+    ...(hasGas ? [{ key: "gasolina", label: "Gasolina" }] : []),
+    ...(hasStreaming ? [{ key: "streaming", label: "Streaming" }] : []),
+    ...(hasP2P ? [{ key: "p2p", label: "P2P" }] : []),
   ];
 
   const nonBankFilters = [
