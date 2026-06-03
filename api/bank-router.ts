@@ -12,11 +12,8 @@ import { join } from "path";
 
 let plaidClient: any = null;
 
-// Auto-detect Plaid environment based on secret format
-// Production secrets are longer and have a different format than sandbox
-const plaidSecret = process.env.PLAID_SECRET || "";
-const isProductionSecret = plaidSecret.length > 30 && !plaidSecret.startsWith("sk-");
-const isProductionEnv = process.env.PLAID_ENV === "production" || isProductionSecret;
+// Force sandbox until Plaid approves production access
+const isProductionEnv = false;
 
 async function initPlaid() {
   if (plaidClient) return plaidClient;
