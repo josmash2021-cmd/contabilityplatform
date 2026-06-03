@@ -12,9 +12,10 @@ import { join } from "path";
 
 let plaidClient: any = null;
 
-// Force sandbox until Plaid approves production access
-// Plaid production requires official approval - credentials won't work without it
-const isProductionEnv = false;
+// Auto-detect Plaid environment based on secret format
+const plaidSecret = process.env.PLAID_SECRET || "";
+const isProductionSecret = plaidSecret.length > 30 && !plaidSecret.startsWith("sk-");
+const isProductionEnv = process.env.PLAID_ENV === "production" || isProductionSecret;
 
 async function initPlaid() {
   if (plaidClient) return plaidClient;
