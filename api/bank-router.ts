@@ -808,7 +808,8 @@ export const bankRouter = createRouter({
       return { success: true as const, linkToken: res.data.link_token };
     } catch (err: any) {
       console.error(`[createLinkToken] Error: ${err.message}`);
-      return { success: false as const, linkToken: null, error: err.message || "Error al crear link token" };
+      console.error(`[createLinkToken] Response: ${err.response?.data ? JSON.stringify(err.response.data) : 'no response data'}`);
+      return { success: false as const, linkToken: null, error: err.response?.data?.error_message || err.message || "Error al crear link token" };
     }
   }),
 
