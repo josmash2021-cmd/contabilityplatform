@@ -16,6 +16,7 @@ import {
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
   Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
   CheckCircle2, PiggyBank, Loader2, X, Check, Clock, RotateCcw,
+  ShoppingBag, Fuel, Utensils, HeartPulse,
 } from "lucide-react";
 
 /** Account dropdown — pushes content down when open (part of document flow) */
@@ -117,12 +118,17 @@ function getMonthRangeLabel(month: number, year: number): string {
 const CATEGORY_ICONS: Record<string, typeof Banknote> = {
   zelle_income: Smartphone, deposit: Landmark, cash_deposit: Banknote,
   cash_withdrawal: Banknote, zelle_sent: Smartphone, subscription: CreditCard, transfer: ArrowDownRight,
+  shopping: ShoppingBag, gasolina: Fuel, medical: HeartPulse, food: Utensils,
+  business_expense: Receipt, home_expense: Utensils,
 };
 
 const CATEGORY_COLORS: Record<string, string> = {
   zelle_income: "bg-blue-50 text-blue-600", deposit: "bg-emerald-50 text-emerald-600",
   cash_deposit: "bg-emerald-50 text-emerald-600", cash_withdrawal: "bg-red-50 text-red-600",
   zelle_sent: "bg-red-50 text-red-600", subscription: "bg-amber-50 text-amber-600", transfer: "bg-neutral-100 text-neutral-600",
+  shopping: "bg-violet-50 text-violet-600", gasolina: "bg-orange-50 text-orange-600",
+  medical: "bg-red-50 text-red-600", food: "bg-orange-50 text-orange-600",
+  business_expense: "bg-slate-50 text-slate-600", home_expense: "bg-orange-50 text-orange-600",
 };
 
 const CATEGORY_LABELS: Record<string, string> = {
