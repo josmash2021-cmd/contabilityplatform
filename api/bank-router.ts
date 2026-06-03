@@ -798,7 +798,7 @@ export const bankRouter = createRouter({
     try {
       const res = await client.linkTokenCreate({
         user: { client_user_id: String(ctx.user.id) },
-        client_name: "Ai Aethel Accountant",
+        client_name: "Aethel Accounting platform",
         products: ["transactions", "auth"],
         country_codes: ["US"],
         language: "en",
