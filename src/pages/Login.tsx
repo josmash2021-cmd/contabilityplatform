@@ -211,7 +211,7 @@ export default function Login() {
                       placeholder="Tu contrasena"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-300 bg-white text-black placeholder:text-neutral-400"}`}
+                      className="pr-10 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
                     />
                     <button
                       type="button"
