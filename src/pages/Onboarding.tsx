@@ -5,10 +5,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
-import { Loader2, Building2, MapPin, Phone, Mail, ArrowLeft, Home, Briefcase, Store, Building } from "lucide-react";
+import { Loader2, Building2, MapPin, Phone, Mail, Home, Briefcase, Store, Building } from "lucide-react";
 import { toast } from "sonner";
 
-// Google Places types
 declare global {
   interface Window {
     google: any;
@@ -16,10 +15,10 @@ declare global {
 }
 
 const ADDRESS_TYPES = [
-  { value: "Casa", label: "Casa", icon: Home },
-  { value: "Apartamento", label: "Apartamento", icon: Building },
-  { value: "Oficina", label: "Oficina", icon: Briefcase },
-  { value: "Tienda", label: "Tienda", icon: Store },
+  { value: "Casa", icon: Home },
+  { value: "Apartamento", icon: Building },
+  { value: "Oficina", icon: Briefcase },
+  { value: "Tienda", icon: Store },
 ];
 
 export default function Onboarding() {
@@ -35,7 +34,6 @@ export default function Onboarding() {
   const [autocompleteLoaded, setAutocompleteLoaded] = useState(false);
   const addressRef = useRef<HTMLInputElement>(null);
 
-  // Load Google Places API
   useEffect(() => {
     if (window.google?.maps?.places) {
       setAutocompleteLoaded(true);
@@ -48,213 +46,120 @@ export default function Onboarding() {
     document.head.appendChild(script);
   }, []);
 
-  // Initialize autocomplete on address input
   useEffect(() => {
     if (!autocompleteLoaded || !addressRef.current || !window.google?.maps?.places) return;
-
     const autocomplete = new window.google.maps.places.Autocomplete(addressRef.current, {
       types: ["address"],
       componentRestrictions: { country: "us" },
     });
-
     autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
       if (!place.address_components) return;
-
-      let street = "";
-      let cityVal = "";
-      let stateVal = "";
-      let zipVal = "";
-
+      let street = "", cityVal = "", stateVal = "", zipVal = "";
       place.address_components.forEach((comp: any) => {
-        const type = comp.types[0];
-        if (type === "street_number") street = comp.long_name + " ";
-        if (type === "route") street += comp.long_name;
-        if (type === "locality") cityVal = comp.long_name;
-        if (type === "administrative_area_level_1") stateVal = comp.short_name;
-        if (type === "postal_code") zipVal = comp.long_name;
+        const t = comp.types[0];
+        if (t === "street_number") street = comp.long_name + " ";
+        if (t === "route") street += comp.long_name;
+        if (t === "locality") cityVal = comp.long_name;
+        if (t === "administrative_area_level_1") stateVal = comp.short_name;
+        if (t === "postal_code") zipVal = comp.long_name;
       });
-
       setAddress(street || place.formatted_address || "");
-      setCity(cityVal);
-      setState(stateVal);
-      setZipCode(zipVal);
+      setCity(cityVal); setState(stateVal); setZipCode(zipVal);
     });
   }, [autocompleteLoaded]);
 
   const updateSettings = trpc.settings.update.useMutation({
-    onSuccess: () => {
-      toast.success("Negocio configurado exitosamente");
-      window.location.href = "/";
-    },
-    onError: (err) => {
-      toast.error(err.message);
-    },
+    onSuccess: () => { toast.success("Negocio configurado"); window.location.href = "/"; },
+    onError: (err) => toast.error(err.message),
   });
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim()) { toast.error("El nombre del negocio es requerido"); return; }
-    if (!address.trim()) { toast.error("La direccion es requerida"); return; }
-    if (!addressType) { toast.error("Selecciona el tipo de direccion"); return; }
-    if (!phone.trim()) { toast.error("El telefono es requerido"); return; }
-    if (!email.trim()) { toast.error("El email del negocio es requerido"); return; }
-    if (!city.trim() || !state.trim() || !zipCode.trim()) {
-      toast.error("Completa la direccion completa con ciudad, estado y ZIP");
-      return;
-    }
-
-    updateSettings.mutate({
-      companyName: companyName.trim(),
-      address: address.trim(),
-      addressType,
-      city: city.trim(),
-      state: state.trim(),
-      zipCode: zipCode.trim(),
-      phone: phone.trim(),
-      email: email.trim(),
-    });
+    if (!companyName.trim()) { toast.error("Nombre del negocio requerido"); return; }
+    if (!phone.trim()) { toast.error("Telefono requerido"); return; }
+    if (!email.trim()) { toast.error("Email requerido"); return; }
+    if (!address.trim()) { toast.error("Direccion requerida"); return; }
+    if (!city.trim() || !state.trim() || !zipCode.trim()) { toast.error("Completa ciudad, estado y ZIP"); return; }
+    if (!addressType) { toast.error("Selecciona tipo de ubicacion"); return; }
+    updateSettings.mutate({ companyName, address, addressType, city, state, zipCode, phone, email });
   };
 
-  const isComplete = companyName.trim() && address.trim() && addressType && phone.trim() && email.trim() && city.trim() && state.trim() && zipCode.trim();
-
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-4">
-      <div className="w-full max-w-md space-y-6">
-        {/* Back button */}
-        <button
-          onClick={() => navigate(-1)}
-          className="flex items-center gap-1.5 text-sm text-neutral-500 hover:text-black transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
-
-        <div className="text-center space-y-2">
-          <Logo className="w-12 h-12 mx-auto mb-3" />
-          <h1 className="text-2xl font-medium text-black">Configura tu negocio</h1>
-          <p className="text-neutral-400 text-sm">
-            Ingresa la informacion de tu empresa para comenzar
-          </p>
+    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 overflow-hidden">
+      <div className="w-full max-w-md">
+        {/* Header */}
+        <div className="text-center mb-4">
+          <Logo className="w-8 h-8 mx-auto mb-2" />
+          <h1 className="text-lg font-semibold text-black">Tu negocio</h1>
+          <p className="text-[11px] text-neutral-400">Completa para comenzar</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Company Name */}
-          <div>
-            <Label className="text-xs text-neutral-500">Nombre del negocio *</Label>
-            <div className="relative mt-1">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <Input
-                placeholder="Ej: Ai Aethel Accountant, LLC"
-                value={companyName}
-                onChange={(e) => setCompanyName(e.target.value)}
-                className="pl-10 rounded-lg border-neutral-200"
-                autoFocus
-              />
-            </div>
-          </div>
-
-          {/* Phone */}
-          <div>
-            <Label className="text-xs text-neutral-500">Telefono *</Label>
-            <div className="relative mt-1">
-              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <Input
-                placeholder="(555) 000-0000"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
-                className="pl-10 rounded-lg border-neutral-200"
-                type="tel"
-              />
-            </div>
-          </div>
-
-          {/* Email */}
-          <div>
-            <Label className="text-xs text-neutral-500">Email del negocio *</Label>
-            <div className="relative mt-1">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
-              <Input
-                type="email"
-                placeholder="negocio@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 rounded-lg border-neutral-200"
-              />
-            </div>
-          </div>
-
-          {/* Address with Google Autocomplete */}
-          <div>
-            <Label className="text-xs text-neutral-500">Direccion *</Label>
-            <div className="relative mt-1">
-              <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 z-10" />
-              <Input
-                ref={addressRef}
-                placeholder="Escribe tu direccion..."
-                value={address}
-                onChange={(e) => setAddress(e.target.value)}
-                className="pl-10 rounded-lg border-neutral-200"
-              />
-            </div>
-            {!autocompleteLoaded && (
-              <p className="text-[11px] text-neutral-400 mt-1">Cargando autocomplete...</p>
-            )}
-          </div>
-
-          {/* City, State, ZIP in a row */}
-          <div className="grid grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="space-y-3">
+          {/* Row 1: Company + Phone */}
+          <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-xs text-neutral-500">Ciudad *</Label>
-              <Input
-                placeholder="Ciudad"
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="mt-1 rounded-lg border-neutral-200"
-              />
+              <Label className="text-[10px] text-neutral-500">Negocio *</Label>
+              <div className="relative">
+                <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                <Input placeholder="Nombre" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+              </div>
             </div>
             <div>
-              <Label className="text-xs text-neutral-500">Estado *</Label>
-              <Input
-                placeholder="CA"
-                value={state}
-                onChange={(e) => setState(e.target.value)}
-                className="mt-1 rounded-lg border-neutral-200"
-                maxLength={2}
-              />
-            </div>
-            <div>
-              <Label className="text-xs text-neutral-500">ZIP *</Label>
-              <Input
-                placeholder="12345"
-                value={zipCode}
-                onChange={(e) => setZipCode(e.target.value)}
-                className="mt-1 rounded-lg border-neutral-200"
-                maxLength={10}
-              />
+              <Label className="text-[10px] text-neutral-500">Telefono *</Label>
+              <div className="relative">
+                <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                <Input placeholder="(555) 000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" type="tel" />
+              </div>
             </div>
           </div>
 
-          {/* Address Type */}
+          {/* Row 2: Email */}
           <div>
-            <Label className="text-xs text-neutral-500">Tipo de ubicacion *</Label>
-            <div className="grid grid-cols-4 gap-2 mt-1">
-              {ADDRESS_TYPES.map((type) => {
-                const Icon = type.icon;
-                const isSelected = addressType === type.value;
+            <Label className="text-[10px] text-neutral-500">Email del negocio *</Label>
+            <div className="relative">
+              <Mail className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+              <Input type="email" placeholder="negocio@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+            </div>
+          </div>
+
+          {/* Row 3: Address */}
+          <div>
+            <Label className="text-[10px] text-neutral-500">Direccion *</Label>
+            <div className="relative">
+              <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 z-10" />
+              <Input ref={addressRef} placeholder="Escribe tu direccion..." value={address} onChange={(e) => setAddress(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+            </div>
+          </div>
+
+          {/* Row 4: City / State / ZIP */}
+          <div className="grid grid-cols-3 gap-2">
+            <div>
+              <Label className="text-[10px] text-neutral-500">Ciudad *</Label>
+              <Input placeholder="Ciudad" value={city} onChange={(e) => setCity(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" />
+            </div>
+            <div>
+              <Label className="text-[10px] text-neutral-500">Estado *</Label>
+              <Input placeholder="CA" value={state} onChange={(e) => setState(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" maxLength={2} />
+            </div>
+            <div>
+              <Label className="text-[10px] text-neutral-500">ZIP *</Label>
+              <Input placeholder="12345" value={zipCode} onChange={(e) => setZipCode(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" maxLength={10} />
+            </div>
+          </div>
+
+          {/* Row 5: Address Type */}
+          <div>
+            <Label className="text-[10px] text-neutral-500">Tipo *</Label>
+            <div className="grid grid-cols-4 gap-2 mt-0.5">
+              {ADDRESS_TYPES.map((t) => {
+                const Icon = t.icon;
+                const sel = addressType === t.value;
                 return (
-                  <button
-                    key={type.value}
-                    type="button"
-                    onClick={() => setAddressType(type.value)}
-                    className={`flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg border transition-all duration-200 ${
-                      isSelected
-                        ? "border-black bg-black text-white"
-                        : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    <span className="text-[11px] font-medium">{type.label}</span>
+                  <button key={t.value} type="button" onClick={() => setAddressType(t.value)}
+                    className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg border transition-all text-[10px] font-medium ${sel ? "border-black bg-black text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
+                    <Icon className="w-4 h-4" />
+                    {t.value}
                   </button>
                 );
               })}
@@ -262,14 +167,9 @@ export default function Onboarding() {
           </div>
 
           {/* Submit */}
-          <Button
-            type="submit"
-            disabled={updateSettings.isPending || !isComplete}
-            className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-11 mt-2 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {updateSettings.isPending ? (
-              <Loader2 className="w-4 h-4 animate-spin mr-2" />
-            ) : null}
+          <Button type="submit" disabled={updateSettings.isPending}
+            className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-10 text-sm mt-1">
+            {updateSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Continuar
           </Button>
         </form>
