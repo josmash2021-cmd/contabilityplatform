@@ -260,9 +260,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             </div>
 
             {/* Cards - horizontal on desktop */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col md:flex-row gap-4 justify-center items-stretch">
               {/* Monthly Card */}
-              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="border rounded-xl p-6 space-y-4 bg-white relative md:w-[380px] flex-shrink-0">
                 <div className="absolute -top-2.5 right-4">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
@@ -447,9 +447,9 @@ function SubscriptionOverlayOnly() {
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div className="flex flex-col md:flex-row gap-4 justify-center items-stretch">
               {/* Monthly */}
-              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+              <div className="border rounded-xl p-6 space-y-4 bg-white relative md:w-[380px] flex-shrink-0">
                 <div className="absolute -top-2.5 right-4">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
