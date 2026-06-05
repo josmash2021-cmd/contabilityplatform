@@ -75,7 +75,7 @@ const defaultCategoryRules: Record<string, { category: string; type: string }> =
   "facebook": { category: "transfer", type: "expense" },
   "walmart": { category: "retail", type: "expense" },
   "target": { category: "retail", type: "expense" },
-  "amazon": { category: "ecommerce", type: "expense" },
+  "amazon": { category: "shopping", type: "expense" },
   "costco": { category: "wholesale", type: "expense" },
   "best buy": { category: "electronics", type: "expense" },
   "uber": { category: "rideshare", type: "expense" },
