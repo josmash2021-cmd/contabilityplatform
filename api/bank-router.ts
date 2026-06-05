@@ -150,6 +150,22 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   const isPaymentFrom = desc.includes("payment from") || desc.includes("deposit from") || desc.includes("credit from");
   if (isIncomingTransfer || isPaymentFrom) return { type: "income", category: "transfer_income" };
 
+  // ─── KNOWN SUBSCRIPTIONS (MUST be BEFORE generic merchant rules like "amazon") ───
+  const subKeywords = [
+    "amazon prime", "prime video", "prime membership",
+    "netflix", "spotify", "disney+", "disney plus", "hulu", "hbo", "max ",
+    "paramount+", "paramount plus", "peacock", "apple tv+", "apple music",
+    "youtube premium", "youtube tv", "crunchyroll", "twitch",
+    "chatgpt", "openai", "claude", "anthropic", "kimi",
+    "adobe", "creative cloud", "microsoft 365", "office 365",
+    "google one", "dropbox", "notion", "slack", "zoom",
+    "calm", "headspace", "duolingo", "masterclass",
+    "icloud", "apple arcade",
+  ];
+  for (const kw of subKeywords) {
+    if (desc.includes(kw)) return { type: "expense", category: "subscription" };
+  }
+
   // Check default rules (doordash, etc.)
   // CRITICAL: plaidAmount direction determines if it's expense or income:
   //   plaidAmount > 0 = money LEAVING account = expense
@@ -247,8 +263,8 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   // Utilities
   if (detailed.includes("UTILITIES") || desc.includes("electric") || desc.includes("water")) return { type: "expense", category: "utilities" };
 
-  // Subscription
-  if (detailed.includes("SUBSCRIPTION") || desc.includes("subscription") || desc.includes("netflix") || desc.includes("spotify")) return { type: "expense", category: "subscription" };
+  // Subscription — catch-all for Plaid category + generic keyword
+  if (detailed.includes("SUBSCRIPTION") || desc.includes("subscription")) return { type: "expense", category: "subscription" };
 
   // Food
   if (detailed.includes("FOOD") || desc.includes("food")) return { type: "expense", category: "food" };
