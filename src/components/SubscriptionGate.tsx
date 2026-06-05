@@ -219,40 +219,42 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
         {children}
       </div>
       <style>{SHIMMER_STYLES}</style>
-      <div className="fixed inset-0 z-[99998] bg-white/60 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white/95 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          {/* Header with close X */}
-          <div className="sticky top-0 bg-white z-10 flex items-center justify-between p-4 border-b border-neutral-100">
+      {/* Overlay: transparent with blur so page behind is visible */}
+      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+        {/* Container: transparent glassmorphism */}
+        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          {/* Header with close X - transparent */}
+          <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
+              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
                 <Crown className="w-4 h-4 text-yellow-500" />
               </div>
-              <span className="text-sm font-medium text-black">{title} — Premium</span>
+              <span className="text-sm font-medium text-white">{title} — Premium</span>
             </div>
             <button
               onClick={() => setDismissed(true)}
-              className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-black hover:bg-neutral-200 transition-colors"
+              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
 
           <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
-            {/* Success banner */}
-            <div className="flex items-center gap-3 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-              <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-              <p className="text-sm text-emerald-800">
+            {/* Success banner - transparent */}
+            <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
+              <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
+              <p className="text-sm text-emerald-200">
                 <strong>Banco conectado.</strong> Suscribete para acceso completo.
               </p>
             </div>
 
-            {/* Crown + Title */}
+            {/* Crown + Title - white text for dark transparent bg */}
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent mx-auto">
+              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-7 h-7 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold text-black">Desbloquea el acceso completo</h2>
-              <p className="text-sm text-neutral-500">
+              <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
+              <p className="text-sm text-neutral-300">
                 Suscribete para ver todas tus transacciones, analisis y reportes.
               </p>
             </div>
@@ -343,7 +345,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
             {/* Footer */}
             <p className="text-[10px] text-neutral-400 text-center pb-4">
-              Al suscribirte, aceptas los terminos de servicio de AI Aethel Accountant.
+              Al suscribirte, aceptas los terminos de servicio de <span className="text-white">AI Aethel Accountant</span>.
             </p>
           </div>
         </div>
