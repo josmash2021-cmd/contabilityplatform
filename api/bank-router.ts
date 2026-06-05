@@ -1239,9 +1239,14 @@ export const bankRouter = createRouter({
     let startStr: string | null = null;
     let endStr: string | null = null;
     if (year && month) {
+      // Specific month
       startStr = `${year}-${String(month).padStart(2, "0")}-01`;
       const endDay = new Date(year, month, 0).getDate();
       endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    } else if (year && !month) {
+      // Full year (Jan 1 - Dec 31) — for "Resumen del Ano"
+      startStr = `${year}-01-01`;
+      endStr = `${year}-12-31`;
     }
 
     // Try DB first

@@ -58,8 +58,8 @@ export default function BankCategoryDetail() {
   const accountIdNum = selectedAccountId ? parseInt(selectedAccountId) : undefined;
 
   const { data: allTransactions, isLoading: loadingAll } = trpc.bank.listByCategory.useQuery(
-    { category: category || "", accountId: accountIdNum },
-    { enabled: !!category },
+    { category: category || "", year: parseInt(returnYear), accountId: accountIdNum },
+    { enabled: !!category && !filterMonth },
   );
 
   const { data: monthTransactions, isLoading: loadingMonth } = trpc.bank.listByCategory.useQuery(
@@ -119,7 +119,7 @@ export default function BankCategoryDetail() {
               !filterMonth ? "bg-black text-white" : "bg-neutral-100 text-neutral-500 hover:bg-neutral-200"
             }`}
           >
-            <LayoutList className="w-3.5 h-3.5" /> Resumen del Ano
+            <LayoutList className="w-3.5 h-3.5" /> {returnYear}
           </button>
         </div>
       </div>
@@ -128,7 +128,7 @@ export default function BankCategoryDetail() {
 
       <div>
         <p className="text-xs text-neutral-400 uppercase tracking-wider mb-3">
-          Transacciones {filterMonth ? `· ${monthLabel}` : "· Resumen del Ano"}
+          Transacciones {filterMonth ? `· ${monthLabel}` : `· ${returnYear}`}
         </p>
         {isLoading ? (
           <div className="space-y-2"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
