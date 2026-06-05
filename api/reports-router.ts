@@ -96,12 +96,16 @@ export const reportsRouter = createRouter({
 
       const totalRevenue = salesRevenue + bankRevenue;
       const totalExpenses = operExpenses + bankExpenses;
+      const businessExpenses = operExpenses; // Only business operational expenses, NOT personal bank expenses
       const netIncome = totalRevenue - totalExpenses;
+      const businessNetIncome = salesRevenue - businessExpenses; // Net income from business operations only
 
       return {
         period: { start: startDate, end: endDate },
         totalRevenue,
         totalExpenses,
+        businessExpenses,
+        businessNetIncome,
         netIncome,
         breakdown: { salesRevenue, bankRevenue, operExpenses, bankExpenses },
       };

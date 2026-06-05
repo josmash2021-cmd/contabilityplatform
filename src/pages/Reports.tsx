@@ -218,8 +218,8 @@ export default function Reports() {
 
   const weekSales = Number(salesStats?.week.total ?? 0);
   const monthSales = Number(incomeData?.totalRevenue ?? 0);
-  const monthExpenses = Number(incomeData?.totalExpenses ?? 0);
-  const netIncome = Number(incomeData?.netIncome ?? 0);
+  const monthExpenses = Number(incomeData?.businessExpenses ?? 0);
+  const netIncome = Number(incomeData?.businessNetIncome ?? 0);
   const margin = monthSales > 0 ? (netIncome / monthSales) * 100 : 0;
 
   // KPI values based on period filter
@@ -254,11 +254,11 @@ export default function Reports() {
   // 3-segment pie chart: Ventas, Ingresos Bancarios, Gastos
   const salesRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
   const bankRevenue = Number(incomeData?.breakdown.bankRevenue ?? 0);
-  const totalExp = Number(incomeData?.totalExpenses ?? 0);
+  const businessExp = Number(incomeData?.businessExpenses ?? 0);
   const pie3Data = [
     { name: "Ventas", value: salesRevenue, color: "#22c55e" },
     { name: "Ingresos Bancarios", value: bankRevenue, color: "#86efac" },
-    { name: "Gastos", value: totalExp, color: "#ef4444" },
+    { name: "Gastos del Negocio", value: businessExp, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   // Period filter options
@@ -449,9 +449,9 @@ export default function Reports() {
                       <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Gastos</p>
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm"><span className="text-neutral-600">Gastos Operativos</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.operExpenses)}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Gastos Bancarios</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.bankExpenses)}</span></div>
                         <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Gastos</span><span className="text-red-500">{formatCurrency(incomeData.totalExpenses)}</span></div>
+                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Gastos del Negocio</span><span className="text-red-500">{formatCurrency(incomeData.businessExpenses ?? 0)}</span></div>
+                        <p className="text-[10px] text-neutral-400 mt-1">Gastos bancarios personales no incluidos</p>
                       </div>
                     </div>
                     <Separator />
