@@ -34,17 +34,19 @@ export default function Onboarding() {
   const [autocompleteLoaded, setAutocompleteLoaded] = useState(false);
   const addressRef = useRef<HTMLInputElement>(null);
 
+  const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDs8MIOA8qk0JwxOkxd8rGxtAmVTeB7CF0";
+
   useEffect(() => {
     if (window.google?.maps?.places) {
       setAutocompleteLoaded(true);
       return;
     }
     const script = document.createElement("script");
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${process.env.GOOGLE_MAPS_API_KEY || ""}&libraries=places`;
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
     script.onload = () => setAutocompleteLoaded(true);
     document.head.appendChild(script);
-  }, []);
+  }, [GOOGLE_MAPS_API_KEY]);
 
   useEffect(() => {
     if (!autocompleteLoaded || !addressRef.current || !window.google?.maps?.places) return;
