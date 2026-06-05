@@ -408,6 +408,10 @@ export const companySettings = mysqlTable("companySettings", {
   companyName: varchar("companyName", { length: 255 }).default("Tu Placa"),
   rif: varchar("rif", { length: 50 }),
   address: text("address"),
+  addressType: varchar("addressType", { length: 50 }), // Apartamento, Oficina, Casa, Tienda
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 100 }),
+  zipCode: varchar("zipCode", { length: 20 }),
   phone: varchar("phone", { length: 50 }),
   email: varchar("email", { length: 320 }),
   zelleEmail: varchar("zelleEmail", { length: 320 }),
