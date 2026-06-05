@@ -122,12 +122,24 @@ export default function PersonalDashboard() {
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
+  const [selectedAccountId, setSelectedAccountIdRaw] = useState<string>("");
+  const setSelectedAccountId = (id: string) => {
+    setSelectedAccountIdRaw(id);
+    try { localStorage.setItem("personal_selected_account_id", id); } catch { /* ignore */ }
+  };
   const [showAllTxs, setShowAllTxs] = useState(false);
   const [confirmDisconnect, setConfirmDisconnect] = useState(false);
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const hasAutoSelected = useRef(false);
   const utils = trpc.useUtils();
+
+  // Load selected account from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("personal_selected_account_id");
+      if (saved) setSelectedAccountIdRaw(saved);
+    } catch { /* ignore */ }
+  }, []);
 
   // ─── Check if bank is connected ───
   const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
@@ -453,19 +465,19 @@ export default function PersonalDashboard() {
         )}
       </div>
 
-      {/* Income Breakdown — clickable filters */}
+      {/* Income Breakdown — clickable, navigates to category detail */}
       {!isLoading && incomeBreakdown.length > 0 && (
         <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-600" /> Desglose de Ingresos</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{incomeBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/transactions?filter=${item.category}&month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><p className="text-sm font-semibold text-emerald-600">+{formatCurrency(item.amount)}</p></div>); })}</div></CardContent>
+          <CardContent className="pt-0"><div className="space-y-1">{incomeBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-emerald-600">+{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
         </Card>
       )}
 
-      {/* Expense Breakdown — clickable filters */}
+      {/* Expense Breakdown — clickable, navigates to category detail */}
       {!isLoading && expenseBreakdown.length > 0 && (
         <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
           <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingDown className="w-4 h-4 text-rose-600" /> Desglose de Gastos</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{expenseBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/transactions?filter=${item.category}&month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><p className="text-sm font-semibold text-rose-600">-{formatCurrency(item.amount)}</p></div>); })}</div></CardContent>
+          <CardContent className="pt-0"><div className="space-y-1">{expenseBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-rose-600">-{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
         </Card>
       )}
 

@@ -19,6 +19,7 @@ import PersonalTransactions from "@/pages/PersonalTransactions";
 import PersonalGoals from "@/pages/PersonalGoals";
 import PersonalSubscriptions from "@/pages/PersonalSubscriptions";
 import PersonalBank from "@/pages/PersonalBank";
+import PersonalCategoryDetail from "@/pages/PersonalCategoryDetail";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
@@ -87,6 +88,7 @@ export default function App() {
         <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />
         <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
         <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
+        <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
       </Route>
 
       <Route path="*" element={<NotFound />} />
