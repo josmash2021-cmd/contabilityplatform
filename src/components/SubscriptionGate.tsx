@@ -419,18 +419,18 @@ function SubscriptionOverlayOnly() {
   return (
     <>
       <style>{SHIMMER_STYLES}</style>
-      <div className="fixed inset-0 z-[99998] bg-white/60 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white/95 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl md:shadow-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          <div className="sticky top-0 bg-white/95 z-10 flex items-center justify-between p-4 border-b border-neutral-100">
+      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent">
+              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
                 <Crown className="w-4 h-4 text-yellow-500" />
               </div>
-              <span className="text-sm font-medium text-black">{title} — Premium</span>
+              <span className="text-sm font-medium text-white">{title} — Premium</span>
             </div>
             <button
               onClick={() => navigate("/settings")}
-              className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-neutral-500 hover:text-black hover:bg-neutral-200 transition-colors"
+              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
             >
               <X className="w-4 h-4" />
             </button>
@@ -438,11 +438,11 @@ function SubscriptionOverlayOnly() {
 
           <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center bg-transparent mx-auto">
+              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-7 h-7 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold text-black">Desbloquea el acceso completo</h2>
-              <p className="text-sm text-neutral-500">
+              <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
+              <p className="text-sm text-neutral-300">
                 Suscribete para acceder a esta pagina y todas las funciones.
               </p>
             </div>
