@@ -207,7 +207,8 @@ export default function Register() {
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-gray-900/80 text-white placeholder:text-neutral-500 h-11 text-sm"
+                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
+                    style={{ color: "white", backgroundColor: "black" }}
                   />
                 </div>
                 <div>
@@ -217,7 +218,8 @@ export default function Register() {
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-gray-900/80 text-white placeholder:text-neutral-500 h-11 text-sm"
+                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
+                    style={{ color: "white", backgroundColor: "black" }}
                   />
                 </div>
                 <div>
@@ -228,7 +230,8 @@ export default function Register() {
                       placeholder="Minimo 6 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-white/30 bg-gray-900/80 text-white placeholder:text-neutral-500 h-11 text-sm"
+                      className="pr-10 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
+                      style={{ color: "white", backgroundColor: "black" }}
                     />
                     <button
                       type="button"
@@ -246,7 +249,8 @@ export default function Register() {
                     placeholder="Repite tu contrasena"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-gray-900/80 text-white placeholder:text-neutral-500 h-11 text-sm"
+                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
+                    style={{ color: "white", backgroundColor: "black" }}
                   />
                 </div>
                 <Button
