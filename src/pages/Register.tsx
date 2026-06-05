@@ -146,24 +146,6 @@ export default function Register() {
       {/* ─── RIGHT PANEL: Register Form (transparent glassmorphism) ─── */}
       <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative z-10">
         <div className="w-full max-w-sm space-y-6 animate-in fade-in slide-in-from-right-8 duration-700">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
-            <Logo className="w-10 h-10" />
-            <div className="text-center">
-              <span className="text-white font-semibold text-xl block">Ai Aethel</span>
-              <p className="text-neutral-300 text-xs">Accountant</p>
-            </div>
-          </div>
-
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3">
-            <Logo className="w-10 h-10" />
-            <div className="text-center">
-              <span className="text-white font-semibold text-xl block">Ai Aethel</span>
-              <p className="text-neutral-300 text-xs">Accountant</p>
-            </div>
-          </div>
-
           <div className="text-center space-y-1">
             <h1 className="text-2xl font-semibold text-white">Crea tu cuenta</h1>
             <p className="text-sm text-neutral-400">Empieza gratis, sin tarjeta de credito</p>
