@@ -230,9 +230,9 @@ export default function Reports() {
   const bankCategories = Array.from(categoryMap.values()).sort((a, b) => b.total - a.total);
 
   const weekSales = Number(salesStats?.week.total ?? 0);
-  const monthSales = Number(incomeData?.totalRevenue ?? 0);
+  const monthSales = Number(incomeData?.breakdown.salesRevenue ?? 0);
   const monthExpenses = Number(incomeData?.businessExpenses ?? 0);
-  const netIncome = Number(incomeData?.businessNetIncome ?? 0);
+  const netIncome = Number(incomeData?.breakdown.salesRevenue ?? 0) - Number(incomeData?.businessExpenses ?? 0);
   const margin = monthSales > 0 ? (netIncome / monthSales) * 100 : 0;
 
   // KPI values based on period filter
@@ -264,13 +264,11 @@ export default function Reports() {
     value: Number(p.total),
   }));
 
-  // 3-segment pie chart: Ventas, Ingresos Bancarios, Gastos
+  // 3-segment pie chart: Ventas vs Gastos del Negocio
   const salesRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
-  const bankRevenue = Number(incomeData?.breakdown.bankRevenue ?? 0);
   const businessExp = Number(incomeData?.businessExpenses ?? 0);
   const pie3Data = [
     { name: "Ventas", value: salesRevenue, color: "#22c55e" },
-    { name: "Ingresos Bancarios", value: bankRevenue, color: "#86efac" },
     { name: "Gastos del Negocio", value: businessExp, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
@@ -452,9 +450,8 @@ export default function Reports() {
                       <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Ingresos</p>
                       <div className="space-y-2">
                         <div className="flex justify-between text-sm"><span className="text-neutral-600">Ventas de Servicios</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Ingresos Bancarios</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.bankRevenue)}</span></div>
                         <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Ingresos</span><span className="text-green-600">{formatCurrency(incomeData.totalRevenue)}</span></div>
+                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Ingresos del Negocio</span><span className="text-green-600">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
                       </div>
                     </div>
                     <Separator />
