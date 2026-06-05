@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield, Building2, User } from "lucide-react";
+import { Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield, Building2, User, PiggyBank, Target, BarChart3, CreditCard } from "lucide-react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 
@@ -81,24 +81,39 @@ export default function Login() {
         {/* Center content */}
         <div className="relative z-10 space-y-8">
           <div className="space-y-4">
-            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight">
-              Tu negocio,<br />
-              <span className="text-neutral-300">organizado.</span>
+            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight transition-all duration-500">
+              {mode === "business" ? (
+                <>Tu negocio,<br /><span className="text-neutral-300">organizado.</span></>
+              ) : (
+                <>Tus finanzas,<br /><span className="text-neutral-300">en control.</span></>
+              )}
             </h2>
-            <p className="text-neutral-300 text-sm max-w-sm">
-              La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día.
+            <p className="text-neutral-300 text-sm max-w-sm transition-all duration-500">
+              {mode === "business"
+                ? "La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día."
+                : "Conecta tu banco, categoriza tus gastos y toma el control de tu dinero personal con inteligencia artificial."
+              }
             </p>
           </div>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-2 gap-3 max-w-md">
-            {[
+          {/* Feature cards - animated switch */}
+          <div className="grid grid-cols-2 gap-3 max-w-md" key={mode}>
+            {(mode === "business" ? [
               { icon: Wallet, label: "Contabilidad Autónoma", desc: "Tu libro diario con Ai Aethel se actualiza solo, sin tocar una tecla" },
               { icon: TrendingUp, label: "Análisis Predictivo", desc: "Proyecta tu flujo de caja con Ai Aethel y detecta riesgos antes de que ocurran" },
               { icon: Shield, label: "Cumplimiento Fiscal", desc: "Reportes listos para la DGII con Ai Aethel, calculados en tiempo real" },
               { icon: Receipt, label: "Banca Conectada", desc: "Tus transacciones con Ai Aethel se concilian automáticamente cada día" },
-            ].map((f) => (
-              <div key={f.label} className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-md">
+            ] : [
+              { icon: CreditCard, label: "Control de Gastos", desc: "Categoriza automáticamente cada compra y ve en qué gastas tu dinero" },
+              { icon: Target, label: "Presupuesto Inteligente", desc: "Establece límites por categoría y recibe alertas antes de pasarte" },
+              { icon: PiggyBank, label: "Metas de Ahorro", desc: "Visualiza tus objetivos de ahorro y el progreso mes a mes" },
+              { icon: BarChart3, label: "Banca Conectada", desc: "Conecta todas tus cuentas bancarias en un solo lugar, en tiempo real" },
+            ]).map((f, i) => (
+              <div
+                key={f.label}
+                className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500"
+                style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
+              >
                 <f.icon className="w-4 h-4 text-white mb-2" />
                 <p className="text-white text-xs font-medium leading-tight">{f.label}</p>
                 <p className="text-white/80 text-[11px] leading-relaxed mt-1">{f.desc}</p>
@@ -109,8 +124,11 @@ export default function Login() {
 
         {/* Bottom: AI agent tagline */}
         <div className="relative z-10">
-          <p className="text-neutral-400 text-xs">
-            Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes
+          <p className="text-neutral-400 text-xs transition-all duration-500">
+            {mode === "business"
+              ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
+              : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
+            }
           </p>
         </div>
       </div>
