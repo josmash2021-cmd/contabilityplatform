@@ -447,7 +447,7 @@ function SubscriptionOverlayOnly() {
               </p>
             </div>
 
-            <div className="space-y-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Monthly */}
               <div className="border rounded-lg p-5 space-y-4 bg-white relative">
                 <div className="absolute -top-2.5 right-4">
