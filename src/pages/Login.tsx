@@ -194,26 +194,32 @@ export default function Login() {
 
               <form onSubmit={handleSubmit} className="space-y-5">
                 <div>
-                  <Label className="text-xs text-neutral-300 lg:text-neutral-500">Email</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
                   <Input
                     type="email"
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
-                    style={{ color: "white", backgroundColor: "black" }}
+                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${
+                      mode === "personal"
+                        ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                        : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                    }`}
                   />
                 </div>
                 <div>
-                  <Label className="text-xs text-neutral-300 lg:text-neutral-500">Contrasena</Label>
+                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Tu contrasena"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
-                      style={{ color: "white", backgroundColor: "black" }}
+                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${
+                        mode === "personal"
+                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                      }`}
                     />
                     <button
                       type="button"
