@@ -5,6 +5,30 @@ import { companySettings } from "@db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export const settingsRouter = createRouter({
+  // ── run DB migration for onboarding columns ──
+  migrate: publicQuery.query(async () => {
+    const db = getDb();
+    const results: string[] = [];
+    const columns = [
+      { name: "addressType", def: "VARCHAR(50)" },
+      { name: "city", def: "VARCHAR(100)" },
+      { name: "state", def: "VARCHAR(100)" },
+      { name: "zipCode", def: "VARCHAR(20)" },
+    ];
+    for (const col of columns) {
+      try {
+        await db.execute(sql.raw(`ALTER TABLE companySettings ADD COLUMN ${col.name} ${col.def}`));
+        results.push(`Added ${col.name}`);
+      } catch (e: any) {
+        if (e.message?.includes("Duplicate") || e.message?.includes("already exists")) {
+          results.push(`${col.name} already exists`);
+        } else {
+          results.push(`Error ${col.name}: ${e.message}`);
+        }
+      }
+    }
+    return { success: true, results };
+  }),
   // ── get: return ONLY the current user's settings ──
   get: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return null;
