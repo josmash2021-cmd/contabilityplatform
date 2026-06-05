@@ -200,7 +200,8 @@ export default function Login() {
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1.5 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
+                    className="mt-1.5 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
+                    style={{ color: "white", backgroundColor: "black" }}
                   />
                 </div>
                 <div>
@@ -211,7 +212,8 @@ export default function Login() {
                       placeholder="Tu contrasena"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
+                      className="pr-10 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-400 lg:bg-white lg:border-neutral-200 lg:text-black h-12 text-base"
+                      style={{ color: "white", backgroundColor: "black" }}
                     />
                     <button
                       type="button"
