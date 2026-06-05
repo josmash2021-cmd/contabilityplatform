@@ -126,6 +126,10 @@ export default function Reports() {
     tzOffsetHours: dateInputs.tzOffsetHours,
     year: selectedYear,
     month: selectedMonth,
+  }, {
+    enabled: true,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
   const journalQuery = trpc.reports.journalEntries.useQuery({ limit: 100 });
@@ -136,6 +140,11 @@ export default function Reports() {
   const dbAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
 
   const utils = trpc.useUtils();
+
+  // Auto-refetch income statement when month/year changes
+  useEffect(() => {
+    utils.reports.incomeStatement.invalidate();
+  }, [selectedMonth, selectedYear, utils]);
 
   // ── Derived data (computed after all hooks) ──
   const hasBankConnected = bankConnectionQuery.data?.hasBank === true;
