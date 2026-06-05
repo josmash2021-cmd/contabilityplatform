@@ -445,6 +445,66 @@ export default function Bank() {
     return () => clearTimeout(timer);
   }, [hasBankConnected, account, accountIdNum, selectedYear, selectedMonth, syncMutation]);
 
+  // ─── SYNC RECENT: Catch new transactions on page load ───
+  useEffect(() => {
+    if (!hasBankConnected || !accountIdNum) return;
+    const timer = setTimeout(() => {
+      syncRecentMutation.mutate();
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [hasBankConnected, accountIdNum, syncRecentMutation]);
+
+  // ─── AUTO-SYNC EVERY 2 MINUTES: Keep transactions up to date ───
+  useEffect(() => {
+    if (!hasBankConnected || !accountIdNum) return;
+    const interval = setInterval(() => {
+      syncMutation.mutate({
+        year: parseInt(selectedYear),
+        month: parseInt(selectedMonth),
+        accountId: accountIdNum,
+      });
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [hasBankConnected, accountIdNum, selectedYear, selectedMonth, syncMutation]);
+
+  // ─── AUTO-FIX CATEGORIES: Silently correct miscategorized transactions ───
+  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
+    onSuccess: (data) => {
+      if (data.fixed && data.fixed > 0) {
+        utils.invalidate();
+      }
+    },
+  });
+  useEffect(() => {
+    if (!hasBankConnected || !accountIdNum) return;
+    const timer = setTimeout(() => {
+      autoFixMutation.mutate();
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, [hasBankConnected, accountIdNum, autoFixMutation]);
+
+  // ─── LIVE BALANCE REFRESH: Every 30 seconds ───
+  const refreshMutation = trpc.bank.refreshAllBalances.useMutation({
+    onSuccess: (data) => {
+      utils.bank.listAccounts.invalidate();
+      if (data.added && data.added > 0) toast.success(`${data.added} cuenta(s) nueva(s) encontradas`);
+      else if (data.updated && data.updated > 0) {
+        // silent - balance updated
+      }
+    },
+    onError: () => { /* silent */ },
+  });
+  useEffect(() => {
+    if (!hasBankConnected) return;
+    // Refresh on load
+    refreshMutation.mutate();
+    // Every 30 seconds
+    const interval = setInterval(() => {
+      if (!refreshMutation.isPending) refreshMutation.mutate();
+    }, 30000);
+    return () => clearInterval(interval);
+  }, [hasBankConnected, refreshMutation]);
+
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
 
