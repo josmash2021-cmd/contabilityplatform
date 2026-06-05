@@ -69,6 +69,12 @@ export default function Onboarding() {
     });
   }, [autocompleteLoaded]);
 
+  // Auto-run DB migration on page load
+  const migrateQuery = trpc.settings.migrate.useQuery(undefined, {
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+
   const updateSettings = trpc.settings.update.useMutation({
     onSuccess: () => { toast.success("Negocio configurado"); window.location.href = "/"; },
     onError: (err) => toast.error(err.message),
