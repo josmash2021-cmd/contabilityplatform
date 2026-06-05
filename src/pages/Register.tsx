@@ -5,8 +5,10 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield, Building2, User } from "lucide-react";
+import {
+  Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield,
+  Building2, User, CreditCard, Target, PiggyBank, BarChart3,
+} from "lucide-react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 
@@ -63,89 +65,87 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex relative">
-      {/* Mobile video background - full screen */}
-      <div className="absolute inset-0 z-0 lg:hidden">
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          preload="auto"
-          className="w-full h-full object-cover"
-        >
-          <source src="/videos/hero-bg.mp4" type="video/mp4" />
-        </video>
-        <div className="absolute inset-0 bg-black/30" />
-      </div>
+    <div className="min-h-screen flex relative overflow-hidden">
+      {/* Video background - FULL SCREEN for all devices */}
+      <video
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="auto"
+        className="absolute inset-0 w-full h-full object-cover z-0"
+      >
+        <source src="/videos/hero-bg.mp4" type="video/mp4" />
+      </video>
+      <div className="absolute inset-0 bg-black/50 z-[1]" />
 
-      {/* ─── LEFT PANEL: Video background (desktop only) ─── */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative overflow-hidden">
-        {/* Video background */}
-        <video
-          autoPlay
-          muted
-          loop
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover z-0"
-        >
-          <source src="/videos/hero-bg.mp4" type="video/mp4" />
-        </video>
-
-        {/* Dark overlay for readability */}
-        <div className="absolute inset-0 bg-black/50 z-[1]" />
-
+      {/* ─── LEFT PANEL: Hero content (desktop only) ─── */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative z-10">
         {/* Top */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <Logo className="w-8 h-8" />
-            <div>
-              <span className="text-white font-semibold text-lg">Ai Aethel</span>
-              <p className="text-neutral-400 text-[10px]">Accountant</p>
-            </div>
+        <div className="flex items-center gap-2">
+          <Logo className="w-8 h-8" />
+          <div>
+            <span className="text-white font-semibold text-lg">Ai Aethel</span>
+            <p className="text-neutral-400 text-[10px]">Accountant</p>
           </div>
         </div>
 
         {/* Center content */}
-        <div className="relative z-10 space-y-8">
+        <div className="space-y-8">
           <div className="space-y-4">
-            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight">
-              Empieza a<br />
-              <span className="text-neutral-300">crecer hoy.</span>
+            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight transition-all duration-500">
+              {mode === "business" ? (
+                <>Empieza a<br /><span className="text-neutral-300">crecer hoy.</span></>
+              ) : (
+                <>Toma el control<br /><span className="text-neutral-300">de tu dinero.</span></>
+              )}
             </h2>
-            <p className="text-neutral-300 text-sm max-w-sm">
-              Unete a miles de empresarios que ya gestionan sus finanzas con Aethel. Rapido, seguro y sin complicaciones.
+            <p className="text-neutral-300 text-sm max-w-sm transition-all duration-500">
+              {mode === "business"
+                ? "Unete a miles de empresarios que ya gestionan sus finanzas con Aethel. Rapido, seguro y sin complicaciones."
+                : "Conecta tus cuentas, categoriza tus gastos y descubre donde va tu dinero con inteligencia artificial."
+              }
             </p>
           </div>
 
-          {/* Feature cards */}
-          <div className="grid grid-cols-2 gap-3 max-w-md">
-            {[
+          {/* Feature cards - animated */}
+          <div className="grid grid-cols-2 gap-3 max-w-md" key={mode}>
+            {(mode === "business" ? [
               { icon: Wallet, label: "Contabilidad Autónoma", desc: "Tu libro diario con Ai Aethel se actualiza solo, sin tocar una tecla" },
               { icon: TrendingUp, label: "Análisis Predictivo", desc: "Proyecta tu flujo de caja con Ai Aethel y detecta riesgos antes de que ocurran" },
               { icon: Shield, label: "Cumplimiento Fiscal", desc: "Reportes listos para la DGII con Ai Aethel, calculados en tiempo real" },
               { icon: Receipt, label: "Banca Conectada", desc: "Tus transacciones con Ai Aethel se concilian automáticamente cada día" },
-            ].map((f) => (
-              <div key={f.label} className="bg-black/60 border border-white/10 rounded-lg p-3 backdrop-blur-md">
+            ] : [
+              { icon: CreditCard, label: "Control de Gastos", desc: "Categoriza automáticamente cada compra y ve en qué gastas tu dinero" },
+              { icon: Target, label: "Presupuesto Inteligente", desc: "Establece límites por categoría y recibe alertas antes de pasarte" },
+              { icon: PiggyBank, label: "Metas de Ahorro", desc: "Visualiza tus objetivos de ahorro y el progreso mes a mes" },
+              { icon: BarChart3, label: "Banca Conectada", desc: "Conecta todas tus cuentas bancarias en un solo lugar, en tiempo real" },
+            ]).map((f, i) => (
+              <div
+                key={f.label}
+                className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500"
+                style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
+              >
                 <f.icon className="w-4 h-4 text-white mb-2" />
                 <p className="text-white text-xs font-medium leading-tight">{f.label}</p>
-                <p className="text-neutral-300 text-[11px] leading-relaxed mt-1">{f.desc}</p>
+                <p className="text-white/80 text-[11px] leading-relaxed mt-1">{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Bottom: AI agent tagline */}
-        <div className="relative z-10">
-          <p className="text-neutral-400 text-xs">
-            Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes
-          </p>
-        </div>
+        {/* Bottom tagline */}
+        <p className="text-neutral-400 text-xs transition-all duration-500">
+          {mode === "business"
+            ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
+            : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
+          }
+        </p>
       </div>
 
-      {/* ─── RIGHT PANEL: Register Form ─── */}
-      <div className="flex-1 flex items-center justify-center lg:bg-white p-6 sm:p-8 lg:p-8 relative z-10">
-        <div className="w-full max-w-sm space-y-8">
+      {/* ─── RIGHT PANEL: Register Form (transparent glassmorphism) ─── */}
+      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative z-10">
+        <div className="w-full max-w-sm space-y-6 animate-in fade-in slide-in-from-right-8 duration-700">
           {/* Mobile logo */}
           <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
             <Logo className="w-10 h-10" />
@@ -155,117 +155,119 @@ export default function Register() {
             </div>
           </div>
 
-          <div className="text-center space-y-2">
-            <h1 className={`text-3xl font-semibold transition-colors duration-300 ${mode === "personal" ? "text-white" : "text-black"}`}>Crea tu cuenta</h1>
-            <p className={`text-base transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-400"}`}>Empieza gratis, sin tarjeta de credito</p>
+          {/* Mobile logo */}
+          <div className="lg:hidden flex items-center justify-center gap-3">
+            <Logo className="w-10 h-10" />
+            <div className="text-center">
+              <span className="text-white font-semibold text-xl block">Ai Aethel</span>
+              <p className="text-neutral-300 text-xs">Accountant</p>
+            </div>
           </div>
 
-          <Card className={`rounded-2xl shadow-none border transition-colors duration-300 ${
-            mode === "personal" ? "bg-black border-white/20 text-white" : "bg-white border-neutral-200 text-black"
-          }`}>
-            <CardContent className="p-6 sm:p-8">
+          <div className="text-center space-y-1">
+            <h1 className="text-2xl font-semibold text-white">Crea tu cuenta</h1>
+            <p className="text-sm text-neutral-400">Empieza gratis, sin tarjeta de credito</p>
+          </div>
+
+          {/* Glassmorphism card */}
+          <div className="bg-white/10 border border-white/20 rounded-2xl backdrop-blur-md">
+            <div className="p-5 sm:p-6">
               {/* Mode Toggle */}
-              {/* Animated Mode Switch — Business = Black, Personal = White */}
-              <div className="flex items-center justify-center mb-5">
-                <div className="relative flex items-center p-1 bg-neutral-200 rounded-xl w-full max-w-[280px] overflow-hidden">
-                  {/* Sliding background pill — Black for Business, White for Personal */}
+              <div className="flex items-center justify-center mb-4">
+                <div className="relative flex items-center p-1 bg-neutral-200/20 rounded-xl w-full max-w-[280px] overflow-hidden">
                   <div
-                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                      mode === "personal" ? "bg-black" : "bg-white"
-                    }`}
-                    style={{
-                      left: mode === "business" ? "4px" : "calc(50%)",
-                    }}
+                    className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-lg transition-all duration-300 ease-out"
+                    style={{ left: mode === "business" ? "4px" : "calc(50%)" }}
                   />
                   <button
                     type="button"
                     onClick={() => setMode("business")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
+                      mode === "business" ? "text-black" : "text-neutral-400 hover:text-white"
                     }`}
                   >
-                    <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
+                    <Building2 className="w-4 h-4" /> Negocios
                   </button>
                   <button
                     type="button"
                     onClick={() => setMode("personal")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "personal" ? "text-white" : "text-neutral-500 hover:text-neutral-700"
+                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
+                      mode === "personal" ? "text-black" : "text-neutral-400 hover:text-white"
                     }`}
                   >
-                    <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
+                    <User className="w-4 h-4" /> Personal
                   </button>
                 </div>
               </div>
 
-              <form onSubmit={handleSubmit} className="space-y-5">
+              <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Nombre completo</Label>
+                  <Label className="text-xs text-neutral-400">Nombre completo</Label>
                   <Input
                     placeholder="Tu nombre"
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
+                    className="mt-1 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-500 h-11 text-sm"
                   />
                 </div>
                 <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Email</Label>
+                  <Label className="text-xs text-neutral-400">Email</Label>
                   <Input
                     type="email"
                     placeholder="tu@email.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
+                    className="mt-1 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-500 h-11 text-sm"
                   />
                 </div>
                 <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Contrasena</Label>
+                  <Label className="text-xs text-neutral-400">Contrasena</Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Minimo 6 caracteres"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
-                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
+                      className="pr-10 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-500 h-11 text-sm"
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className={`absolute right-3 top-1/2 -translate-y-1/2 transition-colors duration-300 ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-400 hover:text-neutral-600"}`}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
                     >
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                 </div>
                 <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-400" : "text-neutral-500"}`}>Confirmar contrasena</Label>
+                  <Label className="text-xs text-neutral-400">Confirmar contrasena</Label>
                   <Input
                     type={showPassword ? "text" : "password"}
                     placeholder="Repite tu contrasena"
                     value={confirmPassword}
                     onChange={(e) => setConfirmPassword(e.target.value)}
-                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${mode === "personal" ? "border-white/30 bg-white/10 text-white placeholder:text-neutral-500" : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"}`}
+                    className="mt-1 rounded-xl border-white/30 bg-white/10 text-white placeholder:text-neutral-500 h-11 text-sm"
                   />
                 </div>
                 <Button
                   type="submit"
                   disabled={registerMut.isPending}
-                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
+                  className="w-full rounded-lg h-10 bg-white text-black hover:bg-neutral-200 font-medium"
                 >
                   {registerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                   Crear Cuenta
                 </Button>
               </form>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          <div className="text-center space-y-3">
-            <p className="text-sm text-neutral-300 lg:text-neutral-400">
-              Al registrarte, aceptas nuestros <Link to="#" className="text-white lg:text-black hover:underline">Terminos</Link> y <Link to="#" className="text-white lg:text-black hover:underline">Privacidad</Link>
+          <div className="text-center space-y-2">
+            <p className="text-xs text-neutral-400">
+              Al registrarte, aceptas nuestros <Link to="#" className="text-white hover:underline">Terminos</Link> y <Link to="#" className="text-white hover:underline">Privacidad</Link>
             </p>
-            <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
+            <p className="text-sm text-neutral-400">
               Ya tienes cuenta?{" "}
-              <Link to="/login" className="text-white transition-colors duration-300 hover:underline font-medium hover:text-neutral-200">Inicia sesion</Link>
+              <Link to="/login" className="text-white hover:underline font-medium">Inicia sesion</Link>
             </p>
           </div>
         </div>
