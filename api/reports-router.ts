@@ -12,6 +12,8 @@ export const reportsRouter = createRouter({
       startDate: z.string().optional(),
       endDate: z.string().optional(),
       tzOffsetHours: z.number().optional(),
+      year: z.number().optional(),
+      month: z.number().optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();
@@ -21,13 +23,24 @@ export const reportsRouter = createRouter({
       const tzExprBank = `DATE_ADD(transactionDate, INTERVAL ${tzOff} HOUR)`;
       const tzExprExp = `DATE_ADD(date, INTERVAL ${tzOff} HOUR)`;
 
-      const todayLocal = new Date();
-      const y = todayLocal.getFullYear();
-      const m = todayLocal.getMonth();
-      const d = todayLocal.getDate();
       const pad = (n: number) => String(n).padStart(2, "0");
 
-      const endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(d)}`;
+      // Use provided year/month, or default to current month
+      let y: number, m: number, endD: number;
+      if (input?.year && input?.month) {
+        y = input.year;
+        m = input.month - 1; // month is 1-based
+        // Get last day of the month
+        const lastDay = new Date(y, input.month, 0).getDate();
+        endD = lastDay;
+      } else {
+        const todayLocal = new Date();
+        y = todayLocal.getFullYear();
+        m = todayLocal.getMonth();
+        endD = todayLocal.getDate();
+      }
+
+      const endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(endD)}`;
       const startDate = input?.startDate || `${y}-${pad(m + 1)}-01`;
 
       // Helper: normalize db.execute result

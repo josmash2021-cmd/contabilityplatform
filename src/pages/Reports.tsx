@@ -122,7 +122,11 @@ export default function Reports() {
   // Local date + timezone inputs — stable with useMemo to prevent infinite re-fetching
   const dateInputs = useMemo(() => getLocalDateInputs(), []);
 
-  const incomeQuery = trpc.reports.incomeStatement.useQuery({ tzOffsetHours: dateInputs.tzOffsetHours });
+  const incomeQuery = trpc.reports.incomeStatement.useQuery({
+    tzOffsetHours: dateInputs.tzOffsetHours,
+    year: selectedYear,
+    month: selectedMonth,
+  });
   const balanceQuery = trpc.reports.balanceSheet.useQuery();
   const journalQuery = trpc.reports.journalEntries.useQuery({ limit: 100 });
   const salesQuery = trpc.sales.stats.useQuery(dateInputs);
