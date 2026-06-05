@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label";
 import {
   Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield,
   Building2, User, CreditCard, Target, PiggyBank, BarChart3,
+  Check, X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
@@ -19,6 +20,19 @@ export default function Register() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<"business" | "personal">("business");
+
+  // Real-time validation
+  const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const passwordReqs = {
+    length: password.length >= 8,
+    uppercase: /[A-Z]/.test(password),
+    number: /[0-9]/.test(password),
+    special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  };
+  const isPasswordValid = mode === "business"
+    ? passwordReqs.length && passwordReqs.uppercase && passwordReqs.number && passwordReqs.special
+    : password.length >= 6;
+
   const { isAuthenticated, user } = useAuth();
 
   // If already authenticated, redirect based on mode
@@ -53,7 +67,15 @@ export default function Register() {
       toast.error("Completa todos los campos");
       return;
     }
-    if (password.length < 6) {
+    if (mode === "business" && !isEmailValid) {
+      toast.error("Ingresa un correo electronico valido");
+      return;
+    }
+    if (mode === "business" && !isPasswordValid) {
+      toast.error("La contrasena no cumple con todos los requisitos");
+      return;
+    }
+    if (mode === "personal" && password.length < 6) {
       toast.error("La contrasena debe tener al menos 6 caracteres");
       return;
     }
@@ -184,9 +206,11 @@ export default function Register() {
 
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
-                  <Label className="text-xs text-neutral-400">Nombre completo</Label>
+                  <Label className="text-xs text-neutral-400">
+                    {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
+                  </Label>
                   <Input
-                    placeholder="Tu nombre"
+                    placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
                     value={name}
                     onChange={(e) => setName(e.target.value)}
                     className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
@@ -195,21 +219,35 @@ export default function Register() {
                 </div>
                 <div>
                   <Label className="text-xs text-neutral-400">Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
-                    style={{ color: "white", backgroundColor: "black" }}
-                  />
+                  <div className="relative mt-1">
+                    <Input
+                      type="email"
+                      placeholder="tu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className="rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm pr-10"
+                      style={{ color: "white", backgroundColor: "black" }}
+                    />
+                    {email.length > 0 && (
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                        {isEmailValid ? (
+                          <Check className="w-5 h-5 text-green-400" />
+                        ) : (
+                          <X className="w-5 h-5 text-red-400" />
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {mode === "business" && email.length > 0 && !isEmailValid && (
+                    <p className="text-[11px] text-red-400 mt-1">Formato de correo invalido</p>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-neutral-400">Contrasena</Label>
                   <div className="relative mt-1">
                     <Input
                       type={showPassword ? "text" : "password"}
-                      placeholder="Minimo 6 caracteres"
+                      placeholder={mode === "business" ? "Minimo 8 caracteres" : "Minimo 6 caracteres"}
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
                       className="pr-10 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
@@ -223,6 +261,28 @@ export default function Register() {
                       {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
+                  {/* Password requirements - only for business */}
+                  {mode === "business" && password.length > 0 && (
+                    <div className="mt-2 space-y-1.5">
+                      {[
+                        { label: "8+ caracteres", met: passwordReqs.length },
+                        { label: "Una mayuscula", met: passwordReqs.uppercase },
+                        { label: "Un numero", met: passwordReqs.number },
+                        { label: "Un caracter especial", met: passwordReqs.special },
+                      ].map((req) => (
+                        <div key={req.label} className="flex items-center gap-2">
+                          {req.met ? (
+                            <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />
+                          ) : (
+                            <div className="w-3.5 h-3.5 rounded-full border border-neutral-500 shrink-0" />
+                          )}
+                          <span className={`text-[11px] ${req.met ? "text-green-400" : "text-neutral-400"}`}>
+                            {req.label}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <Label className="text-xs text-neutral-400">Confirmar contrasena</Label>
