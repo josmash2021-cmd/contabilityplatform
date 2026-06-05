@@ -259,8 +259,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               </p>
             </div>
 
-            {/* Cards */}
-            <div className="space-y-3">
+            {/* Cards - horizontal on desktop */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {/* Monthly Card */}
               <div className="border rounded-lg p-5 space-y-4 bg-white relative">
                 <div className="absolute -top-2.5 right-4">
