@@ -220,7 +220,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       </div>
       <style>{SHIMMER_STYLES}</style>
       {/* Overlay: transparent with blur so page behind is visible */}
-      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-start justify-center p-0 md:p-4 pt-12 md:pt-16">
         {/* Container: no border, fully transparent */}
         <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
           {/* Floating close button - no header bar */}
@@ -231,7 +231,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto pt-16 md:pt-12">
+          <div className="p-4 space-y-6 max-w-lg mx-auto">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -411,7 +411,7 @@ function SubscriptionOverlayOnly() {
   return (
     <>
       <style>{SHIMMER_STYLES}</style>
-      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
+      <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-start justify-center p-0 md:p-4 pt-12 md:pt-16">
         <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
           {/* Floating close button - no header bar */}
           <button
@@ -421,7 +421,7 @@ function SubscriptionOverlayOnly() {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto pt-16 md:pt-12">
+          <div className="p-4 space-y-6 max-w-lg mx-auto">
             <div className="text-center space-y-1">
               <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-6 h-6 text-yellow-500" />
