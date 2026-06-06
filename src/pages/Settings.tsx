@@ -169,34 +169,78 @@ function BusinessSettings() {
     onSuccess: () => { utils.settings.get.invalidate(); toast.success("Guardado"); },
     onError: (err) => toast.error(err.message),
   });
-  const [form, setForm] = useState({ companyName: "Tu Placa", address: "", phone: "", email: "", zelleEmail: "" });
+  const [form, setForm] = useState({
+    companyName: "Tu Placa", address: "", city: "", state: "", zipCode: "",
+    addressType: "", phone: "", email: "", zelleEmail: "",
+  });
 
   useEffect(() => {
-    if (settings) setForm({ companyName: settings.companyName || "Tu Placa", address: settings.address || "", phone: settings.phone || "", email: settings.email || "", zelleEmail: settings.zelleEmail || "" });
+    if (settings) setForm({
+      companyName: settings.companyName || "Tu Placa",
+      address: settings.address || "",
+      city: settings.city || "",
+      state: settings.state || "",
+      zipCode: settings.zipCode || "",
+      addressType: settings.addressType || "",
+      phone: settings.phone || "",
+      email: settings.email || "",
+      zelleEmail: settings.zelleEmail || "",
+    });
   }, [settings]);
+
+  const fullAddress = [form.address, form.city, form.state, form.zipCode].filter(Boolean).join(", ");
 
   return (
     <div className="p-6 lg:p-10 space-y-6 bg-white min-h-screen max-w-7xl mx-auto">
       <AnimatedPage>
-        <div>
-          <h1 className="text-2xl font-medium text-black">Ajustes</h1>
-          <p className="text-neutral-400 text-sm mt-1">Configura tu empresa</p>
+        <div className="flex items-center gap-4">
+          <div className="w-14 h-14 rounded-xl bg-black flex items-center justify-center text-xl font-semibold text-white shrink-0">
+            {(form.companyName || "?").charAt(0).toUpperCase()}
+          </div>
+          <div>
+            <h1 className="text-2xl font-medium text-black">{form.companyName || "Ajustes"}</h1>
+            <p className="text-neutral-400 text-sm">{fullAddress || "Configura tu empresa"}</p>
+          </div>
         </div>
       </AnimatedPage>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <AnimatedCard delay={80}>
+        {/* Mi Negocio — Profile Card */}
+        <AnimatedCard delay={80} className="lg:col-span-2">
           <Card className="border-neutral-200 rounded-lg shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><Building2 className="w-4 h-4 text-neutral-400" /> Empresa</CardTitle></CardHeader>
-            <CardContent className="space-y-3">
-              <div><label className="text-xs text-neutral-400 mb-1 block">Nombre</label><Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} className="border-neutral-200 text-sm" /></div>
+            <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><Building2 className="w-4 h-4 text-neutral-400" /> Mi Negocio</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {/* Company Name */}
+              <div><label className="text-xs text-neutral-400 mb-1 block">Nombre del negocio</label><Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} className="border-neutral-200 text-sm" /></div>
+              {/* Address row */}
               <div><label className="text-xs text-neutral-400 mb-1 block">Direccion</label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-neutral-200 text-sm" /></div>
+              {/* City / State / ZIP */}
+              <div className="grid grid-cols-3 gap-3">
+                <div><label className="text-xs text-neutral-400 mb-1 block">Ciudad</label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                <div><label className="text-xs text-neutral-400 mb-1 block">Estado</label><Input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} className="border-neutral-200 text-sm" maxLength={2} /></div>
+                <div><label className="text-xs text-neutral-400 mb-1 block">ZIP</label><Input value={form.zipCode} onChange={(e) => setForm({ ...form, zipCode: e.target.value })} className="border-neutral-200 text-sm" /></div>
+              </div>
+              {/* Address Type */}
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Tipo de ubicacion</label>
+                <div className="grid grid-cols-4 gap-2">
+                  {["Casa", "Apartamento", "Oficina", "Tienda"].map((t) => (
+                    <button key={t} type="button" onClick={() => setForm({ ...form, addressType: t })}
+                      className={`py-2 px-1 rounded-lg border text-xs font-medium transition-all ${form.addressType === t ? "border-black bg-black text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              {/* Phone / Email */}
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="text-xs text-neutral-400 mb-1 block">Telefono</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                <div><label className="text-xs text-neutral-400 mb-1 block">Email</label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                <div><label className="text-xs text-neutral-400 mb-1 block">Email del negocio</label><Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-200 text-sm" /></div>
               </div>
             </CardContent>
           </Card>
         </AnimatedCard>
+
         <AnimatedCard delay={160}>
           <Card className="border-neutral-200 rounded-lg shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><CreditCard className="w-4 h-4 text-neutral-400" /> Pagos</CardTitle></CardHeader>
@@ -205,11 +249,13 @@ function BusinessSettings() {
             </CardContent>
           </Card>
         </AnimatedCard>
+
         <AnimatedCard delay={240}>
           <Card className="border-neutral-200 rounded-lg shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <CardContent className="py-4"><CloverSettings /></CardContent>
           </Card>
         </AnimatedCard>
+
         <AnimatedCard delay={320} className="lg:col-span-2">
           <Card className="border-neutral-200 rounded-lg shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <CardHeader className="pb-2"><CardTitle className="text-black text-sm font-normal flex items-center gap-2"><Crown className="w-4 h-4 text-yellow-500" /> Suscripcion</CardTitle></CardHeader>
