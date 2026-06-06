@@ -543,42 +543,45 @@ export default function SubscriptionSettings() {
           </p>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
           {/* Monthly — Premium */}
-          <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+          <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
             {PLAN_MONTHLY.badge && (
-              <div className="absolute -top-2.5 right-4">
+              <div className="absolute -top-2.5 right-3">
                 <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{PLAN_MONTHLY.badge}</Badge>
               </div>
             )}
             {/* Silver crown */}
-            <div className="flex items-center gap-2 mb-1">
+            <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
                 <Crown className="w-4 h-4 text-gray-400" />
               </div>
             </div>
-            <div>
-              {/* Shimmer title with crown icon */}
-              <div className="flex items-center gap-1.5">
-                <Crown className="w-3 h-3 text-gray-400" />
-                <p className="text-[11px] font-bold uppercase tracking-wide shimmer-premium">Suscripcion Premium</p>
-              </div>
-              <h4 className="text-sm font-medium text-black mt-0.5">{PLAN_MONTHLY.name}</h4>
+            <div className="mt-2">
+              {/* Subtitle */}
+              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Premium</p>
+              {/* Plan name as main title */}
+              <h3 className="text-xl font-semibold text-black">{PLAN_MONTHLY.name}</h3>
+              {/* Price */}
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-medium text-black">{PLAN_MONTHLY.price}</span>
+                <span className="text-3xl font-medium text-black">{PLAN_MONTHLY.price}</span>
                 <span className="text-xs text-neutral-400 line-through">{PLAN_MONTHLY.originalPrice}</span>
                 <span className="text-xs text-neutral-400">{PLAN_MONTHLY.period}</span>
               </div>
-              <p className="text-[11px] text-neutral-400 mt-1">{PLAN_MONTHLY.description}</p>
+              {/* Description */}
+              <p className="text-[11px] text-neutral-500 mt-1">{PLAN_MONTHLY.description}</p>
             </div>
-            <ul className="space-y-1.5">
+            {/* Features */}
+            <ul className="space-y-0.5 mt-2 flex-1">
               {PLAN_MONTHLY.features.map((f) => (
-                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                   <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
                   {f}
                 </li>
               ))}
             </ul>
+            {/* Spacer + Button */}
+            <div className="mt-6" />
             <Button
               onClick={() => createCheckout.mutate({ plan: "monthly" })}
               disabled={createCheckout.isPending}
@@ -593,43 +596,47 @@ export default function SubscriptionSettings() {
           </div>
 
           {/* Annual — Elite */}
-          <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+          <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
             {PLAN_ANNUAL.badge && (
-              <div className="absolute -top-2.5 right-4">
+              <div className="absolute -top-2.5 right-3">
                 <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">{PLAN_ANNUAL.badge}</Badge>
               </div>
             )}
-            {/* Black illuminated crown */}
-            <div className="flex items-center gap-2 mb-1">
+            {/* Black crown */}
+            <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
                 <Crown className="w-4 h-4 text-black drop-shadow-sm" />
               </div>
             </div>
-            <div>
-              {/* Shimmer title with crown icon */}
-              <div className="flex items-center gap-1.5">
-                <Crown className="w-3 h-3 text-yellow-500" />
-                <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">Suscripcion elite</p>
-              </div>
-              <h4 className="text-sm font-medium text-black mt-0.5">{PLAN_ANNUAL.name}</h4>
+            <div className="mt-2">
+              {/* Subtitle */}
+              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Elite</p>
+              {/* Plan name as main title */}
+              <h3 className="text-xl font-semibold text-black">{PLAN_ANNUAL.name}</h3>
+              {/* Price */}
               <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
+                <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
                 <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
                 <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
               </div>
+              {/* Savings */}
               {PLAN_ANNUAL.savings && (
                 <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
               )}
-              <p className="text-[11px] text-neutral-400 mt-1">{PLAN_ANNUAL.description}</p>
+              {/* Description */}
+              <p className="text-[11px] text-neutral-500 mt-1">{PLAN_ANNUAL.description}</p>
             </div>
-            <ul className="space-y-1.5">
+            {/* Features */}
+            <ul className="space-y-0.5 mt-2 flex-1">
               {PLAN_ANNUAL.features.map((f) => (
-                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                   <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
                   {f}
                 </li>
               ))}
             </ul>
+            {/* Spacer + Button */}
+            <div className="mt-6" />
             <Button
               onClick={() => createCheckout.mutate({ plan: "annual" })}
               disabled={createCheckout.isPending}
