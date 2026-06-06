@@ -222,24 +222,16 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       {/* Overlay: transparent with blur so page behind is visible */}
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
         {/* Container: no border, fully transparent */}
-        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          {/* Header with close X - transparent */}
-          <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
-                <Crown className="w-4 h-4 text-yellow-500" />
-              </div>
-              <span className="text-sm font-medium text-white">{title} — Premium</span>
-            </div>
-            <button
-              onClick={() => setDismissed(true)}
-              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
+          {/* Floating close button - no header bar */}
+          <button
+            onClick={() => setDismissed(true)}
+            className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
 
-          <div className="p-4 space-y-4 max-w-lg mx-auto">
+          <div className="p-4 space-y-4 max-w-lg mx-auto pt-14 md:pt-10">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -420,23 +412,16 @@ function SubscriptionOverlayOnly() {
     <>
       <style>{SHIMMER_STYLES}</style>
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          <div className="sticky top-0 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
-                <Crown className="w-4 h-4 text-yellow-500" />
-              </div>
-              <span className="text-sm font-medium text-white">{title} — Premium</span>
-            </div>
-            <button
-              onClick={() => navigate("/settings")}
-              className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
+        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
+          {/* Floating close button - no header bar */}
+          <button
+            onClick={() => navigate("/settings")}
+            className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
+          >
+            <X className="w-4 h-4" />
+          </button>
 
-          <div className="p-4 space-y-4 max-w-lg mx-auto">
+          <div className="p-4 space-y-4 max-w-lg mx-auto pt-14 md:pt-10">
             <div className="text-center space-y-2">
               <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-7 h-7 text-yellow-500" />
