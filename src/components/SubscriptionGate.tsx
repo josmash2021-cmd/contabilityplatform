@@ -35,14 +35,14 @@ const BIZ_ANNUAL = {
   period: "/año",
   badge: "Mejor valor",
   savings: "Ahorras $400",
-  description: "Facturado anualmente. Cancela cuando quieras.",
+  description: "Facturado anualmente. Pago unico.",
   features: [
     "Todo lo incluido en el plan Mensual",
     "Agente de contabilidad AI ilimitado",
-    "Clientes ilimitados en tu base de datos",
-    "Reportes contables exportables (PDF / Excel)",
+    "Clientes ilimitados",
+    "Reportes contables exportables (PDF/Excel)",
     "Backups diarios automaticos",
-    "Soporte prioritario VIP",
+    "Soporte VIP prioritario",
   ],
 };
 
@@ -73,7 +73,7 @@ const PERS_ANNUAL = {
   period: "/año",
   badge: "Mejor valor",
   savings: "Ahorras $300",
-  description: "Facturado anualmente. Cancela cuando quieras.",
+  description: "Facturado anualmente. Pago unico.",
   features: [
     "Todo lo incluido en el plan Mensual",
     "Agente de contabilidad AI ilimitado",
@@ -222,7 +222,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       {/* Overlay: transparent with blur so page behind is visible */}
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
         {/* Container: transparent glassmorphism */}
-        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
           {/* Header with close X - transparent */}
           <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
@@ -239,7 +239,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             </button>
           </div>
 
-          <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
+          <div className="p-4 space-y-4 max-w-lg mx-auto">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -260,15 +260,15 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             </div>
 
             {/* Cards - horizontal on desktop */}
-            <div className="flex flex-col md:flex-row gap-4 justify-center items-stretch">
+            <div className="flex flex-col md:flex-row gap-3 justify-center items-start">
               {/* Monthly Card */}
-              <div className="border rounded-xl p-6 space-y-4 bg-white relative md:w-[380px] flex-shrink-0">
-                <div className="absolute -top-2.5 right-4">
+              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+                <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
-                    <Crown className="w-4 h-4 text-gray-400" />
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
+                    <Crown className="w-3.5 h-3.5 text-gray-400" />
                   </div>
                 </div>
                 <div>
@@ -284,9 +284,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                   <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5">
                   {monthlyPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
                   ))}
@@ -301,13 +301,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               </div>
 
               {/* Annual Card */}
-              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
-                <div className="absolute -top-2.5 right-4">
+              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+                <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
-                <div className="flex items-center gap-2 mb-1">
-                  <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
-                    <Crown className="w-4 h-4 text-black drop-shadow-sm" />
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
+                    <Crown className="w-3.5 h-3.5 text-black drop-shadow-sm" />
                   </div>
                 </div>
                 <div>
@@ -326,9 +326,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   )}
                   <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5">
                   {annualPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
                   ))}
@@ -420,7 +420,7 @@ function SubscriptionOverlayOnly() {
     <>
       <style>{SHIMMER_STYLES}</style>
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[90vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
           <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
@@ -436,7 +436,7 @@ function SubscriptionOverlayOnly() {
             </button>
           </div>
 
-          <div className="p-4 md:p-6 space-y-5 max-w-lg mx-auto">
+          <div className="p-4 space-y-4 max-w-lg mx-auto">
             <div className="text-center space-y-2">
               <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-7 h-7 text-yellow-500" />
@@ -447,10 +447,10 @@ function SubscriptionOverlayOnly() {
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-4 justify-center items-stretch">
+            <div className="flex flex-col md:flex-row gap-3 justify-center items-start">
               {/* Monthly */}
-              <div className="border rounded-xl p-6 space-y-4 bg-white relative md:w-[380px] flex-shrink-0">
-                <div className="absolute -top-2.5 right-4">
+              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+                <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
                 <div>
@@ -466,9 +466,9 @@ function SubscriptionOverlayOnly() {
                   </div>
                   <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5">
                   {monthlyPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
                   ))}
@@ -483,8 +483,8 @@ function SubscriptionOverlayOnly() {
               </div>
 
               {/* Annual */}
-              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
-                <div className="absolute -top-2.5 right-4">
+              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+                <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
                 <div>
@@ -503,9 +503,9 @@ function SubscriptionOverlayOnly() {
                   )}
                   <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
                 </div>
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5">
                   {annualPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
                     </li>
                   ))}
