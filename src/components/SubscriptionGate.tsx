@@ -231,7 +231,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-4 max-w-lg mx-auto pt-14 md:pt-10">
+          <div className="p-4 space-y-3 max-w-lg mx-auto pt-6 md:pt-4">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -241,13 +241,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             </div>
 
             {/* Crown + Title - white text for dark transparent bg */}
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
-                <Crown className="w-7 h-7 text-yellow-500" />
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
+                <Crown className="w-6 h-6 text-yellow-500" />
               </div>
               <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
               <p className="text-sm text-neutral-300">
-                Suscribete para ver todas tus transacciones, analisis y reportes.
+                Suscribete para acceder a esta pagina y todas las funciones.
               </p>
             </div>
 
@@ -421,10 +421,10 @@ function SubscriptionOverlayOnly() {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-4 max-w-lg mx-auto pt-14 md:pt-10">
-            <div className="text-center space-y-2">
-              <div className="w-14 h-14 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
-                <Crown className="w-7 h-7 text-yellow-500" />
+          <div className="p-4 space-y-3 max-w-lg mx-auto pt-6 md:pt-4">
+            <div className="text-center space-y-1">
+              <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
+                <Crown className="w-6 h-6 text-yellow-500" />
               </div>
               <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
               <p className="text-sm text-neutral-300">
