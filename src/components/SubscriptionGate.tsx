@@ -264,17 +264,18 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <div className="flex items-center gap-1.5">
-                    <Crown className="w-3 h-3 text-gray-400" />
-                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
-                  </div>
-                  <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
+                  {/* Plan name as main title */}
+                  <h3 className="text-xl font-semibold text-black">{monthlyPlan.name}</h3>
+                  {/* Price row */}
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500 mt-1">{monthlyPlan.description}</p>
+                  {/* Subtitle + description */}
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    <span className="font-medium text-neutral-600">{monthlyPlan.subtitle}</span> — {monthlyPlan.description}
+                  </p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
@@ -304,20 +305,22 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                 </div>
                 <div className="mt-2">
-                  <div className="flex items-center gap-1.5">
-                    <Crown className="w-3 h-3 text-yellow-500" />
-                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
-                  </div>
-                  <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
+                  {/* Plan name as main title */}
+                  <h3 className="text-xl font-semibold text-black">{annualPlan.name}</h3>
+                  {/* Price row */}
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{annualPlan.period}</span>
                   </div>
+                  {/* Savings badge */}
                   {annualPlan.savings && (
                     <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
                   )}
-                  <p className="text-[11px] text-neutral-500 mt-1">{annualPlan.description}</p>
+                  {/* Subtitle + description */}
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    <span className="font-medium text-neutral-600">{annualPlan.subtitle}</span> — {annualPlan.description}
+                  </p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
@@ -441,17 +444,18 @@ function SubscriptionOverlayOnly() {
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <Crown className="w-3 h-3 text-gray-400" />
-                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
-                  </div>
-                  <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
+                  {/* Plan name as main title */}
+                  <h3 className="text-xl font-semibold text-black">{monthlyPlan.name}</h3>
+                  {/* Price row */}
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-500 mt-1">{monthlyPlan.description}</p>
+                  {/* Subtitle + description */}
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    <span className="font-medium text-neutral-600">{monthlyPlan.subtitle}</span> — {monthlyPlan.description}
+                  </p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
@@ -476,20 +480,22 @@ function SubscriptionOverlayOnly() {
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
                 <div>
-                  <div className="flex items-center gap-1.5">
-                    <Crown className="w-3 h-3 text-yellow-500" />
-                    <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
-                  </div>
-                  <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
+                  {/* Plan name as main title */}
+                  <h3 className="text-xl font-semibold text-black">{annualPlan.name}</h3>
+                  {/* Price row */}
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{annualPlan.period}</span>
                   </div>
+                  {/* Savings badge */}
                   {annualPlan.savings && (
                     <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
                   )}
-                  <p className="text-[11px] text-neutral-500 mt-1">{annualPlan.description}</p>
+                  {/* Subtitle + description */}
+                  <p className="text-[11px] text-neutral-500 mt-1">
+                    <span className="font-medium text-neutral-600">{annualPlan.subtitle}</span> — {annualPlan.description}
+                  </p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
