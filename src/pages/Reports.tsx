@@ -102,9 +102,11 @@ function getLocalDateInputs() {
   const m = now.getMonth();
   const d = now.getDate();
   const pad = (n: number) => String(n).padStart(2, "0");
+  // Calculate week start properly (handles month boundary, e.g. June 3 -> May 28)
+  const weekStart = new Date(y, m, d - 6);
   return {
     todayDate: `${y}-${pad(m + 1)}-${pad(d)}`,
-    weekStartDate: `${y}-${pad(m + 1)}-${pad(d - 6)}`,
+    weekStartDate: `${weekStart.getFullYear()}-${pad(weekStart.getMonth() + 1)}-${pad(weekStart.getDate())}`,
     monthStartDate: `${y}-${pad(m + 1)}-01`,
     tzOffsetHours: now.getTimezoneOffset() / -60,
   };

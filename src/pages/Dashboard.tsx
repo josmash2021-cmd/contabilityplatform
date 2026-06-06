@@ -47,7 +47,9 @@ export default function Dashboard() {
   const pad = (n: number) => String(n).padStart(2, "0");
 
   const todayDate = `${y}-${pad(m + 1)}-${pad(d)}`;
-  const weekStartDate = `${y}-${pad(m + 1)}-${pad(d - 6)}`;
+  // Calculate week start properly (handles month boundary, e.g. June 3 -> May 28)
+  const weekStart = new Date(y, m, d - 6);
+  const weekStartDate = `${weekStart.getFullYear()}-${pad(weekStart.getMonth() + 1)}-${pad(weekStart.getDate())}`;
   const monthStartDate = `${y}-${pad(m + 1)}-01`;
   const tzOffsetHours = now.getTimezoneOffset() / -60; // -4 for EDT, +1 for CET, etc.
 
