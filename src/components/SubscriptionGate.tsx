@@ -231,7 +231,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto pt-6 md:pt-4">
+          <div className="p-4 space-y-6 max-w-lg mx-auto pt-16 md:pt-12">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -421,7 +421,7 @@ function SubscriptionOverlayOnly() {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto pt-6 md:pt-4">
+          <div className="p-4 space-y-6 max-w-lg mx-auto pt-16 md:pt-12">
             <div className="text-center space-y-1">
               <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-6 h-6 text-yellow-500" />
