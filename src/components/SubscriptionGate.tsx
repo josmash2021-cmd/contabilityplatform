@@ -254,7 +254,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             {/* Cards - horizontal on desktop, same height */}
             <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
               {/* Monthly Card */}
-              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
+              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
@@ -270,7 +270,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
+                    <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
@@ -293,7 +293,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               </div>
 
               {/* Annual Card */}
-              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
+              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
@@ -309,7 +309,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
+                    <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{annualPlan.period}</span>
                   </div>
@@ -434,7 +434,7 @@ function SubscriptionOverlayOnly() {
 
             <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
               {/* Monthly */}
-              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
+              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
@@ -445,7 +445,7 @@ function SubscriptionOverlayOnly() {
                   </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{monthlyPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl font-medium text-black">{monthlyPlan.price}</span>
+                    <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
@@ -468,7 +468,7 @@ function SubscriptionOverlayOnly() {
               </div>
 
               {/* Annual */}
-              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
+              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
@@ -479,7 +479,7 @@ function SubscriptionOverlayOnly() {
                   </div>
                   <h4 className="text-sm font-medium text-black mt-0.5">{annualPlan.name}</h4>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl font-medium text-black">{annualPlan.price}</span>
+                    <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{annualPlan.period}</span>
                   </div>
