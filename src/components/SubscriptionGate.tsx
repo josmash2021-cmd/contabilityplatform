@@ -274,7 +274,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">{monthlyPlan.description}</p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
@@ -283,10 +283,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                     </li>
                   ))}
                 </ul>
+                <div className="mt-6" />
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
                 </button>
@@ -316,7 +317,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   {annualPlan.savings && (
                     <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
                   )}
-                  <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">{annualPlan.description}</p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
@@ -325,10 +326,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                     </li>
                   ))}
                 </ul>
+                <div className="mt-6" />
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
                 </button>
@@ -449,7 +451,7 @@ function SubscriptionOverlayOnly() {
                     <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">{monthlyPlan.description}</p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
@@ -458,10 +460,11 @@ function SubscriptionOverlayOnly() {
                     </li>
                   ))}
                 </ul>
+                <div className="mt-6" />
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
                 </button>
@@ -486,7 +489,7 @@ function SubscriptionOverlayOnly() {
                   {annualPlan.savings && (
                     <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
                   )}
-                  <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">{annualPlan.description}</p>
                 </div>
                 <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
@@ -495,10 +498,11 @@ function SubscriptionOverlayOnly() {
                     </li>
                   ))}
                 </ul>
+                <div className="mt-6" />
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
                 </button>
