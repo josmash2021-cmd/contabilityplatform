@@ -318,37 +318,36 @@ export default function Reports() {
 
       {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {/* KPI labels change based on period filter */}
         {(() => {
           const expenseLabel = periodFilter === "today" ? "Gastos Hoy" : periodFilter === "week" ? "Gastos Sem." : periodFilter === "year" ? "Gastos Ano" : "Gastos Mes";
           const profitLabel = periodFilter === "today" ? "Utilidad Hoy" : periodFilter === "week" ? "Utilidad Sem." : periodFilter === "year" ? "Utilidad Ano" : "Utilidad Mes";
           const salesLabel = periodFilter === "today" ? "Ventas Hoy" : periodFilter === "week" ? "Ventas Sem." : periodFilter === "year" ? "Ventas Ano" : "Ventas Mes";
-          // For year: use incomeData (already switched to year query above)
           const yearExpenses = Number(incomeData?.businessExpenses ?? 0);
           const yearRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
           const yearNet = yearRevenue - yearExpenses;
           const kpiExpenses = periodFilter === "year" ? yearExpenses : periodFilter === "week" ? 0 : periodFilter === "today" ? 0 : monthExpenses;
           const kpiNet = periodFilter === "year" ? yearNet : periodFilter === "week" ? 0 : periodFilter === "today" ? 0 : netIncome;
-          const kpiMargin = (periodFilter === "year" ? yearRevenue : periodFilter === "week" ? weekSales : periodFilter === "today" ? todaySales : monthSales) > 0
-            ? (kpiNet / (periodFilter === "year" ? yearRevenue : periodFilter === "week" ? weekSales : periodFilter === "today" ? todaySales : monthSales)) * 100 : 0;
+          const kpiRevenueVal = periodFilter === "today" ? todaySales : periodFilter === "week" ? weekSales : periodFilter === "year" ? yearRevenue : monthSales;
+          const kpiMargin = kpiRevenueVal > 0 ? (kpiNet / kpiRevenueVal) * 100 : 0;
           return [
             { label: kpiLabel, value: formatCurrency(kpiRevenue), icon: Receipt, color: "bg-green-50 text-green-600" },
             { label: expenseLabel, value: formatCurrency(kpiExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
             { label: profitLabel, value: formatCurrency(kpiNet), icon: DollarSign, color: kpiMargin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
             { label: salesLabel, value: String(periodFilter === "today" ? todayTransactions : periodFilter === "year" ? "—" : (monthlyData?.totalSalesCount ?? 0)), icon: TrendingUp, color: "bg-green-50 text-green-600" },
           ].map((s, i) => (
-          <AnimatedCard key={s.label} delay={i * 80}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
-              <CardContent className="p-3 flex items-center gap-2.5 h-full">
-                <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
-                  <p className="text-base font-semibold text-black truncate">{s.value}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-        )))()}
+            <AnimatedCard key={s.label} delay={i * 80}>
+              <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
+                <CardContent className="p-3 flex items-center gap-2.5 h-full">
+                  <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" /></div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
+                    <p className="text-base font-semibold text-black truncate">{s.value}</p>
+                  </div>
+                </CardContent>
+              </Card>
+            </AnimatedCard>
+          ));
+        })()}
       </div>
 
       {/* Tabs — Horizontal Scroll Carousel */}

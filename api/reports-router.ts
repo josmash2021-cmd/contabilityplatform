@@ -49,9 +49,12 @@ export const reportsRouter = createRouter({
       let endDate: string;
       let startDate: string;
       if (input?.year && !input?.month) {
-        // Full year: Jan 1 to Dec 31
+        // Year-to-date: Jan 1 to current month (not Dec 31 — year hasn't ended)
+        const todayLocal = new Date();
+        const endMonth = todayLocal.getMonth() + 1;
+        const endDay = todayLocal.getDate();
         startDate = input?.startDate || `${y}-01-01`;
-        endDate = input?.endDate || `${y}-12-31`;
+        endDate = input?.endDate || `${y}-${pad(endMonth)}-${pad(endDay)}`;
       } else {
         startDate = input?.startDate || `${y}-${pad(m + 1)}-01`;
         endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(endD)}`;
