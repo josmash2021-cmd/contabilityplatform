@@ -26,13 +26,19 @@ export const reportsRouter = createRouter({
       const pad = (n: number) => String(n).padStart(2, "0");
 
       // Use provided year/month, or default to current month
+      // If only year is provided (no month) → full year (Jan 1 - Dec 31)
       let y: number, m: number, endD: number;
       if (input?.year && input?.month) {
+        // Specific month
         y = input.year;
         m = input.month - 1; // month is 1-based
-        // Get last day of the month
         const lastDay = new Date(y, input.month, 0).getDate();
         endD = lastDay;
+      } else if (input?.year && !input?.month) {
+        // Full year mode (Jan 1 - Dec 31)
+        y = input.year;
+        m = 0; // January
+        endD = 31;
       } else {
         const todayLocal = new Date();
         y = todayLocal.getFullYear();
@@ -40,8 +46,16 @@ export const reportsRouter = createRouter({
         endD = todayLocal.getDate();
       }
 
-      const endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(endD)}`;
-      const startDate = input?.startDate || `${y}-${pad(m + 1)}-01`;
+      let endDate: string;
+      let startDate: string;
+      if (input?.year && !input?.month) {
+        // Full year: Jan 1 to Dec 31
+        startDate = input?.startDate || `${y}-01-01`;
+        endDate = input?.endDate || `${y}-12-31`;
+      } else {
+        startDate = input?.startDate || `${y}-${pad(m + 1)}-01`;
+        endDate = input?.endDate || `${y}-${pad(m + 1)}-${pad(endD)}`;
+      }
 
       // Helper: normalize db.execute result
       const getRows = (r: any): any[] => {

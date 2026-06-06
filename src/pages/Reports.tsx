@@ -124,12 +124,22 @@ export default function Reports() {
   // Local date + timezone inputs — stable with useMemo to prevent infinite re-fetching
   const dateInputs = useMemo(() => getLocalDateInputs(), []);
 
+  // Month income statement (for "Mes" tab)
   const incomeQuery = trpc.reports.incomeStatement.useQuery({
     tzOffsetHours: dateInputs.tzOffsetHours,
     year: selectedYear,
     month: selectedMonth,
   }, {
-    enabled: true,
+    enabled: periodFilter !== "year",
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+  });
+  // Year income statement (for "Ano" tab) — no month = full year
+  const yearIncomeQuery = trpc.reports.incomeStatement.useQuery({
+    tzOffsetHours: dateInputs.tzOffsetHours,
+    year: selectedYear,
+  }, {
+    enabled: periodFilter === "year",
     staleTime: 0,
     refetchOnWindowFocus: true,
   });
@@ -202,7 +212,7 @@ export default function Reports() {
     );
   }
 
-  const incomeData = incomeQuery.data;
+  const incomeData = periodFilter === "year" ? yearIncomeQuery.data : incomeQuery.data;
   const balanceData = balanceQuery.data;
   const journalData = journalQuery.data;
   const salesStats = salesQuery.data;
@@ -308,12 +318,25 @@ export default function Reports() {
 
       {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: kpiLabel, value: formatCurrency(kpiRevenue), icon: Receipt, color: "bg-green-50 text-green-600" },
-          { label: "Gastos Mes", value: formatCurrency(monthExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-          { label: "Utilidad", value: formatCurrency(netIncome), icon: DollarSign, color: margin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
-          { label: periodFilter === "today" ? "Ventas Hoy" : "Ventas Mes", value: String(periodFilter === "today" ? todayTransactions : (monthlyData?.totalSalesCount ?? 0)), icon: TrendingUp, color: "bg-green-50 text-green-600" },
-        ].map((s, i) => (
+        {/* KPI labels change based on period filter */}
+        {(() => {
+          const expenseLabel = periodFilter === "today" ? "Gastos Hoy" : periodFilter === "week" ? "Gastos Sem." : periodFilter === "year" ? "Gastos Ano" : "Gastos Mes";
+          const profitLabel = periodFilter === "today" ? "Utilidad Hoy" : periodFilter === "week" ? "Utilidad Sem." : periodFilter === "year" ? "Utilidad Ano" : "Utilidad Mes";
+          const salesLabel = periodFilter === "today" ? "Ventas Hoy" : periodFilter === "week" ? "Ventas Sem." : periodFilter === "year" ? "Ventas Ano" : "Ventas Mes";
+          // For year: use incomeData (already switched to year query above)
+          const yearExpenses = Number(incomeData?.businessExpenses ?? 0);
+          const yearRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
+          const yearNet = yearRevenue - yearExpenses;
+          const kpiExpenses = periodFilter === "year" ? yearExpenses : periodFilter === "week" ? 0 : periodFilter === "today" ? 0 : monthExpenses;
+          const kpiNet = periodFilter === "year" ? yearNet : periodFilter === "week" ? 0 : periodFilter === "today" ? 0 : netIncome;
+          const kpiMargin = (periodFilter === "year" ? yearRevenue : periodFilter === "week" ? weekSales : periodFilter === "today" ? todaySales : monthSales) > 0
+            ? (kpiNet / (periodFilter === "year" ? yearRevenue : periodFilter === "week" ? weekSales : periodFilter === "today" ? todaySales : monthSales)) * 100 : 0;
+          return [
+            { label: kpiLabel, value: formatCurrency(kpiRevenue), icon: Receipt, color: "bg-green-50 text-green-600" },
+            { label: expenseLabel, value: formatCurrency(kpiExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
+            { label: profitLabel, value: formatCurrency(kpiNet), icon: DollarSign, color: kpiMargin >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500" },
+            { label: salesLabel, value: String(periodFilter === "today" ? todayTransactions : periodFilter === "year" ? "—" : (monthlyData?.totalSalesCount ?? 0)), icon: TrendingUp, color: "bg-green-50 text-green-600" },
+          ].map((s, i) => (
           <AnimatedCard key={s.label} delay={i * 80}>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo h-[88px]">
               <CardContent className="p-3 flex items-center gap-2.5 h-full">
@@ -325,7 +348,7 @@ export default function Reports() {
               </CardContent>
             </Card>
           </AnimatedCard>
-        ))}
+        )))()}
       </div>
 
       {/* Tabs — Horizontal Scroll Carousel */}
