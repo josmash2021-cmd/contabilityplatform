@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -128,6 +128,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const [phase, setPhase] = useState<"checking" | "connect_bank" | "subscribe" | "active">("checking");
   const [dismissed, setDismissed] = useState(false);
   const [checkTimedOut, setCheckTimedOut] = useState(false);
+  // Track when bank was connected (for 10s delay before showing subscription overlay)
+  const bankConnectedAtRef = useRef<number | null>(null);
 
   const { user } = useAuth();
   const userMode = user?.modePreference || "business";
@@ -141,6 +143,17 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   const hasSubscription = status?.active === true;
   const hasBank = bankConnection?.hasBank === true;
+
+  // Track when bank transitions from disconnected -> connected
+  useEffect(() => {
+    if (hasBank && bankConnectedAtRef.current === null) {
+      // Bank just connected — record timestamp
+      bankConnectedAtRef.current = Date.now();
+    } else if (!hasBank) {
+      // Bank disconnected — reset
+      bankConnectedAtRef.current = null;
+    }
+  }, [hasBank]);
 
   // Timeout: don't stay in "checking" forever
   useEffect(() => {
@@ -162,12 +175,15 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
     },
   });
 
+  // Phase logic: 10s AFTER bank connects, show subscription overlay
   useEffect(() => {
     if (phase === "subscribe") return;
     if (hasSubscription) { setPhase("active"); return; }
     if (!hasBank) { setPhase("connect_bank"); return; }
-    if (hasBank && !hasSubscription) {
-      const timer = setTimeout(() => setPhase("subscribe"), 20000);
+    if (hasBank && !hasSubscription && bankConnectedAtRef.current !== null) {
+      const elapsed = Date.now() - bankConnectedAtRef.current;
+      const remaining = Math.max(0, 10000 - elapsed);
+      const timer = setTimeout(() => setPhase("subscribe"), remaining);
       return () => clearTimeout(timer);
     }
   }, [hasSubscription, hasBank, subLoading, bankLoading, phase]);
