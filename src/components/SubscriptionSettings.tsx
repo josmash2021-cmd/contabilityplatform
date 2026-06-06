@@ -289,7 +289,7 @@ export default function SubscriptionSettings() {
           {/* Plan name */}
           <div>
             <h4 className="text-sm font-medium text-black">Suscripcion actual: Premium {currentPlan.period}</h4>
-            {isMonthly && (
+            {isMonthly ? (
               <>
                 <div className="flex items-baseline gap-2 mt-1">
                   <span className="text-2xl font-medium text-black">$80</span>
@@ -297,6 +297,15 @@ export default function SubscriptionSettings() {
                   <span className="text-xs text-neutral-400">/mes</span>
                 </div>
                 <p className="text-[11px] text-emerald-700 font-medium mt-1">Ahorras $40</p>
+              </>
+            ) : (
+              <>
+                <div className="flex items-baseline gap-2 mt-1">
+                  <span className="text-2xl font-medium text-black">$800</span>
+                  <span className="text-xs text-neutral-400 line-through">$1,200</span>
+                  <span className="text-xs text-neutral-400">/año</span>
+                </div>
+                <p className="text-[11px] text-emerald-700 font-medium mt-1">Ahorras $400</p>
               </>
             )}
             <p className="text-[11px] text-neutral-400 mt-1">
@@ -326,8 +335,8 @@ export default function SubscriptionSettings() {
             </div>
           )}
 
-          {/* Action buttons */}
-          {!status.cancelAtPeriodEnd && (
+          {/* Action buttons — hidden for annual plans (no refund, no cancel) */}
+          {!status.cancelAtPeriodEnd && isMonthly && (
             <div className="flex flex-wrap gap-2 pt-1">
               <Button
                 variant="outline"
