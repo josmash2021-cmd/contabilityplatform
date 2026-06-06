@@ -221,8 +221,8 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       <style>{SHIMMER_STYLES}</style>
       {/* Overlay: transparent with blur so page behind is visible */}
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        {/* Container: transparent glassmorphism */}
-        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+        {/* Container: no border, fully transparent */}
+        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
           {/* Header with close X - transparent */}
           <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
@@ -259,10 +259,10 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               </p>
             </div>
 
-            {/* Cards - horizontal on desktop */}
-            <div className="flex flex-col md:flex-row gap-3 justify-center items-start">
+            {/* Cards - horizontal on desktop, same height */}
+            <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
               {/* Monthly Card */}
-              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
@@ -271,7 +271,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                     <Crown className="w-3.5 h-3.5 text-gray-400" />
                   </div>
                 </div>
-                <div>
+                <div className="mt-2">
                   <div className="flex items-center gap-1.5">
                     <Crown className="w-3 h-3 text-gray-400" />
                     <p className="text-[11px] font-bold uppercase tracking-wide shimmer-silver">{monthlyPlan.subtitle}</p>
@@ -284,7 +284,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   </div>
                   <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
                 </div>
-                <ul className="space-y-0.5">
+                <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
@@ -294,14 +294,14 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
                 >
                   <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
                 </button>
               </div>
 
               {/* Annual Card */}
-              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
@@ -310,7 +310,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                     <Crown className="w-3.5 h-3.5 text-black drop-shadow-sm" />
                   </div>
                 </div>
-                <div>
+                <div className="mt-2">
                   <div className="flex items-center gap-1.5">
                     <Crown className="w-3 h-3 text-yellow-500" />
                     <p className="text-[11px] font-bold uppercase tracking-wide shimmer-elite">{annualPlan.subtitle}</p>
@@ -326,7 +326,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   )}
                   <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
                 </div>
-                <ul className="space-y-0.5">
+                <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
@@ -336,7 +336,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
                 >
                   <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
                 </button>
@@ -420,8 +420,8 @@ function SubscriptionOverlayOnly() {
     <>
       <style>{SHIMMER_STYLES}</style>
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-center justify-center p-0 md:p-4">
-        <div className="bg-white/10 border border-white/20 w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
-          <div className="sticky top-0 bg-black/30 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
+        <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300">
+          <div className="sticky top-0 backdrop-blur-md z-10 flex items-center justify-between p-4 border-b border-white/10">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 rounded-full border-2 border-yellow-500 flex items-center justify-center">
                 <Crown className="w-4 h-4 text-yellow-500" />
@@ -447,9 +447,9 @@ function SubscriptionOverlayOnly() {
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-3 justify-center items-start">
+            <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
               {/* Monthly */}
-              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
                 </div>
@@ -466,7 +466,7 @@ function SubscriptionOverlayOnly() {
                   </div>
                   <p className="text-[11px] text-neutral-400 mt-1">{monthlyPlan.description}</p>
                 </div>
-                <ul className="space-y-0.5">
+                <ul className="space-y-0.5 mt-2 flex-1">
                   {monthlyPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
@@ -476,14 +476,14 @@ function SubscriptionOverlayOnly() {
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
                 >
                   <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
                 </button>
               </div>
 
               {/* Annual */}
-              <div className="border rounded-xl p-5 space-y-3 bg-white relative md:w-[340px] flex-shrink-0">
+              <div className="border rounded-xl p-5 bg-white relative md:w-[340px] flex-shrink-0 flex flex-col">
                 <div className="absolute -top-2.5 right-3">
                   <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
                 </div>
@@ -503,7 +503,7 @@ function SubscriptionOverlayOnly() {
                   )}
                   <p className="text-[11px] text-neutral-400 mt-1">{annualPlan.description}</p>
                 </div>
-                <ul className="space-y-0.5">
+                <ul className="space-y-0.5 mt-2 flex-1">
                   {annualPlan.features.map((f) => (
                     <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
@@ -513,7 +513,7 @@ function SubscriptionOverlayOnly() {
                 <button
                   onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
                   disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50 mt-auto"
                 >
                   <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
                 </button>
