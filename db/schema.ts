@@ -409,6 +409,7 @@ export const companySettings = mysqlTable("companySettings", {
   rif: varchar("rif", { length: 50 }),
   address: text("address"),
   addressType: varchar("addressType", { length: 50 }), // Apartamento, Oficina, Casa, Tienda
+  unitNumber: varchar("unitNumber", { length: 50 }), // Numero de apto/oficina
   city: varchar("city", { length: 100 }),
   state: varchar("state", { length: 100 }),
   zipCode: varchar("zipCode", { length: 20 }),

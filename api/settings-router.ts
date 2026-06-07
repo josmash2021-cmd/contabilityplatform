@@ -11,6 +11,7 @@ export const settingsRouter = createRouter({
     const results: string[] = [];
     const columns = [
       { name: "addressType", def: "VARCHAR(50)" },
+      { name: "unitNumber", def: "VARCHAR(50)" },
       { name: "city", def: "VARCHAR(100)" },
       { name: "state", def: "VARCHAR(100)" },
       { name: "zipCode", def: "VARCHAR(20)" },
@@ -47,6 +48,7 @@ export const settingsRouter = createRouter({
       rif: z.string().optional(),
       address: z.string().optional(),
       addressType: z.string().optional(),
+      unitNumber: z.string().optional(),
       city: z.string().optional(),
       state: z.string().optional(),
       zipCode: z.string().optional(),

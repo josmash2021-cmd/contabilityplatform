@@ -171,7 +171,7 @@ function BusinessSettings() {
   });
   const [form, setForm] = useState({
     companyName: "Tu Placa", address: "", city: "", state: "", zipCode: "",
-    addressType: "", phone: "", email: "", zelleEmail: "",
+    addressType: "", unitNumber: "", phone: "", email: "", zelleEmail: "",
   });
 
   useEffect(() => {
@@ -182,6 +182,7 @@ function BusinessSettings() {
       state: settings.state || "",
       zipCode: settings.zipCode || "",
       addressType: settings.addressType || "",
+      unitNumber: settings.unitNumber || "",
       phone: settings.phone || "",
       email: settings.email || "",
       zelleEmail: settings.zelleEmail || "",
@@ -224,13 +225,32 @@ function BusinessSettings() {
               <div>
                 <label className="text-xs text-neutral-400 mb-1 block">Tipo de ubicacion</label>
                 <div className="grid grid-cols-4 gap-2">
-                  {["Casa", "Apartamento", "Oficina", "Tienda"].map((t) => (
-                    <button key={t} type="button" onClick={() => setForm({ ...form, addressType: t })}
-                      className={`py-2 px-1 rounded-lg border text-xs font-medium transition-all ${form.addressType === t ? "border-black bg-black text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
-                      {t}
+                  {[
+                    { key: "Casa", label: "Casa" },
+                    { key: "Apartamento", label: "Apto." },
+                    { key: "Oficina", label: "Ofic." },
+                    { key: "Tienda", label: "Tienda" },
+                  ].map((t) => (
+                    <button key={t.key} type="button" onClick={() => setForm({ ...form, addressType: t.key, unitNumber: t.key === "Casa" || t.key === "Tienda" ? "" : form.unitNumber })}
+                      className={`py-2 px-1 rounded-lg border text-[11px] font-medium transition-all ${form.addressType === t.key ? "border-black bg-black text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
+                      {t.label}
                     </button>
                   ))}
                 </div>
+                {/* Unit number — only for Apartamento / Oficina */}
+                {(form.addressType === "Apartamento" || form.addressType === "Oficina") && (
+                  <div className="mt-2">
+                    <label className="text-xs text-neutral-400 mb-1 block">
+                      {form.addressType === "Apartamento" ? "No. de apartamento" : "No. de oficina"}
+                    </label>
+                    <Input
+                      value={form.unitNumber}
+                      onChange={(e) => setForm({ ...form, unitNumber: e.target.value })}
+                      className="border-neutral-200 text-sm"
+                      placeholder={form.addressType === "Apartamento" ? "Ej: 4B" : "Ej: 201"}
+                    />
+                  </div>
+                )}
               </div>
               {/* Phone / Email */}
               <div className="grid grid-cols-2 gap-3">
