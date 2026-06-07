@@ -16,39 +16,61 @@ interface AddressAutocompleteProps {
   className?: string;
 }
 
+// CSS for Google Maps autocomplete dropdown to appear above everything
+const AUTOCOMPLETE_CSS = `
+  .pac-container {
+    z-index: 99999 !important;
+    border-radius: 8px !important;
+    margin-top: 4px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+    border: 1px solid #e5e5e5 !important;
+    font-family: inherit !important;
+  }
+  .pac-item {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    cursor: pointer !important;
+  }
+  .pac-item:hover {
+    background-color: #f5f5f5 !important;
+  }
+  .pac-item-query {
+    font-size: 13px !important;
+    font-weight: 500 !important;
+  }
+  .pac-matched {
+    font-weight: 600 !important;
+  }
+  .pac-icon {
+    margin-right: 8px !important;
+  }
+`;
+
 export default function AddressAutocomplete({ value, onChange, onPlaceSelected, placeholder, className }: AddressAutocompleteProps) {
-  const [autocompleteLoaded, setAutocompleteLoaded] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Load Google Maps script
   useEffect(() => {
     if (window.google?.maps?.places) {
-      setAutocompleteLoaded(true);
-      return;
-    }
-    const existing = document.querySelector('script[src*="maps.googleapis.com"]');
-    if (existing) {
-      existing.addEventListener("load", () => setAutocompleteLoaded(true));
+      setLoaded(true);
       return;
     }
     const script = document.createElement("script");
     script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}&libraries=places`;
     script.async = true;
-    script.defer = true;
-    script.onload = () => setAutocompleteLoaded(true);
+    script.onload = () => setLoaded(true);
     document.head.appendChild(script);
   }, []);
 
-  // Attach autocomplete to input
   useEffect(() => {
-    if (!autocompleteLoaded || !inputRef.current || !window.google?.maps?.places) return;
+    if (!loaded || !inputRef.current || !window.google?.maps?.places) return;
     
     const autocomplete = new window.google.maps.places.Autocomplete(inputRef.current, {
       types: ["address"],
       componentRestrictions: { country: "us" },
     });
     
-    const listener = autocomplete.addListener("place_changed", () => {
+    autocomplete.addListener("place_changed", () => {
       const place = autocomplete.getPlace();
       if (!place.address_components) return;
       let street = "", cityVal = "", stateVal = "", zipVal = "";
@@ -66,22 +88,20 @@ export default function AddressAutocomplete({ value, onChange, onPlaceSelected, 
         onPlaceSelected({ address: fullAddress, city: cityVal, state: stateVal, zipCode: zipVal });
       }
     });
-    
-    return () => {
-      if (listener && window.google?.maps?.event) {
-        window.google.maps.event.clearInstanceListeners(autocomplete);
-      }
-    };
-  }, [autocompleteLoaded, onChange, onPlaceSelected]);
+  }, [loaded]);
 
   return (
-    <input
-      ref={inputRef}
-      type="text"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={placeholder}
-      className={className || "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"}
-    />
+    <>
+      <style>{AUTOCOMPLETE_CSS}</style>
+      <input
+        ref={inputRef}
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className={className || "flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"}
+        autoComplete="off"
+      />
+    </>
   );
 }
