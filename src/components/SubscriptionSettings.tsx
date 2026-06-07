@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { toast } from "sonner";
-import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap } from "lucide-react";
+import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown } from "lucide-react";
 
 // ── Shimmer animation styles for subscription titles ──
 const SHIMMER_CSS = `
@@ -228,6 +228,7 @@ export default function SubscriptionSettings() {
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [showUpgrade, setShowUpgrade] = useState(false);
   const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
 
   const upgradeMut = trpc.subscription.upgrade.useMutation({
     onSuccess: (data) => {
@@ -434,37 +435,45 @@ export default function SubscriptionSettings() {
           </div>
         )}
 
-        {/* Payment History */}
+        {/* Payment History — Collapsible */}
         {payments && payments.length > 0 && (
           <div className="border-t border-neutral-100 pt-4">
-            <h4 className="text-xs font-medium text-black mb-3 flex items-center gap-1.5">
-              <Receipt className="w-3.5 h-3.5 text-neutral-400" /> Historial de pagos
-            </h4>
-            <div className="space-y-1.5">
-              {payments.map((p: typeof payments[0]) => (
-                <div key={p.id} className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50 last:border-0">
-                  <div className="flex items-center gap-2">
-                    <span className="text-black font-medium">${p.amount}</span>
-                    <span className="text-neutral-400">{p.plan === "monthly" ? "Mensual" : "Anual"}</span>
+            <button
+              onClick={() => setShowHistory(!showHistory)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <h4 className="text-xs font-medium text-black flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-neutral-400" /> Historial de pagos
+              </h4>
+              <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${showHistory ? "rotate-180" : ""}`} />
+            </button>
+            {showHistory && (
+              <div className="space-y-1.5 mt-3">
+                {payments.map((p: typeof payments[0]) => (
+                  <div key={p.id} className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50 last:border-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-black font-medium">${p.amount}</span>
+                      <span className="text-neutral-400">{p.plan === "monthly" ? "Mensual" : "Anual"}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-neutral-400">
+                        {p.paidAt ? new Date(p.paidAt).toLocaleDateString("es") : "-"}
+                      </span>
+                      {p.status === "succeeded" ? (
+                        <Check className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <AlertTriangle className="w-3 h-3 text-amber-500" />
+                      )}
+                      {p.receiptUrl && (
+                        <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-black">
+                          <ExternalLink className="w-3 h-3" />
+                        </a>
+                      )}
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-neutral-400">
-                      {p.paidAt ? new Date(p.paidAt).toLocaleDateString("es") : "-"}
-                    </span>
-                    {p.status === "succeeded" ? (
-                      <Check className="w-3 h-3 text-emerald-500" />
-                    ) : (
-                      <AlertTriangle className="w-3 h-3 text-amber-500" />
-                    )}
-                    {p.receiptUrl && (
-                      <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-black">
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
