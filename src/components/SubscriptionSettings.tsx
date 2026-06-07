@@ -256,14 +256,13 @@ export default function SubscriptionSettings() {
     );
   }
 
-  // ─── ACTIVE SUBSCRIBER VIEW ───
+  // ─── ACTIVE SUBSCRIBER VIEW — same card design as overlay ───
   if (status?.active) {
     const currentPlan = status.plan === "monthly" ? PLAN_MONTHLY : PLAN_ANNUAL;
-    const otherPlan = status.plan === "monthly" ? PLAN_ANNUAL : PLAN_MONTHLY;
     const isMonthly = status.plan === "monthly";
 
     return (
-      <div className="space-y-6">
+      <div className="space-y-4">
         {/* Success message after upgrade */}
         {upgradeSuccess && (
           <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
@@ -272,43 +271,41 @@ export default function SubscriptionSettings() {
           </div>
         )}
 
-        {/* Current Plan Card — Same design as plan cards */}
-        <div className="border rounded-lg p-5 space-y-4 bg-white relative">
+        {/* Cancel warning */}
+        {status.cancelAtPeriodEnd && (
+          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+            <p className="text-xs text-amber-800">Tu plan se cancelara automaticamente al final del periodo actual.</p>
+          </div>
+        )}
+
+        {/* Current Plan Card — Same design as subscription cards */}
+        <div className="border rounded-xl p-6 bg-white relative flex flex-col">
           {/* Active badge */}
-          <div className="absolute -top-2.5 right-4">
+          <div className="absolute -top-2.5 right-3">
             <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">Activo</Badge>
           </div>
 
           {/* Crown icon */}
-          <div className="flex items-center gap-2 mb-1">
-            <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
-              <Crown className="w-4 h-4 text-gray-400" />
+          <div className="flex items-center gap-2">
+            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${isMonthly ? "border-gray-400" : "border-black bg-neutral-100 shadow-sm"}`}>
+              <Crown className={`w-4 h-4 ${isMonthly ? "text-gray-400" : "text-black drop-shadow-sm"}`} />
             </div>
           </div>
 
-          {/* Plan name */}
-          <div>
-            <h4 className="text-sm font-medium text-black">Suscripcion actual: Premium {currentPlan.period}</h4>
-            {isMonthly ? (
-              <>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-medium text-black">$80</span>
-                  <span className="text-xs text-neutral-400 line-through">$120</span>
-                  <span className="text-xs text-neutral-400">/mes</span>
-                </div>
-                <p className="text-[11px] text-emerald-700 font-medium mt-1">Ahorras $40</p>
-              </>
-            ) : (
-              <>
-                <div className="flex items-baseline gap-2 mt-1">
-                  <span className="text-2xl font-medium text-black">$800</span>
-                  <span className="text-xs text-neutral-400 line-through">$1,200</span>
-                  <span className="text-xs text-neutral-400">/año</span>
-                </div>
-                <p className="text-[11px] text-emerald-700 font-medium mt-1">Ahorras $400</p>
-              </>
+          {/* Plan name as main title */}
+          <div className="mt-2">
+            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion {isMonthly ? "Premium" : "Elite"}</p>
+            <h3 className="text-xl font-semibold text-black">{currentPlan.name}</h3>
+            <div className="flex items-baseline gap-2 mt-1">
+              <span className="text-3xl font-medium text-black">{currentPlan.price}</span>
+              <span className="text-xs text-neutral-400 line-through">{currentPlan.originalPrice}</span>
+              <span className="text-xs text-neutral-400">{currentPlan.period}</span>
+            </div>
+            {currentPlan.savings && (
+              <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{currentPlan.savings}</p>
             )}
-            <p className="text-[11px] text-neutral-400 mt-1">
+            <p className="text-[11px] text-neutral-500 mt-1">
               {status.currentPeriodEnd
                 ? `Vence el ${new Date(status.currentPeriodEnd).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`
                 : currentPlan.description}
@@ -316,168 +313,120 @@ export default function SubscriptionSettings() {
           </div>
 
           {/* Features list */}
-          <ul className="space-y-1.5">
+          <ul className="space-y-0.5 mt-2 flex-1">
             {currentPlan.features.map((f) => (
-              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                 <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
                 {f}
               </li>
             ))}
           </ul>
 
-          {/* Cancel warning */}
-          {status.cancelAtPeriodEnd && (
-            <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-800">
-                Tu plan se cancelara automaticamente al final del periodo actual.
-              </p>
-            </div>
-          )}
-
-          {/* Action buttons — hidden for annual plans (no refund, no cancel) */}
+          {/* Action buttons — only for monthly */}
           {!status.cancelAtPeriodEnd && isMonthly && (
-            <div className="flex flex-wrap gap-2 pt-1">
-              <Button
-                variant="outline"
-                onClick={() => portalMut.mutate()}
-                disabled={portalMut.isPending}
-                className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-8 flex-1"
-              >
-                {portalMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <ExternalLink className="w-3 h-3 mr-1" />}
-                Gestionar tarjeta
-              </Button>
-
+            <>
+              <div className="mt-6" />
               {!confirmCancel ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setConfirmCancel(true)}
-                  className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-8 flex-1"
-                >
-                  Cancelar
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    variant="outline"
+                    onClick={() => portalMut.mutate()}
+                    disabled={portalMut.isPending}
+                    className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1"
+                  >
+                    {portalMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <ExternalLink className="w-3 h-3 mr-1" />}
+                    Gestionar tarjeta
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmCancel(true)}
+                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-9 flex-1"
+                  >
+                    Cancelar
+                  </Button>
+                </div>
               ) : (
                 <div className="space-y-2 w-full">
                   <p className="text-xs text-neutral-500">¿Seguro? Tu acceso sigue hasta el final del periodo.</p>
                   <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() => setConfirmCancel(false)}
-                      className="text-xs h-8 border-neutral-200"
-                    >
-                      Volver
-                    </Button>
-                    <Button
-                      onClick={() => cancelMut.mutate()}
-                      disabled={cancelMut.isPending}
-                      className="bg-red-600 hover:bg-red-700 text-white text-xs h-8"
-                    >
+                    <Button variant="outline" onClick={() => setConfirmCancel(false)} className="text-xs h-9 border-neutral-200 flex-1">Volver</Button>
+                    <Button onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending} className="bg-red-600 hover:bg-red-700 text-white text-xs h-9 flex-1">
                       {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
                     </Button>
                   </div>
                 </div>
               )}
-            </div>
+            </>
+          )}
+
+          {/* Annual no-cancel message */}
+          {!isMonthly && (
+            <>
+              <div className="mt-6" />
+              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-xs text-amber-700"><strong>Plan Anual activo.</strong> No es posible cambiar a mensual. El plan anual no tiene devolucion.</p>
+              </div>
+            </>
           )}
         </div>
-
-        {/* No downgrade message — Only for annual subscribers */}
-        {!isMonthly && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <p className="text-xs text-amber-700">
-              <strong>Plan Anual activo.</strong> No es posible cambiar a mensual. El plan anual no tiene devolucion.
-            </p>
-          </div>
-        )}
 
         {/* Upgrade Section — Only for monthly subscribers */}
         {isMonthly && (
           <div className="space-y-3">
             {!showUpgrade ? (
-              <Button
-                onClick={() => setShowUpgrade(true)}
-                variant="outline"
-                className="w-full h-9 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800"
-              >
+              <Button onClick={() => setShowUpgrade(true)} variant="outline" className="w-full h-9 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800">
                 <Zap className="w-4 h-4 mr-1.5" /> Upgrade plan
               </Button>
             ) : (
-              /* Upgrade Card — Same design as active subscription but with black illuminated crown */
-              <div className="border rounded-lg p-5 space-y-4 bg-white relative">
-                {/* Upgrade badge */}
-                <div className="absolute -top-2.5 right-4">
-                  <Badge className="bg-black text-white text-[10px] px-2 py-0.5">Upgrade</Badge>
+              /* Upgrade Card — Same design */
+              <div className="border rounded-xl p-6 bg-white relative flex flex-col">
+                <div className="absolute -top-2.5 right-3">
+                  <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">Upgrade</Badge>
                 </div>
 
-                {/* Black illuminated crown */}
-                <div className="flex items-center gap-2 mb-1">
+                <div className="flex items-center gap-2">
                   <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
                     <Crown className="w-4 h-4 text-black drop-shadow-sm" />
                   </div>
                 </div>
 
-                {/* Plan name */}
-                <div>
-                  <h4 className="text-sm font-medium text-black">Upgrade a: Anual elite suscripcion</h4>
+                <div className="mt-2">
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Elite</p>
+                  <h3 className="text-xl font-semibold text-black">Anual</h3>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-2xl font-medium text-black">{PLAN_ANNUAL.price}</span>
+                    <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
                   </div>
-                  <p className="text-[11px] text-neutral-400 mt-1">{PLAN_ANNUAL.description}</p>
+                  <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
+                  <p className="text-[11px] text-neutral-500 mt-1">{PLAN_ANNUAL.description}</p>
                 </div>
 
-                {/* Savings badge */}
-                <p className="text-[11px] text-emerald-700 font-medium bg-emerald-50 px-2 py-1 rounded">{PLAN_ANNUAL.savings}</p>
-
-                {/* Features list */}
-                <ul className="space-y-1.5">
+                <ul className="space-y-0.5 mt-2 flex-1">
                   {PLAN_ANNUAL.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600">
+                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
                       <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
                       {f}
                     </li>
                   ))}
                 </ul>
 
-                {/* Pay difference note */}
-                <p className="text-[11px] text-neutral-500">
+                <p className="text-[11px] text-neutral-500 mt-3">
                   Solo pagas <strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong> de diferencia. Los <strong>{PLAN_MONTHLY.price}</strong> ya pagados se aplican como credito.
                 </p>
 
-                {/* Action buttons */}
-                <div className="flex flex-wrap gap-2 pt-1">
+                <div className="mt-6" />
+                <div className="flex flex-wrap gap-2">
+                  <Button variant="outline" onClick={() => setShowUpgrade(false)} className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1">Cancelar</Button>
                   <Button
-                    variant="outline"
-                    onClick={() => setShowUpgrade(false)}
-                    className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-8 flex-1"
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={() => {
-                      upgradeMut.mutate({ from: "monthly", to: "annual" }, {
-                        onSuccess: (data) => {
-                          if (data.success && data.url) {
-                            // Redirect to Stripe Checkout (supports Apple Pay, Link, etc.)
-                            window.location.href = data.url;
-                          } else {
-                            toast.error(data.error || "Error al procesar");
-                          }
-                        },
-                        onError: (err) => {
-                          toast.error(err.message || "Error al procesar el upgrade");
-                        },
-                      });
-                    }}
+                    onClick={() => upgradeMut.mutate({ from: "monthly", to: "annual" }, {
+                      onSuccess: (data) => { if (data.success && data.url) window.location.href = data.url; },
+                    })}
                     disabled={upgradeMut.isPending}
-                    className="bg-black hover:bg-neutral-800 text-white text-xs h-8 flex-1"
+                    className="bg-black hover:bg-neutral-800 text-white text-xs h-9 flex-1"
                   >
-                    {upgradeMut.isPending ? (
-                      <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Procesando...</>
-                    ) : (
-                      `Pagar $${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}`
-                    )}
+                    {upgradeMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Crown className="w-3.5 h-3.5 text-yellow-500 mr-1" />}
+                    Upgrade a Anual
                   </Button>
                 </div>
               </div>
