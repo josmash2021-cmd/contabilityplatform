@@ -8,6 +8,7 @@ import { toast } from "sonner";
 import { useAuth } from "@/hooks/useAuth";
 import { Building2, CreditCard, Receipt, Wifi, Unlink, Loader2, Crown, ChevronDown, ChevronUp, User, Mail, Lock } from "lucide-react";
 import SubscriptionSettings from "@/components/SubscriptionSettings";
+import AddressAutocomplete from "@/components/AddressAutocomplete";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 
 function CloverSettings() {
@@ -213,8 +214,17 @@ function BusinessSettings() {
             <CardContent className="space-y-4">
               {/* Company Name */}
               <div><label className="text-xs text-neutral-400 mb-1 block">Nombre del negocio</label><Input value={form.companyName} onChange={(e) => setForm({ ...form, companyName: e.target.value })} className="border-neutral-200 text-sm" /></div>
-              {/* Address row */}
-              <div><label className="text-xs text-neutral-400 mb-1 block">Direccion</label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-neutral-200 text-sm" /></div>
+              {/* Address row with Google Maps autocomplete */}
+              <div>
+                <label className="text-xs text-neutral-400 mb-1 block">Direccion</label>
+                <AddressAutocomplete
+                  value={form.address}
+                  onChange={(val) => setForm({ ...form, address: val })}
+                  onPlaceSelected={(place) => setForm({ ...form, address: place.address, city: place.city, state: place.state, zipCode: place.zipCode })}
+                  className="border-neutral-200 text-sm"
+                  placeholder="Empieza a escribir la direccion..."
+                />
+              </div>
               {/* City / State / ZIP */}
               <div className="grid grid-cols-3 gap-3">
                 <div><label className="text-xs text-neutral-400 mb-1 block">Ciudad</label><Input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} className="border-neutral-200 text-sm" /></div>
