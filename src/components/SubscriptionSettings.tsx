@@ -375,7 +375,7 @@ export default function SubscriptionSettings() {
         {isMonthly && (
           <div className="space-y-3">
             {!showUpgrade ? (
-              <Button onClick={() => setShowUpgrade(true)} variant="outline" className="w-full h-9 text-xs border-emerald-200 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800">
+              <Button onClick={() => setShowUpgrade(true)} className="w-full h-9 text-xs bg-black hover:bg-neutral-800 text-white">
                 <Zap className="w-4 h-4 mr-1.5" /> Upgrade plan
               </Button>
             ) : (
