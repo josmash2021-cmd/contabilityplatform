@@ -30,11 +30,24 @@ export const settingsRouter = createRouter({
     }
     return { success: true, results };
   }),
-  // ── get: return ONLY the current user's settings ──
+  // ── get: return ONLY the current user's settings + auto-migrate columns ──
   get: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return null;
     const db = getDb();
     const userId = ctx.user.id;
+
+    // Auto-migrate: silently add missing columns (unitNumber, etc.)
+    const migrateCols = [
+      { name: "addressType", def: "VARCHAR(50)" },
+      { name: "unitNumber", def: "VARCHAR(50)" },
+      { name: "city", def: "VARCHAR(100)" },
+      { name: "state", def: "VARCHAR(100)" },
+      { name: "zipCode", def: "VARCHAR(20)" },
+    ];
+    for (const col of migrateCols) {
+      try { await db.execute(sql.raw(`ALTER TABLE companySettings ADD COLUMN ${col.name} ${col.def}`)); } catch { /* already exists */ }
+    }
+
     const settings = await db.select().from(companySettings)
       .where(eq(companySettings.userId, userId))
       .limit(1);
