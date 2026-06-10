@@ -4,6 +4,7 @@ import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -341,6 +342,9 @@ export default function Bank() {
     { year: parseInt(selectedYear), accountId: accountIdNum },
     { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
+  // Elite Health Monitor — watches bank connection health in real-time
+  const bankHealth = useBankHealthMonitor(accountIdNum);
+
   const { data: diagnosis, isLoading: loadingDiagnosis, refetch: refetchDiagnosis } = trpc.bank.diagnoseMonth.useQuery(
     { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
     { enabled: false } // manual only
@@ -400,7 +404,12 @@ export default function Bank() {
   });
 
   const disconnectMut = trpc.bank.disconnect.useMutation({
-    onSuccess: () => { setAutoSyncDone(false); setConfirmDisconnect(false); handleSuccess(); },
+    onSuccess: () => {
+      setAutoSyncDone(false);
+      setConfirmDisconnect(false);
+      autoSyncFiredRef.current = false; // ← RESET: allow auto-sync on next connect
+      handleSuccess();
+    },
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
@@ -458,6 +467,8 @@ export default function Bank() {
   useEffect(() => {
     if (!hasBankConnected || !accountIdNum) return;
     const interval = setInterval(() => {
+      // Skip if a sync is already in progress (prevents duplicate syncs)
+      if (syncMutation.isPending || syncing) return;
       syncMutation.mutate({
         year: parseInt(selectedYear),
         month: parseInt(selectedMonth),
@@ -465,7 +476,7 @@ export default function Bank() {
       });
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [hasBankConnected, accountIdNum, selectedYear, selectedMonth, syncMutation]);
+  }, [hasBankConnected, accountIdNum, selectedYear, selectedMonth, syncMutation, syncing]);
 
   // ─── AUTO-FIX CATEGORIES: Silently correct miscategorized transactions ───
   const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
@@ -504,6 +515,14 @@ export default function Bank() {
     }, 30000);
     return () => clearInterval(interval);
   }, [hasBankConnected, refreshMutation]);
+
+  // Auto-invalidate month/year data when selectors change
+  useEffect(() => {
+    if (hasBankConnected && accountIdNum) {
+      utils.bank.getMonthData.invalidate();
+      utils.bank.getYearData.invalidate();
+    }
+  }, [selectedMonth, selectedYear, accountIdNum, hasBankConnected, utils]);
 
   useEffect(() => { if (account) setIsConnecting(false); }, [account]);
   useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
@@ -695,6 +714,17 @@ export default function Bank() {
                 )
               )}
               {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> Reconexion necesaria</Badge>}
+              {/* Health Monitor Status Indicator */}
+              {isPlaidConnected && (
+                <div
+                  title={bankHealth.message}
+                  className={`w-2.5 h-2.5 rounded-full ${
+                    bankHealth.status === "healthy" ? "bg-emerald-400" :
+                    bankHealth.status === "warning" ? "bg-amber-400" :
+                    bankHealth.status === "critical" ? "bg-red-500 animate-pulse" : "bg-neutral-300"
+                  }`}
+                />
+              )}
             </div>
             {account && (
               <p className="text-sm text-neutral-400 mt-1">
