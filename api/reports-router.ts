@@ -124,20 +124,20 @@ export const reportsRouter = createRouter({
         // Table may not exist or no bank connected
       }
 
-      const totalRevenue = salesRevenue + bankRevenue;
-      const totalExpenses = operExpenses + bankExpenses;
-      const businessExpenses = operExpenses; // Only business operational expenses, NOT personal bank expenses
-      const netIncome = totalRevenue - totalExpenses;
-      const businessNetIncome = salesRevenue - businessExpenses; // Net income from business operations only
+      // Reports page shows ONLY business sales and operational expenses
+      // Bank transactions (Zelle, deposits, transfers) are personal and NOT included here
+      const totalRevenue = salesRevenue;
+      const totalExpenses = operExpenses;
+      const netIncome = salesRevenue - operExpenses;
 
       return {
         period: { start: startDate, end: endDate },
         totalRevenue,
         totalExpenses,
-        businessExpenses,
-        businessNetIncome,
+        businessExpenses: operExpenses,
+        businessNetIncome: netIncome,
         netIncome,
-        breakdown: { salesRevenue, bankRevenue, operExpenses, bankExpenses },
+        breakdown: { salesRevenue, bankRevenue: 0, operExpenses, bankExpenses: 0 },
       };
     }),
 
