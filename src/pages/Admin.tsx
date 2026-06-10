@@ -15,7 +15,7 @@ import {
   Crown, Calendar, Trash2, AlertTriangle, Wrench,
   Download, ChevronLeft, ChevronRight, RefreshCw,
   Building2, ShoppingCart, TrendingUp,
-  Activity, Clock, Banknote, ArrowDownRight, Wallet
+  Activity, Clock
 } from "lucide-react";
 
 export default function Admin() {
@@ -28,14 +28,9 @@ export default function Admin() {
   const [grantPlan, setGrantPlan] = useState<"monthly" | "annual">("annual");
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showActivityUser, setShowActivityUser] = useState<any>(null);
-  const [showPayoutDialog, setShowPayoutDialog] = useState(false);
-  const [payoutAmount, setPayoutAmount] = useState("");
-  const [payoutMethod, setPayoutMethod] = useState("transfer");
-  const [payoutDestination, setPayoutDestination] = useState("");
-  const [payoutNote, setPayoutNote] = useState("");
 
   // Queries
-  const { data: stats, refetch: refetchStats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin });
+  const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin });
   const { data: usersData, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(
     { page, limit: 50, search: searchTerm || undefined, mode: modeFilter },
     { enabled: isAdmin, keepPreviousData: true }
@@ -86,32 +81,6 @@ export default function Admin() {
       } else {
         toast.error(data.error);
       }
-    },
-  });
-
-  const { data: payoutsList, refetch: refetchPayouts } = trpc.admin.listPayouts.useQuery(undefined, { enabled: isAdmin });
-
-  const createPayout = trpc.admin.createPayout.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        toast.success(data.message);
-        refetchPayouts();
-        refetchStats?.();
-        setShowPayoutDialog(false);
-        setPayoutAmount("");
-        setPayoutDestination("");
-        setPayoutNote("");
-      } else {
-        toast.error(data.error);
-      }
-    },
-  });
-
-  const deletePayout = trpc.admin.deletePayout.useMutation({
-    onSuccess: (data) => {
-      toast.success(data.message);
-      refetchPayouts();
-      refetchStats?.();
     },
   });
 
@@ -276,136 +245,6 @@ export default function Admin() {
           </CardContent>
         </Card>
       </div>
-
-      {/* ═══════ FINANZAS ═══════ */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-base font-semibold text-black">Finanzas</h2>
-          <p className="text-xs text-neutral-400 mt-0.5">Gestion de ingresos y retiros</p>
-        </div>
-        <Button
-          variant="default"
-          size="sm"
-          onClick={() => setShowPayoutDialog(true)}
-          disabled={parseFloat(stats?.available || "0") <= 0}
-          className="gap-2 text-xs bg-black hover:bg-neutral-800 text-white"
-        >
-          <Banknote className="w-3.5 h-3.5" />
-          Registrar retiro
-        </Button>
-      </div>
-
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
-        {/* Available */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Disponible</p>
-                <p className="text-2xl font-bold text-emerald-600">${stats?.available || "0.00"}</p>
-              </div>
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <Wallet className="w-4.5 h-4.5 text-emerald-500" />
-              </div>
-            </div>
-            <div className="mt-3 text-xs text-neutral-400">
-              Ingresos - Retirado
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Withdrawn */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Retirado</p>
-                <p className="text-2xl font-bold text-neutral-800">${stats?.totalPayouts || "0.00"}</p>
-              </div>
-              <div className="w-9 h-9 rounded-lg bg-amber-50 flex items-center justify-center">
-                <ArrowDownRight className="w-4.5 h-4.5 text-amber-500" />
-              </div>
-            </div>
-            <div className="mt-3 text-xs text-neutral-400">
-              {payoutsList?.length || 0} retiros registrados
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Pending */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow col-span-2 lg:col-span-1">
-          <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Pendiente en Stripe</p>
-                <p className="text-2xl font-bold text-blue-600">${stats?.available || "0.00"}</p>
-              </div>
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <CreditCard className="w-4.5 h-4.5 text-blue-500" />
-              </div>
-            </div>
-            <div className="mt-3 text-xs text-neutral-400">
-              Transfierelo a tu banco desde Stripe
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payouts history */}
-      {payoutsList && payoutsList.length > 0 && (
-        <Card className="border-neutral-200/80 shadow-sm">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base font-semibold flex items-center gap-2">
-              <Banknote className="w-4 h-4" />
-              Historial de retiros
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-0">
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-neutral-100 text-neutral-400 text-left text-xs uppercase tracking-wider">
-                    <th className="pb-3 font-medium">Fecha</th>
-                    <th className="pb-3 font-medium">Monto</th>
-                    <th className="pb-3 font-medium">Metodo</th>
-                    <th className="pb-3 font-medium">Destino</th>
-                    <th className="pb-3 font-medium">Nota</th>
-                    <th className="pb-3 font-medium text-right">Accion</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-neutral-50">
-                  {payoutsList.map((p: any) => (
-                    <tr key={p.id} className="hover:bg-neutral-50/60 transition-colors">
-                      <td className="py-3 text-neutral-500 text-xs">
-                        {p.createdAt ? new Date(p.createdAt).toLocaleDateString("es") : "—"}
-                      </td>
-                      <td className="py-3 font-semibold text-black">${p.amount}</td>
-                      <td className="py-3 text-xs capitalize">{p.method}</td>
-                      <td className="py-3 text-neutral-500 text-xs">{p.destination || "—"}</td>
-                      <td className="py-3 text-neutral-400 text-xs max-w-[200px] truncate">{p.note || "—"}</td>
-                      <td className="py-3 text-right">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                          onClick={() => {
-                            if (confirm("Eliminar este retiro del registro?")) {
-                              deletePayout.mutate({ id: p.id });
-                            }
-                          }}
-                          title="Eliminar"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* ═══════ MAIN TABS ═══════ */}
       <Tabs defaultValue="users" className="space-y-4">
@@ -1016,101 +855,6 @@ export default function Admin() {
         </DialogContent>
       </Dialog>
 
-      {/* ═══════ PAYOUT DIALOG ═══════ */}
-      <Dialog open={showPayoutDialog} onOpenChange={setShowPayoutDialog}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <Banknote className="w-5 h-5 text-emerald-600" />
-              Registrar retiro
-            </DialogTitle>
-            <DialogDescription>
-              Disponible: <span className="font-semibold text-emerald-600">${stats?.available || "0.00"}</span>
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-2 space-y-4">
-            {/* Amount */}
-            <div>
-              <label className="text-xs font-medium text-neutral-600 block mb-1.5">Monto *</label>
-              <Input
-                type="number"
-                min={0.01}
-                step={0.01}
-                max={parseFloat(stats?.available || "0")}
-                placeholder="0.00"
-                value={payoutAmount}
-                onChange={(e) => setPayoutAmount(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-            {/* Method */}
-            <div>
-              <label className="text-xs font-medium text-neutral-600 block mb-1.5">Metodo *</label>
-              <div className="flex items-center border rounded-lg overflow-hidden">
-                {(["transfer", "zelle", "wire", "cash", "other"] as const).map((m) => (
-                  <button
-                    key={m}
-                    onClick={() => setPayoutMethod(m)}
-                    className={`flex-1 px-3 py-2 text-xs font-medium capitalize transition-all ${
-                      payoutMethod === m ? "bg-black text-white" : "text-neutral-500 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {m === "transfer" ? "Transferencia" : m === "wire" ? "Wire" : m === "other" ? "Otro" : m}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {/* Destination */}
-            <div>
-              <label className="text-xs font-medium text-neutral-600 block mb-1.5">Destino (banco / cuenta)</label>
-              <Input
-                placeholder="Ej: Chase Business Checking"
-                value={payoutDestination}
-                onChange={(e) => setPayoutDestination(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-            {/* Note */}
-            <div>
-              <label className="text-xs font-medium text-neutral-600 block mb-1.5">Nota</label>
-              <Input
-                placeholder="Opcional..."
-                value={payoutNote}
-                onChange={(e) => setPayoutNote(e.target.value)}
-                className="text-sm"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPayoutDialog(false)} className="text-sm">
-              Cancelar
-            </Button>
-            <Button
-              onClick={() => {
-                const amount = parseFloat(payoutAmount);
-                if (isNaN(amount) || amount <= 0) {
-                  toast.error("Monto invalido");
-                  return;
-                }
-                if (amount > parseFloat(stats?.available || "0")) {
-                  toast.error("Fondos insuficientes");
-                  return;
-                }
-                createPayout.mutate({
-                  amount,
-                  method: payoutMethod,
-                  destination: payoutDestination || undefined,
-                  note: payoutNote || undefined,
-                });
-              }}
-              disabled={createPayout.isPending || !payoutAmount || parseFloat(payoutAmount) <= 0}
-              className="bg-emerald-600 hover:bg-emerald-700 text-white text-sm"
-            >
-              {createPayout.isPending ? "Registrando..." : "Registrar retiro"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
