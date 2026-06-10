@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Shield, Users, CreditCard, Ban, CheckCircle, Lock, Unlock,
@@ -41,6 +42,7 @@ export default function Admin() {
 
   const users = usersData?.users ?? [];
   const pagination = usersData?.pagination;
+  const utils = trpc.useUtils();
 
   // Mutations
   const toggleBlock = trpc.admin.toggleUserBlock.useMutation({
@@ -101,14 +103,7 @@ export default function Admin() {
     );
   }
 
-  const filteredUsers = users?.filter((u) => {
-    if (!searchTerm) return true;
-    const term = searchTerm.toLowerCase();
-    return (
-      (u.name || "").toLowerCase().includes(term) ||
-      (u.email || "").toLowerCase().includes(term)
-    );
-  });
+  // Backend already filters by searchTerm — use results directly
 
   const getStatusBadge = (user: any) => {
     if (user.isBlocked) return <Badge variant="destructive" className="text-xs"><Ban className="w-3 h-3 mr-1" />Bloqueado</Badge>;
@@ -272,7 +267,7 @@ export default function Admin() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-neutral-50">
-                    {filteredUsers?.map((user) => (
+                    {users?.map((user) => (
                       <tr key={user.id} className="hover:bg-neutral-50/50">
                         <td className="py-3">
                           <div className="flex items-center gap-2">
@@ -382,7 +377,7 @@ export default function Admin() {
                         </td>
                       </tr>
                     ))}
-                    {(!filteredUsers || filteredUsers.length === 0) && (
+                    {(!users || users.length === 0) && (
                       <tr>
                         <td colSpan={6} className="py-8 text-center text-neutral-400 text-sm">
                           No se encontraron usuarios
