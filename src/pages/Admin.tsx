@@ -11,22 +11,36 @@ import { toast } from "sonner";
 import {
   Shield, Users, CreditCard, Ban, CheckCircle, Lock, Unlock,
   Gift, Search, TrendingUp, DollarSign, Banknote, UserX, UserCheck,
-  Crown, Calendar, Trash2, AlertTriangle, Wrench, ToggleLeft, ToggleRight
+  Crown, Calendar, Trash2, AlertTriangle, Wrench, ToggleLeft, ToggleRight,
+  Download, ChevronLeft, ChevronRight, Filter, Receipt
 } from "lucide-react";
 
 export default function Admin() {
   const { isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState("");
+  const [modeFilter, setModeFilter] = useState<"all" | "business" | "personal">("all");
+  const [page, setPage] = useState(1);
   const [selectedUser, setSelectedUser] = useState<any>(null);
   const [showGrantDialog, setShowGrantDialog] = useState(false);
   const [grantPlan, setGrantPlan] = useState<"monthly" | "annual">("annual");
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
+  const [showActivityUser, setShowActivityUser] = useState<any>(null);
 
   // Queries
   const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin });
-  const { data: users, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(undefined, { enabled: isAdmin });
+  const { data: usersData, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(
+    { page, limit: 50, search: searchTerm || undefined, mode: modeFilter },
+    { enabled: isAdmin, keepPreviousData: true }
+  );
   const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin });
   const { data: maintenanceStatus, refetch: refetchMaintenance } = trpc.admin.maintenanceStatus.useQuery();
+  const { data: activityData, isLoading: activityLoading } = trpc.admin.userActivity.useQuery(
+    { userId: showActivityUser?.id ?? 0 },
+    { enabled: !!showActivityUser }
+  );
+
+  const users = usersData?.users ?? [];
+  const pagination = usersData?.pagination;
 
   // Mutations
   const toggleBlock = trpc.admin.toggleUserBlock.useMutation({
@@ -194,14 +208,53 @@ export default function Admin() {
                   <Users className="w-4 h-4" />
                   Usuarios registrados
                 </CardTitle>
-                <div className="relative">
-                  <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
-                  <Input
-                    placeholder="Buscar por nombre o email..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 w-full sm:w-64 text-sm"
-                  />
+                <div className="flex items-center gap-2">
+                  {/* Mode filter */}
+                  <div className="flex items-center border rounded-lg overflow-hidden">
+                    {(["all", "business", "personal"] as const).map((m) => (
+                      <button
+                        key={m}
+                        onClick={() => { setModeFilter(m); setPage(1); }}
+                        className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                          modeFilter === m ? "bg-black text-white" : "text-neutral-500 hover:bg-neutral-100"
+                        }`}
+                      >
+                        {m === "all" ? "Todos" : m === "business" ? "Negocio" : "Personal"}
+                      </button>
+                    ))}
+                  </div>
+                  {/* Search */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-neutral-400" />
+                    <Input
+                      placeholder="Buscar por nombre o email..."
+                      value={searchTerm}
+                      onChange={(e) => { setSearchTerm(e.target.value); setPage(1); }}
+                      className="pl-9 w-full sm:w-52 text-sm"
+                    />
+                  </div>
+                  {/* Export CSV */}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      utils.admin.exportUsers.fetch().then((data) => {
+                        if (data?.csv) {
+                          const blob = new Blob([data.csv], { type: "text/csv" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `usuarios-${new Date().toISOString().split("T")[0]}.csv`;
+                          a.click();
+                          URL.revokeObjectURL(url);
+                          toast.success(`${data.count} usuarios exportados`);
+                        }
+                      });
+                    }}
+                    className="text-xs h-8"
+                  >
+                    <Download className="w-3.5 h-3.5 mr-1" /> CSV
+                  </Button>
                 </div>
               </div>
             </CardHeader>
@@ -253,6 +306,17 @@ export default function Admin() {
                           <div className="flex items-center justify-end gap-1">
                             {!user.isAdmin && (
                               <>
+                                {/* View activity button */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                                  onClick={() => setShowActivityUser(user)}
+                                  title="Ver actividad reciente"
+                                >
+                                  <Receipt className="w-3.5 h-3.5 mr-1" />
+                                  <span className="text-xs">Actividad</span>
+                                </Button>
                                 {/* Grant subscription button */}
                                 {!user.isBlocked && !user.subscription && (
                                   <Button
@@ -327,6 +391,35 @@ export default function Admin() {
                     )}
                   </tbody>
                 </table>
+                {/* Pagination */}
+                {pagination && pagination.totalPages > 1 && (
+                  <div className="flex items-center justify-between pt-3 border-t border-neutral-100">
+                    <p className="text-xs text-neutral-400">
+                      {pagination.total} usuarios · Pagina {pagination.page} de {pagination.totalPages}
+                    </p>
+                    <div className="flex items-center gap-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={page <= 1}
+                        className="h-7 w-7 p-0"
+                      >
+                        <ChevronLeft className="w-4 h-4" />
+                      </Button>
+                      <span className="text-xs text-neutral-500 px-2">{page}</span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setPage(p => Math.min(pagination.totalPages, p + 1))}
+                        disabled={page >= pagination.totalPages}
+                        className="h-7 w-7 p-0"
+                      >
+                        <ChevronRight className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -541,6 +634,44 @@ export default function Admin() {
               {maintenanceStatus?.enabled ? "Desactivar mantenimiento" : "Activar mantenimiento"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Activity Dialog ── */}
+      <Dialog open={!!showActivityUser} onOpenChange={() => setShowActivityUser(null)}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle className="text-base font-medium flex items-center gap-2">
+              <Receipt className="w-4 h-4 text-neutral-400" />
+              Actividad reciente
+            </DialogTitle>
+            <DialogDescription>
+              {showActivityUser ? `${showActivityUser.name || showActivityUser.email} — Ultimas transacciones` : ""}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="max-h-[300px] overflow-y-auto">
+            {activityLoading ? (
+              <div className="flex justify-center py-4"><RefreshCw className="w-4 h-4 animate-spin text-neutral-400" /></div>
+            ) : !activityData || activityData.length === 0 ? (
+              <p className="text-sm text-neutral-400 text-center py-4">Sin actividad reciente</p>
+            ) : (
+              <div className="space-y-1">
+                {activityData.map((activity: any, i: number) => (
+                  <div key={i} className="flex items-center justify-between py-1.5 border-b border-neutral-50 last:border-0">
+                    <div className="min-w-0">
+                      <p className="text-xs text-neutral-800 truncate">{activity.description}</p>
+                      <p className="text-[10px] text-neutral-400">
+                        {activity.date ? new Date(activity.date).toLocaleDateString("es") : ""} · {activity.type === "bank" ? "Banco" : "Venta"}
+                      </p>
+                    </div>
+                    <span className={`text-xs font-medium shrink-0 ml-2 ${activity.amount >= 0 ? "text-emerald-600" : "text-red-600"}`}>
+                      {activity.amount >= 0 ? "+" : ""}{formatCurrency(activity.amount)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -429,6 +429,17 @@ export const companySettings = mysqlTable("companySettings", {
 export type CompanySetting = typeof companySettings.$inferSelect;
 export type InsertCompanySetting = typeof companySettings.$inferInsert;
 
+// ─── System Settings ───
+export const systemSettings = mysqlTable("systemSettings", {
+  id: serial("id").primaryKey(),
+  key: varchar("key", { length: 100 }).notNull().unique(),
+  value: text("value"),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+});
+
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = typeof systemSettings.$inferInsert;
+
 // ─── Clover Accounts ───
 export const cloverAccounts = mysqlTable("cloverAccounts", {
   id: serial("id").primaryKey(),
