@@ -679,9 +679,7 @@ export default function Bank() {
             )}
             <MonthSelector value={selectedMonth} onChange={setSelectedMonth} selectedYear={selectedYear} />
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
-            <Button onClick={handleSync} disabled={syncing || !hasAccount} className="bg-black text-white hover:bg-neutral-800 rounded-lg h-8 w-8 p-0 shrink-0" title="Sincronizar mes actual">
-              <RefreshCw className={`w-3.5 h-3.5 ${syncing ? "animate-spin" : ""}`} />
-            </Button>
+            {/* Auto-sync handled by autonomous agent — manual button removed */}
             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
             <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title="Importar estado de cuenta CSV">
               <Landmark className="w-3 h-3 mr-1" /> Importar CSV
@@ -852,14 +850,7 @@ export default function Bank() {
                     <p className="text-sm text-neutral-400">No hay transacciones sincronizadas para {(() => { const names = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]; return `${names[parseInt(selectedMonth)]} ${selectedYear}`; })()}</p>
                     {isPlaidConnected && (
                       <div className="flex flex-col items-center gap-2">
-                        <Button
-                          onClick={handleSync}
-                          disabled={syncing}
-                          className="bg-black text-white hover:bg-neutral-800 text-sm px-4 h-9 rounded-lg"
-                        >
-                          <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? "animate-spin" : ""}`} />
-                          {syncing ? "Sincronizando..." : "Sincronizar transacciones de este mes"}
-                        </Button>
+                        {/* Auto-sync handled by autonomous agent */}
                         <Button
                           onClick={() => { setShowDiagnosis(true); refetchDiagnosis(); }}
                           variant="ghost"
