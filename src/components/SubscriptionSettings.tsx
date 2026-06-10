@@ -8,7 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { toast } from "sonner";
-import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown } from "lucide-react";
+import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown, RefreshCw } from "lucide-react";
 
 // ── Shimmer animation styles for subscription titles ──
 const SHIMMER_CSS = `
@@ -249,6 +249,18 @@ export default function SubscriptionSettings() {
     },
   });
 
+  // ── Resume subscription — Re-activate a cancelled subscription ──
+  const resumeMut = trpc.subscription.resume.useMutation({
+    onSuccess: (data) => {
+      utils.subscription.status.invalidate();
+      utils.subscription.payments.invalidate();
+      toast.success(data.message || "Suscripcion reanudada exitosamente");
+    },
+    onError: (err) => {
+      toast.error(err.message || "No se pudo reanudar la suscripcion");
+    },
+  });
+
   if (statusLoading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -272,11 +284,27 @@ export default function SubscriptionSettings() {
           </div>
         )}
 
-        {/* Cancel warning */}
+        {/* Cancel warning + Resume button */}
         {status.cancelAtPeriodEnd && (
-          <div className="flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
-            <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-amber-800">Tu plan se cancelara automaticamente al final del periodo actual.</p>
+          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
+              <p className="text-xs text-amber-800">
+                Tu plan se cancelara automaticamente al final del periodo actual.
+                Puedes reanudarla ahora y seguir disfrutando de todos los beneficios.
+              </p>
+            </div>
+            <Button
+              onClick={() => resumeMut.mutate()}
+              disabled={resumeMut.isPending}
+              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium"
+            >
+              {resumeMut.isPending ? (
+                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Reanudando...</>
+              ) : (
+                <><RefreshCw className="w-3.5 h-3.5 mr-1" /> Reanudar suscripcion</>
+              )}
+            </Button>
           </div>
         )}
 

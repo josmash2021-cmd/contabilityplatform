@@ -567,6 +567,43 @@ export const subscriptionRouter = createRouter({
     return { success: true };
   }),
 
+  // ── Resume subscription — Re-activate a cancelled subscription ──
+  resume: authedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    const userId = Number(ctx.user.id);
+
+    // Find latest subscription
+    const subs = await db.select().from(subscriptions)
+      .where(eq(subscriptions.userId, userId))
+      .orderBy(desc(subscriptions.createdAt))
+      .limit(1);
+
+    const sub = subs[0];
+    if (!sub) throw new Error("No tienes una suscripcion");
+    if (!sub.cancelAtPeriodEnd) throw new Error("Tu suscripcion ya esta activa");
+
+    // Re-activate in Stripe: cancel_at_period_end = false
+    if (sub.stripeSubscriptionId) {
+      try {
+        const stripe = getStripe();
+        await stripe.subscriptions.update(sub.stripeSubscriptionId, {
+          cancel_at_period_end: false,
+        });
+      } catch (err: any) {
+        console.error("[resume] Stripe error:", err.message);
+        throw new Error("No se pudo reanudar la suscripcion en Stripe");
+      }
+    }
+
+    // Update DB: back to active
+    await db.update(subscriptions).set({
+      status: "active",
+      cancelAtPeriodEnd: false,
+    }).where(eq(subscriptions.id, sub.id));
+
+    return { success: true, message: "Suscripcion reanudada. Se seguira cobrando mensualmente." };
+  }),
+
   // ── Verify subscription — Agent finds lost subscriptions ──
   verify: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null };
