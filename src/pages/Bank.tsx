@@ -342,8 +342,8 @@ export default function Bank() {
     { year: parseInt(selectedYear), accountId: accountIdNum },
     { enabled: hasBankConnected && !!account && !!accountIdNum }
   );
-  // Elite Health Monitor — watches bank connection health in real-time
-  const bankHealth = useBankHealthMonitor(accountIdNum);
+  // Elite Health Monitor — autonomous agent that acts without user intervention
+  const bankHealth = useBankHealthMonitor(accountIdNum, selectedYear, selectedMonth);
 
   const { data: diagnosis, isLoading: loadingDiagnosis, refetch: refetchDiagnosis } = trpc.bank.diagnoseMonth.useQuery(
     { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
@@ -714,16 +714,21 @@ export default function Bank() {
                 )
               )}
               {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> Reconexion necesaria</Badge>}
-              {/* Health Monitor Status Indicator */}
+              {/* Autonomous Agent Status Indicator */}
               {isPlaidConnected && (
-                <div
-                  title={bankHealth.message}
-                  className={`w-2.5 h-2.5 rounded-full ${
-                    bankHealth.status === "healthy" ? "bg-emerald-400" :
-                    bankHealth.status === "warning" ? "bg-amber-400" :
-                    bankHealth.status === "critical" ? "bg-red-500 animate-pulse" : "bg-neutral-300"
-                  }`}
-                />
+                <div className="flex items-center gap-1.5">
+                  <div
+                    title={bankHealth.message}
+                    className={`w-2.5 h-2.5 rounded-full ${
+                      bankHealth.status === "healthy" ? "bg-emerald-400" :
+                      bankHealth.status === "warning" ? "bg-amber-400 animate-pulse" :
+                      "bg-neutral-300"
+                    }`}
+                  />
+                  {bankHealth.pendingSync && (
+                    <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />
+                  )}
+                </div>
               )}
             </div>
             {account && (
