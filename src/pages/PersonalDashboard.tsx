@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useNavigate } from "react-router";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
 
 const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
   zelle_income: { label: "Zelle Recibidos", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
@@ -132,6 +133,10 @@ export default function PersonalDashboard() {
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
   const hasAutoSelected = useRef(false);
   const utils = trpc.useUtils();
+
+  // Elite Autonomous Agent — handles all auto-sync, auto-fix, auto-reconnect
+  const accountIdNum = selectedAccountId ? parseInt(selectedAccountId) : undefined;
+  const bankHealth = useBankHealthMonitor(accountIdNum, selectedYear, selectedMonth);
 
   // Load selected account from localStorage on mount
   useEffect(() => {
@@ -370,10 +375,19 @@ export default function PersonalDashboard() {
             <SelectTrigger className="h-9 w-[88px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
             <SelectContent>{[2026, 2025, 2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
           </Select>
-          <Button onClick={() => refreshMutation.mutate()} disabled={refreshMutation.isPending} variant="outline" size="sm" className="h-9 px-2.5 border-neutral-200">
-            {refreshMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-          </Button>
-          {/* Salir button next to sync */}
+          {/* Autonomous agent status indicator */}
+          <div className="flex items-center gap-1.5">
+            <div
+              title={bankHealth.message}
+              className={`w-2.5 h-2.5 rounded-full ${
+                bankHealth.status === "healthy" ? "bg-emerald-400" :
+                bankHealth.status === "warning" ? "bg-amber-400 animate-pulse" :
+                "bg-neutral-300"
+              }`}
+            />
+            {bankHealth.pendingSync && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
+          </div>
+          {/* Disconnect button */}
           {accounts.length > 0 && (
             confirmDisconnect ? (
               <div className="flex items-center gap-1">
