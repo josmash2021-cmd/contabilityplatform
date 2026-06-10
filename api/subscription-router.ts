@@ -1053,14 +1053,37 @@ export const subscriptionRouter = createRouter({
     }),
 
   // ── Admin: Revoke subscription from a user ──
+  // Cancels in Stripe first (if linked), then removes from local DB.
   revokeSubscription: adminQuery
     .input(z.object({ userId: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
       try {
-        // Delete subscription
+        // Find the subscription first
+        const subs = await db.select().from(subscriptions)
+          .where(eq(subscriptions.userId, input.userId))
+          .orderBy(desc(subscriptions.createdAt))
+          .limit(1);
+
+        const sub = subs[0];
+        if (!sub) {
+          return { success: false, error: "El usuario no tiene una suscripcion activa" };
+        }
+
+        // Cancel in Stripe if linked
+        if (sub.stripeSubscriptionId) {
+          try {
+            const stripe = getStripe();
+            await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+          } catch (stripeErr: any) {
+            console.error("[revokeSubscription] Stripe error:", stripeErr.message);
+            // Continue — we still clean up our DB even if Stripe fails
+          }
+        }
+
+        // Delete from local DB
         await db.delete(subscriptions).where(eq(subscriptions.userId, input.userId));
-        return { success: true, message: "Suscripcion eliminada" };
+        return { success: true, message: "Suscripcion revocada correctamente" };
       } catch (err: any) {
         console.error("[revokeSubscription] Error:", err.message);
         return { success: false, error: err.message || "Error al revocar suscripcion" };
