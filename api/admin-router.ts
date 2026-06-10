@@ -295,6 +295,42 @@ export const adminRouter = createRouter({
       return activities;
     }),
 
+  // ── Revoke a user's subscription ──
+  revokeSubscription: adminQuery
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const userId = input.userId;
+
+      // Find the subscription
+      const subs = await db.select().from(subscriptions)
+        .where(eq(subscriptions.userId, userId))
+        .orderBy(desc(subscriptions.createdAt))
+        .limit(1);
+
+      const sub = subs[0];
+      if (!sub) throw new Error("El usuario no tiene una suscripcion");
+
+      // Cancel in Stripe if exists
+      if (sub.stripeSubscriptionId) {
+        try {
+          const stripe = getStripe();
+          await stripe.subscriptions.cancel(sub.stripeSubscriptionId);
+        } catch (err: any) {
+          console.error("[revoke] Stripe error:", err.message);
+          // Continue even if Stripe fails — we still update our DB
+        }
+      }
+
+      // Update DB to inactive
+      await db.update(subscriptions).set({
+        status: "canceled",
+        cancelAtPeriodEnd: false,
+      }).where(eq(subscriptions.id, sub.id));
+
+      return { success: true, message: "Suscripcion revocada correctamente" };
+    }),
+
   // ── Toggle maintenance mode (persisted in DB) ──
   toggleMaintenance: adminQuery
     .input(z.object({
