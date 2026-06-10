@@ -69,6 +69,7 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
   const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastFixRef = useRef<Map<number, number>>(new Map());
   const lastSyncRef = useRef<Map<number, number>>(new Map());
+  const hasSyncedRecentRef = useRef<Map<number, boolean>>(new Map()); // Track if initial sync was done
   const prevAccountRef = useRef<number | undefined>(undefined);
 
   // Poll for data
@@ -86,9 +87,12 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
   useEffect(() => {
     if (accountId !== prevAccountRef.current) {
       prevAccountRef.current = accountId;
-      // Don't reset prevTxCount — we want to detect changes from the old account
-      // But DO reset consecutive errors for the new account
-      if (accountId) consecutiveErrorsRef.current.set(accountId, 0);
+      // Reset consecutive errors for the new account
+      if (accountId) {
+        consecutiveErrorsRef.current.set(accountId, 0);
+        // Reset sync flag so new account gets its initial sync
+        hasSyncedRecentRef.current.set(accountId, false);
+      }
     }
   }, [accountId]);
 
@@ -145,8 +149,10 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     const prevTx = prevTxCountRef.current.get(acctId) ?? 0;
     const prevBal = prevBalanceRef.current.get(acctId) ?? null;
 
-    // 1. FIRST TIME: Auto-sync recent transactions
-    if (prevTx === 0 && !syncRecentMutation.isPending) {
+    // 1. FIRST TIME: Auto-sync recent transactions (only once per account)
+    const hasSynced = hasSyncedRecentRef.current.get(acctId) ?? false;
+    if (!hasSynced && !syncRecentMutation.isPending) {
+      hasSyncedRecentRef.current.set(acctId, true);
       syncRecentMutation.mutate();
     }
 
