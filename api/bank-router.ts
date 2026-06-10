@@ -251,8 +251,8 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
     }
   }
 
-  // Rent
-  if (detailed.includes("RENT") || desc.includes("rent")) return { type: "expense", category: "rent" };
+  // Rent ( PURCHASE TURBO BOOST etc. detected as rent by Plaid ) → Compras
+  if (detailed.includes("RENT") || desc.includes("rent")) return { type: "expense", category: "shopping" };
 
   // Loan
   if (detailed.includes("LOAN") || desc.includes("loan") || desc.includes("mortgage")) return { type: "expense", category: "loan" };
@@ -276,7 +276,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (detailed.includes("MEDICAL") || desc.includes("medical")) return { type: "expense", category: "medical" };
 
   // Default: In Plaid, positive amount = money LEAVING (expense), negative = money ENTERING (income)
-  if (plaidAmount < 0) return { type: "income", category: "income" };
+  if (plaidAmount < 0) return { type: "income", category: "general" };
   return { type: "expense", category: "shopping" };
 }
 

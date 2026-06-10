@@ -22,6 +22,7 @@ const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; icon
   cash_deposit: { label: "Deposito de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
   cash_income: { label: "Efectivo Recibido", icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
   income: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  general: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
   paycheck: { label: "Nomina", icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
   transfer: { label: "Transferencias", icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
 };

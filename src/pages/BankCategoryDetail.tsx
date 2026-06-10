@@ -14,6 +14,11 @@ const categoryMeta: Record<string, { label: string; type: "income" | "expense" }
   transfer_income: { label: "Transferencias", type: "income" },
   deposit: { label: "Depositos", type: "income" },
   cash_deposit: { label: "Depositos de Efectivo", type: "income" },
+  general: { label: "Ingresos", type: "income" },
+  paycheck: { label: "Nomina", type: "income" },
+  refund: { label: "Reembolsos", type: "income" },
+  investment: { label: "Inversiones", type: "income" },
+  interest: { label: "Intereses", type: "income" },
   cash_withdrawal: { label: "Retiros de Efectivo", type: "expense" },
   zelle_sent: { label: "Zelle Enviados", type: "expense" },
   subscription: { label: "Suscripciones", type: "expense" },
@@ -22,6 +27,9 @@ const categoryMeta: Record<string, { label: string; type: "income" | "expense" }
   food: { label: "Comida", type: "expense" },
   shopping: { label: "Compras", type: "expense" },
   gasolina: { label: "Gasolina", type: "expense" },
+  loan: { label: "Prestamos", type: "expense" },
+  insurance: { label: "Seguros", type: "expense" },
+  utilities: { label: "Servicios", type: "expense" },
 };
 
 function getCategoryMeta(category: string): { label: string; type: "income" | "expense" } {
