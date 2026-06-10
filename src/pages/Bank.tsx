@@ -421,18 +421,7 @@ export default function Bank() {
   const importMutation = trpc.bank.importBankStatement.useMutation();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Auto-sync recent transactions on page load
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        utils.transactions.getAll.invalidate();
-        utils.bank.listAccounts.invalidate();
-        utils.bankAccounts.list.invalidate();
-        toast.success(`${data.added} transacciones nuevas sincronizadas`);
-      }
-    },
-    onError: () => { /* silent */ },
-  });
+  // Auto-sync handled by useBankHealthMonitor autonomous agent
 
   // ─── useEffect hooks AFTER all useMutation declarations ───
 
@@ -454,67 +443,8 @@ export default function Bank() {
     return () => clearTimeout(timer);
   }, [hasBankConnected, account, accountIdNum, selectedYear, selectedMonth, syncMutation]);
 
-  // ─── SYNC RECENT: Catch new transactions on page load ───
-  useEffect(() => {
-    if (!hasBankConnected || !accountIdNum) return;
-    const timer = setTimeout(() => {
-      syncRecentMutation.mutate();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, [hasBankConnected, accountIdNum, syncRecentMutation]);
-
-  // ─── AUTO-SYNC EVERY 2 MINUTES: Keep transactions up to date ───
-  useEffect(() => {
-    if (!hasBankConnected || !accountIdNum) return;
-    const interval = setInterval(() => {
-      // Skip if a sync is already in progress (prevents duplicate syncs)
-      if (syncMutation.isPending || syncing) return;
-      syncMutation.mutate({
-        year: parseInt(selectedYear),
-        month: parseInt(selectedMonth),
-        accountId: accountIdNum,
-      });
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [hasBankConnected, accountIdNum, selectedYear, selectedMonth, syncMutation, syncing]);
-
-  // ─── AUTO-FIX CATEGORIES: Silently correct miscategorized transactions ───
-  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
-    onSuccess: (data) => {
-      if (data.fixed && data.fixed > 0) {
-        utils.invalidate();
-      }
-    },
-  });
-  useEffect(() => {
-    if (!hasBankConnected || !accountIdNum) return;
-    const timer = setTimeout(() => {
-      autoFixMutation.mutate();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, [hasBankConnected, accountIdNum, autoFixMutation]);
-
-  // ─── LIVE BALANCE REFRESH: Every 30 seconds ───
-  const refreshMutation = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: (data) => {
-      utils.bank.listAccounts.invalidate();
-      if (data.added && data.added > 0) toast.success(`${data.added} cuenta(s) nueva(s) encontradas`);
-      else if (data.updated && data.updated > 0) {
-        // silent - balance updated
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-  useEffect(() => {
-    if (!hasBankConnected) return;
-    // Refresh on load
-    refreshMutation.mutate();
-    // Every 30 seconds
-    const interval = setInterval(() => {
-      if (!refreshMutation.isPending) refreshMutation.mutate();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [hasBankConnected, refreshMutation]);
+  // ─── AUTONOMOUS AGENT: All auto-sync, auto-fix, auto-reconnect handled by useBankHealthMonitor ───
+  // The elite agent manages: sync every 3min, fix every 5min, reconnect every 2min
 
   // Auto-invalidate month/year data when selectors change
   useEffect(() => {

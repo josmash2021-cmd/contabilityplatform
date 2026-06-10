@@ -9,21 +9,21 @@
  * - Solo alerta al usuario cuando necesita accion manual
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
 
 export function useBankHealthMonitor(accountId: number | undefined, selectedYear: string, selectedMonth: string) {
   const utils = trpc.useUtils();
-  const acctIdRef = useRef(accountId);
-  acctIdRef.current = accountId;
 
-  // ── AUTONOMOUS SYNC: Detecta y sincroniza transacciones nuevas solo ──
+  // ── AUTONOMOUS SYNC: Sincroniza transacciones del banco solo ──
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
-        utils.invalidate();
-        toast.success(`${data.added} transacciones auto-sincronizadas`, { id: "auto-sync" });
+        utils.bank.getMonthData.invalidate();
+        utils.bank.getYearData.invalidate();
+        utils.bank.listAccounts.invalidate();
+        toast.success(`${data.added} transacciones sincronizadas`, { id: "auto-sync" });
       }
     },
     onError: () => { /* silent — retry on next cycle */ },
@@ -33,8 +33,8 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
   const fixMutation = trpc.bank.autoFixCategories.useMutation({
     onSuccess: (data) => {
       if (data.fixed && data.fixed > 0) {
-        utils.invalidate();
-        toast.info(`${data.fixed} categorias auto-correctas`, { id: "auto-fix" });
+        utils.bank.getMonthData.invalidate();
+        toast.info(`${data.fixed} categorias corregidas`, { id: "auto-fix" });
       }
     },
   });
@@ -44,7 +44,7 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     onSuccess: (data) => {
       if (data.updated && data.updated > 0) {
         utils.invalidate();
-        toast.success("Conexion auto-restaurada", { id: "auto-reconnect" });
+        toast.success("Conexion restaurada", { id: "auto-reconnect" });
       }
     },
     onError: () => { /* silent — retry on next cycle */ },
@@ -54,20 +54,24 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
   const syncRecentMutation = trpc.bank.syncRecent.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
-        utils.invalidate();
+        utils.bank.getMonthData.invalidate();
+        toast.success(`${data.added} transacciones nuevas encontradas`, { id: "auto-recent" });
       }
     },
     onError: () => { /* silent */ },
   });
 
-  // ── MONITORING STATE ──
+  // ── TRACKING STATE (per-account) ──
   const prevTxCountRef = useRef<Map<number, number>>(new Map());
   const prevBalanceRef = useRef<Map<number, string>>(new Map());
   const lastAlertRef = useRef<{ type: string; time: number } | null>(null);
-  const consecutiveErrorsRef = useRef(0);
-  const isRunningRef = useRef(false);
+  const consecutiveErrorsRef = useRef<Map<number, number>>(new Map());
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastFixRef = useRef<Map<number, number>>(new Map());
+  const lastSyncRef = useRef<Map<number, number>>(new Map());
+  const prevAccountRef = useRef<number | undefined>(undefined);
 
-  // Poll for data changes
+  // Poll for data
   const connectionQuery = trpc.bank.checkConnection.useQuery(undefined, {
     refetchInterval: 30000,
     retry: 2,
@@ -78,7 +82,24 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     { enabled: !!accountId, refetchInterval: 60000, retry: 2 }
   );
 
-  const showAlertOnce = (type: string, message: string, variant: "success" | "warning" | "error" = "info") => {
+  // Reset tracking when account changes
+  useEffect(() => {
+    if (accountId !== prevAccountRef.current) {
+      prevAccountRef.current = accountId;
+      // Don't reset prevTxCount — we want to detect changes from the old account
+      // But DO reset consecutive errors for the new account
+      if (accountId) consecutiveErrorsRef.current.set(accountId, 0);
+    }
+  }, [accountId]);
+
+  // Cleanup reconnect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+    };
+  }, []);
+
+  const showAlertOnce = useCallback((type: string, message: string, variant: "success" | "warning" | "error" = "info") => {
     const now = Date.now();
     if (lastAlertRef.current?.type === type && now - lastAlertRef.current.time < 120000) return;
     lastAlertRef.current = { type, time: now };
@@ -86,55 +107,74 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     else if (variant === "warning") toast.warning(message, { id: type });
     else if (variant === "error") toast.error(message, { id: type });
     else toast.info(message, { id: type });
-  };
+  }, []);
 
   // ── MAIN AUTONOMOUS LOOP ──
   useEffect(() => {
-    if (isRunningRef.current) return; // Prevent duplicate runs
-    isRunningRef.current = true;
-
     const hasBank = connectionQuery.data?.hasBank === true;
     const txCount = (monthDataQuery.data?.transactions ?? []).length;
     const currentBalance = monthDataQuery.data?.liveBalance ?? null;
     const isError = connectionQuery.isError || monthDataQuery.isError;
     const acctId = accountId ?? 0;
+    const now = Date.now();
 
+    // Connection lost detection (per-account error counter)
     if (!hasBank && connectionQuery.data !== undefined) {
-      consecutiveErrorsRef.current++;
-      if (consecutiveErrorsRef.current >= 2) {
+      const errs = (consecutiveErrorsRef.current.get(acctId) ?? 0) + 1;
+      consecutiveErrorsRef.current.set(acctId, errs);
+      if (errs >= 2) {
         showAlertOnce("conn-lost", "Conexion perdida. Intentando reconectar...", "warning");
-        // AUTONOMOUS: Try to reconnect automatically
-        setTimeout(() => reconnectMutation.mutate(), 5000);
+        // Clean up any existing timer before setting new one
+        if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = setTimeout(() => {
+          if (!reconnectMutation.isPending) reconnectMutation.mutate();
+          reconnectTimerRef.current = null;
+        }, 5000);
       }
-      isRunningRef.current = false;
       return;
     }
 
-    if (hasBank) consecutiveErrorsRef.current = 0;
-    if (!hasBank || !accountId) { isRunningRef.current = false; return; }
+    // Reset errors on healthy connection
+    if (hasBank && accountId) {
+      consecutiveErrorsRef.current.set(accountId, 0);
+    }
+
+    // Nothing to do without bank or account
+    if (!hasBank || !accountId) return;
 
     const prevTx = prevTxCountRef.current.get(acctId) ?? 0;
     const prevBal = prevBalanceRef.current.get(acctId) ?? null;
 
-    // 1. AUTONOMOUS SYNC: New transactions detected → auto-sync
-    if (txCount > prevTx && prevTx > 0) {
-      const newTx = txCount - prevTx;
-      showAlertOnce("new-tx", `${newTx} nueva(s) — sincronizando...`, "success");
-      // Auto-fix categories after sync
-      setTimeout(() => fixMutation.mutate(), 2000);
-    }
-
-    // 2. AUTONOMOUS: If first time seeing this account, auto-sync recent
-    if (prevTx === 0 && txCount === 0 && !syncRecentMutation.isPending) {
+    // 1. FIRST TIME: Auto-sync recent transactions
+    if (prevTx === 0 && !syncRecentMutation.isPending) {
       syncRecentMutation.mutate();
     }
 
-    // 3. AUTONOMOUS: Auto-fix categories periodically (every 5 min via interval)
-    if (!fixMutation.isPending && txCount > 0) {
+    // 2. NEW TRANSACTIONS DETECTED: Alert + auto-sync
+    if (txCount > prevTx && prevTx > 0) {
+      const newTx = txCount - prevTx;
+      showAlertOnce("new-tx", `${newTx} nueva(s) — sincronizando...`, "success");
+      // Auto-sync to ensure all new transactions are fetched
+      if (!syncMutation.isPending) {
+        syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId });
+      }
+    }
+
+    // 3. PERIODIC AUTO-FIX: Only every 5 minutes (not every cycle)
+    const lastFix = lastFixRef.current.get(acctId) ?? 0;
+    if (!fixMutation.isPending && txCount > 0 && now - lastFix > 5 * 60 * 1000) {
+      lastFixRef.current.set(acctId, now);
       fixMutation.mutate();
     }
 
-    // 4. Detect balance changes
+    // 4. PERIODIC AUTO-SYNC: Only every 3 minutes (not every cycle)
+    const lastSync = lastSyncRef.current.get(acctId) ?? 0;
+    if (!syncMutation.isPending && now - lastSync > 3 * 60 * 1000) {
+      lastSyncRef.current.set(acctId, now);
+      syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId });
+    }
+
+    // 5. Detect balance changes
     if (currentBalance && prevBal && currentBalance !== prevBal) {
       const diff = parseFloat(currentBalance) - parseFloat(prevBal);
       if (Math.abs(diff) > 0.01) {
@@ -151,8 +191,6 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     if (isError) {
       showAlertOnce("slow-conn", "Conexion lenta — verificando...", "warning");
     }
-
-    isRunningRef.current = false;
   }, [
     connectionQuery.data,
     connectionQuery.isError,
@@ -161,44 +199,8 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
     accountId,
     selectedYear,
     selectedMonth,
+    showAlertOnce,
   ]);
-
-  // ── PERIODIC AUTO-SYNC: Every 3 minutes, auto-sync current month ──
-  useEffect(() => {
-    if (!accountId) return;
-    const interval = setInterval(() => {
-      if (!syncMutation.isPending) {
-        syncMutation.mutate({
-          year: parseInt(selectedYear),
-          month: parseInt(selectedMonth),
-          accountId: accountId,
-        });
-      }
-    }, 3 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [accountId, selectedYear, selectedMonth, syncMutation]);
-
-  // ── PERIODIC AUTO-FIX: Every 5 minutes, auto-fix categories ──
-  useEffect(() => {
-    if (!accountId) return;
-    const interval = setInterval(() => {
-      if (!fixMutation.isPending) {
-        fixMutation.mutate();
-      }
-    }, 5 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [accountId, fixMutation]);
-
-  // ── PERIODIC RECONNECT CHECK: Every 2 minutes, refresh connection ──
-  useEffect(() => {
-    if (!accountId) return;
-    const interval = setInterval(() => {
-      if (!reconnectMutation.isPending) {
-        reconnectMutation.mutate();
-      }
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [accountId, reconnectMutation]);
 
   // Return status for UI indicator
   const hasBank = connectionQuery.data?.hasBank === true;
