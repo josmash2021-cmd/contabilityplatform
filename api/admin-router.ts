@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createRouter, adminQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings } from "@db/schema";
+import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
 // ── DB-based Maintenance Mode (persists across restarts) ──
@@ -214,6 +214,15 @@ export const adminRouter = createRouter({
       .filter((p) => p.status === "succeeded")
       .reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
 
+    // Payouts (withdrawals) — auto-migration if table doesn't exist yet
+    let totalPayouts = 0;
+    try {
+      const allPayouts = await db.select().from(payouts);
+      totalPayouts = allPayouts.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+    } catch { /* table may not exist yet — ignore */ }
+
+    const available = Math.max(0, totalRevenue - totalPayouts);
+
     return {
       totalUsers,
       blockedUsers,
@@ -223,6 +232,8 @@ export const adminRouter = createRouter({
       annualSubscriptions: annualSubs,
       totalBankAccounts: bankAccountsCount[0]?.count || 0,
       totalRevenue: totalRevenue.toFixed(2),
+      totalPayouts: totalPayouts.toFixed(2),
+      available: available.toFixed(2),
     };
   }),
 
@@ -313,6 +324,61 @@ export const adminRouter = createRouter({
         enabled: newEnabled,
         message: msg,
       };
+    }),
+
+  // ── Create a payout (withdrawal) ──
+  createPayout: adminQuery
+    .input(z.object({
+      amount: z.number().positive(),
+      method: z.string().min(1),
+      destination: z.string().optional(),
+      note: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+
+      // Verify there are sufficient funds
+      const allPayments = await db.select().from(subscriptionPayments);
+      const totalRevenue = allPayments
+        .filter((p) => p.status === "succeeded")
+        .reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+
+      let totalPayouts = 0;
+      try {
+        const allPayouts = await db.select().from(payouts);
+        totalPayouts = allPayouts.reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
+      } catch { /* table may not exist yet */ }
+
+      const available = Math.max(0, totalRevenue - totalPayouts);
+      if (input.amount > available) {
+        return { success: false, error: `Fondos insuficientes. Disponible: $${available.toFixed(2)}` };
+      }
+
+      await db.insert(payouts).values({
+        amount: String(input.amount.toFixed(2)),
+        method: input.method,
+        destination: input.destination || null,
+        note: input.note || null,
+      });
+
+      return { success: true, message: `Retiro de $${input.amount.toFixed(2)} registrado` };
+    }),
+
+  // ── List all payouts ──
+  listPayouts: adminQuery.query(async () => {
+    const db = getDb();
+    try {
+      return await db.select().from(payouts).orderBy(desc(payouts.createdAt));
+    } catch { return []; }
+  }),
+
+  // ── Delete a payout (if needed) ──
+  deletePayout: adminQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(payouts).where(eq(payouts.id, input.id));
+      return { success: true, message: "Retiro eliminado" };
     }),
 
   // ── Get maintenance status (public, from DB) ──

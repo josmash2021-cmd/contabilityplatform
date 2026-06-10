@@ -82,9 +82,17 @@ app.post("/api/webhooks/stripe", async (c) => {
               status: "active",
             });
           }
+          // Prevent duplicate payments from webhook retries
+          const paymentIntentId = session.payment_intent;
+          if (paymentIntentId) {
+            const existingPayment = await db.select().from(subscriptionPayments)
+              .where(eq(subscriptionPayments.stripePaymentIntentId, paymentIntentId)).limit(1);
+            if (existingPayment.length > 0) break; // Already recorded, skip
+          }
+
           await db.insert(subscriptionPayments).values({
             userId: numericUserId,
-            stripePaymentIntentId: session.payment_intent,
+            stripePaymentIntentId: paymentIntentId,
             amount: plan === "monthly" ? "80.00" : "800.00",
             plan: plan as "monthly" | "annual",
             status: "succeeded",
@@ -104,6 +112,11 @@ app.post("/api/webhooks/stripe", async (c) => {
             currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : new Date(),
             status: "active",
           }).where(eq(subscriptions.id, subs[0].id));
+          // Prevent duplicate payments from webhook retries
+          const existingInvoice = await db.select().from(subscriptionPayments)
+            .where(eq(subscriptionPayments.stripeInvoiceId, invoice.id)).limit(1);
+          if (existingInvoice.length > 0) break; // Already recorded, skip
+
           await db.insert(subscriptionPayments).values({
             userId: subs[0].userId, subscriptionId: subs[0].id,
             stripeInvoiceId: invoice.id,

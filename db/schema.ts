@@ -610,3 +610,16 @@ export const reconciliationLogs = mysqlTable("reconciliationLogs", {
 ]);
 
 export type ReconciliationLog = typeof reconciliationLogs.$inferSelect;
+
+// ─── Admin Payouts (withdrawals from subscription revenue) ───
+export const payouts = mysqlTable("payouts", {
+  id: serial("id").primaryKey(),
+  amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
+  method: varchar("method", { length: 50 }).notNull(), // e.g. "transfer", "zelle", "wire"
+  destination: varchar("destination", { length: 255 }), // bank name / account info
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Payout = typeof payouts.$inferSelect;
+export type InsertPayout = typeof payouts.$inferInsert;
