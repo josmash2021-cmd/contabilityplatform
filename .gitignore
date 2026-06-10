@@ -39,3 +39,5 @@ build/
 # Test coverage
 coverage/
 .nyc_output/
+nm_corrupt/
+old_nm_1780671271/
