@@ -174,7 +174,7 @@ export default function Transactions() {
   const isCashWithdrawal = (t: any) => t.category === "cash_withdrawal";
   const isVenta = (t: any) => {
     if (t.type !== "income") return false;
-    return t.category === "business_income" || t.category === "sale" || t.category === "income";
+    return t.category === "business_income" || t.category === "sale" || t.category === "income" || t.category === "general";
   };
   const isDevolucion = (t: any) => {
     const n = (t.description || "").toLowerCase();

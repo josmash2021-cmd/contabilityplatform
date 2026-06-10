@@ -15,6 +15,7 @@ const categoryMeta: Record<string, { label: string; type: "income" | "expense" }
   deposit: { label: "Depositos", type: "income" },
   cash_deposit: { label: "Depositos de Efectivo", type: "income" },
   general: { label: "Ingresos", type: "income" },
+  income: { label: "Ingresos", type: "income" },
   paycheck: { label: "Nomina", type: "income" },
   refund: { label: "Reembolsos", type: "income" },
   investment: { label: "Inversiones", type: "income" },
