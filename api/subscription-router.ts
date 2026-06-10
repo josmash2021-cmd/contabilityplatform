@@ -601,7 +601,8 @@ export const subscriptionRouter = createRouter({
       cancelAtPeriodEnd: false,
     }).where(eq(subscriptions.id, sub.id));
 
-    return { success: true, message: "Suscripcion reanudada. Se seguira cobrando mensualmente." };
+    const planLabel = sub.plan === "annual" ? "anualmente" : "mensualmente";
+    return { success: true, message: `Suscripcion reanudada. Se seguira cobrando ${planLabel}.` };
   }),
 
   // ── Verify subscription — Agent finds lost subscriptions ──
