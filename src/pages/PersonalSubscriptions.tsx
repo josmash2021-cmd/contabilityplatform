@@ -11,10 +11,10 @@ import { getCancelGuide } from "@/lib/cancelGuides";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import {
   Tv, CreditCard, Landmark, Building2, ChevronDown,
-  Music, Film, Car, Droplets, Zap, Shield, ExternalLink,
-  Smartphone, Wifi, HardHat, Dumbbell, Cloud, Newspaper,
-  Fuel, ParkingCircle, AlertTriangle, CheckCircle, RotateCcw,
-  Bell, Mail, CalendarClock, X, RefreshCw, CalendarDays, ChevronRight,
+  Music, Film, Car, Shield, ExternalLink,
+  Smartphone, Wifi, Dumbbell, Cloud, Newspaper,
+  ParkingCircle, AlertTriangle, CheckCircle, RotateCcw,
+  Bell, Mail, CalendarClock, X, RefreshCw, CalendarDays,
   Database, ArrowUpCircle, Link2,
 } from "lucide-react";
 
@@ -70,6 +70,7 @@ function getSubIcon(name: string) {
 
 function getNextChargeDate(lastDate: string): string {
   const d = new Date(lastDate);
+  if (isNaN(d.getTime())) return "Fecha desconocida";
   d.setMonth(d.getMonth() + 1);
   return d.toLocaleDateString("es", { day: "numeric", month: "long" });
 }
@@ -81,7 +82,6 @@ export default function PersonalSubscriptions() {
   const [tab, setTab] = useState<"guide" | "email" | "tips">("guide");
   const [filter, setFilter] = useState<FilterType>("all");
   const [showAll, setShowAll] = useState(false);
-  const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [detailSub, setDetailSub] = useState<string | null>(null);
   const [historyFilter, setHistoryFilter] = useState<"all" | "3months" | "6months" | "12months">("all");
   const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
@@ -288,12 +288,12 @@ export default function PersonalSubscriptions() {
         </div>
       ) : (
         <div className="space-y-2">
-          {displayed.map((sub: any) => {
+          {displayed.map((sub: any, idx: number) => {
             const { icon: Icon, bg, color } = getSubIcon(sub.name);
             const nextC = getNextChargeDate(sub.lastDate);
             const paymentDates = (sub.dates || []).slice(0, 6);
             return (
-              <div key={sub.name} className="bg-white border border-neutral-100 rounded-lg hover:border-neutral-300 transition-all hover:shadow-sm">
+              <div key={`${sub.name}_${idx}`} className="bg-white border border-neutral-100 rounded-lg hover:border-neutral-300 transition-all hover:shadow-sm">
                 <div onClick={() => { setDetailSub(detailSub === sub.name ? null : sub.name); setHistoryFilter("all"); }} className="flex items-center justify-between py-3 px-3 cursor-pointer">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center shrink-0`}><Icon className={`w-5 h-5 ${color}`} /></div>
@@ -393,7 +393,7 @@ export default function PersonalSubscriptions() {
                     <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center shrink-0"><CheckCircle className="w-5 h-5 text-emerald-600" /></div>
                     <div>
                       <p className="text-sm font-medium text-black capitalize">{sub.merchantName}</p>
-                      <p className="text-[10px] text-emerald-600">Cancelada el {sub.cancelledAt ? new Date(sub.cancelledAt).toLocaleDateString("es") : ""}</p>
+                      <p className="text-[10px] text-emerald-600">{sub.cancelledAt ? `Cancelada el ${new Date(sub.cancelledAt).toLocaleDateString("es")}` : "Cancelada"}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
