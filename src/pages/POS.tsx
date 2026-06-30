@@ -268,7 +268,7 @@ export default function POS() {
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
@@ -277,17 +277,17 @@ export default function POS() {
                 onClick={backspace}
                 className="h-full rounded-xl lg:rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
-                <X className="w-5 h-5 lg:w-6 lg:h-6" />
+                <X className="w-6 h-6 lg:w-7 lg:h-7" />
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
