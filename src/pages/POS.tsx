@@ -354,7 +354,7 @@ export default function POS() {
 
       {/* Desktop animated side panel */}
       <div
-        className={`hidden lg:flex flex-col border-l border-neutral-200 bg-white overflow-hidden transition-all duration-300 ease-in-out ${leftPanel !== "none" ? "w-72 opacity-100" : "w-0 opacity-0"}`}
+        className={`hidden lg:flex fixed top-0 bottom-0 z-20 flex-col border-l border-neutral-200 bg-white overflow-hidden transition-all duration-300 ease-in-out w-72 ${leftPanel !== "none" ? "left-[calc(100%-380px-18rem)] opacity-100" : "left-full opacity-0"}`}
       >
         {leftPanel === "services" && (
           <div className="flex flex-col h-full w-72">
@@ -410,7 +410,7 @@ export default function POS() {
       </div>
 
       {/* Desktop right action bar */}
-      <div className="hidden lg:flex flex-col items-center justify-center w-20 border-l border-neutral-200 bg-white shrink-0 gap-6 py-6">
+      <div className="hidden lg:flex fixed right-[380px] top-1/2 -translate-y-1/2 z-30 flex-col items-center justify-center w-20 border-l border-neutral-200 bg-white gap-6 py-6">
         <button
           onClick={() => setLeftPanel(leftPanel === "services" ? "none" : "services")}
           className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
