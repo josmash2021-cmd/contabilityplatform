@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp, DollarSign, Tag, FileText, RefreshCw } from "lucide-react";
+import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp, DollarSign, RefreshCw, RotateCcw, Square, ClipboardList } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 
 interface CartItem {
@@ -25,9 +25,10 @@ const PAYMENT_METHODS = [
 ];
 
 const QUICK_SERVICES = [
-  { id: "sticker", label: "Sticker título", icon: Tag },
-  { id: "title_plate", label: "Título y placa", icon: FileText },
   { id: "plate_change", label: "Cambio de placa de estado", icon: RefreshCw },
+  { id: "sticker_renewal", label: "Renovación de sticker", icon: RotateCcw },
+  { id: "new_plate", label: "Placa nueva", icon: Square },
+  { id: "title_process", label: "Trámite de título", icon: ClipboardList },
 ];
 
 export default function POS() {
