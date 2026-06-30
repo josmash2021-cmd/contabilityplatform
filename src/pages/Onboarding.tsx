@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
-import { Loader2, Building2, MapPin, Phone, Mail, Home, Briefcase, Store, Building } from "lucide-react";
+import { Loader2, Building2, MapPin, Phone, Mail, Home, Briefcase, Store, Building, X } from "lucide-react";
 import { toast } from "sonner";
 
 declare global {
@@ -23,6 +23,7 @@ const ADDRESS_TYPES = [
 
 export default function Onboarding() {
   const navigate = useNavigate();
+  const [pendingRegistration, setPendingRegistration] = useState<{ email: string; password: string; name: string; mode: "business" | "personal" } | null>(null);
   const [companyName, setCompanyName] = useState("");
   const [address, setAddress] = useState("");
   const [addressType, setAddressType] = useState("");
@@ -33,6 +34,26 @@ export default function Onboarding() {
   const [email, setEmail] = useState("");
   const [autocompleteLoaded, setAutocompleteLoaded] = useState(false);
   const addressRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const raw = localStorage.getItem("register_pending");
+    if (!raw) {
+      navigate("/register", { replace: true });
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw);
+      if (!parsed.email || !parsed.password || !parsed.name || !parsed.mode) {
+        localStorage.removeItem("register_pending");
+        navigate("/register", { replace: true });
+        return;
+      }
+      setPendingRegistration(parsed);
+    } catch {
+      localStorage.removeItem("register_pending");
+      navigate("/register", { replace: true });
+    }
+  }, [navigate]);
 
   const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || "AIzaSyDs8MIOA8qk0JwxOkxd8rGxtAmVTeB7CF0";
 
@@ -78,7 +99,22 @@ export default function Onboarding() {
   });
 
   const updateSettings = trpc.settings.update.useMutation({
-    onSuccess: () => { toast.success("Negocio configurado"); window.location.href = "/"; },
+    onSuccess: () => { toast.success("Negocio configurado"); localStorage.removeItem("register_pending"); window.location.href = "/"; },
+    onError: (err) => toast.error(err.message),
+  });
+
+  const registerMut = trpc.auth.register.useMutation({
+    onSuccess: (data) => {
+      if (data.success && data.user) {
+        if (data.token) {
+          localStorage.setItem("auth_token", data.token);
+        }
+        localStorage.setItem("auth_user", JSON.stringify(data.user));
+        updateSettings.mutate({ companyName, address, addressType, city, state, zipCode, phone, email });
+      } else {
+        toast.error(data.error || "Error al crear cuenta");
+      }
+    },
     onError: (err) => toast.error(err.message),
   });
 
@@ -90,12 +126,30 @@ export default function Onboarding() {
     if (!address.trim()) { toast.error("Direccion requerida"); return; }
     if (!city.trim() || !state.trim() || !zipCode.trim()) { toast.error("Completa ciudad, estado y ZIP"); return; }
     if (!addressType) { toast.error("Selecciona tipo de ubicacion"); return; }
-    updateSettings.mutate({ companyName, address, addressType, city, state, zipCode, phone, email });
+    if (!pendingRegistration) { toast.error("No hay registro pendiente"); return; }
+    registerMut.mutate(pendingRegistration);
+  };
+
+  const handleCancel = () => {
+    if (window.confirm("Estas seguro que quieres salirte? Perderas el progreso de registro")) {
+      localStorage.removeItem("register_pending");
+      navigate("/login", { replace: true });
+    }
   };
 
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4 overflow-hidden">
-      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+        {/* Cancel button */}
+        <button
+          type="button"
+          onClick={handleCancel}
+          className="absolute top-3 right-3 p-1.5 rounded-full text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors"
+          aria-label="Cancelar registro"
+        >
+          <X className="w-5 h-5" />
+        </button>
+
         {/* Header */}
         <div className="text-center mb-4">
           <Logo className="w-8 h-8 mx-auto mb-2" />
@@ -175,9 +229,9 @@ export default function Onboarding() {
           </div>
 
           {/* Submit */}
-          <Button type="submit" disabled={updateSettings.isPending}
+          <Button type="submit" disabled={registerMut.isPending || updateSettings.isPending}
             className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-10 text-sm mt-1">
-            {updateSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+            {registerMut.isPending || updateSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
             Continuar
           </Button>
         </form>

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link, Navigate } from "react-router";
+import { Link, Navigate, useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
 
 export default function Register() {
+  const navigate = useNavigate();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -41,7 +42,7 @@ export default function Register() {
     return <Navigate to={user.modePreference === "personal" ? "/personal" : "/"} replace />;
   }
 
-  const registerMut = trpc.auth.register.useMutation({
+  const personalRegisterMut = trpc.auth.register.useMutation({
     onSuccess: (data) => {
       if (data.success && data.user) {
         if (data.token) {
@@ -49,10 +50,7 @@ export default function Register() {
         }
         localStorage.setItem("auth_user", JSON.stringify(data.user));
         toast.success("Cuenta creada exitosamente");
-        // Redirect based on user's registered mode from backend
-        const isPersonal = data.user.modePreference === "personal";
-        console.log("[Register] User mode:", data.user.modePreference, "Redirect to:", isPersonal ? "/personal" : "/onboarding");
-        window.location.href = isPersonal ? "/personal" : "/onboarding";
+        window.location.href = "/personal";
       } else {
         toast.error(data.error || "Error al crear cuenta");
       }
@@ -84,7 +82,16 @@ export default function Register() {
       toast.error("Las contrasenas no coinciden");
       return;
     }
-    registerMut.mutate({ email, password, name, mode });
+
+    if (mode === "business") {
+      // Save pending registration and continue to onboarding
+      localStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode }));
+      navigate("/onboarding");
+      return;
+    }
+
+    // Personal mode: create account immediately
+    personalRegisterMut.mutate({ email, password, name, mode });
   };
 
   return (
