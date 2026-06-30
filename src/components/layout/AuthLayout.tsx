@@ -1,14 +1,25 @@
 import { useState, useEffect } from "react";
-import { Outlet } from "react-router";
+import { Outlet, useLocation } from "react-router";
 import { Logo } from "@/components/Logo";
 
 export default function AuthLayout() {
+  const location = useLocation();
   const [showContent, setShowContent] = useState(false);
+  const [isFading, setIsFading] = useState(false);
 
+  // Initial reveal: Spline first, then content after 3s
   useEffect(() => {
     const timer = setTimeout(() => setShowContent(true), 3000);
     return () => clearTimeout(timer);
   }, []);
+
+  // Crossfade content when switching between login/register routes
+  useEffect(() => {
+    if (!showContent) return;
+    setIsFading(true);
+    const timer = setTimeout(() => setIsFading(false), 250);
+    return () => clearTimeout(timer);
+  }, [location.pathname, showContent]);
 
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden flex relative">
@@ -25,8 +36,8 @@ export default function AuthLayout() {
 
       {/* Desktop logo - top left corner over Spline */}
       <div
-        className={`hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2 animate-in fade-in slide-in-from-left-4 duration-700 ${
-          showContent ? "" : "opacity-0"
+        className={`hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2 transition-opacity duration-500 ${
+          showContent ? "opacity-100" : "opacity-0"
         }`}
       >
         <Logo className="w-8 h-8" />
@@ -38,10 +49,8 @@ export default function AuthLayout() {
 
       {/* ─── CONTENT OUTLET ─── */}
       <div
-        className={`w-full h-full ${
-          showContent
-            ? "animate-in fade-in slide-in-from-right-4 duration-700"
-            : "opacity-0"
+        className={`w-full h-full transition-opacity duration-300 ${
+          showContent && !isFading ? "opacity-100" : "opacity-0"
         }`}
       >
         <Outlet />
