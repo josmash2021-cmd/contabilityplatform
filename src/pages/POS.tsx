@@ -177,11 +177,11 @@ export default function POS() {
   return (
     <div className="h-[100dvh] flex flex-col bg-white lg:min-h-screen lg:block">
       {/* Main content */}
-      <div className="flex-1 min-h-0 p-2 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
+      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
-            <div className="shrink-0 py-2 lg:py-3 mb-1 lg:mb-2 text-center bg-neutral-50 rounded-xl lg:rounded-2xl border border-neutral-100">
+            <div className="shrink-0 py-1.5 lg:py-3 mb-1 lg:mb-2 text-center bg-neutral-50 rounded-xl lg:rounded-2xl border border-neutral-100">
               <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5 lg:mb-1">Monto a cobrar</p>
               <p className="text-3xl lg:text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
@@ -240,7 +240,7 @@ export default function POS() {
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-2 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
+                  <button className="flex items-center justify-center gap-2 p-1.5 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
                     <User className="w-4 h-4" /> Cliente
                   </button>
                 </DialogTrigger>
@@ -263,12 +263,12 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-2 lg:max-h-[480px]">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 lg:gap-2 mb-2 lg:max-h-[480px]">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-4xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
@@ -277,17 +277,17 @@ export default function POS() {
                 onClick={backspace}
                 className="h-full rounded-xl lg:rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
-                <X className="w-7 h-7 lg:w-8 lg:h-8" />
+                <X className="w-6 h-6 lg:w-8 lg:h-8" />
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-4xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-4xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
@@ -299,14 +299,14 @@ export default function POS() {
                 onClick={handleAddAnother}
                 disabled={numericValue <= 0}
                 variant="outline"
-                className="h-12 lg:h-14 rounded-xl lg:rounded-lg border-neutral-200 text-black text-sm lg:text-base font-medium hover:bg-neutral-50 disabled:opacity-50"
+                className="h-11 lg:h-14 rounded-xl lg:rounded-lg border-neutral-200 text-black text-sm lg:text-base font-medium hover:bg-neutral-50 disabled:opacity-50"
               >
                 <Plus className="w-4 h-4 lg:w-5 lg:h-5 mr-1" /> Agregar
               </Button>
               <Button
                 onClick={handleCobrarClick}
                 disabled={cart.length === 0 && numericValue <= 0}
-                className="h-12 lg:h-14 rounded-xl lg:rounded-lg bg-black hover:bg-neutral-800 text-white text-sm lg:text-base font-medium disabled:opacity-50"
+                className="h-11 lg:h-14 rounded-xl lg:rounded-lg bg-black hover:bg-neutral-800 text-white text-sm lg:text-base font-medium disabled:opacity-50"
               >
                 Cobrar
               </Button>
