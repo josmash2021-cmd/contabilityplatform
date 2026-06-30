@@ -4,10 +4,13 @@ import { Logo } from "@/components/Logo";
 
 export default function AuthLayout() {
   const contentRef = useRef<HTMLDivElement>(null);
-  const [contentVisible, setContentVisible] = useState(false);
+  // Mobile: content is always visible (scroll naturally reveals it)
+  // Desktop: use IntersectionObserver for elegant fade-in
+  const [contentVisible, setContentVisible] = useState(true);
 
   useEffect(() => {
-    if (!contentRef.current) return;
+    // Only apply observer on desktop (lg+)
+    if (!contentRef.current || window.innerWidth < 1024) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (entry.isIntersecting) setContentVisible(true);
@@ -24,7 +27,7 @@ export default function AuthLayout() {
       <div className="h-screen lg:hidden relative shrink-0 bg-black touch-pan-y">
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
-          className="absolute top-1/2 left-1/2 h-[100%] w-[220%] -translate-x-[72%] -translate-y-1/2 border-0 pointer-events-none"
+          className="absolute top-1/2 left-1/2 h-[100%] w-[220%] -translate-x-[72%] -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
