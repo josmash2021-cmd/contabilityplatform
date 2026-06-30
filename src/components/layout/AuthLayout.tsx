@@ -26,7 +26,7 @@ export default function AuthLayout() {
       {/* ─── MOBILE SPLINE: centered orb, scroll down to reveal login ─── */}
       <div className="h-screen lg:hidden relative shrink-0 bg-black touch-pan-y">
         {/* Mobile logo - top center over Spline */}
-        <div className="absolute top-14 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
           <Logo className="w-10 h-10" />
           <div className="text-center">
             <span className="font-semibold text-xl text-white block">Ai Aethel</span>
