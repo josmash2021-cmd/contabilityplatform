@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales, saleServices, paymentRecords, services, customers, accounts, journalEntries, journalEntryLines } from "@db/schema";
 import { eq, desc, sql, gte, and } from "drizzle-orm";
@@ -20,7 +20,7 @@ export const salesRouter = createRouter({
         notes: sales.notes, createdAt: sales.createdAt,
       }).from(sales).where(eq(sales.createdBy, userId)).orderBy(desc(sales.createdAt)).limit(limit).offset(offset);
       // Fetch items for each sale
-      const result = await Promise.all(salesRows.map(async (sale) => {
+      const result = await Promise.all(salesRows.map(async (sale: typeof salesRows[0]) => {
         const items = await db.select({
           serviceName: saleServices.serviceName,
           quantity: saleServices.quantity,
@@ -78,7 +78,8 @@ export const salesRouter = createRouter({
       customerId: z.number().optional(),
       customerName: z.string().optional(),
       items: z.array(z.object({
-        serviceId: z.number(),
+        serviceId: z.number().optional(),
+        serviceName: z.string().optional(),
         quantity: z.number().min(1),
         unitPrice: z.string().or(z.number()),
       })),
@@ -118,12 +119,42 @@ export const salesRouter = createRouter({
       });
       const saleId = Number(saleResult[0].insertId);
 
+      let genericCustomServiceId: number | undefined;
+
       for (const item of input.items) {
-        const svc = await db.select({ name: services.name }).from(services).where(eq(services.id, item.serviceId)).limit(1);
+        let resolvedServiceId: number;
+        let serviceName = item.serviceName;
+
+        // Custom charge: no serviceId or explicit 0
+        if (!item.serviceId) {
+          if (!genericCustomServiceId) {
+            const existing = await db.select({ id: services.id }).from(services).where(
+              and(eq(services.userId, ctx.user.id), eq(services.name, "Cargo personalizado"))
+            ).limit(1);
+            if (existing.length > 0) {
+              genericCustomServiceId = existing[0].id;
+            } else {
+              const result = await db.execute(sql`
+                INSERT INTO services (userId, name, description, price, cost, isActive)
+                VALUES (${ctx.user.id}, ${"Cargo personalizado"}, ${""}, ${"0"}, ${"0"}, ${1})
+              `);
+              genericCustomServiceId = Number(result[0].insertId);
+            }
+          }
+          resolvedServiceId = genericCustomServiceId!;
+        } else {
+          resolvedServiceId = item.serviceId;
+        }
+
+        if (!serviceName) {
+          const svc = await db.select({ name: services.name }).from(services).where(eq(services.id, resolvedServiceId)).limit(1);
+          serviceName = svc[0]?.name ?? "Servicio";
+        }
+
         await db.insert(saleServices).values({
           saleId,
-          serviceId: item.serviceId,
-          serviceName: svc[0]?.name ?? "Servicio",
+          serviceId: resolvedServiceId,
+          serviceName,
           quantity: item.quantity,
           unitPrice: String(item.unitPrice),
           total: String(Number(item.unitPrice) * item.quantity),
@@ -224,7 +255,7 @@ export const salesRouter = createRouter({
       ).orderBy(desc(sales.createdAt));
 
       // Fetch items for each sale
-      const saleIds = saleRows.map((s) => s.id);
+      const saleIds = saleRows.map((s: typeof saleRows[0]) => s.id);
       if (saleIds.length === 0) return [];
 
       const items = await db.select({
@@ -242,7 +273,7 @@ export const salesRouter = createRouter({
         itemsBySale.set(item.saleId, arr);
       }
 
-      return saleRows.map((s) => ({
+      return saleRows.map((s: typeof saleRows[0]) => ({
         ...s,
         items: itemsBySale.get(s.id) ?? [],
       }));

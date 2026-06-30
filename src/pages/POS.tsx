@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -6,14 +6,16 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp } from "lucide-react";
+import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp, DollarSign } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 
 interface CartItem {
-  serviceId: number;
+  id: string;
+  serviceId?: number;
   name: string;
   price: number;
   quantity: number;
+  isCustom?: boolean;
 }
 
 const PAYMENT_METHODS = [
@@ -50,8 +52,10 @@ export default function POS() {
   const [discount, setDiscount] = useState("0");
   const [showCart, setShowCart] = useState(false);
   const [showZellePanel, setShowZellePanel] = useState(false);
-  const [copiedZelle, setCopiedZelle] = useState(false);
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
+  const [customOpen, setCustomOpen] = useState(false);
+  const [customName, setCustomName] = useState("");
+  const [customPrice, setCustomPrice] = useState("");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -63,12 +67,25 @@ export default function POS() {
     setCart((prev) => {
       const ex = prev.find((i) => i.serviceId === service.id);
       if (ex) return prev.map((i) => i.serviceId === service.id ? { ...i, quantity: i.quantity + 1 } : i);
-      return [...prev, { serviceId: service.id!, name: service.name, price: parseFloat(String(service.price)), quantity: 1 }];
+      return [...prev, { id: crypto.randomUUID(), serviceId: service.id!, name: service.name, price: parseFloat(String(service.price)), quantity: 1 }];
     });
   };
 
-  const updateQty = (id: number, d: number) => {
-    setCart((prev) => prev.map((i) => i.serviceId === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter((i) => i.quantity > 0));
+  const addCustomCharge = () => {
+    const price = parseFloat(customPrice);
+    if (Number.isNaN(price) || price <= 0) {
+      toast.error("Ingresa un monto válido");
+      return;
+    }
+    const name = customName.trim() || "Cargo personalizado";
+    setCart((prev) => [...prev, { id: crypto.randomUUID(), name, price, quantity: 1, isCustom: true }]);
+    setCustomName("");
+    setCustomPrice("");
+    setCustomOpen(false);
+  };
+
+  const updateQty = (id: string, d: number) => {
+    setCart((prev) => prev.map((i) => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter((i) => i.quantity > 0));
   };
 
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
@@ -83,7 +100,12 @@ export default function POS() {
     createSale.mutate({
       customerId: selectedCustomer,
       customerName: selectedCustomerData ? `${selectedCustomerData.name} ${selectedCustomerData.lastName || ""}`.trim() : undefined,
-      items: cart.map((i) => ({ serviceId: i.serviceId, quantity: i.quantity, unitPrice: String(i.price.toFixed(2)) })),
+      items: cart.map((i) => ({
+        serviceId: i.serviceId,
+        serviceName: i.isCustom ? i.name : undefined,
+        quantity: i.quantity,
+        unitPrice: String(i.price.toFixed(2)),
+      })),
       subtotal: String(subtotal.toFixed(2)),
       discount: String(discountAmt.toFixed(2)),
       total: String(total.toFixed(2)),
@@ -150,10 +172,15 @@ export default function POS() {
           {filteredServices.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-center">
               <p className="text-sm text-neutral-400 mb-2">No hay servicios disponibles</p>
-              <p className="text-xs text-neutral-400 mb-4">Crea servicios primero para poder cobrar</p>
-              <Button onClick={() => window.location.href = "/services"} className="bg-black hover:bg-neutral-800 text-white text-xs h-8">
-                Ir a Servicios
-              </Button>
+              <p className="text-xs text-neutral-400 mb-4">Crea servicios primero o usa un monto libre</p>
+              <div className="flex gap-2">
+                <Button onClick={() => setCustomOpen(true)} variant="outline" className="border-neutral-200 text-black text-xs h-8">
+                  <DollarSign className="w-3.5 h-3.5 mr-1.5" /> Monto libre
+                </Button>
+                <Button onClick={() => window.location.href = "/services"} className="bg-black hover:bg-neutral-800 text-white text-xs h-8">
+                  Ir a Servicios
+                </Button>
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -172,6 +199,15 @@ export default function POS() {
                   </button>
                 </AnimatedCard>
               ))}
+              <AnimatedCard key="custom" delay={100 + filteredServices.length * 40}>
+                <button onClick={() => setCustomOpen(true)} className="w-full h-full min-h-[160px] text-left p-3 border border-dashed border-neutral-300 rounded-lg hover:border-black hover:bg-neutral-50 transition-[border-color,background-color] duration-200 ease-out-expo group flex flex-col items-center justify-center gap-2">
+                  <div className="w-full aspect-square rounded-md bg-neutral-100 mb-2 flex items-center justify-center">
+                    <DollarSign className="w-8 h-8 text-neutral-300 group-hover:text-neutral-500 transition-colors duration-150" />
+                  </div>
+                  <p className="text-sm text-black truncate">Monto libre</p>
+                  <p className="text-xs text-neutral-400">Ingresa el monto</p>
+                </button>
+              </AnimatedCard>
             </div>
           )}
         </AnimatedPage>
@@ -210,8 +246,6 @@ export default function POS() {
               setShowZellePanel={setShowZellePanel}
               companyZelleEmail={companyZelleEmail}
               hasCompanyZelle={hasCompanyZelle}
-              copiedZelle={copiedZelle}
-              setCopiedZelle={setCopiedZelle}
               handleZelleConfirm={handleZelleConfirm}
             />
           </DialogContent>
@@ -229,18 +263,18 @@ export default function POS() {
         <div className="flex-1 overflow-y-auto px-4 py-3 min-h-0">
           <div className="space-y-3">
             {cart.map((item) => (
-              <div key={item.serviceId} className="flex items-center gap-3">
+              <div key={item.id} className="flex items-center gap-3">
                 <div className="flex-1 min-w-0">
                   <p className="text-sm text-black truncate">{item.name}</p>
                   <p className="text-xs text-neutral-400">{formatCurrency(item.price)} c/u</p>
                 </div>
                 <div className="flex items-center gap-1">
-                  <button onClick={() => updateQty(item.serviceId, -1)} className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors duration-150"><Minus className="w-3 h-3" /></button>
+                  <button onClick={() => updateQty(item.id, -1)} className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors duration-150"><Minus className="w-3 h-3" /></button>
                   <span className="text-sm w-6 text-center font-medium">{item.quantity}</span>
-                  <button onClick={() => updateQty(item.serviceId, 1)} className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors duration-150"><Plus className="w-3 h-3" /></button>
+                  <button onClick={() => updateQty(item.id, 1)} className="w-7 h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600 hover:bg-neutral-200 transition-colors duration-150"><Plus className="w-3 h-3" /></button>
                 </div>
                 <span className="text-sm text-black min-w-[60px] text-right font-medium">{formatCurrency(item.price * item.quantity)}</span>
-                <button onClick={() => updateQty(item.serviceId, -999)} className="text-neutral-300 hover:text-red-500 p-1 transition-colors duration-150"><Trash2 className="w-4 h-4" /></button>
+                <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500 p-1 transition-colors duration-150"><Trash2 className="w-4 h-4" /></button>
               </div>
             ))}
           </div>
@@ -277,18 +311,18 @@ export default function POS() {
           {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">Agrega servicios</p> : (
             <div className="space-y-3">
               {cart.map((item) => (
-                <div key={item.serviceId} className="flex items-center gap-3">
+                <div key={item.id} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-black truncate">{item.name}</p>
                     <p className="text-xs text-neutral-400">{formatCurrency(item.price)} c/u</p>
                   </div>
                   <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.serviceId, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors duration-150"><Minus className="w-3 h-3" /></button>
+                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors duration-150"><Minus className="w-3 h-3" /></button>
                     <span className="text-sm w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.serviceId, 1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors duration-150"><Plus className="w-3 h-3" /></button>
+                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors duration-150"><Plus className="w-3 h-3" /></button>
                   </div>
                   <span className="text-sm text-black min-w-[56px] text-right">{formatCurrency(item.price * item.quantity)}</span>
-                  <button onClick={() => updateQty(item.serviceId, -999)} className="text-neutral-300 hover:text-red-500 transition-colors duration-150"><Trash2 className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500 transition-colors duration-150"><Trash2 className="w-3.5 h-3.5" /></button>
                 </div>
               ))}
             </div>
@@ -329,14 +363,33 @@ export default function POS() {
                 setShowZellePanel={setShowZellePanel}
                 companyZelleEmail={companyZelleEmail}
                 hasCompanyZelle={hasCompanyZelle}
-                copiedZelle={copiedZelle}
-                setCopiedZelle={setCopiedZelle}
                 handleZelleConfirm={handleZelleConfirm}
               />
             </DialogContent>
           </Dialog>
         </div>
       </div>
+
+      {/* Custom Amount Dialog */}
+      <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+        <DialogContent className="bg-white border-neutral-200 max-w-sm">
+          <DialogHeader><DialogTitle className="text-black text-base font-medium">Monto libre</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs text-neutral-500 mb-1.5 block">Descripción (opcional)</label>
+              <Input placeholder="Ej: Pago por reparación" value={customName} onChange={(e) => setCustomName(e.target.value)} className="h-9 text-sm border-neutral-200" />
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 mb-1.5 block">Monto</label>
+              <Input type="number" placeholder="0.00" value={customPrice} onChange={(e) => setCustomPrice(e.target.value)} className="h-9 text-sm border-neutral-200" min="0" step="0.01" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={() => setCustomOpen(false)} variant="outline" className="flex-1 border-neutral-200 text-black h-9 text-xs">Cancelar</Button>
+              <Button onClick={addCustomCharge} disabled={!customPrice || Number.isNaN(parseFloat(customPrice)) || parseFloat(customPrice) <= 0} className="flex-1 bg-black hover:bg-neutral-800 text-white h-9 text-xs">Agregar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -345,7 +398,7 @@ export default function POS() {
 function PaymentDialog({ 
   activePayment, setActivePayment, total, handleCheckout, createSalePending,
   showZellePanel, setShowZellePanel, companyZelleEmail, hasCompanyZelle,
-  copiedZelle, setCopiedZelle, handleZelleConfirm
+  handleZelleConfirm
 }: any) {
   return (
     <div className="relative flex flex-col h-full">
