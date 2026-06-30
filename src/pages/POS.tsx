@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -176,41 +176,51 @@ export default function POS() {
 
   const numericValue = parseFloat(amount) || 0;
 
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1023px)");
+    if (!mq.matches) return;
+    const original = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = original;
+    };
+  }, []);
+
   return (
-    <div className="h-[100dvh] flex flex-col overflow-hidden bg-white lg:min-h-screen lg:h-auto lg:block">
+    <div className="fixed inset-0 overflow-hidden bg-white lg:static lg:min-h-screen lg:block">
       {/* Main content */}
-      <div className="flex-1 min-h-0 p-2 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
+      <div className="h-full p-2 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
-            <div className="shrink-0 bg-neutral-50 rounded-lg lg:rounded-xl p-2 lg:p-3 mb-1.5 lg:mb-2 text-center border border-neutral-100">
+            <div className="shrink-0 bg-neutral-50 rounded-lg lg:rounded-xl p-1.5 lg:p-3 mb-1 lg:mb-2 text-center border border-neutral-100">
               <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Monto a cobrar</p>
-              <p className="text-2xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+              <p className="text-xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
             {/* Selected badges */}
             {(selectedService || selectedCustomerData) && (
-              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1.5 lg:gap-2 mb-1.5 lg:mb-2">
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 lg:gap-2 mb-1 lg:mb-2">
                 {selectedService && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] lg:text-xs bg-black text-white px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
-                    <Package className="w-3 h-3" /> {selectedService.name}
-                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
+                  <span className="inline-flex items-center gap-1 text-[10px] lg:text-xs bg-black text-white px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
+                    <Package className="w-2.5 h-2.5 lg:w-3 lg:h-3" /> {selectedService.name}
+                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
                   </span>
                 )}
                 {selectedCustomerData && (
-                  <span className="inline-flex items-center gap-1.5 text-[10px] lg:text-xs bg-neutral-100 text-black px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
-                    <User className="w-3 h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
-                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-3 h-3" /></button>
+                  <span className="inline-flex items-center gap-1 text-[10px] lg:text-xs bg-neutral-100 text-black px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
+                    <User className="w-2.5 h-2.5 lg:w-3 lg:h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
+                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
                   </span>
                 )}
               </div>
             )}
 
             {/* Action buttons */}
-            <div className="shrink-0 grid grid-cols-2 gap-1.5 lg:gap-2 mb-1.5 lg:mb-2">
+            <div className="shrink-0 grid grid-cols-2 gap-1.5 lg:gap-2 mb-1 lg:mb-2">
               <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
+                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
                     <Package className="w-3.5 h-3.5" /> Servicio / Producto
                   </button>
                 </DialogTrigger>
@@ -242,7 +252,7 @@ export default function POS() {
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
+                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
                     <User className="w-3.5 h-3.5" /> Cliente
                   </button>
                 </DialogTrigger>
@@ -265,12 +275,12 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-1.5 lg:mb-2">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-1 lg:mb-2">
               {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-lg bg-white border border-neutral-200 text-base lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
@@ -283,13 +293,13 @@ export default function POS() {
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="h-full rounded-lg bg-white border border-neutral-200 text-base lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="h-full rounded-lg bg-white border border-neutral-200 text-base lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
@@ -299,7 +309,7 @@ export default function POS() {
             <div className="shrink-0 grid grid-cols-3 gap-2">
               <button
                 onClick={backspace}
-                className="h-11 lg:h-12 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
+                className="h-10 lg:h-12 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -307,51 +317,45 @@ export default function POS() {
                 onClick={handleAddAnother}
                 disabled={numericValue <= 0}
                 variant="outline"
-                className="h-11 lg:h-12 rounded-lg border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                className="h-10 lg:h-12 rounded-lg border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
               >
                 <Plus className="w-4 h-4 mr-1" /> Agregar
               </Button>
               <Button
                 onClick={handleCobrarClick}
                 disabled={cart.length === 0 && numericValue <= 0}
-                className="h-11 lg:h-12 rounded-lg bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50"
+                className="h-10 lg:h-12 rounded-lg bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50"
               >
                 Cobrar
               </Button>
             </div>
 
             {/* Mobile cart preview */}
-            <div className="lg:hidden shrink-0 mt-1.5 lg:mt-2">
+            <div className="lg:hidden shrink-0 mt-1">
               {cart.length > 0 && (
-                <div className="border border-neutral-200 rounded-lg lg:rounded-xl p-2 lg:p-3">
-                  <div className="flex items-center justify-between mb-1.5 lg:mb-3">
-                    <p className="text-xs lg:text-sm font-medium">Items ({cart.length})</p>
-                    <button onClick={() => setShowCart(!showCart)} className="text-[10px] lg:text-xs text-neutral-500 flex items-center gap-1">
-                      {showCart ? "Ocultar" : "Ver"} <ChevronDown className={`w-3 h-3 transition-transform ${showCart ? "rotate-180" : ""}`} />
-                    </button>
-                  </div>
-                  {showCart && (
-                    <div className="max-h-24 overflow-y-auto space-y-2 mb-2">
-                      {cart.map((item) => (
-                        <div key={item.id} className="flex items-center gap-2">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs text-black truncate">{item.name}</p>
-                            <p className="text-[10px] text-neutral-400">{formatCurrency(item.price)} c/u</p>
-                          </div>
-                          <div className="flex items-center gap-1">
-                            <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 lg:w-7 lg:h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Minus className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
-                            <span className="text-xs w-4 lg:w-6 text-center font-medium">{item.quantity}</span>
-                            <button onClick={() => updateQty(item.id, 1)} className="w-5 h-5 lg:w-7 lg:h-7 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Plus className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
-                          </div>
-                          <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5 lg:w-4 lg:h-4" /></button>
-                        </div>
-                      ))}
+                <div className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5">
+                  <button onClick={() => setShowCart(!showCart)} className="text-xs font-medium text-black flex items-center gap-1">
+                    Items ({cart.length}) <ChevronDown className={`w-3 h-3 transition-transform ${showCart ? "rotate-180" : ""}`} />
+                  </button>
+                  <span className="text-sm font-bold text-black">{formatCurrency(total)}</span>
+                </div>
+              )}
+              {showCart && cart.length > 0 && (
+                <div className="mt-1 max-h-20 overflow-y-auto border border-neutral-200 rounded-lg p-2 space-y-1.5 bg-white">
+                  {cart.map((item) => (
+                    <div key={item.id} className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs text-black truncate">{item.name}</p>
+                        <p className="text-[10px] text-neutral-400">{formatCurrency(item.price)} c/u</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Minus className="w-2.5 h-2.5" /></button>
+                        <span className="text-xs w-4 text-center font-medium">{item.quantity}</span>
+                        <button onClick={() => updateQty(item.id, 1)} className="w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Plus className="w-2.5 h-2.5" /></button>
+                      </div>
+                      <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
                     </div>
-                  )}
-                  <div className="border-t border-neutral-100 pt-1.5 lg:pt-3 flex justify-between items-center">
-                    <span className="text-xs lg:text-sm text-neutral-500">Total</span>
-                    <span className="text-base lg:text-xl font-bold text-black">{formatCurrency(total)}</span>
-                  </div>
+                  ))}
                 </div>
               )}
             </div>
