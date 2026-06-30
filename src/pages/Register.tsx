@@ -95,7 +95,7 @@ export default function Register() {
   };
 
   return (
-    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-5 xl:p-6 animate-in fade-in slide-in-from-right-4 duration-500 transition-colors duration-500 ${
+    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-5 xl:p-6 animate-in fade-in slide-in-from-right-4 duration-500 transition-colors duration-500 bg-black/60 backdrop-blur-sm ${
       mode === "business" ? "lg:bg-black" : "lg:bg-white"
     }`}>
         <div className="flex-1 flex items-center justify-center">
@@ -284,15 +284,15 @@ export default function Register() {
             </Card>
 
             <div className="text-center space-y-2">
-              <p className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+              <p className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
                 Al registrarte, aceptas nuestros{" "}
-                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white" : "text-black"}`}>Terminos</Link>{" "}
+                <Link to="#" className={`hover:underline text-white ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Terminos</Link>{" "}
                 y{" "}
-                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white" : "text-black"}`}>Privacidad</Link>
+                <Link to="#" className={`hover:underline text-white ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Privacidad</Link>
               </p>
-              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+              <p className={`text-sm transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
                 Ya tienes cuenta?{" "}
-                <Link to="/login" className={`hover:underline font-medium ${mode === "business" ? "text-white" : "text-black"}`}>Inicia sesion</Link>
+                <Link to="/login" className={`hover:underline font-medium text-white hover:text-neutral-200 ${mode === "business" ? "lg:text-white lg:hover:text-neutral-200" : "lg:text-black lg:hover:text-neutral-600"}`}>Inicia sesion</Link>
               </p>
             </div>
           </div>

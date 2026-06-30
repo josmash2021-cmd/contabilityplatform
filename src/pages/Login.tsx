@@ -45,7 +45,7 @@ export default function Login() {
   };
 
   return (
-    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 animate-in fade-in slide-in-from-right-4 duration-500 transition-colors duration-500 ${
+    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 animate-in fade-in slide-in-from-right-4 duration-500 transition-colors duration-500 bg-black/60 backdrop-blur-sm ${
       mode === "business"
         ? "lg:bg-black"
         : "lg:bg-white"
@@ -179,11 +179,11 @@ export default function Login() {
 
             <div className="text-center space-y-3">
               <p className="text-sm">
-                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "business" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
+                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline text-neutral-300 hover:text-white ${mode === "business" ? "lg:text-neutral-400 lg:hover:text-white" : "lg:text-neutral-500 lg:hover:text-black"}`}>Olvidaste tu contrasena?</Link>
               </p>
-              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+              <p className={`text-sm transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
                 No tienes cuenta?{" "}
-                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200" : "text-black hover:text-neutral-600"}`}>Registrate</Link>
+                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium text-white hover:text-neutral-200 ${mode === "business" ? "lg:text-white lg:hover:text-neutral-200" : "lg:text-black lg:hover:text-neutral-600"}`}>Registrate</Link>
               </p>
             </div>
           </div>
