@@ -16,10 +16,10 @@ export default function AuthLayout() {
       </div>
 
       {/* ─── DESKTOP SPLINE: left side panel ─── */}
-      <div className="hidden lg:block w-[60%] h-full relative overflow-hidden bg-black">
+      <div className="hidden lg:block w-[65%] h-full relative overflow-hidden bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 -translate-x-[22%]"
+          className="absolute top-1/2 left-1/2 h-full w-[130%] -translate-x-1/2 -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -36,7 +36,7 @@ export default function AuthLayout() {
       </div>
 
       {/* ─── CONTENT OUTLET ─── */}
-      <div className="w-full lg:w-[40%] h-full relative z-10 animate-[authReveal_0.8s_ease-out_forwards]">
+      <div className="w-full lg:w-[35%] h-full relative z-10 animate-[authReveal_0.8s_ease-out_forwards]">
         <Outlet />
       </div>
     </div>
