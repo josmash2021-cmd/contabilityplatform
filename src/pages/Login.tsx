@@ -50,7 +50,7 @@ export default function Login() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[15%]"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -58,7 +58,11 @@ export default function Login() {
       </div>
 
       {/* ─── RIGHT PANEL: all content on the right (desktop) / centered (mobile) ─── */}
-      <div className="relative z-10 w-full lg:w-[40%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:bg-white p-6 sm:p-8 lg:p-10 xl:p-12">
+      <div className={`relative z-10 w-full lg:w-[40%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-10 xl:p-12 transition-colors duration-500 ${
+        mode === "business"
+          ? "lg:bg-black"
+          : "lg:bg-white"
+      }`}>
         {/* Mobile: centered form over Spline */}
         <div className="flex-1 flex items-center justify-center lg:items-start">
           <div className="w-full max-w-sm lg:max-w-md space-y-5">
@@ -75,21 +79,21 @@ export default function Login() {
             <div className="hidden lg:flex items-center gap-2">
               <Logo className="w-8 h-8" />
               <div>
-                <span className="text-black font-semibold text-lg">Ai Aethel</span>
-                <p className="text-neutral-500 text-[10px]">Accountant</p>
+                <span className={`font-semibold text-lg transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
+                <p className={`text-[10px] transition-colors duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>Accountant</p>
               </div>
             </div>
 
             {/* Headline - desktop only */}
             <div className="hidden lg:block space-y-1">
-              <h2 className="text-3xl xl:text-4xl font-bold text-black leading-tight transition-all duration-500">
+              <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
                 {mode === "business" ? (
-                  <>Tu negocio,<br /><span className="text-neutral-500">organizado.</span></>
+                  <>Tu negocio,<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>organizado.</span></>
                 ) : (
-                  <>Tus finanzas,<br /><span className="text-neutral-500">en control.</span></>
+                  <>Tus finanzas,<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>en control.</span></>
                 )}
               </h2>
-              <p className="text-neutral-600 text-sm transition-all duration-500">
+              <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
                 {mode === "business"
                   ? "La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día."
                   : "Conecta tu banco, categoriza tus gastos y toma el control de tu dinero personal con inteligencia artificial."
@@ -98,8 +102,8 @@ export default function Login() {
             </div>
 
             <div className="text-center lg:text-left space-y-1">
-              <h1 className="text-2xl lg:text-3xl font-semibold text-white lg:text-black">Bienvenido de vuelta</h1>
-              <p className="text-neutral-300 lg:text-neutral-500 text-base">Inicia sesion en tu cuenta</p>
+              <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Bienvenido de vuelta</h1>
+              <p className={`text-neutral-300 text-base transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Inicia sesion en tu cuenta</p>
             </div>
 
             <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
@@ -197,11 +201,11 @@ export default function Login() {
 
             <div className="text-center lg:text-left space-y-3">
               <p className="text-sm">
-                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
+                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "business" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
               </p>
-              <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
+              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
                 No tienes cuenta?{" "}
-                <Link to="/register" className="text-white lg:text-black transition-colors duration-300 hover:underline font-medium hover:text-neutral-200 lg:hover:text-neutral-600">Registrate</Link>
+                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200" : "text-black hover:text-neutral-600"}`}>Registrate</Link>
               </p>
             </div>
           </div>
@@ -223,11 +227,11 @@ export default function Login() {
             ]).map((f, i) => (
               <div
                 key={f.label}
-                className="bg-neutral-50 border border-neutral-200 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
+                className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
                 style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
               >
-                <f.icon className="w-5 h-5 text-black mx-auto mb-1" />
-                <p className="text-black text-[10px] font-medium leading-tight">{f.label}</p>
+                <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
+                <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
               </div>
             ))}
           </div>
@@ -235,7 +239,7 @@ export default function Login() {
 
         {/* Bottom tagline - desktop only */}
         <div className="hidden lg:block mt-auto pt-4">
-          <p className="text-neutral-500 text-xs max-w-md transition-all duration-500">
+          <p className={`text-xs max-w-md transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
             {mode === "business"
               ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
               : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
