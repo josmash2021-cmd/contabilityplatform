@@ -178,46 +178,8 @@ export default function POS() {
 
   return (
     <div className="h-[100dvh] flex flex-col overflow-hidden bg-white lg:min-h-screen lg:h-auto lg:block">
-      {/* Header */}
-      <AnimatedPage className="shrink-0">
-        <div className="px-3 lg:px-6 lg:pr-[400px] py-2 lg:pt-3 lg:pb-2 border-b border-neutral-100">
-          <div className="flex items-center justify-between">
-            <h1 className="text-base lg:text-lg font-medium text-black">Cobrar</h1>
-            {selectedCustomerData ? (
-              <div className="flex items-center gap-2">
-                <span className="inline-flex items-center gap-1.5 text-xs bg-neutral-100 px-2.5 py-1 rounded text-black">
-                  <User className="w-3 h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
-                  <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black transition-colors duration-150"><X className="w-3 h-3" /></button>
-                </span>
-              </div>
-            ) : (
-              <Dialog>
-                <DialogTrigger asChild>
-                  <button className="text-xs text-neutral-500 hover:text-black border border-neutral-200 px-3 py-1.5 rounded transition-colors duration-150">Cliente</button>
-                </DialogTrigger>
-                <DialogContent className="bg-white border-neutral-200 max-w-sm">
-                  <DialogHeader><DialogTitle className="text-black text-base font-medium">Cliente</DialogTitle></DialogHeader>
-                  <ScrollArea className="h-64">
-                    <div className="space-y-0.5">
-                      {customers?.map((c: NonNullable<typeof customers>[0]) => (
-                        <button key={c.id} onClick={() => setSelectedCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
-                          <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-black">{c.name} {c.lastName}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
-            )}
-          </div>
-        </div>
-      </AnimatedPage>
-
       {/* Main content */}
-      <div className="flex-1 min-h-0 p-2 lg:p-4 lg:pr-[400px] lg:h-[calc(100vh-52px)] lg:flex lg:items-center">
+      <div className="flex-1 min-h-0 p-2 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
@@ -226,13 +188,21 @@ export default function POS() {
               <p className="text-2xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
-            {/* Selected service badge */}
-            {selectedService && (
-              <div className="shrink-0 flex items-center justify-center gap-2 mb-1.5 lg:mb-2">
-                <span className="inline-flex items-center gap-1.5 text-[10px] lg:text-xs bg-black text-white px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
-                  <Package className="w-3 h-3" /> {selectedService.name}
-                  <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
-                </span>
+            {/* Selected badges */}
+            {(selectedService || selectedCustomerData) && (
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1.5 lg:gap-2 mb-1.5 lg:mb-2">
+                {selectedService && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] lg:text-xs bg-black text-white px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
+                    <Package className="w-3 h-3" /> {selectedService.name}
+                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+                {selectedCustomerData && (
+                  <span className="inline-flex items-center gap-1.5 text-[10px] lg:text-xs bg-neutral-100 text-black px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
+                    <User className="w-3 h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
+                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
               </div>
             )}
 
