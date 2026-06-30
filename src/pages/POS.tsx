@@ -182,7 +182,7 @@ export default function POS() {
   const numericValue = parseFloat(amount) || 0;
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col lg:flex-row bg-white">
+    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col lg:flex-row bg-white lg:pr-[380px]">
       {/* Mobile calculator */}
       <div className="lg:hidden flex-1 min-h-0 p-1.5">
         <AnimatedPage delay={100} className="w-full h-full">
@@ -330,8 +330,8 @@ export default function POS() {
         </AnimatedPage>
       </div>
 
-      {/* Desktop left half: calculator */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col p-4 h-full">
+      {/* Desktop left: calculator */}
+      <div className="hidden lg:flex lg:w-[42%] flex-col p-4 h-full">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto h-full flex flex-col">
             {/* Amount display */}
@@ -389,23 +389,21 @@ export default function POS() {
         </AnimatedPage>
       </div>
 
-      {/* Desktop right half: options panel */}
-      <div className="hidden lg:flex lg:w-1/2 h-full border-l border-neutral-200 bg-white">
+      {/* Desktop center: services/customers panel */}
+      <div className="hidden lg:flex lg:flex-1 flex-col h-full border-l border-neutral-200 bg-white">
         {/* Vertical action buttons */}
-        <div className="w-20 border-r border-neutral-200 flex flex-col items-center justify-center gap-6 py-6 shrink-0 bg-white z-10">
+        <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-neutral-100 bg-white">
           <button
             onClick={() => setLeftPanel("services")}
-            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
-            <Package className="w-6 h-6" />
-            <span className="text-[9px] font-medium">Servicio</span>
+            <Package className="w-4 h-4" /> Servicios
           </button>
           <button
             onClick={() => setLeftPanel("customers")}
-            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
-            <User className="w-6 h-6" />
-            <span className="text-[9px] font-medium">Cliente</span>
+            <User className="w-4 h-4" /> Clientes
           </button>
         </div>
 
@@ -457,35 +455,6 @@ export default function POS() {
               </ScrollArea>
             </>
           )}
-
-          {/* Desktop cart summary */}
-          <div className="border-t border-neutral-200 p-4 space-y-3">
-            <div className="flex justify-between text-sm">
-              <span className="text-neutral-400">Items ({cart.length})</span>
-              <span className="text-black">{formatCurrency(subtotal)}</span>
-            </div>
-            <div className="flex justify-between text-sm items-center">
-              <span className="text-neutral-400">Descuento</span>
-              <div className="flex items-center gap-2">
-                <div className="flex bg-gray-100 rounded-full p-0.5">
-                  <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
-                  <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
-                </div>
-                <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
-              </div>
-            </div>
-            {discountType === "percentage" && discountRaw > 0 && (
-              <div className="flex justify-between text-xs">
-                <span className="text-neutral-400">Equivale a</span>
-                <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
-              </div>
-            )}
-            <div className="border-t border-neutral-100 pt-2 flex justify-between items-center">
-              <span className="text-black font-medium">Total</span>
-              <span className="text-xl font-medium text-black">{formatCurrency(total)}</span>
-            </div>
-            <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
-          </div>
         </div>
       </div>
 
@@ -507,6 +476,55 @@ export default function POS() {
           />
         </DialogContent>
       </Dialog>
+
+      {/* Desktop right: cart sidebar */}
+      <div className="hidden lg:flex fixed right-0 top-0 bottom-0 w-[380px] border-l border-neutral-200 bg-white flex-col">
+        <div className="px-5 pt-4 pb-2 border-b border-neutral-100">
+          <p className="text-xs text-neutral-400">{cart.length} items</p>
+        </div>
+        <ScrollArea className="flex-1 px-5 py-2">
+          {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">Agrega un monto para cobrar</p> : (
+            <div className="space-y-3">
+              {cart.map((item) => (
+                <div key={item.id} className="flex items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm text-black truncate">{item.name}</p>
+                    <p className="text-xs text-neutral-400">{formatCurrency(item.price)} c/u</p>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Minus className="w-3 h-3" /></button>
+                    <span className="text-sm w-5 text-center">{item.quantity}</span>
+                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Plus className="w-3 h-3" /></button>
+                  </div>
+                  <span className="text-sm text-black min-w-[56px] text-right">{formatCurrency(item.price * item.quantity)}</span>
+                  <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+        <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
+          <div className="flex justify-between text-sm"><span className="text-neutral-400">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
+          <div className="flex justify-between text-sm items-center">
+            <span className="text-neutral-400">Descuento</span>
+            <div className="flex items-center gap-2">
+              <div className="flex bg-gray-100 rounded-full p-0.5">
+                <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
+                <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
+              </div>
+              <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
+            </div>
+          </div>
+          {discountType === "percentage" && discountRaw > 0 && (
+            <div className="flex justify-between text-xs">
+              <span className="text-neutral-400">Equivale a</span>
+              <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
+            </div>
+          )}
+          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
+          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">Cobrar</Button>
+        </div>
+      </div>
     </div>
   );
 }
