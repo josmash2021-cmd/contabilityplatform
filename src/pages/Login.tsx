@@ -45,9 +45,9 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen flex relative">
-      {/* Spline background - ALL screen sizes */}
-      <div className="fixed inset-0 z-0">
+    <div className="min-h-screen relative flex flex-col lg:flex-row">
+      {/* ─── SPLINE BACKGROUND: left half on desktop, full on mobile ─── */}
+      <div className="fixed inset-0 lg:inset-y-0 lg:left-0 lg:right-auto lg:w-1/2 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
           className="absolute inset-0 w-full h-full border-0"
@@ -55,44 +55,163 @@ export default function Login() {
           loading="eager"
           title="Spline background"
         />
-        {/* Overlay: lighter on mobile, darker on desktop */}
-        <div className="absolute inset-0 bg-black/30 lg:bg-black/60" />
+        {/* Overlay: mobile covers everything, desktop only the left half */}
+        <div className="absolute inset-0 bg-black/50 lg:bg-black/20" />
       </div>
 
-      {/* ─── LEFT PANEL: Content over video (desktop only) ─── */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative z-10">
+      {/* ─── RIGHT PANEL: all content (desktop) / form only (mobile) ─── */}
+      <div className="relative z-10 flex-1 lg:ml-auto lg:w-1/2 min-h-screen flex flex-col p-6 sm:p-8 lg:p-10 xl:p-12 lg:bg-white">
+        {/* Desktop logo */}
+        <div className="hidden lg:flex items-center gap-2 mb-10">
+          <Logo className="w-8 h-8" />
+          <div>
+            <span className="text-black font-semibold text-lg">Ai Aethel</span>
+            <p className="text-neutral-500 text-[10px]">Accountant</p>
+          </div>
+        </div>
 
-        {/* Top */}
-        <div className="relative z-10">
-          <div className="flex items-center gap-2">
-            <Logo className="w-8 h-8" />
-            <div>
-              <span className="text-white font-semibold text-lg">Ai Aethel</span>
-              <p className="text-neutral-400 text-[10px]">Accountant</p>
+        {/* Mobile: centered form over Spline */}
+        <div className="flex-1 flex items-center justify-center lg:items-start">
+          <div className="w-full max-w-sm lg:max-w-md space-y-6">
+            {/* Mobile logo */}
+            <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
+              <Logo className="w-10 h-10" />
+              <div className="text-center">
+                <span className="text-white font-semibold text-xl block">Ai Aethel</span>
+                <p className="text-neutral-300 text-xs">Accountant</p>
+              </div>
+            </div>
+
+            {/* Headline - desktop only */}
+            <div className="hidden lg:block space-y-2">
+              <h2 className="text-3xl xl:text-4xl font-bold text-black leading-tight transition-all duration-500">
+                {mode === "business" ? (
+                  <>Tu negocio,<br /><span className="text-neutral-500">organizado.</span></>
+                ) : (
+                  <>Tus finanzas,<br /><span className="text-neutral-500">en control.</span></>
+                )}
+              </h2>
+              <p className="text-neutral-600 text-sm max-w-sm transition-all duration-500">
+                {mode === "business"
+                  ? "La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día."
+                  : "Conecta tu banco, categoriza tus gastos y toma el control de tu dinero personal con inteligencia artificial."
+                }
+              </p>
+            </div>
+
+            <div className="text-center lg:text-left space-y-1">
+              <h1 className="text-2xl lg:text-3xl font-semibold text-white lg:text-black">Bienvenido de vuelta</h1>
+              <p className="text-neutral-300 lg:text-neutral-500 text-base">Inicia sesion en tu cuenta</p>
+            </div>
+
+            <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
+              mode === "personal"
+                ? "bg-black border-white/20 text-white"
+                : "bg-white border-neutral-200 text-black"
+            }`}>
+              <CardContent className="p-6 sm:p-8">
+                {/* Mode Toggle */}
+                <div className="flex items-center justify-center mb-5">
+                  <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
+                    mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
+                  }`}>
+                    {/* Sliding background pill */}
+                    <div
+                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
+                        mode === "personal" ? "bg-white" : "bg-black"
+                      }`}
+                      style={{
+                        left: mode === "business" ? "4px" : "calc(50%)",
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMode("business")}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
+                        mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
+                      }`}
+                    >
+                      <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("personal")}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
+                        mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                      }`}
+                    >
+                      <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-5">
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
+                    <Input
+                      type="email"
+                      placeholder="tu@email.com"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${
+                        mode === "personal"
+                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder="Tu contrasena"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${
+                          mode === "personal"
+                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={loginMut.isPending}
+                    className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
+                  >
+                    {loginMut.isPending ? (
+                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
+                    ) : null}
+                    Iniciar Sesion
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <div className="text-center lg:text-left space-y-3">
+              <p className="text-sm">
+                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
+              </p>
+              <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
+                No tienes cuenta?{" "}
+                <Link to="/register" className="text-white lg:text-black transition-colors duration-300 hover:underline font-medium hover:text-neutral-200 lg:hover:text-neutral-600">Registrate</Link>
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Center content */}
-        <div className="relative z-10 space-y-8">
-          <div className="space-y-4">
-            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight transition-all duration-500">
-              {mode === "business" ? (
-                <>Tu negocio,<br /><span className="text-neutral-300">organizado.</span></>
-              ) : (
-                <>Tus finanzas,<br /><span className="text-neutral-300">en control.</span></>
-              )}
-            </h2>
-            <p className="text-neutral-300 text-sm max-w-sm transition-all duration-500">
-              {mode === "business"
-                ? "La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día."
-                : "Conecta tu banco, categoriza tus gastos y toma el control de tu dinero personal con inteligencia artificial."
-              }
-            </p>
-          </div>
-
-          {/* Feature cards - animated switch */}
-          <div className="grid grid-cols-2 gap-3 max-w-md" key={mode}>
+        {/* Feature cards - desktop only */}
+        <div className="hidden lg:block mt-8" key={mode}>
+          <div className="grid grid-cols-2 gap-3 max-w-lg">
             {(mode === "business" ? [
               { icon: Wallet, label: "Contabilidad Autónoma", desc: "Tu libro diario con Ai Aethel se actualiza solo, sin tocar una tecla" },
               { icon: TrendingUp, label: "Análisis Predictivo", desc: "Proyecta tu flujo de caja con Ai Aethel y detecta riesgos antes de que ocurran" },
@@ -106,148 +225,25 @@ export default function Login() {
             ]).map((f, i) => (
               <div
                 key={f.label}
-                className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500"
+                className="bg-neutral-50 border border-neutral-200 rounded-lg p-3 animate-in fade-in slide-in-from-bottom-4 duration-500"
                 style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
               >
-                <f.icon className="w-4 h-4 text-white mb-2" />
-                <p className="text-white text-xs font-medium leading-tight">{f.label}</p>
-                <p className="text-white/80 text-[11px] leading-relaxed mt-1">{f.desc}</p>
+                <f.icon className="w-4 h-4 text-black mb-2" />
+                <p className="text-black text-xs font-medium leading-tight">{f.label}</p>
+                <p className="text-neutral-600 text-[11px] leading-relaxed mt-1">{f.desc}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Bottom: AI agent tagline */}
-        <div className="relative z-10">
-          <p className="text-neutral-400 text-xs transition-all duration-500">
+        {/* Bottom tagline - desktop only */}
+        <div className="hidden lg:block mt-auto pt-6">
+          <p className="text-neutral-500 text-xs max-w-md transition-all duration-500">
             {mode === "business"
               ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
               : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
             }
           </p>
-        </div>
-      </div>
-
-      {/* ─── RIGHT PANEL: Login Form ─── */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-8 relative z-10">
-        <div className="w-full max-w-sm space-y-8">
-          {/* Mobile logo */}
-          <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
-            <Logo className="w-10 h-10" />
-            <div className="text-center">
-              <span className="text-white font-semibold text-xl block">Ai Aethel</span>
-              <p className="text-neutral-300 text-xs">Accountant</p>
-            </div>
-          </div>
-
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-semibold text-white lg:text-black">Bienvenido de vuelta</h1>
-            <p className="text-neutral-300 lg:text-neutral-400 text-base">Inicia sesion en tu cuenta</p>
-          </div>
-
-          <Card className={`rounded-2xl shadow-none border transition-colors duration-300 ${
-            mode === "personal"
-              ? "bg-black border-white/20 text-white"
-              : "bg-white border-neutral-200 text-black"
-          }`}>
-            <CardContent className="p-6 sm:p-8">
-              {/* Mode Toggle */}
-                  {/* Animated Mode Switch */}
-              <div className="flex items-center justify-center mb-5">
-                <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
-                  mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
-                }`}>
-                  {/* Sliding background pill */}
-                  <div
-                    className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                      mode === "personal" ? "bg-white" : "bg-black"
-                    }`}
-                    style={{
-                      left: mode === "business" ? "4px" : "calc(50%)",
-                    }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMode("business")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
-                    }`}
-                  >
-                    <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("personal")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                      mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
-                    }`}
-                  >
-                    <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-5">
-                <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
-                  <Input
-                    type="email"
-                    placeholder="tu@email.com"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${
-                      mode === "personal"
-                        ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                        : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                    }`}
-                  />
-                </div>
-                <div>
-                  <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Tu contrasena"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${
-                        mode === "personal"
-                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                      }`}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-                <Button
-                  type="submit"
-                  disabled={loginMut.isPending}
-                  className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
-                >
-                  {loginMut.isPending ? (
-                    <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                  ) : null}
-                  Iniciar Sesion
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
-
-          <div className="text-center space-y-3 mt-4">
-            <p className="text-sm">
-              <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "personal" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
-            </p>
-            <p className={`text-sm transition-colors duration-300 ${mode === "personal" ? "text-neutral-500" : "text-neutral-400"}`}>
-              No tienes cuenta?{" "}
-              <Link to="/register" className="text-white transition-colors duration-300 hover:underline font-medium hover:text-neutral-200">Registrate</Link>
-            </p>
-          </div>
         </div>
       </div>
     </div>
