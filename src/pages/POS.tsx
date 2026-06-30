@@ -175,9 +175,9 @@ export default function POS() {
   const numericValue = parseFloat(amount) || 0;
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] lg:h-screen flex flex-col bg-white lg:block">
+    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col bg-white lg:block">
       {/* Main content */}
-      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
+      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-full lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
@@ -263,7 +263,7 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 lg:gap-2 mb-2 lg:max-h-[480px]">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 lg:gap-2 mb-2">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                 <button
                   key={digit}
