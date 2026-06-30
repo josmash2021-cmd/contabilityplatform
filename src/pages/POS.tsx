@@ -61,6 +61,7 @@ export default function POS() {
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
+  const [leftPanel, setLeftPanel] = useState<"none" | "services" | "customers">("none");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -93,6 +94,12 @@ export default function POS() {
     setAmount(String(service.price ?? "0"));
     setServiceDialogOpen(false);
     setServiceSearch("");
+    setLeftPanel("none");
+  };
+
+  const selectCustomer = (id: number) => {
+    setSelectedCustomer(id);
+    setLeftPanel("none");
   };
 
   const clearService = () => {
@@ -175,11 +182,86 @@ export default function POS() {
   const numericValue = parseFloat(amount) || 0;
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col bg-white lg:block">
-      {/* Main content */}
-      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-full lg:flex lg:items-center">
+    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col lg:flex-row bg-white">
+      {/* Desktop left action bar */}
+      <div className="hidden lg:flex flex-col items-center justify-center w-20 border-r border-neutral-200 bg-white shrink-0 gap-6 py-6">
+        <button
+          onClick={() => setLeftPanel(leftPanel === "services" ? "none" : "services")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+        >
+          <Package className="w-6 h-6" />
+          <span className="text-[9px] font-medium">Servicio</span>
+        </button>
+        <button
+          onClick={() => setLeftPanel(leftPanel === "customers" ? "none" : "customers")}
+          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+        >
+          <User className="w-6 h-6" />
+          <span className="text-[9px] font-medium">Cliente</span>
+        </button>
+      </div>
+
+      {/* Desktop animated side panel */}
+      <div
+        className={`hidden lg:flex flex-col border-r border-neutral-200 bg-white overflow-hidden transition-all duration-300 ease-in-out ${leftPanel !== "none" ? "w-80 opacity-100" : "w-0 opacity-0"}`}
+      >
+        {leftPanel === "services" && (
+          <div className="flex flex-col h-full w-80">
+            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-black">Seleccionar servicio</h3>
+              <button onClick={() => setLeftPanel("none")} className="text-neutral-400 hover:text-black"><X className="w-4 h-4" /></button>
+            </div>
+            <div className="p-3">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
+              </div>
+            </div>
+            <ScrollArea className="flex-1 px-3">
+              <div className="space-y-0.5">
+                {filteredServices.length === 0 ? (
+                  <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
+                ) : (
+                  filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
+                    <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
+                        <p className="text-sm text-black">{s.name}</p>
+                      </div>
+                      <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
+                    </button>
+                  ))
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+        {leftPanel === "customers" && (
+          <div className="flex flex-col h-full w-80">
+            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
+              <h3 className="text-sm font-medium text-black">Cliente</h3>
+              <button onClick={() => setLeftPanel("none")} className="text-neutral-400 hover:text-black"><X className="w-4 h-4" /></button>
+            </div>
+            <ScrollArea className="flex-1 px-3 py-2">
+              <div className="space-y-0.5">
+                {customers?.map((c: NonNullable<typeof customers>[0]) => (
+                  <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
+                    <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-black">{c.name} {c.lastName}</p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </ScrollArea>
+          </div>
+        )}
+      </div>
+
+      {/* Calculator area */}
+      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-full">
         <AnimatedPage delay={100} className="w-full h-full">
-          <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
+          <div className="max-w-md mx-auto lg:mx-0 h-full flex flex-col">
             {/* Amount display */}
             <div className="shrink-0 py-1.5 lg:py-3 mb-1 lg:mb-2 text-center bg-neutral-50 rounded-xl lg:rounded-2xl border border-neutral-100">
               <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5 lg:mb-1">Monto a cobrar</p>
@@ -204,11 +286,11 @@ export default function POS() {
               </div>
             )}
 
-            {/* Action buttons */}
-            <div className="shrink-0 grid grid-cols-2 gap-2 mb-2 lg:mb-3">
+            {/* Action buttons - mobile only */}
+            <div className="lg:hidden shrink-0 grid grid-cols-2 gap-2 mb-2">
               <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-2.5 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
+                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
                     <Package className="w-4 h-4" /> Servicio / Producto
                   </button>
                 </DialogTrigger>
@@ -240,7 +322,7 @@ export default function POS() {
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-1.5 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
+                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
                     <User className="w-4 h-4" /> Cliente
                   </button>
                 </DialogTrigger>
@@ -415,7 +497,6 @@ export default function POS() {
     </div>
   );
 }
-
 // Extracted Payment Dialog Component
 function PaymentDialog({
   activePayment, setActivePayment, total, handleCheckout, createSalePending,
