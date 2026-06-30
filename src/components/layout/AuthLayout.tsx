@@ -21,18 +21,18 @@ export default function AuthLayout() {
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col lg:flex-row relative">
       {/* ─── MOBILE SPLINE: centered orb, scroll down to reveal login ─── */}
-      <div className="h-[85vh] lg:hidden relative overflow-hidden shrink-0 bg-black">
+      <div className="h-screen lg:hidden relative overflow-hidden shrink-0 bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
-          className="absolute top-1/2 left-1/2 h-[90%] w-[120%] -translate-x-[72%] -translate-y-[50%] border-0"
+          className="absolute top-1/2 left-1/2 h-[120%] w-[160%] -translate-x-[78%] -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
         />
-        {/* Scroll hint - centered below orb */}
-        <div className="absolute bottom-6 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1.5 z-10 animate-bounce">
-          <span className="text-[10px] text-white/60 tracking-widest uppercase font-medium">Desliza hacia abajo</span>
-          <svg className="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        {/* Scroll hint */}
+        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 z-10 animate-bounce">
+          <span className="text-[10px] text-white/50 tracking-widest uppercase">Desliza hacia abajo</span>
+          <svg className="w-4 h-4 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 14l-7 7m0 0l-7-7m7 7V3" />
           </svg>
         </div>
