@@ -29,6 +29,7 @@ import NotFound from "@/pages/NotFound";
 import Diagnostico from "@/pages/Diagnostico";
 import Admin from "@/pages/Admin";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import AuthLayout from "@/components/layout/AuthLayout";
 
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -51,9 +52,11 @@ function PublicGuard({ children }: { children: React.ReactNode }) {
 export default function App() {
   return (
     <Routes>
-      {/* Public routes - only accessible when NOT logged in */}
-      <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
-      <Route path="/register" element={<Register />} />
+      {/* Public auth routes - shared layout keeps Spline from reloading */}
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
+        <Route path="/register" element={<Register />} />
+      </Route>
       <Route path="/forgot-password" element={<PublicGuard><ForgotPassword /></PublicGuard>} />
 
       {/* Onboarding - accessible when logged in */}

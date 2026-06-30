@@ -45,33 +45,11 @@ export default function Login() {
   };
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex relative">
-      {/* ─── SPLINE BACKGROUND: full screen ─── */}
-      <div className="fixed inset-0 z-0">
-        <iframe
-          src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
-          allowFullScreen
-          loading="eager"
-          title="Spline background"
-        />
-      </div>
-
-      {/* Desktop logo - top left corner over Spline */}
-      <div className="hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2">
-        <Logo className="w-8 h-8" />
-        <div>
-          <span className="font-semibold text-lg text-white">Ai Aethel</span>
-          <p className="text-[10px] text-neutral-300">Accountant</p>
-        </div>
-      </div>
-
-      {/* ─── RIGHT PANEL: all content on the right (desktop) / centered (mobile) ─── */}
-      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 transition-colors duration-500 ${
-        mode === "business"
-          ? "lg:bg-black"
-          : "lg:bg-white"
-      }`}>
+    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 animate-in fade-in slide-in-from-right-4 duration-500 transition-colors duration-500 ${
+      mode === "business"
+        ? "lg:bg-black"
+        : "lg:bg-white"
+    }`}>
         {/* Mobile: centered form over Spline */}
         <div className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
@@ -251,6 +229,5 @@ export default function Login() {
           </div>
         </div>
       </div>
-    </div>
   );
 }
