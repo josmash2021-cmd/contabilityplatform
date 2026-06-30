@@ -93,7 +93,7 @@ export default function Register() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:scale-[0.85] lg:-translate-x-[18%]"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -101,7 +101,7 @@ export default function Register() {
       </div>
 
       {/* ─── RIGHT PANEL: content (desktop) / centered (mobile) ─── */}
-      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-8 xl:p-10 transition-colors duration-500 ${
+      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-6 xl:p-8 transition-colors duration-500 ${
         mode === "business" ? "lg:bg-black" : "lg:bg-white"
       }`}>
         <div className="flex-1 flex items-center justify-center lg:items-start">
