@@ -1,16 +1,7 @@
-import { useState, useEffect } from "react";
 import { Outlet } from "react-router";
 import { Logo } from "@/components/Logo";
 
 export default function AuthLayout() {
-  const [showContent, setShowContent] = useState(false);
-
-  // Initial reveal: Spline first, then content after 3s
-  useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 3000);
-    return () => clearTimeout(timer);
-  }, []);
-
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden flex relative">
       {/* ─── MOBILE SPLINE: full screen, centered ─── */}
@@ -36,11 +27,7 @@ export default function AuthLayout() {
       </div>
 
       {/* Desktop logo - top left corner over Spline */}
-      <div
-        className={`hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2 transition-opacity duration-700 ${
-          showContent ? "opacity-100" : "opacity-0"
-        }`}
-      >
+      <div className="hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2">
         <Logo className="w-8 h-8" />
         <div>
           <span className="font-semibold text-lg text-white">Ai Aethel</span>
@@ -48,12 +35,8 @@ export default function AuthLayout() {
         </div>
       </div>
 
-      {/* ─── CONTENT OUTLET: shared layout prevents page reload ─── */}
-      <div
-        className={`w-full h-full transition-opacity duration-700 ${
-          showContent ? "opacity-100" : "opacity-0"
-        }`}
-      >
+      {/* ─── CONTENT OUTLET ─── */}
+      <div className="w-full h-full">
         <Outlet />
       </div>
     </div>
