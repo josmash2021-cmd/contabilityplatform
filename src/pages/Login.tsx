@@ -55,7 +55,6 @@ export default function Login() {
           loading="eager"
           title="Spline background"
         />
-        <div className="absolute inset-0 bg-black/30 lg:bg-black/40" />
       </div>
 
       {/* ─── LEFT PANEL: content aligned left so it doesn't cover the orb/text ─── */}
