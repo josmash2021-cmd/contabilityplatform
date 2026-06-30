@@ -61,7 +61,7 @@ export default function POS() {
   const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
-  const [leftPanel, setLeftPanel] = useState<"none" | "services" | "customers">("none");
+  const [leftPanel, setLeftPanel] = useState<"none" | "services" | "customers">("services");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -183,36 +183,36 @@ export default function POS() {
 
   return (
     <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col lg:flex-row bg-white">
-      {/* Calculator area */}
-      <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-full">
+      {/* Mobile calculator */}
+      <div className="lg:hidden flex-1 min-h-0 p-1.5">
         <AnimatedPage delay={100} className="w-full h-full">
-          <div className="max-w-md mx-auto lg:mx-0 lg:max-w-sm h-full flex flex-col">
+          <div className="max-w-md mx-auto h-full flex flex-col">
             {/* Amount display */}
-            <div className="shrink-0 py-1.5 lg:py-3 mb-1 lg:mb-2 text-center bg-neutral-50 rounded-xl lg:rounded-2xl border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5 lg:mb-1">Monto a cobrar</p>
-              <p className="text-3xl lg:text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+            <div className="shrink-0 py-1.5 mb-1 text-center bg-neutral-50 rounded-xl border border-neutral-100">
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Monto a cobrar</p>
+              <p className="text-3xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
             {/* Selected badges */}
             {(selectedService || selectedCustomerData) && (
-              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 lg:gap-2 mb-1 lg:mb-2">
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 mb-1">
                 {selectedService && (
-                  <span className="inline-flex items-center gap-1 text-[10px] lg:text-xs bg-black text-white px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
-                    <Package className="w-2.5 h-2.5 lg:w-3 lg:h-3" /> {selectedService.name}
-                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-black text-white px-2 py-0.5 rounded-full">
+                    <Package className="w-2.5 h-2.5" /> {selectedService.name}
+                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-2.5 h-2.5" /></button>
                   </span>
                 )}
                 {selectedCustomerData && (
-                  <span className="inline-flex items-center gap-1 text-[10px] lg:text-xs bg-neutral-100 text-black px-2 py-0.5 lg:px-2.5 lg:py-1 rounded-full">
-                    <User className="w-2.5 h-2.5 lg:w-3 lg:h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
-                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-2.5 h-2.5 lg:w-3 lg:h-3" /></button>
+                  <span className="inline-flex items-center gap-1 text-[10px] bg-neutral-100 text-black px-2 py-0.5 rounded-full">
+                    <User className="w-2.5 h-2.5" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
+                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-2.5 h-2.5" /></button>
                   </span>
                 )}
               </div>
             )}
 
-            {/* Action buttons - mobile only */}
-            <div className="lg:hidden shrink-0 grid grid-cols-2 gap-2 mb-2">
+            {/* Action buttons */}
+            <div className="shrink-0 grid grid-cols-2 gap-2 mb-2">
               <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                 <DialogTrigger asChild>
                   <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
@@ -270,57 +270,35 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 lg:gap-2 mb-2">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 mb-2">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
               ))}
-              <button
-                onClick={backspace}
-                className="h-full rounded-xl lg:rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
-              >
-                <X className="w-6 h-6 lg:w-8 lg:h-8" />
+              <button onClick={backspace} className="h-full rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center">
+                <X className="w-6 h-6" />
               </button>
-              <button
-                onClick={() => appendDigit("0")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
-              >
-                0
-              </button>
-              <button
-                onClick={() => appendDigit(".")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
-              >
-                .
-              </button>
+              <button onClick={() => appendDigit("0")} className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">0</button>
+              <button onClick={() => appendDigit(".")} className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">.</button>
             </div>
 
-            {/* Bottom row: add, charge */}
+            {/* Bottom row */}
             <div className="shrink-0 grid grid-cols-2 gap-2">
-              <Button
-                onClick={handleAddAnother}
-                disabled={numericValue <= 0}
-                variant="outline"
-                className="h-11 lg:h-14 rounded-xl lg:rounded-lg border-neutral-200 text-black text-sm lg:text-base font-medium hover:bg-neutral-50 disabled:opacity-50"
-              >
-                <Plus className="w-4 h-4 lg:w-5 lg:h-5 mr-1" /> Agregar
+              <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-11 rounded-xl border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50">
+                <Plus className="w-4 h-4 mr-1" /> Agregar
               </Button>
-              <Button
-                onClick={handleCobrarClick}
-                disabled={cart.length === 0 && numericValue <= 0}
-                className="h-11 lg:h-14 rounded-xl lg:rounded-lg bg-black hover:bg-neutral-800 text-white text-sm lg:text-base font-medium disabled:opacity-50"
-              >
+              <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-11 rounded-xl bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50">
                 Cobrar
               </Button>
             </div>
 
             {/* Mobile cart preview */}
-            <div className="lg:hidden shrink-0 mt-1">
+            <div className="shrink-0 mt-1">
               {cart.length > 0 && (
                 <div className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5">
                   <button onClick={() => setShowCart(!showCart)} className="text-xs font-medium text-black flex items-center gap-1">
@@ -352,127 +330,162 @@ export default function POS() {
         </AnimatedPage>
       </div>
 
-      {/* Desktop animated side panel */}
-      <div
-        className={`hidden lg:flex fixed top-0 bottom-0 z-20 flex-col border-l border-neutral-200 bg-white overflow-hidden transition-all duration-300 ease-in-out w-72 ${leftPanel !== "none" ? "left-[calc(100%-380px-18rem)] opacity-100" : "left-full opacity-0"}`}
-      >
-        {leftPanel === "services" && (
-          <div className="flex flex-col h-full w-72">
-            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-black">Seleccionar servicio</h3>
-              <button onClick={() => setLeftPanel("none")} className="text-neutral-400 hover:text-black"><X className="w-4 h-4" /></button>
+      {/* Desktop left half: calculator */}
+      <div className="hidden lg:flex lg:w-1/2 flex-col p-4 h-full">
+        <AnimatedPage delay={100} className="w-full h-full">
+          <div className="max-w-md mx-auto h-full flex flex-col">
+            {/* Amount display */}
+            <div className="shrink-0 py-3 mb-2 text-center bg-neutral-50 rounded-2xl border border-neutral-100">
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-1">Monto a cobrar</p>
+              <p className="text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
-            <div className="p-3">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
-              </div>
-            </div>
-            <ScrollArea className="flex-1 px-3">
-              <div className="space-y-0.5">
-                {filteredServices.length === 0 ? (
-                  <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
-                ) : (
-                  filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
-                    <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
-                        <p className="text-sm text-black">{s.name}</p>
-                      </div>
-                      <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
-                    </button>
-                  ))
+
+            {/* Selected badges */}
+            {(selectedService || selectedCustomerData) && (
+              <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 mb-2">
+                {selectedService && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-black text-white px-2.5 py-1 rounded-full">
+                    <Package className="w-3 h-3" /> {selectedService.name}
+                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
+                  </span>
+                )}
+                {selectedCustomerData && (
+                  <span className="inline-flex items-center gap-1 text-xs bg-neutral-100 text-black px-2.5 py-1 rounded-full">
+                    <User className="w-3 h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
+                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-3 h-3" /></button>
+                  </span>
                 )}
               </div>
-            </ScrollArea>
-          </div>
-        )}
-        {leftPanel === "customers" && (
-          <div className="flex flex-col h-full w-72">
-            <div className="px-4 py-3 border-b border-neutral-100 flex items-center justify-between">
-              <h3 className="text-sm font-medium text-black">Cliente</h3>
-              <button onClick={() => setLeftPanel("none")} className="text-neutral-400 hover:text-black"><X className="w-4 h-4" /></button>
-            </div>
-            <ScrollArea className="flex-1 px-3 py-2">
-              <div className="space-y-0.5">
-                {customers?.map((c: NonNullable<typeof customers>[0]) => (
-                  <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
-                    <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-black">{c.name} {c.lastName}</p>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </ScrollArea>
-          </div>
-        )}
-      </div>
+            )}
 
-      {/* Desktop right action bar */}
-      <div className="hidden lg:flex fixed right-[380px] top-1/2 -translate-y-1/2 z-30 flex-col items-center justify-center w-20 border-l border-neutral-200 bg-white gap-6 py-6">
-        <button
-          onClick={() => setLeftPanel(leftPanel === "services" ? "none" : "services")}
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
-        >
-          <Package className="w-6 h-6" />
-          <span className="text-[9px] font-medium">Servicio</span>
-        </button>
-        <button
-          onClick={() => setLeftPanel(leftPanel === "customers" ? "none" : "customers")}
-          className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
-        >
-          <User className="w-6 h-6" />
-          <span className="text-[9px] font-medium">Cliente</span>
-        </button>
-      </div>
-
-      {/* Desktop Cart Sidebar */}
-      <div className="hidden lg:flex fixed right-0 top-0 bottom-0 w-[380px] border-l border-neutral-200 bg-white flex-col">
-        <div className="px-5 pt-4 pb-2 border-b border-neutral-100">
-          <p className="text-xs text-neutral-400">{cart.length} items</p>
-        </div>
-        <ScrollArea className="flex-1 px-5 py-2">
-          {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">Agrega un monto para cobrar</p> : (
-            <div className="space-y-3">
-              {cart.map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-black truncate">{item.name}</p>
-                    <p className="text-xs text-neutral-400">{formatCurrency(item.price)} c/u</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Minus className="w-3 h-3" /></button>
-                    <span className="text-sm w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Plus className="w-3 h-3" /></button>
-                  </div>
-                  <span className="text-sm text-black min-w-[56px] text-right">{formatCurrency(item.price * item.quantity)}</span>
-                  <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
+            {/* Numeric keypad */}
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-2 mb-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                <button
+                  key={digit}
+                  onClick={() => appendDigit(digit)}
+                  className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                >
+                  {digit}
+                </button>
               ))}
+              <button onClick={backspace} className="h-full rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center">
+                <X className="w-8 h-8" />
+              </button>
+              <button onClick={() => appendDigit("0")} className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">0</button>
+              <button onClick={() => appendDigit(".")} className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">.</button>
             </div>
-          )}
-        </ScrollArea>
-        <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
-          <div className="flex justify-between text-sm"><span className="text-neutral-400">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
-          <div className="flex justify-between text-sm items-center">
-            <span className="text-neutral-400">Descuento</span>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-gray-100 rounded-full p-0.5">
-                <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
-                <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
-              </div>
-              <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
+
+            {/* Bottom row */}
+            <div className="shrink-0 grid grid-cols-2 gap-2">
+              <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-14 rounded-lg border-neutral-200 text-black text-base font-medium hover:bg-neutral-50 disabled:opacity-50">
+                <Plus className="w-5 h-5 mr-1" /> Agregar
+              </Button>
+              <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-14 rounded-lg bg-black hover:bg-neutral-800 text-white text-base font-medium disabled:opacity-50">
+                Cobrar
+              </Button>
             </div>
           </div>
-          {discountType === "percentage" && discountRaw > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-neutral-400">Equivale a</span>
-              <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
-            </div>
+        </AnimatedPage>
+      </div>
+
+      {/* Desktop right half: options panel */}
+      <div className="hidden lg:flex lg:w-1/2 h-full border-l border-neutral-200 bg-white">
+        {/* Vertical action buttons */}
+        <div className="w-20 border-r border-neutral-200 flex flex-col items-center justify-center gap-6 py-6 shrink-0 bg-white z-10">
+          <button
+            onClick={() => setLeftPanel("services")}
+            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+          >
+            <Package className="w-6 h-6" />
+            <span className="text-[9px] font-medium">Servicio</span>
+          </button>
+          <button
+            onClick={() => setLeftPanel("customers")}
+            className={`flex flex-col items-center gap-1 p-2 rounded-lg transition-colors ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+          >
+            <User className="w-6 h-6" />
+            <span className="text-[9px] font-medium">Cliente</span>
+          </button>
+        </div>
+
+        {/* Options content */}
+        <div className="flex-1 flex flex-col min-w-0">
+          {leftPanel === "services" && (
+            <>
+              <div className="p-3 border-b border-neutral-100">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                  <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
+                </div>
+              </div>
+              <ScrollArea className="flex-1 px-3">
+                <div className="space-y-0.5">
+                  {filteredServices.length === 0 ? (
+                    <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
+                  ) : (
+                    filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
+                      <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
+                          <p className="text-sm text-black">{s.name}</p>
+                        </div>
+                        <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </>
           )}
-          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
-          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">Cobrar</Button>
+          {leftPanel === "customers" && (
+            <>
+              <div className="px-4 py-3 border-b border-neutral-100">
+                <h3 className="text-sm font-medium text-black">Seleccionar cliente</h3>
+              </div>
+              <ScrollArea className="flex-1 px-3 py-2">
+                <div className="space-y-0.5">
+                  {customers?.map((c: NonNullable<typeof customers>[0]) => (
+                    <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
+                      <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-black">{c.name} {c.lastName}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </>
+          )}
+
+          {/* Desktop cart summary */}
+          <div className="border-t border-neutral-200 p-4 space-y-3">
+            <div className="flex justify-between text-sm">
+              <span className="text-neutral-400">Items ({cart.length})</span>
+              <span className="text-black">{formatCurrency(subtotal)}</span>
+            </div>
+            <div className="flex justify-between text-sm items-center">
+              <span className="text-neutral-400">Descuento</span>
+              <div className="flex items-center gap-2">
+                <div className="flex bg-gray-100 rounded-full p-0.5">
+                  <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
+                  <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
+                </div>
+                <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
+              </div>
+            </div>
+            {discountType === "percentage" && discountRaw > 0 && (
+              <div className="flex justify-between text-xs">
+                <span className="text-neutral-400">Equivale a</span>
+                <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
+              </div>
+            )}
+            <div className="border-t border-neutral-100 pt-2 flex justify-between items-center">
+              <span className="text-black font-medium">Total</span>
+              <span className="text-xl font-medium text-black">{formatCurrency(total)}</span>
+            </div>
+            <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
+          </div>
         </div>
       </div>
 
