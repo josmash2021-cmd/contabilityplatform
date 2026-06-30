@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp, DollarSign } from "lucide-react";
+import { Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt, ChevronUp, DollarSign, Tag, FileText, RefreshCw } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 
 interface CartItem {
@@ -22,6 +22,12 @@ const PAYMENT_METHODS = [
   { id: "cash" as const, label: "Efectivo", icon: Banknote },
   { id: "zelle" as const, label: "Zelle", icon: Smartphone },
   { id: "card" as const, label: "Tarjeta", icon: Receipt },
+];
+
+const QUICK_SERVICES = [
+  { id: "sticker", label: "Sticker título", icon: Tag },
+  { id: "title_plate", label: "Título y placa", icon: FileText },
+  { id: "plate_change", label: "Cambio de placa de estado", icon: RefreshCw },
 ];
 
 export default function POS() {
@@ -56,6 +62,9 @@ export default function POS() {
   const [customOpen, setCustomOpen] = useState(false);
   const [customName, setCustomName] = useState("");
   const [customPrice, setCustomPrice] = useState("");
+  const [quickChargeOpen, setQuickChargeOpen] = useState(false);
+  const [quickService, setQuickService] = useState("");
+  const [quickAmount, setQuickAmount] = useState("");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -82,6 +91,32 @@ export default function POS() {
     setCustomName("");
     setCustomPrice("");
     setCustomOpen(false);
+  };
+
+  const addQuickCharge = () => {
+    const price = parseFloat(quickAmount);
+    if (Number.isNaN(price) || price <= 0) {
+      toast.error("Ingresa un monto válido");
+      return;
+    }
+    if (!quickService) {
+      toast.error("Selecciona un servicio");
+      return;
+    }
+    const service = QUICK_SERVICES.find((s) => s.id === quickService);
+    setCart((prev) => [...prev, { id: crypto.randomUUID(), name: service?.label ?? "Servicio", price, quantity: 1, isCustom: true }]);
+    setQuickAmount("");
+    setQuickService("");
+    setQuickChargeOpen(false);
+    setShowPayment(true);
+  };
+
+  const handleCobrarClick = () => {
+    if (cart.length === 0) {
+      setQuickChargeOpen(true);
+    } else {
+      setShowPayment(true);
+    }
   };
 
   const updateQty = (id: string, d: number) => {
@@ -213,44 +248,21 @@ export default function POS() {
         </AnimatedPage>
       </div>
 
-      {/* Mobile Bottom Button: toggles cart when closed, opens payment when cart is open */}
-      {cart.length > 0 && (
-        <Dialog open={showPayment} onOpenChange={setShowPayment}>
-          <DialogTrigger asChild>
-            <button 
-              onClick={() => {
-                if (!showCart) setShowCart(true);
-              }}
-              className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50 active:scale-[0.98] transition-transform"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-sm font-medium">{showCart ? "Cobrar" : `${cart.length} items`}</span>
-                <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>
-              </div>
-              {showCart ? (
-                <ChevronUp className="w-5 h-5" />
-              ) : (
-                <ChevronUp className={`w-5 h-5 transition-transform duration-300 ${showCart ? "rotate-180" : ""}`} />
-              )}
-            </button>
-          </DialogTrigger>
-          <DialogContent className="bg-white sm:max-w-sm flex flex-col justify-center">
-            <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
-            <PaymentDialog 
-              activePayment={activePayment} 
-              setActivePayment={setActivePayment} 
-              total={total} 
-              handleCheckout={handleCheckout} 
-              createSalePending={createSale.isPending}
-              showZellePanel={showZellePanel}
-              setShowZellePanel={setShowZellePanel}
-              companyZelleEmail={companyZelleEmail}
-              hasCompanyZelle={hasCompanyZelle}
-              handleZelleConfirm={handleZelleConfirm}
-            />
-          </DialogContent>
-        </Dialog>
-      )}
+      {/* Mobile Bottom Button */}
+      <button
+        onClick={handleCobrarClick}
+        className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50 active:scale-[0.98] transition-transform"
+      >
+        <div className="flex items-center gap-2">
+          <span className="text-sm font-medium">{cart.length > 0 ? `${cart.length} items` : "Cobrar"}</span>
+          {cart.length > 0 && <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>}
+        </div>
+        {cart.length > 0 ? (
+          <ChevronUp className="w-5 h-5" />
+        ) : (
+          <Plus className="w-5 h-5" />
+        )}
+      </button>
 
       {/* Cart Panel - Mobile: slide up, Desktop: sidebar */}
       <div className={`lg:hidden fixed inset-x-0 bottom-0 bg-white border-t border-neutral-200 rounded-t-2xl shadow-2xl transition-transform duration-300 z-40 flex flex-col ${showCart ? "translate-y-0 pb-20" : "translate-y-full"}`} style={{ maxHeight: "85vh" }}>
@@ -347,10 +359,8 @@ export default function POS() {
             </div>
           )}
           <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
+          <Button onClick={handleCobrarClick} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
           <Dialog open={showPayment} onOpenChange={setShowPayment}>
-            <DialogTrigger asChild>
-              <Button className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm" disabled={cart.length === 0}>Cobrar</Button>
-            </DialogTrigger>
             <DialogContent className="bg-white border-neutral-200 max-w-md">
               <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
               <PaymentDialog 
@@ -386,6 +396,41 @@ export default function POS() {
             <div className="flex gap-2 pt-2">
               <Button onClick={() => setCustomOpen(false)} variant="outline" className="flex-1 border-neutral-200 text-black h-9 text-xs">Cancelar</Button>
               <Button onClick={addCustomCharge} disabled={!customPrice || Number.isNaN(parseFloat(customPrice)) || parseFloat(customPrice) <= 0} className="flex-1 bg-black hover:bg-neutral-800 text-white h-9 text-xs">Agregar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Quick Charge Dialog */}
+      <Dialog open={quickChargeOpen} onOpenChange={setQuickChargeOpen}>
+        <DialogContent className="bg-white border-neutral-200 max-w-sm">
+          <DialogHeader><DialogTitle className="text-black text-base font-medium">Nuevo cobro</DialogTitle></DialogHeader>
+          <div className="space-y-4 pt-2">
+            <div>
+              <label className="text-xs text-neutral-500 mb-1.5 block">Servicio</label>
+              <div className="grid grid-cols-1 gap-2">
+                {QUICK_SERVICES.map((s) => {
+                  const Icon = s.icon;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => setQuickService(s.id)}
+                      className={`flex items-center gap-3 p-3 rounded-lg border text-left transition-all ${quickService === s.id ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-black hover:border-neutral-400"}`}
+                    >
+                      <Icon className={`w-5 h-5 ${quickService === s.id ? "text-white" : "text-neutral-500"}`} />
+                      <span className="text-sm font-medium">{s.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div>
+              <label className="text-xs text-neutral-500 mb-1.5 block">Monto</label>
+              <Input type="number" placeholder="0.00" value={quickAmount} onChange={(e) => setQuickAmount(e.target.value)} className="h-9 text-sm border-neutral-200" min="0" step="0.01" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button onClick={() => setQuickChargeOpen(false)} variant="outline" className="flex-1 border-neutral-200 text-black h-9 text-xs">Cancelar</Button>
+              <Button onClick={addQuickCharge} disabled={!quickService || !quickAmount || Number.isNaN(parseFloat(quickAmount)) || parseFloat(quickAmount) <= 0} className="flex-1 bg-black hover:bg-neutral-800 text-white h-9 text-xs">Continuar</Button>
             </div>
           </div>
         </DialogContent>
