@@ -5,6 +5,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Card, CardContent } from "@/components/ui/card";
 import {
   Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield,
   Building2, User, CreditCard, Target, PiggyBank, BarChart3,
@@ -87,235 +88,265 @@ export default function Register() {
   };
 
   return (
-    <div className="min-h-screen flex relative overflow-hidden">
-      {/* Video background - FULL SCREEN for all devices */}
-      <video
-        autoPlay
-        muted
-        loop
-        playsInline
-        preload="auto"
-        className="absolute inset-0 w-full h-full object-cover z-0"
-      >
-        <source src="/videos/hero-bg.mp4" type="video/mp4" />
-      </video>
-      <div className="absolute inset-0 bg-black/50 z-[1]" />
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex relative">
+      {/* ─── SPLINE BACKGROUND: left side on desktop, full on mobile ─── */}
+      <div className="fixed inset-0 z-0">
+        <iframe
+          src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
+          allowFullScreen
+          loading="eager"
+          title="Spline background"
+        />
+      </div>
 
-      {/* ─── LEFT PANEL: Hero content (desktop only) ─── */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] flex-col justify-between p-10 relative z-10">
-        {/* Top */}
-        <div className="flex items-center gap-2">
-          <Logo className="w-8 h-8" />
-          <div>
-            <span className="text-white font-semibold text-lg">Ai Aethel</span>
-            <p className="text-neutral-400 text-[10px]">Accountant</p>
+      {/* ─── RIGHT PANEL: content (desktop) / centered (mobile) ─── */}
+      <div className={`relative z-10 w-full lg:w-[40%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-10 xl:p-12 transition-colors duration-500 ${
+        mode === "business" ? "lg:bg-black" : "lg:bg-white"
+      }`}>
+        <div className="flex-1 flex items-center justify-center lg:items-start">
+          <div className="w-full max-w-sm lg:max-w-md space-y-5">
+            {/* Mobile logo */}
+            <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
+              <Logo className="w-10 h-10" />
+              <div className="text-center">
+                <span className="text-white font-semibold text-xl block">Ai Aethel</span>
+                <p className="text-neutral-300 text-xs">Accountant</p>
+              </div>
+            </div>
+
+            {/* Desktop logo */}
+            <div className="hidden lg:flex items-center gap-2">
+              <Logo className="w-8 h-8" />
+              <div>
+                <span className={`font-semibold text-lg transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
+                <p className={`text-[10px] transition-colors duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>Accountant</p>
+              </div>
+            </div>
+
+            {/* Headline - desktop only */}
+            <div className="hidden lg:block space-y-1">
+              <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
+                {mode === "business" ? (
+                  <>Empieza a<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>crecer hoy.</span></>
+                ) : (
+                  <>Toma el control<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>de tu dinero.</span></>
+                )}
+              </h2>
+              <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
+                {mode === "business"
+                  ? "Unete a miles de empresarios que ya gestionan sus finanzas con Aethel. Rapido, seguro y sin complicaciones."
+                  : "Conecta tus cuentas, categoriza tus gastos y descubre donde va tu dinero con inteligencia artificial."
+                }
+              </p>
+            </div>
+
+            <div className="text-center lg:text-left space-y-1">
+              <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Crea tu cuenta</h1>
+              <p className={`text-neutral-300 text-sm transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
+            </div>
+
+            <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
+              mode === "personal"
+                ? "bg-black border-white/20 text-white"
+                : "bg-white border-neutral-200 text-black"
+            }`}>
+              <CardContent className="p-5 sm:p-6">
+                {/* Mode Toggle */}
+                <div className="flex items-center justify-center mb-4">
+                  <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
+                    mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
+                  }`}>
+                    <div
+                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
+                        mode === "personal" ? "bg-white" : "bg-black"
+                      }`}
+                      style={{ left: mode === "business" ? "4px" : "calc(50%)" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setMode("business")}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
+                        mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
+                      }`}
+                    >
+                      <Building2 className="w-4 h-4" /> Negocios
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMode("personal")}
+                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
+                        mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
+                      }`}
+                    >
+                      <User className="w-4 h-4" /> Personal
+                    </button>
+                  </div>
+                </div>
+
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>
+                      {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
+                    </Label>
+                    <Input
+                      placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
+                      value={name}
+                      onChange={(e) => setName(e.target.value)}
+                      className={`mt-1 rounded-xl h-11 text-sm transition-colors duration-300 ${
+                        mode === "personal"
+                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                      }`}
+                    />
+                  </div>
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        type="email"
+                        placeholder="tu@email.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className={`rounded-xl h-11 text-sm pr-10 transition-colors duration-300 ${
+                          mode === "personal"
+                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                        }`}
+                      />
+                      {email.length > 0 && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          {isEmailValid ? (
+                            <Check className="w-5 h-5 text-green-500" />
+                          ) : (
+                            <X className="w-5 h-5 text-red-500" />
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    {mode === "business" && email.length > 0 && !isEmailValid && (
+                      <p className="text-[11px] text-red-500 mt-1">Formato de correo invalido</p>
+                    )}
+                  </div>
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
+                    <div className="relative mt-1">
+                      <Input
+                        type={showPassword ? "text" : "password"}
+                        placeholder={mode === "business" ? "Minimo 8 caracteres" : "Minimo 6 caracteres"}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className={`pr-10 rounded-xl h-11 text-sm transition-colors duration-300 ${
+                          mode === "personal"
+                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                        }`}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {mode === "business" && password.length > 0 && (
+                      <div className="mt-2 space-y-1.5">
+                        {[
+                          { label: "8+ caracteres", met: passwordReqs.length },
+                          { label: "Una mayuscula", met: passwordReqs.uppercase },
+                          { label: "Un numero", met: passwordReqs.number },
+                          { label: "Un caracter especial", met: passwordReqs.special },
+                        ].map((req) => (
+                          <div key={req.label} className="flex items-center gap-2">
+                            {req.met ? (
+                              <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
+                            ) : (
+                              <div className="w-3.5 h-3.5 rounded-full border border-neutral-400 shrink-0" />
+                            )}
+                            <span className={`text-[11px] ${req.met ? "text-green-600" : "text-neutral-500"}`}>
+                              {req.label}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Confirmar contrasena</Label>
+                    <Input
+                      type={showPassword ? "text" : "password"}
+                      placeholder="Repite tu contrasena"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className={`mt-1 rounded-xl h-11 text-sm transition-colors duration-300 ${
+                        mode === "personal"
+                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
+                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
+                      }`}
+                    />
+                  </div>
+                  <Button
+                    type="submit"
+                    disabled={registerMut.isPending}
+                    className={`w-full rounded-lg h-10 font-medium transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
+                  >
+                    {registerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    Crear Cuenta
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <div className="text-center lg:text-left space-y-2">
+              <p className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+                Al registrarte, aceptas nuestros{" "}
+                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white" : "text-black"}`}>Terminos</Link>{" "}
+                y{" "}
+                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white" : "text-black"}`}>Privacidad</Link>
+              </p>
+              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+                Ya tienes cuenta?{" "}
+                <Link to="/login" className={`hover:underline font-medium ${mode === "business" ? "text-white" : "text-black"}`}>Inicia sesion</Link>
+              </p>
+            </div>
           </div>
         </div>
 
-        {/* Center content */}
-        <div className="space-y-8">
-          <div className="space-y-4">
-            <h2 className="text-3xl xl:text-4xl font-bold text-white leading-tight transition-all duration-500">
-              {mode === "business" ? (
-                <>Empieza a<br /><span className="text-neutral-300">crecer hoy.</span></>
-              ) : (
-                <>Toma el control<br /><span className="text-neutral-300">de tu dinero.</span></>
-              )}
-            </h2>
-            <p className="text-neutral-300 text-sm max-w-sm transition-all duration-500">
-              {mode === "business"
-                ? "Unete a miles de empresarios que ya gestionan sus finanzas con Aethel. Rapido, seguro y sin complicaciones."
-                : "Conecta tus cuentas, categoriza tus gastos y descubre donde va tu dinero con inteligencia artificial."
-              }
-            </p>
-          </div>
-
-          {/* Feature cards - animated */}
-          <div className="grid grid-cols-2 gap-3 max-w-md" key={mode}>
+        {/* Feature cards - desktop only */}
+        <div className="hidden lg:block mt-6" key={mode}>
+          <div className="grid grid-cols-4 gap-2 max-w-md">
             {(mode === "business" ? [
-              { icon: Wallet, label: "Contabilidad Autónoma", desc: "Tu libro diario con Ai Aethel se actualiza solo, sin tocar una tecla" },
-              { icon: TrendingUp, label: "Análisis Predictivo", desc: "Proyecta tu flujo de caja con Ai Aethel y detecta riesgos antes de que ocurran" },
-              { icon: Shield, label: "Cumplimiento Fiscal", desc: "Reportes listos para la DGII con Ai Aethel, calculados en tiempo real" },
-              { icon: Receipt, label: "Banca Conectada", desc: "Tus transacciones con Ai Aethel se concilian automáticamente cada día" },
+              { icon: Wallet, label: "Contabilidad" },
+              { icon: TrendingUp, label: "Análisis" },
+              { icon: Shield, label: "Fiscal" },
+              { icon: Receipt, label: "Banca" },
             ] : [
-              { icon: CreditCard, label: "Control de Gastos", desc: "Categoriza automáticamente cada compra y ve en qué gastas tu dinero" },
-              { icon: Target, label: "Presupuesto Inteligente", desc: "Establece límites por categoría y recibe alertas antes de pasarte" },
-              { icon: PiggyBank, label: "Metas de Ahorro", desc: "Visualiza tus objetivos de ahorro y el progreso mes a mes" },
-              { icon: BarChart3, label: "Banca Conectada", desc: "Conecta todas tus cuentas bancarias en un solo lugar, en tiempo real" },
+              { icon: CreditCard, label: "Gastos" },
+              { icon: Target, label: "Presupuesto" },
+              { icon: PiggyBank, label: "Ahorro" },
+              { icon: BarChart3, label: "Banca" },
             ]).map((f, i) => (
               <div
                 key={f.label}
-                className="bg-white/10 border border-white/20 rounded-lg p-3 backdrop-blur-md animate-in fade-in slide-in-from-bottom-4 duration-500"
+                className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
                 style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
               >
-                <f.icon className="w-4 h-4 text-white mb-2" />
-                <p className="text-white text-xs font-medium leading-tight">{f.label}</p>
-                <p className="text-white/80 text-[11px] leading-relaxed mt-1">{f.desc}</p>
+                <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
+                <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Bottom tagline */}
-        <p className="text-neutral-400 text-xs transition-all duration-500">
-          {mode === "business"
-            ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
-            : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
-          }
-        </p>
-      </div>
-
-      {/* ─── RIGHT PANEL: Register Form (transparent glassmorphism) ─── */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 relative z-10">
-        <div className="w-full max-w-sm space-y-6 animate-in fade-in slide-in-from-right-8 duration-700">
-          <div className="text-center space-y-1">
-            <h1 className="text-2xl font-semibold text-white">Crea tu cuenta</h1>
-            <p className="text-sm text-neutral-400">Empieza gratis, sin tarjeta de credito</p>
-          </div>
-
-          {/* Glassmorphism card */}
-          <div className="bg-white/10 border border-white/20 rounded-2xl backdrop-blur-md">
-            <div className="p-5 sm:p-6">
-              {/* Mode Toggle */}
-              <div className="flex items-center justify-center mb-4">
-                <div className="relative flex items-center p-1 bg-neutral-200/20 rounded-xl w-full max-w-[280px] overflow-hidden">
-                  <div
-                    className="absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-lg transition-all duration-300 ease-out"
-                    style={{ left: mode === "business" ? "4px" : "calc(50%)" }}
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setMode("business")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
-                      mode === "business" ? "text-black" : "text-neutral-400 hover:text-white"
-                    }`}
-                  >
-                    <Building2 className="w-4 h-4" /> Negocios
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setMode("personal")}
-                    className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
-                      mode === "personal" ? "text-black" : "text-neutral-400 hover:text-white"
-                    }`}
-                  >
-                    <User className="w-4 h-4" /> Personal
-                  </button>
-                </div>
-              </div>
-
-              <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                  <Label className="text-xs text-neutral-400">
-                    {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
-                  </Label>
-                  <Input
-                    placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
-                    style={{ color: "white", backgroundColor: "black" }}
-                  />
-                </div>
-                <div>
-                  <Label className="text-xs text-neutral-400">Email</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      type="email"
-                      placeholder="tu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm pr-10"
-                      style={{ color: "white", backgroundColor: "black" }}
-                    />
-                    {email.length > 0 && (
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                        {isEmailValid ? (
-                          <Check className="w-5 h-5 text-green-400" />
-                        ) : (
-                          <X className="w-5 h-5 text-red-400" />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                  {mode === "business" && email.length > 0 && !isEmailValid && (
-                    <p className="text-[11px] text-red-400 mt-1">Formato de correo invalido</p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-neutral-400">Contrasena</Label>
-                  <div className="relative mt-1">
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder={mode === "business" ? "Minimo 8 caracteres" : "Minimo 6 caracteres"}
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="pr-10 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
-                      style={{ color: "white", backgroundColor: "black" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-white"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                  {/* Password requirements - only for business */}
-                  {mode === "business" && password.length > 0 && (
-                    <div className="mt-2 space-y-1.5">
-                      {[
-                        { label: "8+ caracteres", met: passwordReqs.length },
-                        { label: "Una mayuscula", met: passwordReqs.uppercase },
-                        { label: "Un numero", met: passwordReqs.number },
-                        { label: "Un caracter especial", met: passwordReqs.special },
-                      ].map((req) => (
-                        <div key={req.label} className="flex items-center gap-2">
-                          {req.met ? (
-                            <Check className="w-3.5 h-3.5 text-green-400 shrink-0" />
-                          ) : (
-                            <div className="w-3.5 h-3.5 rounded-full border border-neutral-500 shrink-0" />
-                          )}
-                          <span className={`text-[11px] ${req.met ? "text-green-400" : "text-neutral-400"}`}>
-                            {req.label}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs text-neutral-400">Confirmar contrasena</Label>
-                  <Input
-                    type={showPassword ? "text" : "password"}
-                    placeholder="Repite tu contrasena"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="mt-1 rounded-xl border-white/30 bg-black text-white placeholder:text-neutral-500 h-11 text-sm"
-                    style={{ color: "white", backgroundColor: "black" }}
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  disabled={registerMut.isPending}
-                  className="w-full rounded-lg h-10 bg-white text-black hover:bg-neutral-200 font-medium"
-                >
-                  {registerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                  Crear Cuenta
-                </Button>
-              </form>
-            </div>
-          </div>
-
-          <div className="text-center space-y-2">
-            <p className="text-xs text-neutral-400">
-              Al registrarte, aceptas nuestros <Link to="#" className="text-white hover:underline">Terminos</Link> y <Link to="#" className="text-white hover:underline">Privacidad</Link>
-            </p>
-            <p className="text-sm text-neutral-400">
-              Ya tienes cuenta?{" "}
-              <Link to="/login" className="text-white hover:underline font-medium">Inicia sesion</Link>
-            </p>
-          </div>
+        {/* Bottom tagline - desktop only */}
+        <div className="hidden lg:block mt-auto pt-4">
+          <p className={`text-xs max-w-md transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+            {mode === "business"
+              ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
+              : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
+            }
+          </p>
         </div>
       </div>
     </div>
