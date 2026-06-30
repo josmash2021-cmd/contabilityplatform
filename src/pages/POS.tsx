@@ -62,6 +62,7 @@ export default function POS() {
   const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
   const [serviceSearch, setServiceSearch] = useState("");
   const [leftPanel, setLeftPanel] = useState<"none" | "services" | "customers">("services");
+  const [mobilePanel, setMobilePanel] = useState<"none" | "services" | "customers">("none");
 
   const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
 
@@ -95,11 +96,13 @@ export default function POS() {
     setServiceDialogOpen(false);
     setServiceSearch("");
     setLeftPanel("none");
+    setMobilePanel("none");
   };
 
   const selectCustomer = (id: number) => {
     setSelectedCustomer(id);
     setLeftPanel("none");
+    setMobilePanel("none");
   };
 
   const clearService = () => {
@@ -213,60 +216,18 @@ export default function POS() {
 
             {/* Action buttons */}
             <div className="shrink-0 grid grid-cols-2 gap-2 mb-2">
-              <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
-                <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
-                    <Package className="w-4 h-4" /> Servicio / Producto
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="bg-white border-neutral-200 max-w-sm">
-                  <DialogHeader><DialogTitle className="text-black text-base font-medium">Seleccionar servicio</DialogTitle></DialogHeader>
-                  <div className="relative mb-2">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                    <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
-                  </div>
-                  <ScrollArea className="h-60">
-                    <div className="space-y-0.5">
-                      {filteredServices.length === 0 ? (
-                        <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
-                      ) : (
-                        filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
-                          <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
-                              <p className="text-sm text-black">{s.name}</p>
-                            </div>
-                            <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
-                          </button>
-                        ))
-                      )}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
-
-              <Dialog>
-                <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
-                    <User className="w-4 h-4" /> Cliente
-                  </button>
-                </DialogTrigger>
-                <DialogContent className="bg-white border-neutral-200 max-w-sm">
-                  <DialogHeader><DialogTitle className="text-black text-base font-medium">Cliente</DialogTitle></DialogHeader>
-                  <ScrollArea className="h-72">
-                    <div className="space-y-0.5">
-                      {customers?.map((c: NonNullable<typeof customers>[0]) => (
-                        <button key={c.id} onClick={() => setSelectedCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
-                          <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
-                          <div className="flex-1 min-w-0">
-                            <p className="text-sm text-black">{c.name} {c.lastName}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  </ScrollArea>
-                </DialogContent>
-              </Dialog>
+              <button
+                onClick={() => setMobilePanel("services")}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
+              >
+                <Package className="w-4 h-4" /> Servicio / Producto
+              </button>
+              <button
+                onClick={() => setMobilePanel("customers")}
+                className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
+              >
+                <User className="w-4 h-4" /> Cliente
+              </button>
             </div>
 
             {/* Numeric keypad */}
@@ -454,6 +415,58 @@ export default function POS() {
                 </div>
               </ScrollArea>
             </>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile slide-up panel */}
+      <div className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${mobilePanel !== "none" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
+        <div className="absolute inset-0 bg-black/40" onClick={() => setMobilePanel("none")} />
+        <div className={`absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out ${mobilePanel !== "none" ? "translate-y-0" : "translate-y-full"}`}>
+          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
+            <h3 className="text-base font-medium text-black">{mobilePanel === "services" ? "Seleccionar servicio" : "Seleccionar cliente"}</h3>
+            <button onClick={() => setMobilePanel("none")} className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-black"><X className="w-5 h-5" /></button>
+          </div>
+          {mobilePanel === "services" && (
+            <div className="p-3">
+              <div className="relative mb-2">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
+                <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
+              </div>
+              <ScrollArea className="h-[60vh]">
+                <div className="space-y-0.5">
+                  {filteredServices.length === 0 ? (
+                    <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
+                  ) : (
+                    filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
+                      <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
+                          <p className="text-sm text-black">{s.name}</p>
+                        </div>
+                        <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </ScrollArea>
+            </div>
+          )}
+          {mobilePanel === "customers" && (
+            <div className="p-3">
+              <ScrollArea className="h-[60vh]">
+                <div className="space-y-0.5">
+                  {customers?.map((c: NonNullable<typeof customers>[0]) => (
+                    <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
+                      <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-black">{c.name} {c.lastName}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </ScrollArea>
+            </div>
           )}
         </div>
       </div>
