@@ -6,7 +6,7 @@ export default function AuthLayout() {
   const [showContent, setShowContent] = useState(false);
 
   useEffect(() => {
-    const timer = setTimeout(() => setShowContent(true), 3000);
+    const timer = setTimeout(() => setShowContent(true), 0);
     return () => clearTimeout(timer);
   }, []);
 
