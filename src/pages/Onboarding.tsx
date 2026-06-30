@@ -94,8 +94,19 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col items-center justify-center p-4 overflow-hidden">
-      <div className="w-full max-w-md">
+    <div className="min-h-screen relative flex items-center justify-center p-4 overflow-hidden">
+      {/* Spline background */}
+      <div className="fixed inset-0 z-0">
+        <iframe
+          src="https://my.spline.design/dotwaves-EUEoIdwf4MLl6QAg7rfJJfz9/"
+          className="absolute inset-0 w-full h-full border-0"
+          allowFullScreen
+          loading="eager"
+          title="Spline background"
+        />
+      </div>
+
+      <div className="relative z-10 w-full max-w-md bg-white/95 backdrop-blur-sm rounded-2xl shadow-xl p-6 border border-white/20">
         {/* Header */}
         <div className="text-center mb-4">
           <Logo className="w-8 h-8 mx-auto mb-2" />
