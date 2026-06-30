@@ -57,21 +57,21 @@ export default function Login() {
         />
       </div>
 
+      {/* Desktop logo - top left corner over Spline */}
+      <div className="hidden lg:flex absolute top-6 left-6 z-20 items-center gap-2">
+        <Logo className="w-8 h-8" />
+        <div>
+          <span className="font-semibold text-lg text-white">Ai Aethel</span>
+          <p className="text-[10px] text-neutral-300">Accountant</p>
+        </div>
+      </div>
+
       {/* ─── RIGHT PANEL: all content on the right (desktop) / centered (mobile) ─── */}
       <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-6 xl:p-8 transition-colors duration-500 ${
         mode === "business"
           ? "lg:bg-black"
           : "lg:bg-white"
       }`}>
-        {/* Desktop logo - top left corner of right panel */}
-        <div className="hidden lg:flex absolute top-6 left-6 items-center gap-2">
-          <Logo className="w-8 h-8" />
-          <div>
-            <span className={`font-semibold text-lg transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
-            <p className={`text-[10px] transition-colors duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>Accountant</p>
-          </div>
-        </div>
-
         {/* Mobile: centered form over Spline */}
         <div className="flex-1 flex items-center justify-center lg:items-start">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
