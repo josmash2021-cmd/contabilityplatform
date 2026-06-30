@@ -24,7 +24,7 @@ export default function AuthLayout() {
       <div className="h-[85vh] lg:hidden relative overflow-hidden shrink-0 bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
-          className="absolute top-1/2 left-1/2 h-[100%] w-[130%] -translate-x-[62%] -translate-y-[55%] border-0"
+          className="absolute top-1/2 left-1/2 h-[90%] w-[120%] -translate-x-[72%] -translate-y-[50%] border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
