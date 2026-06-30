@@ -175,7 +175,7 @@ export default function POS() {
   const numericValue = parseFloat(amount) || 0;
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-white lg:min-h-screen lg:block">
+    <div className="h-[calc(100dvh-3.5rem)] lg:h-screen flex flex-col bg-white lg:block">
       {/* Main content */}
       <div className="flex-1 min-h-0 p-1.5 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
