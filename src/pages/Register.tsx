@@ -100,7 +100,7 @@ export default function Register() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[40%]"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -135,9 +135,9 @@ export default function Register() {
             <div className="hidden lg:block space-y-1">
               <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
                 {mode === "business" ? (
-                  <>Empieza a<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>crecer hoy.</span></>
+                  <>Empieza a<br /><span className="text-neutral-400">crecer hoy.</span></>
                 ) : (
-                  <>Toma el control<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>de tu dinero.</span></>
+                  <>Toma el control<br /><span className="text-neutral-500">de tu dinero.</span></>
                 )}
               </h2>
               <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
@@ -295,10 +295,10 @@ export default function Register() {
                   </div>
                   <Button
                     type="submit"
-                    disabled={registerMut.isPending}
+                    disabled={personalRegisterMut.isPending}
                     className={`w-full rounded-lg h-10 font-medium transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
                   >
-                    {registerMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
+                    {personalRegisterMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                     Crear Cuenta
                   </Button>
                 </form>
@@ -320,40 +320,44 @@ export default function Register() {
           </div>
         </div>
 
-        {/* Feature cards - desktop only */}
-        <div className="hidden lg:block mt-6" key={mode}>
-          <div className="grid grid-cols-4 gap-2 max-w-md">
-            {(mode === "business" ? [
-              { icon: Wallet, label: "Contabilidad" },
-              { icon: TrendingUp, label: "Análisis" },
-              { icon: Shield, label: "Fiscal" },
-              { icon: Receipt, label: "Banca" },
-            ] : [
-              { icon: CreditCard, label: "Gastos" },
-              { icon: Target, label: "Presupuesto" },
-              { icon: PiggyBank, label: "Ahorro" },
-              { icon: BarChart3, label: "Banca" },
-            ]).map((f, i) => (
-              <div
-                key={f.label}
-                className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
-                style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
-              >
-                <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
-                <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
-              </div>
-            ))}
+        {/* Feature cards - desktop only, centered in right panel */}
+        <div className="hidden lg:block mt-6 w-full" key={mode}>
+          <div className="max-w-md mx-auto">
+            <div className="grid grid-cols-4 gap-2">
+              {(mode === "business" ? [
+                { icon: Wallet, label: "Contabilidad" },
+                { icon: TrendingUp, label: "Análisis" },
+                { icon: Shield, label: "Fiscal" },
+                { icon: Receipt, label: "Banca" },
+              ] : [
+                { icon: CreditCard, label: "Gastos" },
+                { icon: Target, label: "Presupuesto" },
+                { icon: PiggyBank, label: "Ahorro" },
+                { icon: BarChart3, label: "Banca" },
+              ]).map((f, i) => (
+                <div
+                  key={f.label}
+                  className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
+                >
+                  <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
+                  <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Bottom tagline - desktop only */}
-        <div className="hidden lg:block mt-auto pt-4">
-          <p className={`text-xs max-w-md transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
-            {mode === "business"
-              ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
-              : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
-            }
-          </p>
+        {/* Bottom tagline - desktop only, centered in right panel */}
+        <div className="hidden lg:block mt-4 w-full">
+          <div className="max-w-md mx-auto text-center">
+            <p className={`text-xs transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+              {mode === "business"
+                ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
+                : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
+              }
+            </p>
+          </div>
         </div>
       </div>
     </div>

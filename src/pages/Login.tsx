@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -50,7 +50,7 @@ export default function Login() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[40%]"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -88,9 +88,9 @@ export default function Login() {
             <div className="hidden lg:block space-y-1">
               <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
                 {mode === "business" ? (
-                  <>Tu negocio,<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>organizado.</span></>
+                  <>Tu negocio,<br /><span className="text-neutral-400">organizado.</span></>
                 ) : (
-                  <>Tus finanzas,<br /><span className={mode === "business" ? "text-neutral-400" : "text-neutral-500"}>en control.</span></>
+                  <>Tus finanzas,<br /><span className="text-neutral-500">en control.</span></>
                 )}
               </h2>
               <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
@@ -211,40 +211,44 @@ export default function Login() {
           </div>
         </div>
 
-        {/* Feature cards - desktop only */}
-        <div className="hidden lg:block mt-6" key={mode}>
-          <div className="grid grid-cols-4 gap-2 max-w-md">
-            {(mode === "business" ? [
-              { icon: Wallet, label: "Contabilidad" },
-              { icon: TrendingUp, label: "Análisis" },
-              { icon: Shield, label: "Fiscal" },
-              { icon: Receipt, label: "Banca" },
-            ] : [
-              { icon: CreditCard, label: "Gastos" },
-              { icon: Target, label: "Presupuesto" },
-              { icon: PiggyBank, label: "Ahorro" },
-              { icon: BarChart3, label: "Banca" },
-            ]).map((f, i) => (
-              <div
-                key={f.label}
-                className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
-                style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
-              >
-                <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
-                <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
-              </div>
-            ))}
+        {/* Feature cards - desktop only, centered in right panel */}
+        <div className="hidden lg:block mt-6 w-full" key={mode}>
+          <div className="max-w-md mx-auto">
+            <div className="grid grid-cols-4 gap-2">
+              {(mode === "business" ? [
+                { icon: Wallet, label: "Contabilidad" },
+                { icon: TrendingUp, label: "Análisis" },
+                { icon: Shield, label: "Fiscal" },
+                { icon: Receipt, label: "Banca" },
+              ] : [
+                { icon: CreditCard, label: "Gastos" },
+                { icon: Target, label: "Presupuesto" },
+                { icon: PiggyBank, label: "Ahorro" },
+                { icon: BarChart3, label: "Banca" },
+              ]).map((f, i) => (
+                <div
+                  key={f.label}
+                  className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
+                  style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
+                >
+                  <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
+                  <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
-        {/* Bottom tagline - desktop only */}
-        <div className="hidden lg:block mt-auto pt-4">
-          <p className={`text-xs max-w-md transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
-            {mode === "business"
-              ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
-              : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
-            }
-          </p>
+        {/* Bottom tagline - desktop only, centered in right panel */}
+        <div className="hidden lg:block mt-4 w-full">
+          <div className="max-w-md mx-auto text-center">
+            <p className={`text-xs transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
+              {mode === "business"
+                ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
+                : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
+              }
+            </p>
+          </div>
         </div>
       </div>
     </div>
