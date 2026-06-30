@@ -35,8 +35,8 @@ export default function AuthLayout() {
         </div>
       </div>
 
-      {/* ─── CONTENT OUTLET ─── */}
-      <div className="w-full h-full">
+      {/* ─── CONTENT OUTLET: reveals after Spline, same smooth feel ─── */}
+      <div className="w-full h-full opacity-0 animate-[authContentReveal_2.2s_ease-out_forwards]">
         <Outlet />
       </div>
     </div>

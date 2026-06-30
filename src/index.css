@@ -112,6 +112,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes authContentReveal {
+  0%, 45% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
 /* Horizontal scrollbar for charts */
 .scrollbar-thin::-webkit-scrollbar { width: 4px; height: 4px; }
 .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
