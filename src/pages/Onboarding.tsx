@@ -99,7 +99,7 @@ export default function Onboarding() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/dotwaves-EUEoIdwf4MLl6QAg7rfJJfz9/"
-          className="absolute inset-0 w-full h-full border-0"
+          className="absolute inset-0 w-full h-full border-0 scale-150"
           allowFullScreen
           loading="eager"
           title="Spline background"
