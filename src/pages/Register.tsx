@@ -117,10 +117,10 @@ export default function Register() {
       </div>
 
       {/* ─── RIGHT PANEL: content (desktop) / centered (mobile) ─── */}
-      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-6 xl:p-8 transition-colors duration-500 ${
+      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-5 xl:p-6 transition-colors duration-500 ${
         mode === "business" ? "lg:bg-black" : "lg:bg-white"
       }`}>
-        <div className="flex-1 flex items-center justify-center lg:items-start">
+        <div className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
@@ -148,7 +148,7 @@ export default function Register() {
               </p>
             </div>
 
-            <div className="text-center lg:text-left space-y-1">
+            <div className="text-center space-y-1">
               <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Crea tu cuenta</h1>
               <p className={`text-neutral-300 text-sm transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
             </div>
@@ -305,7 +305,7 @@ export default function Register() {
               </CardContent>
             </Card>
 
-            <div className="text-center lg:text-left space-y-2">
+            <div className="text-center space-y-2">
               <p className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
                 Al registrarte, aceptas nuestros{" "}
                 <Link to="#" className={`hover:underline ${mode === "business" ? "text-white" : "text-black"}`}>Terminos</Link>{" "}

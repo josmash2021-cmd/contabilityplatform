@@ -67,13 +67,13 @@ export default function Login() {
       </div>
 
       {/* ─── RIGHT PANEL: all content on the right (desktop) / centered (mobile) ─── */}
-      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-6 xl:p-8 transition-colors duration-500 ${
+      <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col p-6 sm:p-8 lg:p-5 xl:p-6 transition-colors duration-500 ${
         mode === "business"
           ? "lg:bg-black"
           : "lg:bg-white"
       }`}>
         {/* Mobile: centered form over Spline */}
-        <div className="flex-1 flex items-center justify-center lg:items-start">
+        <div className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
@@ -101,7 +101,7 @@ export default function Login() {
               </p>
             </div>
 
-            <div className="text-center lg:text-left space-y-1">
+            <div className="text-center space-y-1">
               <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Bienvenido de vuelta</h1>
               <p className={`text-neutral-300 text-base transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Inicia sesion en tu cuenta</p>
             </div>
@@ -199,7 +199,7 @@ export default function Login() {
               </CardContent>
             </Card>
 
-            <div className="text-center lg:text-left space-y-3">
+            <div className="text-center space-y-3">
               <p className="text-sm">
                 <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "business" ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-black"}`}>Olvidaste tu contrasena?</Link>
               </p>
