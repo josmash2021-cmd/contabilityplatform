@@ -1,6 +1,5 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router";
-import Spline from "@splinetool/react-spline";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,12 +48,13 @@ export default function Login() {
     <div className="min-h-screen flex relative">
       {/* Spline background - ALL screen sizes */}
       <div className="fixed inset-0 z-0">
-        <div className="absolute inset-0">
-          <Spline
-            scene="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-            className="w-full h-full"
-          />
-        </div>
+        <iframe
+          src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
+          className="absolute inset-0 w-full h-full border-0"
+          allowFullScreen
+          loading="eager"
+          title="Spline background"
+        />
         {/* Overlay: lighter on mobile, darker on desktop */}
         <div className="absolute inset-0 bg-black/30 lg:bg-black/60" />
       </div>
