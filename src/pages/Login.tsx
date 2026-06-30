@@ -45,7 +45,7 @@ export default function Login() {
   };
 
   return (
-    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 bg-black/60 backdrop-blur-sm ${
+    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
       mode === "business"
         ? "lg:bg-black"
         : "lg:bg-white"
@@ -127,7 +127,7 @@ export default function Login() {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Email</Label>
                     <Input
                       type="email"
                       placeholder="tu@email.com"
@@ -141,7 +141,7 @@ export default function Login() {
                     />
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Contrasena</Label>
                     <div className="relative mt-1">
                       <Input
                         type={showPassword ? "text" : "password"}

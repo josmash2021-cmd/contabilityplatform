@@ -95,7 +95,7 @@ export default function Register() {
   };
 
   return (
-    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 bg-black/60 backdrop-blur-sm ${
+    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
       mode === "business" ? "lg:bg-black" : "lg:bg-white"
     }`}>
         <div className="flex-1 flex items-center justify-center">
@@ -171,7 +171,7 @@ export default function Register() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>
                       {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
                     </Label>
                     <Input
@@ -186,7 +186,7 @@ export default function Register() {
                     />
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Email</Label>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Email</Label>
                     <div className="relative mt-1">
                       <Input
                         type="email"
@@ -214,7 +214,7 @@ export default function Register() {
                     )}
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Contrasena</Label>
                     <div className="relative mt-1">
                       <Input
                         type={showPassword ? "text" : "password"}
@@ -258,7 +258,7 @@ export default function Register() {
                     )}
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "personal" ? "text-neutral-300" : "text-neutral-500"}`}>Confirmar contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Confirmar contrasena</Label>
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Repite tu contrasena"
