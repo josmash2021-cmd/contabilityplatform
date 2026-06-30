@@ -1,7 +1,7 @@
 import { trpc } from "@/providers/trpc";
 import { formatCurrency, formatDateShort, formatTimeLocal, getUserTimezoneShort } from "@/lib/utils";
 import { Link } from "react-router";
-import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock, Globe } from "lucide-react";
+import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 import { useState, useEffect } from "react";
 
@@ -153,37 +153,17 @@ export default function Dashboard() {
         </AnimatedCard>
 
         {/* Side Panel */}
-        <div className="space-y-4">
-          <AnimatedCard delay={280}>
-            <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <p className="text-xs text-neutral-400 mb-3">Pagos de hoy</p>
-              {safeData.paymentBreakdown?.length ? safeData.paymentBreakdown.map((p: any) => (
-                <div key={p.method} className="flex items-center justify-between py-1.5">
-                  <span className="text-xs text-neutral-500">{PAYMENT_LABELS[p.method] || p.method}</span>
-                  <span className="text-xs font-medium text-black">{formatCurrency(p.total)}</span>
-                </div>
-              )) : <p className="text-sm text-neutral-400 text-center py-4">Sin cobros hoy</p>}
-            </div>
-          </AnimatedCard>
-
-          <AnimatedCard delay={360}>
-            <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo space-y-3">
-              <p className="text-xs text-neutral-400">Mi Contabilidad</p>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-500">Ventas hoy</span>
-                <span className="text-xs font-medium text-black">{safeData.todaySales.count ?? 0} trans.</span>
+        <AnimatedCard delay={280}>
+          <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
+            <p className="text-xs text-neutral-400 mb-3">Pagos de hoy</p>
+            {safeData.paymentBreakdown?.length ? safeData.paymentBreakdown.map((p: any) => (
+              <div key={p.method} className="flex items-center justify-between py-1.5">
+                <span className="text-xs text-neutral-500">{PAYMENT_LABELS[p.method] || p.method}</span>
+                <span className="text-xs font-medium text-black">{formatCurrency(p.total)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-500">Clientes</span>
-                <span className="text-xs font-medium text-black">{safeData.customerCount ?? 0}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-neutral-500">Balance bancario</span>
-                <span className="text-xs font-medium text-black">{formatCurrency(safeData.bankBalance ?? 0)}</span>
-              </div>
-            </div>
-          </AnimatedCard>
-        </div>
+            )) : <p className="text-sm text-neutral-400 text-center py-4">Sin cobros hoy</p>}
+          </div>
+        </AnimatedCard>
       </div>
 
       {/* Bottom Row */}
@@ -191,7 +171,7 @@ export default function Dashboard() {
         <AnimatedCard delay={400}>
           <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">Mi Contabilidad</span>
+              <span className="text-xs text-neutral-400">Resumen financiero</span>
               <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">Ver mas <ArrowUpRight className="w-3 h-3" /></Link>
             </div>
             <div className="space-y-3">
