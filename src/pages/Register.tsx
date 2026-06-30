@@ -96,16 +96,16 @@ export default function Register() {
 
   return (
     <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
-      mode === "business" ? "lg:bg-black" : "lg:bg-white"
+      mode === "business" ? "bg-black" : "bg-white"
     }`}>
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex-1 flex items-center justify-center animate-in fade-in duration-700">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
               <Logo className="w-10 h-10" />
               <div className="text-center">
-                <span className="text-white font-semibold text-xl block">Ai Aethel</span>
-                <p className="text-neutral-300 text-xs">Accountant</p>
+                <span className={`font-semibold text-xl block ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
+                <p className={`text-xs ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>Accountant</p>
               </div>
             </div>
 
@@ -127,8 +127,8 @@ export default function Register() {
             </div>
 
             <div className="text-center space-y-1">
-              <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Crea tu cuenta</h1>
-              <p className={`text-neutral-300 text-sm transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
+              <h1 className={`text-2xl lg:text-3xl font-semibold transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Crea tu cuenta</h1>
+              <p className={`text-sm transition-colors duration-500 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
             </div>
 
             <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
@@ -171,7 +171,7 @@ export default function Register() {
 
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>
                       {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
                     </Label>
                     <Input
@@ -186,7 +186,7 @@ export default function Register() {
                     />
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Email</Label>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Email</Label>
                     <div className="relative mt-1">
                       <Input
                         type="email"
@@ -214,7 +214,7 @@ export default function Register() {
                     )}
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Contrasena</Label>
                     <div className="relative mt-1">
                       <Input
                         type={showPassword ? "text" : "password"}
@@ -258,7 +258,7 @@ export default function Register() {
                     )}
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Confirmar contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Confirmar contrasena</Label>
                     <Input
                       type={showPassword ? "text" : "password"}
                       placeholder="Repite tu contrasena"
@@ -274,7 +274,7 @@ export default function Register() {
                   <Button
                     type="submit"
                     disabled={personalRegisterMut.isPending}
-                    className={`w-full rounded-lg h-10 font-medium transition-colors duration-300 ${mode === "personal" ? "bg-white text-black hover:bg-neutral-200" : "bg-black text-white hover:bg-neutral-800"}`}
+                    className={`w-full rounded-lg h-10 font-medium transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
                   >
                     {personalRegisterMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
                     Crear Cuenta
@@ -286,13 +286,13 @@ export default function Register() {
             <div className="text-center space-y-2">
               <p className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
                 Al registrarte, aceptas nuestros{" "}
-                <Link to="#" className={`hover:underline text-white ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Terminos</Link>{" "}
+                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white lg:text-white" : "text-black lg:text-black"}`}>Terminos</Link>{" "}
                 y{" "}
-                <Link to="#" className={`hover:underline text-white ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Privacidad</Link>
+                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white lg:text-white" : "text-black lg:text-black"}`}>Privacidad</Link>
               </p>
-              <p className={`text-sm transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
+              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>
                 Ya tienes cuenta?{" "}
-                <Link to="/login" className={`hover:underline font-medium text-white hover:text-neutral-200 ${mode === "business" ? "lg:text-white lg:hover:text-neutral-200" : "lg:text-black lg:hover:text-neutral-600"}`}>Inicia sesion</Link>
+                <Link to="/login" className={`hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200 lg:text-white lg:hover:text-neutral-200" : "text-black hover:text-neutral-600 lg:text-black lg:hover:text-neutral-600"}`}>Inicia sesion</Link>
               </p>
             </div>
           </div>

@@ -46,19 +46,17 @@ export default function Login() {
 
   return (
     <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
-      mode === "business"
-        ? "lg:bg-black"
-        : "lg:bg-white"
+      mode === "business" ? "bg-black" : "bg-white"
     }`}>
-        {/* Mobile: centered form over Spline */}
-        <div className="flex-1 flex items-center justify-center">
+        {/* Mobile: centered form below Spline / desktop: centered form */}
+        <div className="flex-1 flex items-center justify-center animate-in fade-in duration-700">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
               <Logo className="w-10 h-10" />
               <div className="text-center">
-                <span className="text-white font-semibold text-xl block">Ai Aethel</span>
-                <p className="text-neutral-300 text-xs">Accountant</p>
+                <span className={`font-semibold text-xl block ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
+                <p className={`text-xs ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>Accountant</p>
               </div>
             </div>
 
@@ -80,8 +78,8 @@ export default function Login() {
             </div>
 
             <div className="text-center space-y-1">
-              <h1 className={`text-2xl lg:text-3xl font-semibold text-white transition-colors duration-500 ${mode === "business" ? "lg:text-white" : "lg:text-black"}`}>Bienvenido de vuelta</h1>
-              <p className={`text-neutral-300 text-base transition-colors duration-500 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>Inicia sesion en tu cuenta</p>
+              <h1 className={`text-2xl lg:text-3xl font-semibold transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Bienvenido de vuelta</h1>
+              <p className={`text-base transition-colors duration-500 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>Inicia sesion en tu cuenta</p>
             </div>
 
             <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
@@ -127,7 +125,7 @@ export default function Login() {
 
                 <form onSubmit={handleSubmit} className="space-y-5">
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Email</Label>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Email</Label>
                     <Input
                       type="email"
                       placeholder="tu@email.com"
@@ -141,7 +139,7 @@ export default function Login() {
                     />
                   </div>
                   <div>
-                    <Label className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "personal" ? "lg:text-neutral-300" : "lg:text-neutral-500"}`}>Contrasena</Label>
+                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Contrasena</Label>
                     <div className="relative mt-1">
                       <Input
                         type={showPassword ? "text" : "password"}
@@ -179,11 +177,11 @@ export default function Login() {
 
             <div className="text-center space-y-3">
               <p className="text-sm">
-                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline text-neutral-300 hover:text-white ${mode === "business" ? "lg:text-neutral-400 lg:hover:text-white" : "lg:text-neutral-500 lg:hover:text-black"}`}>Olvidaste tu contrasena?</Link>
+                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "business" ? "text-neutral-300 hover:text-white lg:text-neutral-400 lg:hover:text-white" : "text-neutral-600 hover:text-black lg:text-neutral-500 lg:hover:text-black"}`}>Olvidaste tu contrasena?</Link>
               </p>
-              <p className={`text-sm transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
+              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>
                 No tienes cuenta?{" "}
-                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium text-white hover:text-neutral-200 ${mode === "business" ? "lg:text-white lg:hover:text-neutral-200" : "lg:text-black lg:hover:text-neutral-600"}`}>Registrate</Link>
+                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200 lg:text-white lg:hover:text-neutral-200" : "text-black hover:text-neutral-600 lg:text-black lg:hover:text-neutral-600"}`}>Registrate</Link>
               </p>
             </div>
           </div>
