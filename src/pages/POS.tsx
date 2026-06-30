@@ -263,12 +263,12 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-2">
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-2 lg:max-h-[480px]">
               {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
@@ -277,17 +277,17 @@ export default function POS() {
                 onClick={backspace}
                 className="h-full rounded-xl lg:rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
-                <X className="w-6 h-6 lg:w-7 lg:h-7" />
+                <X className="w-7 h-7 lg:w-8 lg:h-8" />
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-2xl lg:text-3xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-3xl lg:text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
