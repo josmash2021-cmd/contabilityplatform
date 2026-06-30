@@ -16,7 +16,7 @@ export default function AuthLayout() {
       </div>
 
       {/* ─── DESKTOP SPLINE: left side panel ─── */}
-      <div className="hidden lg:block w-[55%] h-full relative overflow-hidden bg-black">
+      <div className="hidden lg:block w-[60%] h-full relative overflow-hidden bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
           className="absolute inset-0 w-full h-full border-0 -translate-x-[22%]"
@@ -36,7 +36,7 @@ export default function AuthLayout() {
       </div>
 
       {/* ─── CONTENT OUTLET ─── */}
-      <div className="w-full lg:w-[45%] h-full relative z-10 animate-[authReveal_0.8s_ease-out_forwards]">
+      <div className="w-full lg:w-[40%] h-full relative z-10 animate-[authReveal_0.8s_ease-out_forwards]">
         <Outlet />
       </div>
     </div>
