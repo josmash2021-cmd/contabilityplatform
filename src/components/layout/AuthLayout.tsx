@@ -1,12 +1,8 @@
 import { useState, useEffect } from "react";
-import { useLocation } from "react-router";
-import Login from "@/pages/Login";
-import Register from "@/pages/Register";
+import { Outlet } from "react-router";
 import { Logo } from "@/components/Logo";
 
 export default function AuthLayout() {
-  const location = useLocation();
-  const isRegister = location.pathname === "/register";
   const [showContent, setShowContent] = useState(false);
 
   // Initial reveal: Spline first, then content after 3s
@@ -17,7 +13,7 @@ export default function AuthLayout() {
 
   return (
     <div className="min-h-screen lg:h-screen lg:overflow-hidden flex relative">
-      {/* ─── MOBILE SPLINE: centered, full coverage ─── */}
+      {/* ─── MOBILE SPLINE: full screen, centered ─── */}
       <div className="fixed inset-0 z-0 overflow-hidden lg:hidden">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
@@ -32,7 +28,7 @@ export default function AuthLayout() {
       <div className="hidden lg:block fixed inset-0 z-0 overflow-hidden">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 animate-[authSplineIn_1.2s_ease-out_forwards] lg:-translate-x-[22%]"
+          className="absolute inset-0 w-full h-full border-0 -translate-x-[22%] animate-[authSplineIn_1.2s_ease-out_forwards]"
           allowFullScreen
           loading="eager"
           title="Spline background"
@@ -52,14 +48,13 @@ export default function AuthLayout() {
         </div>
       </div>
 
-      {/* ─── CONTENT: smooth fade-in on route change ─── */}
+      {/* ─── CONTENT OUTLET: shared layout prevents page reload ─── */}
       <div
-        key={location.pathname}
-        className={`w-full h-full transition-opacity duration-300 ${
-          showContent ? "opacity-100 animate-[authReveal_0.5s_ease_forwards]" : "opacity-0"
+        className={`w-full h-full transition-opacity duration-700 ${
+          showContent ? "opacity-100" : "opacity-0"
         }`}
       >
-        {isRegister ? <Register /> : <Login />}
+        <Outlet />
       </div>
     </div>
   );

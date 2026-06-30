@@ -95,7 +95,7 @@ export default function Register() {
   };
 
   return (
-    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-5 xl:p-6 transition-colors duration-500 bg-black/60 backdrop-blur-sm ${
+    <div className={`relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-6 sm:p-8 lg:p-5 xl:p-6 transition-colors duration-500 bg-black/60 backdrop-blur-sm animate-in fade-in duration-500 ${
       mode === "business" ? "lg:bg-black" : "lg:bg-white"
     }`}>
         <div className="flex-1 flex items-center justify-center">
