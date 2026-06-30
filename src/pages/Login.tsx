@@ -52,7 +52,7 @@ export default function Login() {
     }`}>
         {/* Mobile: centered form over Spline */}
         <div className="flex-1 flex items-center justify-center">
-          <div className="w-full max-w-sm lg:max-w-lg space-y-4">
+          <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
             <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
               <Logo className="w-10 h-10" />
