@@ -41,8 +41,8 @@ export default function AuthLayout() {
         </div>
       </div>
 
-      {/* ─── DESKTOP SPLINE: left side panel ─── */}
-      <div className="hidden lg:block w-[60%] h-full relative overflow-hidden bg-black">
+      {/* ─── DESKTOP SPLINE: left side panel 65% ─── */}
+      <div className="hidden lg:block w-[65%] h-full relative overflow-hidden bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
           className="absolute inset-0 w-full h-full border-0 -translate-x-[22%]"
@@ -64,7 +64,7 @@ export default function AuthLayout() {
       {/* ─── CONTENT: fades in + slides up smoothly when scrolled into view ─── */}
       <div
         ref={contentRef}
-        className={`w-full lg:w-[40%] lg:h-full relative z-10 transition-all duration-700 ease-out ${
+        className={`w-full lg:w-[35%] lg:h-full relative z-10 transition-all duration-700 ease-out ${
           contentVisible
             ? "opacity-100 translate-y-0"
             : "opacity-0 translate-y-6"
