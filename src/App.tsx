@@ -53,14 +53,12 @@ export default function App() {
   return (
     <Routes>
       {/* Public auth routes - shared layout keeps Spline from reloading */}
-      <Route element={<AuthLayout />}>
-        <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
-        <Route path="/register" element={<Register />} />
-      </Route>
+      <Route path="/login" element={<PublicGuard><AuthLayout /></PublicGuard>} />
+      <Route path="/register" element={<AuthLayout />} />
       <Route path="/forgot-password" element={<PublicGuard><ForgotPassword /></PublicGuard>} />
 
       {/* Onboarding - accessible when logged in */}
-      <Route path="/onboarding" element={<AuthGuard><Onboarding /></AuthGuard>} />
+      <Route path="/onboarding" element={<Onboarding />} />
 
       {/* Setup - no auth required, run once */}
       <Route path="/setup" element={<Setup />} />
