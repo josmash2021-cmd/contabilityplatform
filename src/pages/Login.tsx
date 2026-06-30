@@ -58,7 +58,7 @@ export default function Login() {
       </div>
 
       {/* ─── RIGHT PANEL: all content on the right (desktop) / centered (mobile) ─── */}
-      <div className="relative z-10 w-full lg:w-[45%] lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:bg-white p-6 sm:p-8 lg:p-10 xl:p-12">
+      <div className="relative z-10 w-full lg:w-1/2 lg:ml-auto min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:bg-white p-6 sm:p-8 lg:p-10 xl:p-12">
         {/* Mobile: centered form over Spline */}
         <div className="flex-1 flex items-center justify-center lg:items-start">
           <div className="w-full max-w-sm lg:max-w-md space-y-5">
