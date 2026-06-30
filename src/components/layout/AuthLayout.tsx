@@ -19,13 +19,12 @@ export default function AuthLayout() {
   }, []);
 
   return (
-    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col lg:flex-row relative overflow-x-hidden">
+    <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col lg:flex-row relative">
       {/* ─── MOBILE SPLINE: centered orb, scroll down to reveal login ─── */}
-      <div className="h-screen lg:hidden relative shrink-0 bg-black" style={{ minWidth: '250vw', marginLeft: '-75vw' }}>
+      <div className="h-screen lg:hidden relative overflow-hidden shrink-0 bg-black">
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
-          className="absolute top-1/2 left-1/2 h-[105%] w-[100%] -translate-x-[55%] -translate-y-1/2 border-0 pointer-events-none"
-          style={{ width: '100%' }}
+          className="absolute top-1/2 left-1/2 h-[115%] w-[140%] -translate-x-[58%] -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
