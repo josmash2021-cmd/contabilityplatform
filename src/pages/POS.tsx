@@ -177,12 +177,12 @@ export default function POS() {
   const numericValue = parseFloat(amount) || 0;
 
   return (
-    <div className="min-h-screen bg-white pb-24 lg:pb-0">
+    <div className="min-h-screen bg-white pb-4">
       {/* Header */}
       <AnimatedPage>
-        <div className="px-4 lg:px-6 lg:pr-[420px] pt-4 lg:pt-6 pb-3 border-b border-neutral-100">
-          <div className="flex items-center justify-between mb-3">
-            <h1 className="text-xl font-medium text-black">Cobrar</h1>
+        <div className="px-4 lg:px-6 lg:pr-[400px] pt-3 pb-2 border-b border-neutral-100">
+          <div className="flex items-center justify-between">
+            <h1 className="text-lg font-medium text-black">Cobrar</h1>
             {selectedCustomerData ? (
               <div className="flex items-center gap-2">
                 <span className="inline-flex items-center gap-1.5 text-xs bg-neutral-100 px-2.5 py-1 rounded text-black">
@@ -197,7 +197,7 @@ export default function POS() {
                 </DialogTrigger>
                 <DialogContent className="bg-white border-neutral-200 max-w-sm">
                   <DialogHeader><DialogTitle className="text-black text-base font-medium">Cliente</DialogTitle></DialogHeader>
-                  <ScrollArea className="h-72">
+                  <ScrollArea className="h-64">
                     <div className="space-y-0.5">
                       {customers?.map((c: NonNullable<typeof customers>[0]) => (
                         <button key={c.id} onClick={() => setSelectedCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
@@ -217,19 +217,19 @@ export default function POS() {
       </AnimatedPage>
 
       {/* Main content */}
-      <div className="p-4 lg:p-6 lg:pr-[420px]">
-        <AnimatedPage delay={100}>
-          <div className="max-w-2xl mx-auto lg:mx-0">
+      <div className="p-3 lg:p-4 lg:pr-[400px] lg:h-[calc(100vh-52px)] lg:flex lg:items-center">
+        <AnimatedPage delay={100} className="w-full">
+          <div className="max-w-md mx-auto lg:mx-auto">
             {/* Amount display */}
-            <div className="bg-neutral-50 rounded-2xl p-6 mb-4 text-center border border-neutral-100">
-              <p className="text-xs text-neutral-400 uppercase tracking-wide mb-1">Monto a cobrar</p>
-              <p className="text-5xl lg:text-6xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+            <div className="bg-neutral-50 rounded-xl p-3 mb-2 text-center border border-neutral-100">
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Monto a cobrar</p>
+              <p className="text-3xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
             {/* Selected service badge */}
             {selectedService && (
-              <div className="flex items-center justify-center gap-2 mb-4">
-                <span className="inline-flex items-center gap-1.5 text-xs bg-black text-white px-3 py-1.5 rounded-full">
+              <div className="flex items-center justify-center gap-2 mb-3">
+                <span className="inline-flex items-center gap-1.5 text-xs bg-black text-white px-2.5 py-1 rounded-full">
                   <Package className="w-3 h-3" /> {selectedService.name}
                   <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
                 </span>
@@ -237,20 +237,20 @@ export default function POS() {
             )}
 
             {/* Action buttons */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
+            <div className="grid grid-cols-2 gap-2 mb-3">
               <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-3 rounded-xl border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-sm font-medium text-black">
-                    <Package className="w-4 h-4" /> Servicio / Producto
+                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
+                    <Package className="w-3.5 h-3.5" /> Servicio / Producto
                   </button>
                 </DialogTrigger>
                 <DialogContent className="bg-white border-neutral-200 max-w-sm">
                   <DialogHeader><DialogTitle className="text-black text-base font-medium">Seleccionar servicio</DialogTitle></DialogHeader>
-                  <div className="relative mb-3">
+                  <div className="relative mb-2">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
                     <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
                   </div>
-                  <ScrollArea className="h-72">
+                  <ScrollArea className="h-60">
                     <div className="space-y-0.5">
                       {filteredServices.length === 0 ? (
                         <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
@@ -272,8 +272,8 @@ export default function POS() {
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-2 p-3 rounded-xl border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-sm font-medium text-black">
-                    <User className="w-4 h-4" /> Cliente
+                  <button className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
+                    <User className="w-3.5 h-3.5" /> Cliente
                   </button>
                 </DialogTrigger>
                 <DialogContent className="bg-white border-neutral-200 max-w-sm">
@@ -295,56 +295,56 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="grid grid-cols-3 gap-3 mb-4">
+            <div className="grid grid-cols-3 gap-2 mb-2">
               {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="aspect-square rounded-xl bg-white border border-neutral-200 text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-12 rounded-lg bg-white border border-neutral-200 text-lg font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
               ))}
               <button
                 onClick={clearAmount}
-                className="aspect-square rounded-xl bg-neutral-100 text-sm font-medium text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
+                className="h-12 rounded-lg bg-neutral-100 text-sm font-medium text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
               >
                 C
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="aspect-square rounded-xl bg-white border border-neutral-200 text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-12 rounded-lg bg-white border border-neutral-200 text-lg font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="aspect-square rounded-xl bg-white border border-neutral-200 text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-12 rounded-lg bg-white border border-neutral-200 text-lg font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
             </div>
 
             {/* Bottom row: backspace, add, charge */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 onClick={backspace}
-                className="rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
+                className="h-12 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5" />
               </button>
               <Button
                 onClick={handleAddAnother}
                 disabled={numericValue <= 0}
                 variant="outline"
-                className="h-14 rounded-xl border-neutral-200 text-black font-medium hover:bg-neutral-50 disabled:opacity-50"
+                className="h-12 rounded-lg border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
               >
-                <Plus className="w-4 h-4 mr-1.5" /> Agregar
+                <Plus className="w-4 h-4 mr-1" /> Agregar
               </Button>
               <Button
                 onClick={handleCobrarClick}
                 disabled={cart.length === 0 && numericValue <= 0}
-                className="h-14 rounded-xl bg-black hover:bg-neutral-800 text-white font-medium disabled:opacity-50"
+                className="h-12 rounded-lg bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50"
               >
                 Cobrar
               </Button>
@@ -391,10 +391,10 @@ export default function POS() {
 
       {/* Desktop Cart Sidebar */}
       <div className="hidden lg:flex fixed right-0 top-0 bottom-0 w-[380px] border-l border-neutral-200 bg-white flex-col">
-        <div className="px-5 pt-6 pb-3 border-b border-neutral-100">
+        <div className="px-5 pt-4 pb-2 border-b border-neutral-100">
           <p className="text-xs text-neutral-400">{cart.length} items</p>
         </div>
-        <ScrollArea className="flex-1 px-5 py-3">
+        <ScrollArea className="flex-1 px-5 py-2">
           {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">Agrega un monto para cobrar</p> : (
             <div className="space-y-3">
               {cart.map((item) => (
@@ -415,7 +415,7 @@ export default function POS() {
             </div>
           )}
         </ScrollArea>
-        <div className="px-5 py-4 border-t border-neutral-100 space-y-3">
+        <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
           <div className="flex justify-between text-sm"><span className="text-neutral-400">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
           <div className="flex justify-between text-sm items-center">
             <span className="text-neutral-400">Descuento</span>
@@ -433,8 +433,8 @@ export default function POS() {
               <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
             </div>
           )}
-          <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
-          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
+          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
+          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">Cobrar</Button>
         </div>
       </div>
 
