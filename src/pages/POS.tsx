@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +33,8 @@ const QUICK_SERVICES = [
 ];
 
 export default function POS() {
+  const { user } = useAuth();
+  const isErika = user?.email?.toLowerCase() === "tuplacaexpressllc@gmail.com";
   const { data: servicesList } = trpc.services.list.useQuery();
   const { data: customers } = trpc.customers.list.useQuery({ type: "all" });
   const { data: settings } = trpc.settings.get.useQuery();
@@ -114,10 +117,12 @@ export default function POS() {
 
   const handleCobrarClick = () => {
     if (cart.length === 0) {
-      setQuickChargeOpen(true);
-    } else {
-      setShowPayment(true);
+      if (isErika) {
+        setQuickChargeOpen(true);
+      }
+      return;
     }
+    setShowPayment(true);
   };
 
   const updateQty = (id: string, d: number) => {
@@ -250,20 +255,22 @@ export default function POS() {
       </div>
 
       {/* Mobile Bottom Button */}
-      <button
-        onClick={handleCobrarClick}
-        className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50 active:scale-[0.98] transition-transform"
-      >
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">{cart.length > 0 ? `${cart.length} items` : "Cobrar"}</span>
-          {cart.length > 0 && <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>}
-        </div>
-        {cart.length > 0 ? (
-          <ChevronUp className="w-5 h-5" />
-        ) : (
-          <Plus className="w-5 h-5" />
-        )}
-      </button>
+      {(cart.length > 0 || isErika) && (
+        <button
+          onClick={handleCobrarClick}
+          className="lg:hidden fixed bottom-4 left-4 right-4 bg-black text-white rounded-xl px-4 py-3 flex items-center justify-between shadow-lg z-50 active:scale-[0.98] transition-transform"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-sm font-medium">{cart.length > 0 ? `${cart.length} items` : "Cobrar"}</span>
+            {cart.length > 0 && <span className="text-xs text-neutral-300">{formatCurrency(total)}</span>}
+          </div>
+          {cart.length > 0 ? (
+            <ChevronUp className="w-5 h-5" />
+          ) : (
+            <Plus className="w-5 h-5" />
+          )}
+        </button>
+      )}
 
       {/* Cart Panel - Mobile: slide up, Desktop: sidebar */}
       <div className={`lg:hidden fixed inset-x-0 bottom-0 bg-white border-t border-neutral-200 rounded-t-2xl shadow-2xl transition-transform duration-300 z-40 flex flex-col ${showCart ? "translate-y-0 pb-20" : "translate-y-full"}`} style={{ maxHeight: "85vh" }}>
@@ -360,7 +367,7 @@ export default function POS() {
             </div>
           )}
           <div className="border-t border-neutral-100 pt-3 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
-          <Button onClick={handleCobrarClick} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
+          <Button onClick={handleCobrarClick} disabled={cart.length === 0 && !isErika} className="w-full bg-black hover:bg-neutral-800 text-white h-10 text-sm">Cobrar</Button>
           <Dialog open={showPayment} onOpenChange={setShowPayment}>
             <DialogContent className="bg-white border-neutral-200 max-w-md">
               <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
