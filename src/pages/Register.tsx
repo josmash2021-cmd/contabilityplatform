@@ -100,7 +100,7 @@ export default function Register() {
       <div className="fixed inset-0 z-0">
         <iframe
           src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
-          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[22%]"
+          className="absolute inset-0 w-full h-full border-0 lg:-translate-x-[40%]"
           allowFullScreen
           loading="eager"
           title="Spline background"
