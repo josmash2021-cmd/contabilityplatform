@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { trpc } from "@/providers/trpc";
 import { formatCurrency } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -174,26 +174,16 @@ export default function POS() {
 
   const numericValue = parseFloat(amount) || 0;
 
-  useEffect(() => {
-    const mq = window.matchMedia("(max-width: 1023px)");
-    if (!mq.matches) return;
-    const original = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = original;
-    };
-  }, []);
-
   return (
-    <div className="fixed inset-0 overflow-hidden bg-white lg:static lg:min-h-screen lg:block">
+    <div className="min-h-[100dvh] flex flex-col bg-white lg:min-h-screen lg:block">
       {/* Main content */}
-      <div className="h-full p-2 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
+      <div className="flex-1 min-h-0 p-3 lg:p-4 lg:pr-[400px] lg:h-screen lg:flex lg:items-center">
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
-            <div className="shrink-0 mb-1 lg:mb-2 text-center">
+            <div className="shrink-0 py-2 lg:py-3 mb-1 lg:mb-2 text-center bg-neutral-50 rounded-xl lg:rounded-2xl border border-neutral-100">
               <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5 lg:mb-1">Monto a cobrar</p>
-              <p className="text-3xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+              <p className="text-4xl lg:text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
             {/* Selected badges */}
