@@ -84,8 +84,6 @@ export default function POS() {
     });
   };
 
-  const clearAmount = () => setAmount("0");
-
   const backspace = () => {
     setAmount((prev) => (prev.length <= 1 ? "0" : prev.slice(0, -1)));
   };
@@ -193,9 +191,9 @@ export default function POS() {
         <AnimatedPage delay={100} className="w-full h-full">
           <div className="max-w-md mx-auto lg:mx-auto h-full flex flex-col">
             {/* Amount display */}
-            <div className="shrink-0 bg-neutral-50 rounded-lg lg:rounded-xl p-1.5 lg:p-3 mb-1 lg:mb-2 text-center border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Monto a cobrar</p>
-              <p className="text-xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+            <div className="shrink-0 mb-1 lg:mb-2 text-center">
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5 lg:mb-1">Monto a cobrar</p>
+              <p className="text-3xl lg:text-4xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
             {/* Selected badges */}
@@ -217,11 +215,11 @@ export default function POS() {
             )}
 
             {/* Action buttons */}
-            <div className="shrink-0 grid grid-cols-2 gap-1.5 lg:gap-2 mb-1 lg:mb-2">
+            <div className="shrink-0 grid grid-cols-2 gap-2 mb-2 lg:mb-3">
               <Dialog open={serviceDialogOpen} onOpenChange={setServiceDialogOpen}>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
-                    <Package className="w-3.5 h-3.5" /> Servicio / Producto
+                  <button className="flex items-center justify-center gap-2 p-2.5 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
+                    <Package className="w-4 h-4" /> Servicio / Producto
                   </button>
                 </DialogTrigger>
                 <DialogContent className="bg-white border-neutral-200 max-w-sm">
@@ -252,8 +250,8 @@ export default function POS() {
 
               <Dialog>
                 <DialogTrigger asChild>
-                  <button className="flex items-center justify-center gap-1.5 lg:gap-2 p-2 lg:p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black">
-                    <User className="w-3.5 h-3.5" /> Cliente
+                  <button className="flex items-center justify-center gap-2 p-2.5 lg:p-3 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs lg:text-sm font-medium text-black">
+                    <User className="w-4 h-4" /> Cliente
                   </button>
                 </DialogTrigger>
                 <DialogContent className="bg-white border-neutral-200 max-w-sm">
@@ -275,56 +273,50 @@ export default function POS() {
             </div>
 
             {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-1 lg:mb-2">
-              {["7", "8", "9", "4", "5", "6", "1", "2", "3"].map((digit) => (
+            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-1 lg:gap-2 mb-2">
+              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                 <button
                   key={digit}
                   onClick={() => appendDigit(digit)}
-                  className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                  className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
                 >
                   {digit}
                 </button>
               ))}
               <button
-                onClick={clearAmount}
-                className="h-full rounded-lg bg-neutral-100 text-xs lg:text-sm font-medium text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all"
+                onClick={backspace}
+                className="h-full rounded-xl lg:rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
               >
-                C
+                <X className="w-5 h-5 lg:w-6 lg:h-6" />
               </button>
               <button
                 onClick={() => appendDigit("0")}
-                className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 0
               </button>
               <button
                 onClick={() => appendDigit(".")}
-                className="h-full rounded-lg bg-white border border-neutral-200 text-sm lg:text-xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
+                className="h-full rounded-xl lg:rounded-lg bg-white border border-neutral-200 text-lg lg:text-2xl font-medium text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
               >
                 .
               </button>
             </div>
 
-            {/* Bottom row: backspace, add, charge */}
-            <div className="shrink-0 grid grid-cols-3 gap-2">
-              <button
-                onClick={backspace}
-                className="h-10 lg:h-12 rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center"
-              >
-                <X className="w-5 h-5" />
-              </button>
+            {/* Bottom row: add, charge */}
+            <div className="shrink-0 grid grid-cols-2 gap-2">
               <Button
                 onClick={handleAddAnother}
                 disabled={numericValue <= 0}
                 variant="outline"
-                className="h-10 lg:h-12 rounded-lg border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                className="h-12 lg:h-14 rounded-xl lg:rounded-lg border-neutral-200 text-black text-sm lg:text-base font-medium hover:bg-neutral-50 disabled:opacity-50"
               >
-                <Plus className="w-4 h-4 mr-1" /> Agregar
+                <Plus className="w-4 h-4 lg:w-5 lg:h-5 mr-1" /> Agregar
               </Button>
               <Button
                 onClick={handleCobrarClick}
                 disabled={cart.length === 0 && numericValue <= 0}
-                className="h-10 lg:h-12 rounded-lg bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50"
+                className="h-12 lg:h-14 rounded-xl lg:rounded-lg bg-black hover:bg-neutral-800 text-white text-sm lg:text-base font-medium disabled:opacity-50"
               >
                 Cobrar
               </Button>
