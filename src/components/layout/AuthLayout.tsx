@@ -25,6 +25,14 @@ export default function AuthLayout() {
     <div className="min-h-screen lg:h-screen lg:overflow-hidden flex flex-col lg:flex-row relative overflow-x-hidden">
       {/* ─── MOBILE SPLINE: centered orb, scroll down to reveal login ─── */}
       <div className="h-screen lg:hidden relative shrink-0 bg-black touch-pan-y">
+        {/* Mobile logo - top center over Spline */}
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+          <Logo className="w-10 h-10" />
+          <div className="text-center">
+            <span className="font-semibold text-xl text-white block">Ai Aethel</span>
+            <p className="text-[10px] text-neutral-300">Accountant</p>
+          </div>
+        </div>
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
           className="absolute top-1/2 left-1/2 h-[100%] w-[220%] md:max-lg:w-[240%] -translate-x-[72%] md:max-lg:-translate-x-[62%] -translate-y-1/2 border-0"
