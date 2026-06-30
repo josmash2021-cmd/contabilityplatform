@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { Logo } from "@/components/Logo";
+import { useFadeIn } from "@/hooks/useFadeIn";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -94,20 +95,35 @@ export default function Register() {
     personalRegisterMut.mutate({ email, password, name, mode });
   };
 
+  // Fade-in wrapper for sections
+  function FadeInSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+    const { ref, isVisible } = useFadeIn();
+    return (
+      <div
+        ref={ref}
+        className={`transition-all duration-700 ease-out ${className} ${
+          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
+        }`}
+      >
+        {children}
+      </div>
+    );
+  }
+
   return (
     <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
       mode === "business" ? "bg-black" : "bg-white"
     }`}>
-        <div className="flex-1 flex items-center justify-center animate-in fade-in duration-700">
+        <div className="flex-1 flex items-center justify-center">
           <div className="w-full max-w-sm lg:max-w-md space-y-4">
             {/* Mobile logo */}
-            <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
+            <FadeInSection className="lg:hidden flex items-center justify-center gap-3 mb-6">
               <Logo className="w-10 h-10" />
               <div className="text-center">
                 <span className={`font-semibold text-xl block ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
                 <p className={`text-xs ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>Accountant</p>
               </div>
-            </div>
+            </FadeInSection>
 
             {/* Headline - desktop only */}
             <div className="hidden lg:block space-y-1">
@@ -126,11 +142,12 @@ export default function Register() {
               </p>
             </div>
 
-            <div className="text-center space-y-1">
+            <FadeInSection className="text-center space-y-1">
               <h1 className={`text-2xl lg:text-3xl font-semibold transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Crea tu cuenta</h1>
               <p className={`text-sm transition-colors duration-500 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
-            </div>
+            </FadeInSection>
 
+            <FadeInSection>
             <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
               mode === "personal"
                 ? "bg-black border-white/20 text-white"
@@ -282,8 +299,9 @@ export default function Register() {
                 </form>
               </CardContent>
             </Card>
+            </FadeInSection>
 
-            <div className="text-center space-y-2">
+            <FadeInSection className="text-center space-y-2">
               <p className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
                 Al registrarte, aceptas nuestros{" "}
                 <Link to="#" className={`hover:underline ${mode === "business" ? "text-white lg:text-white" : "text-black lg:text-black"}`}>Terminos</Link>{" "}
@@ -294,7 +312,7 @@ export default function Register() {
                 Ya tienes cuenta?{" "}
                 <Link to="/login" className={`hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200 lg:text-white lg:hover:text-neutral-200" : "text-black hover:text-neutral-600 lg:text-black lg:hover:text-neutral-600"}`}>Inicia sesion</Link>
               </p>
-            </div>
+            </FadeInSection>
           </div>
         </div>
 
