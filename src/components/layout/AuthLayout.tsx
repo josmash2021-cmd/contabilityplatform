@@ -23,7 +23,7 @@ export default function AuthLayout() {
       {/* ─── MOBILE SPLINE: full viewport height, then scroll to content ─── */}
       <div className="h-screen lg:hidden relative overflow-hidden shrink-0">
         <iframe
-          src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
+          src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
           className="absolute top-1/2 left-1/2 h-full min-w-[100vw] -translate-x-1/2 -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
@@ -34,7 +34,7 @@ export default function AuthLayout() {
       {/* ─── DESKTOP SPLINE: left side panel ─── */}
       <div className="hidden lg:block w-[60%] h-full relative overflow-hidden bg-black">
         <iframe
-          src="https://my.spline.design/reactiveorb-lRUKXnfBGHKP2Gb80l06Ma7T/"
+          src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
           className="absolute inset-0 w-full h-full border-0 -translate-x-[22%]"
           allowFullScreen
           loading="eager"
