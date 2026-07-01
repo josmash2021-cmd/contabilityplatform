@@ -33,11 +33,9 @@ export default function AuthLayout() {
             <p className="text-[10px] text-neutral-300">Accountant</p>
           </div>
         </div>
-        {/* Spacer to push Spline down */}
-        <div className="h-32 shrink-0" />
         <iframe
           src="https://my.spline.design/reactiveorb-YcWeUq9lGkjENkHnNB7hvUjG/"
-          className="absolute top-1/2 left-1/2 h-[100%] w-[220%] md:max-lg:w-[240%] -translate-x-[72%] md:max-lg:-translate-x-[62%] -translate-y-1/2 border-0"
+          className="absolute top-[60%] left-1/2 h-[100%] w-[220%] md:max-lg:w-[240%] -translate-x-[72%] md:max-lg:-translate-x-[62%] -translate-y-1/2 border-0"
           allowFullScreen
           loading="eager"
           title="Spline background"
