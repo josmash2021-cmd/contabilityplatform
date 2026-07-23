@@ -325,6 +325,30 @@ export const adminRouter = createRouter({
       return activities;
     }),
 
+  // ── Payment history (para el detalle de "Ingresos totales") ──
+  paymentHistory: adminQuery.query(async () => {
+    const db = getDb();
+    const pays = await db.select().from(subscriptionPayments)
+      .orderBy(desc(subscriptionPayments.paidAt))
+      .limit(200);
+
+    // Map user info in one pass
+    const allUsers = await db.select({ id: users.id, name: users.name, email: users.email }).from(users);
+    const userMap = new Map<number, { name: string | null; email: string | null }>();
+    for (const u of allUsers) userMap.set(u.id, { name: u.name, email: u.email });
+
+    return pays.map((p) => ({
+      id: p.id,
+      userName: userMap.get(p.userId)?.name ?? null,
+      userEmail: userMap.get(p.userId)?.email ?? null,
+      amount: p.amount,
+      plan: p.plan,
+      status: p.status,
+      paidAt: p.paidAt,
+      receiptUrl: p.receiptUrl,
+    }));
+  }),
+
   // ── Toggle maintenance mode (persisted in DB) ──
   toggleMaintenance: adminQuery
     .input(z.object({

@@ -29,6 +29,7 @@ export default function Admin() {
   const [grantPlan, setGrantPlan] = useState<"monthly" | "annual">("annual");
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showActivityUser, setShowActivityUser] = useState<any>(null);
+  const [statsModal, setStatsModal] = useState<null | "users" | "subs" | "blocked" | "revenue">(null);
 
   // Live options — panel refresca solo (polling + al volver a la pestaña)
   const LIVE_REFETCH_MS = 5000;
@@ -45,6 +46,10 @@ export default function Admin() {
   const { data: activityData, isLoading: activityLoading } = trpc.admin.userActivity.useQuery(
     { userId: showActivityUser?.id ?? 0 },
     { enabled: !!showActivityUser, ...live }
+  );
+  const { data: paymentHistory, isLoading: paymentsLoading } = trpc.admin.paymentHistory.useQuery(
+    undefined,
+    { enabled: isAdmin && statsModal === "revenue", ...live }
   );
 
   const users = usersData?.users ?? [];
@@ -153,6 +158,10 @@ export default function Admin() {
     return acc;
   }, { total: 0, income: 0, expense: 0 }) ?? { total: 0, income: 0, expense: 0 };
 
+  // Derived lists for the stats detail modals
+  const activeSubsList = (subscriptions ?? []).filter((s: any) => s.status === "active" || s.status === "trialing");
+  const blockedAndAdmins = users.filter((u: any) => u.isBlocked || u.isAdmin);
+
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
       {/* ═══════ HEADER ═══════ */}
@@ -175,7 +184,7 @@ export default function Admin() {
       {/* ═══════ STATS CARDS ═══════ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Users */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
+        <Card onClick={() => setStatsModal("users")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
@@ -194,7 +203,7 @@ export default function Admin() {
         </Card>
 
         {/* Active Subscriptions */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
+        <Card onClick={() => setStatsModal("subs")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
@@ -219,7 +228,7 @@ export default function Admin() {
         </Card>
 
         {/* Blocked Users */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
+        <Card onClick={() => setStatsModal("blocked")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
@@ -237,7 +246,7 @@ export default function Admin() {
         </Card>
 
         {/* Revenue */}
-        <Card className="border-neutral-200/80 shadow-sm hover:shadow-md transition-shadow">
+        <Card onClick={() => setStatsModal("revenue")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
           <CardContent className="p-5">
             <div className="flex items-start justify-between">
               <div className="space-y-1">
@@ -865,6 +874,176 @@ export default function Admin() {
             <p className="text-[10px] text-neutral-400 text-center">
               Mostrando hasta 30 movimientos mas recientes
             </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ═══════ STATS DETAIL DIALOG ═══════ */}
+      <Dialog open={!!statsModal} onOpenChange={() => setStatsModal(null)}>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
+          {/* Header */}
+          <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 text-white p-6">
+            <div className="flex items-center gap-4">
+              <div className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 ${
+                statsModal === "users" ? "bg-blue-500/20"
+                : statsModal === "subs" ? "bg-emerald-500/20"
+                : statsModal === "blocked" ? "bg-red-500/20"
+                : "bg-white/15"
+              }`}>
+                {statsModal === "users" && <Users className="w-6 h-6 text-blue-300" />}
+                {statsModal === "subs" && <CreditCard className="w-6 h-6 text-emerald-300" />}
+                {statsModal === "blocked" && <UserX className="w-6 h-6 text-red-300" />}
+                {statsModal === "revenue" && <DollarSign className="w-6 h-6 text-white" />}
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="font-semibold text-lg">
+                  {statsModal === "users" && "Usuarios"}
+                  {statsModal === "subs" && "Suscripciones activas"}
+                  {statsModal === "blocked" && "Bloqueados y administradores"}
+                  {statsModal === "revenue" && "Ingresos totales"}
+                </h3>
+                <p className="text-sm text-neutral-300">
+                  {statsModal === "users" && `${stats?.totalUsers ?? 0} usuarios registrados`}
+                  {statsModal === "subs" && `${stats?.activeSubscriptions ?? 0} activas · ${stats?.annualSubscriptions ?? 0} anual · ${stats?.monthlySubscriptions ?? 0} mensual`}
+                  {statsModal === "blocked" && `${stats?.blockedUsers ?? 0} bloqueados · ${stats?.adminUsers ?? 0} admins`}
+                  {statsModal === "revenue" && `$${stats?.totalRevenue ?? "0.00"} en total`}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div className="max-h-[420px] overflow-y-auto">
+            {/* ── USUARIOS ── */}
+            {statsModal === "users" && (
+              <>
+                <div className="grid grid-cols-2 gap-3 p-6 border-b border-neutral-100">
+                  <div className="p-3 rounded-xl bg-emerald-50 text-center">
+                    <p className="text-lg font-bold text-emerald-600">{stats?.activeSubscriptions ?? 0}</p>
+                    <p className="text-[10px] text-emerald-500 uppercase tracking-wide">Con suscripcion</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-neutral-50 text-center">
+                    <p className="text-lg font-bold text-neutral-700">{(stats?.totalUsers ?? 0) - (stats?.activeSubscriptions ?? 0)}</p>
+                    <p className="text-[10px] text-neutral-400 uppercase tracking-wide">Sin plan</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-amber-50 text-center">
+                    <p className="text-lg font-bold text-amber-600">{stats?.adminUsers ?? 0}</p>
+                    <p className="text-[10px] text-amber-500 uppercase tracking-wide">Administradores</p>
+                  </div>
+                  <div className="p-3 rounded-xl bg-red-50 text-center">
+                    <p className="text-lg font-bold text-red-500">{stats?.blockedUsers ?? 0}</p>
+                    <p className="text-[10px] text-red-400 uppercase tracking-wide">Bloqueados</p>
+                  </div>
+                </div>
+                <div className="divide-y divide-neutral-50">
+                  {users.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-3 px-6 py-3">
+                      <div className="w-8 h-8 rounded-full bg-neutral-100 flex items-center justify-center text-xs font-semibold shrink-0">
+                        {(u.name || "?").charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-neutral-800 truncate">{u.name || "Sin nombre"}</p>
+                        <p className="text-[11px] text-neutral-400 truncate">{u.email}</p>
+                      </div>
+                      {u.isAdmin ? (
+                        <Badge className="bg-amber-100 text-amber-700 border-0 text-[10px]">Admin</Badge>
+                      ) : (u.subscription?.status === "active" || u.subscription?.status === "trialing") ? (
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px]">{u.subscription.plan === "annual" ? "Anual" : "Mensual"}</Badge>
+                      ) : (
+                        <span className="text-[10px] text-neutral-400">Sin plan</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+
+            {/* ── SUSCRIPCIONES ACTIVAS ── */}
+            {statsModal === "subs" && (
+              activeSubsList.length === 0 ? (
+                <div className="py-10 text-center text-sm text-neutral-400">Sin suscripciones activas</div>
+              ) : (
+                <div className="divide-y divide-neutral-50">
+                  {activeSubsList.map((s: any) => (
+                    <div key={s.id} className="flex items-center gap-3 px-6 py-3">
+                      <div className="w-9 h-9 rounded-xl bg-emerald-50 flex items-center justify-center shrink-0">
+                        <Crown className="w-4 h-4 text-emerald-500" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-neutral-800 truncate">{s.userName || "Sin nombre"}</p>
+                        <p className="text-[11px] text-neutral-400 truncate">{s.userEmail}</p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <Badge className="bg-emerald-100 text-emerald-700 border-0 text-[10px]">{s.plan === "annual" ? "Anual" : "Mensual"}</Badge>
+                        <p className="text-[10px] text-neutral-400 mt-0.5">
+                          {s.currentPeriodEnd ? `Hasta ${new Date(s.currentPeriodEnd).toLocaleDateString("es")}` : "—"}{s.cancelAtPeriodEnd ? " · cancela" : ""}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* ── BLOQUEADOS Y ADMINS ── */}
+            {statsModal === "blocked" && (
+              blockedAndAdmins.length === 0 ? (
+                <div className="py-10 text-center text-sm text-neutral-400">Sin bloqueados ni admins en esta vista</div>
+              ) : (
+                <div className="divide-y divide-neutral-50">
+                  {blockedAndAdmins.map((u: any) => (
+                    <div key={u.id} className="flex items-center gap-3 px-6 py-3">
+                      <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${u.isBlocked ? "bg-red-50" : "bg-amber-50"}`}>
+                        {u.isBlocked ? <Ban className="w-4 h-4 text-red-500" /> : <Shield className="w-4 h-4 text-amber-500" />}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-neutral-800 truncate">{u.name || "Sin nombre"}</p>
+                        <p className="text-[11px] text-neutral-400 truncate">{u.email}</p>
+                      </div>
+                      <Badge className={`border-0 text-[10px] ${u.isBlocked ? "bg-red-100 text-red-700" : "bg-amber-100 text-amber-700"}`}>
+                        {u.isBlocked ? "Bloqueado" : "Admin"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )
+            )}
+
+            {/* ── INGRESOS / HISTORIAL DE PAGOS ── */}
+            {statsModal === "revenue" && (
+              <>
+                <div className="px-6 py-3 bg-neutral-50/60 border-b border-neutral-100">
+                  <p className="text-[11px] text-neutral-500">Base inicial $495 + pagos registrados. Se actualiza en vivo con cada suscripcion nueva.</p>
+                </div>
+                {paymentsLoading ? (
+                  <div className="flex flex-col items-center justify-center py-10 gap-2">
+                    <RefreshCw className="w-5 h-5 animate-spin text-neutral-400" />
+                    <p className="text-xs text-neutral-400">Cargando pagos...</p>
+                  </div>
+                ) : !paymentHistory || paymentHistory.length === 0 ? (
+                  <div className="py-10 text-center text-sm text-neutral-400">Sin pagos registrados aun</div>
+                ) : (
+                  <div className="divide-y divide-neutral-50">
+                    {paymentHistory.map((p: any) => (
+                      <div key={p.id} className="flex items-center gap-3 px-6 py-3">
+                        <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
+                          <Crown className="w-4 h-4 text-amber-500" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-neutral-800 truncate">{p.userName || p.userEmail || "Usuario"}</p>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            <span className="text-[10px] text-neutral-400">{p.plan === "annual" ? "Anual" : "Mensual"}</span>
+                            <span className="text-[10px] text-neutral-400">{p.paidAt ? new Date(p.paidAt).toLocaleDateString("es", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</span>
+                            {p.status !== "succeeded" && <span className="text-[10px] text-amber-600">{p.status}</span>}
+                          </div>
+                        </div>
+                        <span className="text-sm font-semibold text-emerald-600 shrink-0">+{formatCurrency(p.amount)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
