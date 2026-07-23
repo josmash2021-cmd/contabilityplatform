@@ -30,7 +30,6 @@ export default function Admin() {
   const [showGrantDialog, setShowGrantDialog] = useState(false);
   const [grantPlan, setGrantPlan] = useState<"monthly" | "annual">("annual");
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
-  const [showActivityUser, setShowActivityUser] = useState<any>(null);
 
   // Live options — panel refresca solo (polling + al volver a la pestaña)
   const LIVE_REFETCH_MS = 5000;
@@ -44,10 +43,6 @@ export default function Admin() {
   );
   const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin, ...live });
   const { data: maintenanceStatus, refetch: refetchMaintenance } = trpc.admin.maintenanceStatus.useQuery();
-  const { data: activityData, isLoading: activityLoading } = trpc.admin.userActivity.useQuery(
-    { userId: showActivityUser?.id ?? 0 },
-    { enabled: !!showActivityUser, ...live }
-  );
 
   const users = usersData?.users ?? [];
   const pagination = usersData?.pagination;
@@ -147,27 +142,6 @@ export default function Admin() {
     }
     return <span className="text-xs text-neutral-400">—</span>;
   };
-
-  const getActivityIcon = (type: string) => {
-    if (type === "bank") return <Building2 className="w-4 h-4 text-blue-500" />;
-    if (type === "subscription") return <Crown className="w-4 h-4 text-amber-500" />;
-    return <ShoppingCart className="w-4 h-4 text-violet-500" />;
-  };
-
-  const getActivityLabel = (type: string) =>
-    type === "bank" ? "Banco" : type === "subscription" ? "Suscripcion" : "Venta";
-
-  // Activity summary — parseFloat ensures string amounts from MySQL Decimal are handled correctly.
-  // Los pagos de suscripcion cuentan como movimiento pero no como ingreso/gasto del negocio.
-  const activitySummary = activityData?.reduce((acc: any, item: any) => {
-    const amount = typeof item.amount === "string" ? parseFloat(item.amount) : (item.amount ?? 0);
-    acc.total++;
-    if (item.type !== "subscription") {
-      if (amount >= 0) acc.income += amount;
-      else acc.expense += Math.abs(amount);
-    }
-    return acc;
-  }, { total: 0, income: 0, expense: 0 }) ?? { total: 0, income: 0, expense: 0 };
 
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
@@ -424,7 +398,7 @@ export default function Admin() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-8 w-8 p-0 text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                  onClick={() => setShowActivityUser(user)}
+                                  onClick={() => navigate(`/admin/actividad/${user.id}`)}
                                   title="Ver actividad"
                                 >
                                   <Activity className="w-4 h-4" />
@@ -774,124 +748,6 @@ export default function Admin() {
               {maintenanceStatus?.enabled ? "Desactivar" : "Activar"} mantenimiento
             </Button>
           </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* ═══════ ACTIVITY DIALOG (REDESIGNED) ═══════ */}
-      <Dialog open={!!showActivityUser} onOpenChange={() => setShowActivityUser(null)}>
-        <DialogContent className="sm:max-w-lg p-0 overflow-hidden">
-          {/* Header with user info */}
-          <div className="bg-gradient-to-br from-neutral-900 to-neutral-800 text-white p-6">
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-white/15 backdrop-blur flex items-center justify-center text-xl font-bold">
-                {(showActivityUser?.name || "?").charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-lg truncate">{showActivityUser?.name || "Sin nombre"}</h3>
-                <p className="text-sm text-neutral-300 truncate">{showActivityUser?.email}</p>
-                {showActivityUser?.subscription && (
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <Badge className="bg-emerald-500/20 text-emerald-300 border-0 text-[10px]">
-                      {showActivityUser.subscription.plan === "annual" ? "Anual" : "Mensual"}
-                    </Badge>
-                    <span className="text-xs text-neutral-400">
-                      Hasta {showActivityUser.subscription.currentPeriodEnd
-                        ? new Date(showActivityUser.subscription.currentPeriodEnd).toLocaleDateString("es")
-                        : "—"}
-                    </span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Activity summary */}
-          <div className="px-6 py-4 border-b border-neutral-100">
-            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wider mb-3">Resumen de actividad</p>
-            <div className="grid grid-cols-3 gap-3">
-              <div className="text-center p-3 bg-neutral-50 rounded-xl">
-                <p className="text-lg font-bold text-black">{activitySummary.total}</p>
-                <p className="text-[10px] text-neutral-400 uppercase">Movimientos</p>
-              </div>
-              <div className="text-center p-3 bg-emerald-50 rounded-xl">
-                <p className="text-lg font-bold text-emerald-600">+{formatCurrency(activitySummary.income)}</p>
-                <p className="text-[10px] text-emerald-400 uppercase">Ingresos</p>
-              </div>
-              <div className="text-center p-3 bg-red-50 rounded-xl">
-                <p className="text-lg font-bold text-red-500">-{formatCurrency(activitySummary.expense)}</p>
-                <p className="text-[10px] text-red-400 uppercase">Gastos</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Activity list */}
-          <div className="max-h-[360px] overflow-y-auto">
-            {activityLoading ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <RefreshCw className="w-5 h-5 animate-spin text-neutral-400" />
-                <p className="text-xs text-neutral-400">Cargando actividad...</p>
-              </div>
-            ) : !activityData || activityData.length === 0 ? (
-              <div className="flex flex-col items-center justify-center py-10 gap-2">
-                <Activity className="w-8 h-8 text-neutral-300" />
-                <p className="text-sm text-neutral-400">Sin actividad reciente</p>
-              </div>
-            ) : (
-              <div className="divide-y divide-neutral-50">
-                {activityData.map((activity: any, i: number) => (
-                  <div key={i} className="flex items-center gap-3 px-6 py-3 hover:bg-neutral-50/50 transition-colors">
-                    {/* Icon */}
-                    <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                      activity.type === "bank"
-                        ? "bg-blue-50"
-                        : activity.type === "subscription"
-                        ? "bg-amber-50"
-                        : "bg-violet-50"
-                    }`}>
-                      {getActivityIcon(activity.type)}
-                    </div>
-                    {/* Description */}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-neutral-800 truncate">{activity.description || "—"}</p>
-                      <div className="flex items-center gap-2 mt-0.5">
-                        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
-                          activity.type === "bank"
-                            ? "bg-blue-50 text-blue-600"
-                            : activity.type === "subscription"
-                            ? "bg-amber-50 text-amber-600"
-                            : "bg-violet-50 text-violet-600"
-                        }`}>
-                          {getActivityLabel(activity.type)}
-                        </span>
-                        <span className="text-[10px] text-neutral-400">
-                          {activity.date ? new Date(activity.date).toLocaleDateString("es", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                          }) : "—"}
-                        </span>
-                      </div>
-                    </div>
-                    {/* Amount */}
-                    <div className="text-right shrink-0">
-                      <span className={`text-sm font-semibold ${
-                        activity.amount >= 0 ? "text-emerald-600" : "text-red-500"
-                      }`}>
-                        {activity.amount >= 0 ? "+" : ""}{formatCurrency(activity.amount)}
-                      </span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Footer */}
-          <div className="px-6 py-3 border-t border-neutral-100 bg-neutral-50/50">
-            <p className="text-[10px] text-neutral-400 text-center">
-              Mostrando hasta 30 movimientos mas recientes
-            </p>
-          </div>
         </DialogContent>
       </Dialog>
 

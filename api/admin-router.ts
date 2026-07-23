@@ -306,6 +306,23 @@ export const adminRouter = createRouter({
       const db = getDb();
       const userId = input.userId;
 
+      // User info + subscription (para el encabezado de la pagina)
+      const urows = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      const u = urows[0];
+      const subRows = await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).limit(1);
+      const sub = subRows[0];
+      const user = u ? {
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        role: u.role,
+        modePreference: u.modePreference,
+        createdAt: u.createdAt,
+        isBlocked: u.role === "blocked",
+        isAdmin: u.role === "admin",
+        subscription: sub ? { plan: sub.plan, status: sub.status, currentPeriodEnd: sub.currentPeriodEnd } : null,
+      } : null;
+
       // Get recent bank transactions
       const bankTxs = await db.select().from(bankTransactions)
         .where(eq(bankTransactions.userId, userId))
@@ -350,7 +367,7 @@ export const adminRouter = createRouter({
       ].sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime())
        .slice(0, 30);
 
-      return activities;
+      return { user, activities };
     }),
 
   // ── Payment history (para el detalle de "Ingresos totales") ──
