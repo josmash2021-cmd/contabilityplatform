@@ -28,6 +28,7 @@ import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
 import Diagnostico from "@/pages/Diagnostico";
 import Admin from "@/pages/Admin";
+import AdminDetail from "@/pages/AdminDetail";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import AuthLayout from "@/components/layout/AuthLayout";
 
@@ -85,6 +86,10 @@ export default function App() {
         <Route path="/reports" element={<Reports />} />
         <Route path="/settings" element={<Settings />} />
         <Route path="/admin" element={<Admin />} />
+        <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
+        <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
+        <Route path="/admin/bloqueados" element={<AdminDetail section="blocked" />} />
+        <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
         {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
         <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
         <Route path="/personal/bank" element={<PersonalBank />} />
