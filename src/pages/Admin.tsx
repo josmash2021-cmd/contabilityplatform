@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -29,17 +30,21 @@ export default function Admin() {
   const [showMaintenanceDialog, setShowMaintenanceDialog] = useState(false);
   const [showActivityUser, setShowActivityUser] = useState<any>(null);
 
+  // Live options — panel refresca solo (polling + al volver a la pestaña)
+  const LIVE_REFETCH_MS = 5000;
+  const live = { refetchInterval: LIVE_REFETCH_MS, refetchOnWindowFocus: true, staleTime: 0 } as const;
+
   // Queries
-  const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin });
+  const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin, ...live });
   const { data: usersData, refetch: refetchUsers } = trpc.admin.listUsers.useQuery(
     { page, limit: 50, search: searchTerm || undefined, mode: modeFilter },
-    { enabled: isAdmin, keepPreviousData: true }
+    { enabled: isAdmin, placeholderData: keepPreviousData, ...live }
   );
-  const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin });
+  const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin, ...live });
   const { data: maintenanceStatus, refetch: refetchMaintenance } = trpc.admin.maintenanceStatus.useQuery();
   const { data: activityData, isLoading: activityLoading } = trpc.admin.userActivity.useQuery(
     { userId: showActivityUser?.id ?? 0 },
-    { enabled: !!showActivityUser }
+    { enabled: !!showActivityUser, ...live }
   );
 
   const users = usersData?.users ?? [];

@@ -65,13 +65,28 @@ app.post("/api/webhooks/stripe", async (c) => {
           const customerId = session.customer;
           const existing = await db.select().from(subscriptions)
             .where(eq(subscriptions.userId, numericUserId)).limit(1);
+
+          // One-time payment checkouts (mode: "payment") have no Stripe subscription,
+          // so they never receive invoice.paid / customer.subscription.updated events.
+          // We must compute the access period here, or the "Hasta" date never advances
+          // after a client pays. Renewals extend from the later of now or the current
+          // still-valid end so leftover days are not lost.
+          const isOneTime = !subscriptionId;
+          const now = new Date();
+          const currentEnd = existing[0]?.currentPeriodEnd ? new Date(existing[0].currentPeriodEnd) : null;
+          const base = currentEnd && currentEnd.getTime() > now.getTime() ? currentEnd : now;
+          const periodEnd = new Date(base);
+          if (plan === "annual") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
+          else periodEnd.setMonth(periodEnd.getMonth() + 1);
+
           if (existing.length > 0) {
             await db.update(subscriptions).set({
               stripeCustomerId: customerId,
-              stripeSubscriptionId: subscriptionId,
+              stripeSubscriptionId: subscriptionId || existing[0].stripeSubscriptionId,
               plan: plan as "monthly" | "annual",
               status: "active",
               cancelAtPeriodEnd: false,
+              ...(isOneTime ? { currentPeriodStart: now, currentPeriodEnd: periodEnd } : {}),
             }).where(eq(subscriptions.id, existing[0].id));
           } else {
             await db.insert(subscriptions).values({
@@ -80,6 +95,7 @@ app.post("/api/webhooks/stripe", async (c) => {
               stripeSubscriptionId: subscriptionId,
               plan: plan as "monthly" | "annual",
               status: "active",
+              ...(isOneTime ? { currentPeriodStart: now, currentPeriodEnd: periodEnd } : {}),
             });
           }
           // Prevent duplicate payments from webhook retries
