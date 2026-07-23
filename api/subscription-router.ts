@@ -154,6 +154,13 @@ export const subscriptionRouter = createRouter({
   // ── Get subscription status ──
   status: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null, status: "no_user", currentPeriodEnd: null };
+
+    // Admins nunca pagan suscripcion: acceso completo siempre, sin verificar Stripe.
+    // Esto tambien evita el sync de estado que fallaba para su registro en la BD.
+    if (ctx.user.role === "admin") {
+      return { active: true, plan: "annual" as const, status: "active", currentPeriodEnd: null, cancelAtPeriodEnd: false };
+    }
+
     const db = getDb();
     const userId = Number(ctx.user.id); // Ensure numeric to match webhook
 
@@ -609,6 +616,12 @@ export const subscriptionRouter = createRouter({
   // ── Verify subscription — Agent finds lost subscriptions ──
   verify: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { active: false, plan: null };
+
+    // Admins nunca pagan suscripcion: acceso completo sin verificar Stripe.
+    if (ctx.user.role === "admin") {
+      return { active: true, plan: "annual" as const, status: "active" };
+    }
+
     const db = getDb();
     const userId = Number(ctx.user.id); // Ensure numeric to match webhook
     const stripe = getStripe();
