@@ -20,11 +20,11 @@ function getAppUrl() {
 }
 
 const PLAN_PRICES = {
-  monthly: { amount: 8000, name: "AI AETHEL - Mensual" },  // $80 for business monthly
+  monthly: { amount: 49500, name: "AI AETHEL - Mensual" },  // $495 for business monthly
   annual: { amount: 80000, name: "AI AETHEL - Anual" },     // $800 for business annual
 };
 
-const STRIPE_MONTHLY_LOOKUP = "contability_monthly_80";
+const STRIPE_MONTHLY_LOOKUP = "contability_monthly_495";
 const STRIPE_ANNUAL_LOOKUP = "contability_annual_800";
 
 // ── Shared: recover a subscription from past_due/unpaid/incomplete state ──
@@ -959,7 +959,7 @@ export const subscriptionRouter = createRouter({
       const db = getDb();
       const stripe = getStripe();
       const plan = input.plan;
-      const amount = plan === "annual" ? "800.00" : "80.00";
+      const amount = plan === "annual" ? "800.00" : "495.00";
       const periodLabel = plan === "annual" ? "anual" : "mensual";
 
       try {

@@ -93,7 +93,7 @@ app.post("/api/webhooks/stripe", async (c) => {
           await db.insert(subscriptionPayments).values({
             userId: numericUserId,
             stripePaymentIntentId: paymentIntentId,
-            amount: plan === "monthly" ? "80.00" : "800.00",
+            amount: plan === "monthly" ? "495.00" : "800.00",
             plan: plan as "monthly" | "annual",
             status: "succeeded",
           });
