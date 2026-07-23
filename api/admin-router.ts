@@ -213,7 +213,7 @@ export const adminRouter = createRouter({
     // al corte) no cuentan. Desde REVENUE_SINCE se suman los pagos reales nuevos, y
     // como el panel refresca en vivo (polling 5s) el total sube en tiempo real con
     // cada suscripcion nueva.
-    const REVENUE_BASELINE = 495;
+    const REVENUE_BASELINE = 0;
     const REVENUE_SINCE = new Date("2026-07-23T00:00:00Z");
     const allPayments = await db.select().from(subscriptionPayments);
     const totalRevenue = REVENUE_BASELINE + allPayments
@@ -348,6 +348,52 @@ export const adminRouter = createRouter({
       receiptUrl: p.receiptUrl,
     }));
   }),
+
+  // ── Registrar un pago manualmente ──
+  recordPayment: adminQuery
+    .input(z.object({
+      userId: z.number(),
+      amount: z.number().positive(),
+      plan: z.enum(["monthly", "annual"]).default("monthly"),
+      paidAt: z.string().optional(), // ISO date (yyyy-mm-dd)
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.insert(subscriptionPayments).values({
+        userId: input.userId,
+        amount: input.amount.toFixed(2),
+        plan: input.plan,
+        status: "succeeded",
+        paidAt: input.paidAt ? new Date(input.paidAt) : new Date(),
+      });
+      return { success: true, message: "Pago registrado" };
+    }),
+
+  // ── Editar un pago (monto y/o fecha) ──
+  updatePayment: adminQuery
+    .input(z.object({
+      id: z.number(),
+      amount: z.number().positive().optional(),
+      paidAt: z.string().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const set: any = {};
+      if (input.amount != null) set.amount = input.amount.toFixed(2);
+      if (input.paidAt) set.paidAt = new Date(input.paidAt);
+      if (Object.keys(set).length === 0) return { success: false, error: "Nada que actualizar" };
+      await db.update(subscriptionPayments).set(set).where(eq(subscriptionPayments.id, input.id));
+      return { success: true, message: "Pago actualizado" };
+    }),
+
+  // ── Eliminar un pago ──
+  deletePayment: adminQuery
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, input.id));
+      return { success: true, message: "Pago eliminado" };
+    }),
 
   // ── Toggle maintenance mode (persisted in DB) ──
   toggleMaintenance: adminQuery

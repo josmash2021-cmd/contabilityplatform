@@ -1,12 +1,17 @@
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { keepPreviousData } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { formatCurrency } from "@/lib/utils";
 import {
   Shield, Users, CreditCard, UserX, DollarSign, Crown, Ban,
-  ChevronLeft, RefreshCw,
+  ChevronLeft, RefreshCw, Pencil, Trash2, Plus,
 } from "lucide-react";
 
 type Section = "users" | "subs" | "blocked" | "revenue";
@@ -21,14 +26,41 @@ const META: Record<Section, { title: string; icon: any; iconClass: string; bg: s
 export default function AdminDetail({ section }: { section: Section }) {
   const { isAdmin } = useAuth();
   const navigate = useNavigate();
+  const utils = trpc.useUtils();
 
   const live = { refetchInterval: 5000, refetchOnWindowFocus: true, staleTime: 0 } as const;
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  // Payment management state (solo seccion "revenue")
+  const [editing, setEditing] = useState<null | { id: number; amount: string; date: string }>(null);
+  const [showRecord, setShowRecord] = useState(false);
+  const [recUser, setRecUser] = useState("");
+  const [recAmount, setRecAmount] = useState("");
+  const [recPlan, setRecPlan] = useState<"monthly" | "annual">("monthly");
+  const [recDate, setRecDate] = useState(todayStr);
 
   const { data: stats } = trpc.admin.stats.useQuery(undefined, { enabled: isAdmin, ...live });
   const { data: usersData } = trpc.admin.listUsers.useQuery(
     { page: 1, limit: 100, mode: "all" },
-    { enabled: isAdmin && (section === "users" || section === "blocked"), placeholderData: keepPreviousData, ...live }
+    { enabled: isAdmin && (section === "users" || section === "blocked" || section === "revenue"), placeholderData: keepPreviousData, ...live }
   );
+
+  const invalidatePayments = () => {
+    utils.admin.paymentHistory.invalidate();
+    utils.admin.stats.invalidate();
+  };
+  const updatePayMut = trpc.admin.updatePayment.useMutation({
+    onSuccess: (d: any) => { if (d.success) { toast.success(d.message); setEditing(null); invalidatePayments(); } else toast.error(d.error); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const deletePayMut = trpc.admin.deletePayment.useMutation({
+    onSuccess: (d: any) => { toast.success(d.message); invalidatePayments(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+  const recordPayMut = trpc.admin.recordPayment.useMutation({
+    onSuccess: (d: any) => { toast.success(d.message); setShowRecord(false); setRecUser(""); setRecAmount(""); invalidatePayments(); },
+    onError: (e: any) => toast.error(e.message),
+  });
   const { data: subscriptions } = trpc.admin.listSubscriptions.useQuery(
     undefined,
     { enabled: isAdmin && section === "subs", ...live }
@@ -186,8 +218,11 @@ export default function AdminDetail({ section }: { section: Section }) {
         {/* ── INGRESOS / HISTORIAL DE PAGOS ── */}
         {section === "revenue" && (
           <>
-            <div className="px-6 py-3 bg-neutral-50/60 border-b border-neutral-100">
-              <p className="text-[11px] text-neutral-500">Base inicial $495 + pagos registrados. Se actualiza en vivo con cada suscripcion nueva.</p>
+            <div className="flex items-center justify-between gap-2 px-6 py-3 bg-neutral-50/60 border-b border-neutral-100">
+              <p className="text-[11px] text-neutral-500">Suma de los pagos registrados. Se actualiza en vivo con cada suscripcion.</p>
+              <Button size="sm" onClick={() => { setRecPlan("monthly"); setRecAmount(""); setRecUser(""); setRecDate(todayStr); setShowRecord(true); }} className="h-8 text-xs shrink-0 gap-1">
+                <Plus className="w-3.5 h-3.5" /> Registrar pago
+              </Button>
             </div>
             {paymentsLoading ? (
               <div className="flex flex-col items-center justify-center py-12 gap-2">
@@ -199,7 +234,7 @@ export default function AdminDetail({ section }: { section: Section }) {
             ) : (
               <div className="divide-y divide-neutral-50">
                 {paymentHistory.map((p: any) => (
-                  <div key={p.id} className="flex items-center gap-3 px-6 py-3">
+                  <div key={p.id} className="flex items-center gap-3 px-6 py-3 group">
                     <div className="w-9 h-9 rounded-xl bg-amber-50 flex items-center justify-center shrink-0">
                       <Crown className="w-4 h-4 text-amber-500" />
                     </div>
@@ -212,6 +247,22 @@ export default function AdminDetail({ section }: { section: Section }) {
                       </div>
                     </div>
                     <span className="text-sm font-semibold text-emerald-600 shrink-0">+{formatCurrency(p.amount)}</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => setEditing({ id: p.id, amount: String(parseFloat(p.amount || "0")), date: p.paidAt ? new Date(p.paidAt).toISOString().slice(0, 10) : todayStr })}
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                        title="Editar pago"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        onClick={() => { if (window.confirm("¿Eliminar este pago?")) deletePayMut.mutate({ id: p.id }); }}
+                        className="p-1.5 rounded-lg text-neutral-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                        title="Eliminar pago"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -219,6 +270,80 @@ export default function AdminDetail({ section }: { section: Section }) {
           </>
         )}
       </div>
+
+      {/* Editar pago */}
+      <Dialog open={!!editing} onOpenChange={(o) => !o && setEditing(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Editar pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs font-medium text-neutral-500">Monto ($)</label>
+              <Input type="number" step="0.01" value={editing?.amount ?? ""} onChange={(e) => setEditing((prev) => prev ? { ...prev, amount: e.target.value } : prev)} />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-neutral-500">Fecha</label>
+              <Input type="date" value={editing?.date ?? ""} onChange={(e) => setEditing((prev) => prev ? { ...prev, date: e.target.value } : prev)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} className="text-sm">Cancelar</Button>
+            <Button
+              disabled={updatePayMut.isPending || !editing?.amount}
+              onClick={() => editing && updatePayMut.mutate({ id: editing.id, amount: parseFloat(editing.amount), paidAt: editing.date })}
+              className="text-sm"
+            >
+              {updatePayMut.isPending ? "Guardando..." : "Guardar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Registrar pago */}
+      <Dialog open={showRecord} onOpenChange={setShowRecord}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Registrar pago</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div>
+              <label className="text-xs font-medium text-neutral-500">Usuario</label>
+              <select value={recUser} onChange={(e) => setRecUser(e.target.value)} className="w-full h-9 px-3 rounded-md border border-neutral-200 text-sm bg-white">
+                <option value="">Selecciona un usuario…</option>
+                {users.map((u: any) => (<option key={u.id} value={u.id}>{u.name || u.email}</option>))}
+              </select>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="text-xs font-medium text-neutral-500">Monto ($)</label>
+                <Input type="number" step="0.01" value={recAmount} onChange={(e) => setRecAmount(e.target.value)} placeholder="495.00" />
+              </div>
+              <div>
+                <label className="text-xs font-medium text-neutral-500">Plan</label>
+                <select value={recPlan} onChange={(e) => setRecPlan(e.target.value as "monthly" | "annual")} className="w-full h-9 px-3 rounded-md border border-neutral-200 text-sm bg-white">
+                  <option value="monthly">Mensual</option>
+                  <option value="annual">Anual</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-neutral-500">Fecha</label>
+              <Input type="date" value={recDate} onChange={(e) => setRecDate(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRecord(false)} className="text-sm">Cancelar</Button>
+            <Button
+              disabled={recordPayMut.isPending || !recUser || !recAmount}
+              onClick={() => recordPayMut.mutate({ userId: Number(recUser), amount: parseFloat(recAmount), plan: recPlan, paidAt: recDate })}
+              className="text-sm"
+            >
+              {recordPayMut.isPending ? "Registrando..." : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
