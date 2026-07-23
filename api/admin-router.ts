@@ -284,6 +284,12 @@ export const adminRouter = createRouter({
         .orderBy(desc(sales.createdAt))
         .limit(20);
 
+      // Get subscription payments (para ver cuando pago la suscripcion)
+      const subPayments = await db.select().from(subscriptionPayments)
+        .where(eq(subscriptionPayments.userId, userId))
+        .orderBy(desc(subscriptionPayments.paidAt))
+        .limit(20);
+
       // Combine and sort by date
       const activities = [
         ...bankTxs.map((tx) => ({
@@ -299,6 +305,13 @@ export const adminRouter = createRouter({
           amount: s.total,
           date: s.createdAt,
           category: null,
+        })),
+        ...subPayments.map((p) => ({
+          type: "subscription" as const,
+          description: `Pago suscripcion ${p.plan === "annual" ? "Anual" : "Mensual"}${p.status !== "succeeded" ? ` (${p.status})` : ""}`,
+          amount: p.amount,
+          date: p.paidAt,
+          category: p.status,
         })),
       ].sort((a, b) => new Date(b.date ?? 0).getTime() - new Date(a.date ?? 0).getTime())
        .slice(0, 30);

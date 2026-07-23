@@ -134,17 +134,22 @@ export default function Admin() {
 
   const getActivityIcon = (type: string) => {
     if (type === "bank") return <Building2 className="w-4 h-4 text-blue-500" />;
+    if (type === "subscription") return <Crown className="w-4 h-4 text-amber-500" />;
     return <ShoppingCart className="w-4 h-4 text-violet-500" />;
   };
 
-  const getActivityLabel = (type: string) => type === "bank" ? "Banco" : "Venta";
+  const getActivityLabel = (type: string) =>
+    type === "bank" ? "Banco" : type === "subscription" ? "Suscripcion" : "Venta";
 
-  // Activity summary — parseFloat ensures string amounts from MySQL Decimal are handled correctly
+  // Activity summary — parseFloat ensures string amounts from MySQL Decimal are handled correctly.
+  // Los pagos de suscripcion cuentan como movimiento pero no como ingreso/gasto del negocio.
   const activitySummary = activityData?.reduce((acc: any, item: any) => {
     const amount = typeof item.amount === "string" ? parseFloat(item.amount) : (item.amount ?? 0);
     acc.total++;
-    if (amount >= 0) acc.income += amount;
-    else acc.expense += Math.abs(amount);
+    if (item.type !== "subscription") {
+      if (amount >= 0) acc.income += amount;
+      else acc.expense += Math.abs(amount);
+    }
     return acc;
   }, { total: 0, income: 0, expense: 0 }) ?? { total: 0, income: 0, expense: 0 };
 
@@ -813,6 +818,8 @@ export default function Admin() {
                     <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
                       activity.type === "bank"
                         ? "bg-blue-50"
+                        : activity.type === "subscription"
+                        ? "bg-amber-50"
                         : "bg-violet-50"
                     }`}>
                       {getActivityIcon(activity.type)}
@@ -824,6 +831,8 @@ export default function Admin() {
                         <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
                           activity.type === "bank"
                             ? "bg-blue-50 text-blue-600"
+                            : activity.type === "subscription"
+                            ? "bg-amber-50 text-amber-600"
                             : "bg-violet-50 text-violet-600"
                         }`}>
                           {getActivityLabel(activity.type)}
