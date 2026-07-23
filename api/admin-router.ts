@@ -192,6 +192,34 @@ export const adminRouter = createRouter({
       };
     }),
 
+  // ── Eliminar usuario (permanente, borra sus datos por cascade) ──
+  deleteUser: adminQuery
+    .input(z.object({ userId: z.number() }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const adminId = ctx.user.id;
+
+      if (input.userId === adminId) {
+        return { success: false, error: "No puedes eliminarte a ti mismo" };
+      }
+
+      const rows = await db.select().from(users).where(eq(users.id, input.userId)).limit(1);
+      if (rows.length === 0) {
+        return { success: false, error: "Usuario no encontrado" };
+      }
+      const targetUser = rows[0];
+      if (targetUser.role === "admin") {
+        return { success: false, error: "No puedes eliminar a otro administrador" };
+      }
+
+      try {
+        await db.delete(users).where(eq(users.id, input.userId));
+        return { success: true, message: `Usuario ${targetUser.name || targetUser.email} eliminado` };
+      } catch (e: any) {
+        return { success: false, error: "No se pudo eliminar: el usuario tiene registros protegidos asociados." };
+      }
+    }),
+
   // ── Get dashboard stats ──
   stats: adminQuery.query(async () => {
     const db = getDb();

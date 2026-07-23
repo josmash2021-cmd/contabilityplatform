@@ -17,7 +17,7 @@ import {
   Crown, Calendar, Trash2, AlertTriangle, Wrench,
   Download, ChevronLeft, ChevronRight, RefreshCw,
   Building2, ShoppingCart, TrendingUp,
-  Activity, Clock
+  Activity, Clock, UserMinus
 } from "lucide-react";
 
 export default function Admin() {
@@ -89,6 +89,20 @@ export default function Admin() {
         toast.error(data.error);
       }
     },
+  });
+
+  const deleteUser = trpc.admin.deleteUser.useMutation({
+    onSuccess: (data: any) => {
+      if (data.success) {
+        toast.success(data.message);
+        refetchUsers();
+        refetchSubs();
+        utils.admin.stats.invalidate();
+      } else {
+        toast.error(data.error);
+      }
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const toggleMaintenance = trpc.admin.toggleMaintenance.useMutation({
@@ -467,6 +481,21 @@ export default function Admin() {
                                   title={user.isBlocked ? "Desbloquear" : "Bloquear"}
                                 >
                                   {user.isBlocked ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+                                </Button>
+                                {/* Delete user */}
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-8 w-8 p-0 text-neutral-400 hover:text-white hover:bg-red-500"
+                                  disabled={deleteUser.isPending}
+                                  onClick={() => {
+                                    if (window.confirm(`¿Eliminar a ${user.name || user.email}? Esta accion es PERMANENTE y borrara todos sus datos (contabilidad, bancos, suscripcion).`)) {
+                                      deleteUser.mutate({ userId: user.id });
+                                    }
+                                  }}
+                                  title="Eliminar usuario"
+                                >
+                                  <UserMinus className="w-4 h-4" />
                                 </Button>
                               </>
                             )}
