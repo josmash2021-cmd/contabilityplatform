@@ -9,8 +9,8 @@ import { env } from "./lib/env";
 import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
 import { getDb } from "./queries/connection";
-import { subscriptions, subscriptionPayments } from "@db/schema";
-import { eq, desc } from "drizzle-orm";
+import { subscriptions, subscriptionPayments, users } from "@db/schema";
+import { eq, desc, and } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
 
@@ -378,17 +378,35 @@ async function syncAllTransactions() {
   }
 }
 
+// ── One-time data fix: el pago real de yonel fue $495 hoy (no $80 de junio) ──
+// Se auto-desactiva: tras correr una vez el monto pasa a 495 y ya no coincide con "80.00".
+async function runStartupFixes() {
+  try {
+    const db = getDb();
+    const rows = await db.select().from(users).where(eq(users.email, "yonelamc@gmail.com")).limit(1);
+    const u = rows[0];
+    if (!u) return;
+    await db.update(subscriptionPayments)
+      .set({ amount: "495.00", paidAt: new Date("2026-07-23T12:00:00Z") })
+      .where(and(eq(subscriptionPayments.userId, u.id), eq(subscriptionPayments.amount, "80.00")));
+    console.log("[startup-fix] pago de yonel corregido a $495 con fecha de hoy");
+  } catch (e: any) {
+    console.error("[startup-fix] error:", e?.message);
+  }
+}
+
 // Run every 3 minutes in production
 if (env.isProduction) {
   // Balance sync every 5 minutes
   setInterval(syncAllBalances, 5 * 60 * 1000);
   setTimeout(syncAllBalances, 10000);
-  
-  // Transaction sync every 3 minutes  
+
+  // Transaction sync every 3 minutes
   setInterval(syncAllTransactions, 3 * 60 * 1000);
   setTimeout(syncAllTransactions, 15000); // 5s after balance sync
-  
-  // Background sync scheduled silently
+
+  // One-time data fixes shortly after boot
+  setTimeout(runStartupFixes, 8000);
 }
 
 // Endpoint for Railway cron job (calls every X minutes)
