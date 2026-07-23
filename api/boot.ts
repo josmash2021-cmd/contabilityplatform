@@ -46,9 +46,11 @@ app.post("/api/webhooks/stripe", async (c) => {
     try {
       event = stripe.webhooks.constructEvent(body, signature, endpointSecret);
     } catch (err: any) {
-      
+      console.error("[stripe-webhook] signature verification FAILED:", err.message);
       return c.json({ error: err.message }, 400);
     }
+
+    console.log("[stripe-webhook] received event:", event.type, "id:", event.id);
 
     const db = getDb();
 
@@ -57,7 +59,10 @@ app.post("/api/webhooks/stripe", async (c) => {
         const session = event.data.object;
         const userId = session.metadata?.platformUserId;
         const plan = session.metadata?.plan;
-        if (!userId || !plan) break;
+        if (!userId || !plan) {
+          console.warn("[stripe-webhook] checkout.session.completed sin metadata (platformUserId/plan) — se ignora. session:", session.id);
+          break;
+        }
         const numericUserId = Number(userId);
 
         {
@@ -106,13 +111,15 @@ app.post("/api/webhooks/stripe", async (c) => {
             if (existingPayment.length > 0) break; // Already recorded, skip
           }
 
+          const recordedAmount = plan === "monthly" ? "495.00" : "800.00";
           await db.insert(subscriptionPayments).values({
             userId: numericUserId,
             stripePaymentIntentId: paymentIntentId,
-            amount: plan === "monthly" ? "495.00" : "800.00",
+            amount: recordedAmount,
             plan: plan as "monthly" | "annual",
             status: "succeeded",
           });
+          console.log(`[stripe-webhook] pago registrado: user ${numericUserId}, plan ${plan}, $${recordedAmount} — ingresos totales actualizados`);
         }
         break;
       }
@@ -174,7 +181,7 @@ app.post("/api/webhooks/stripe", async (c) => {
     }
     return c.json({ received: true });
   } catch (err: any) {
-    
+    console.error("[stripe-webhook] handler error:", err?.message, err?.stack);
     return c.json({ error: err.message }, 500);
   }
 });
