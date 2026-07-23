@@ -158,16 +158,21 @@ export default function Admin() {
   return (
     <div className="p-4 lg:p-6 max-w-7xl mx-auto space-y-6">
       {/* ═══════ HEADER ═══════ */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-semibold text-black tracking-tight">Panel de Administracion</h1>
-          <p className="text-sm text-neutral-400 mt-0.5">Gestiona usuarios, suscripciones y accesos</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-black flex items-center justify-center shrink-0">
+            <Shield className="w-5 h-5 text-white" />
+          </div>
+          <div>
+            <h1 className="text-xl font-semibold text-black tracking-tight">Panel de administracion</h1>
+            <p className="text-sm text-neutral-400 mt-0.5">Gestiona usuarios, suscripciones y accesos</p>
+          </div>
         </div>
         <Button
           variant={maintenanceStatus?.enabled ? "destructive" : "outline"}
           size="sm"
           onClick={() => setShowMaintenanceDialog(true)}
-          className="gap-2 text-xs"
+          className="gap-2 text-xs self-start sm:self-auto"
         >
           <Wrench className="w-3.5 h-3.5" />
           {maintenanceStatus?.enabled ? "Mantenimiento ON" : "Mantenimiento OFF"}
@@ -177,82 +182,73 @@ export default function Admin() {
       {/* ═══════ STATS CARDS ═══════ */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {/* Total Users */}
-        <Card onClick={() => navigate("/admin/usuarios")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
+        <Card onClick={() => navigate("/admin/usuarios")} className="group border-neutral-200/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Usuarios</p>
-                <p className="text-2xl font-bold text-black">{stats?.totalUsers || 0}</p>
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-blue-50 flex items-center justify-center">
+                <Users className="w-5 h-5 text-blue-500" />
               </div>
-              <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center">
-                <Users className="w-4.5 h-4.5 text-blue-500" />
-              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 transition-all group-hover:text-neutral-600 group-hover:translate-x-0.5" />
             </div>
-            <div className="mt-3 flex items-center gap-1 text-xs text-neutral-400">
-              <UserCheck className="w-3 h-3" />
-              <span>{stats?.activeSubscriptions || 0} con suscripcion</span>
+            <p className="text-3xl font-bold text-black tracking-tight mt-4">{stats?.totalUsers ?? 0}</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mt-1">Usuarios</p>
+            <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-1.5 text-xs text-neutral-400">
+              <UserCheck className="w-3.5 h-3.5" />
+              <span>{stats?.activeSubscriptions ?? 0} con suscripcion</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Active Subscriptions */}
-        <Card onClick={() => navigate("/admin/suscripciones")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
+        <Card onClick={() => navigate("/admin/suscripciones")} className="group border-neutral-200/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Suscripciones activas</p>
-                <p className="text-2xl font-bold text-emerald-600">{stats?.activeSubscriptions || 0}</p>
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-emerald-500" />
               </div>
-              <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center">
-                <CreditCard className="w-4.5 h-4.5 text-emerald-500" />
-              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 transition-all group-hover:text-neutral-600 group-hover:translate-x-0.5" />
             </div>
-            <div className="mt-3 flex items-center gap-3 text-xs text-neutral-400">
-              <span className="flex items-center gap-1">
-                <Calendar className="w-3 h-3" />
-                {stats?.annualSubscriptions || 0} anual
-              </span>
-              <span className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                {stats?.monthlySubscriptions || 0} mensual
-              </span>
+            <p className="text-3xl font-bold text-emerald-600 tracking-tight mt-4">{stats?.activeSubscriptions ?? 0}</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mt-1">Suscripciones activas</p>
+            <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-3 text-xs text-neutral-400">
+              <span className="flex items-center gap-1"><Calendar className="w-3.5 h-3.5" />{stats?.annualSubscriptions ?? 0} anual</span>
+              <span className="flex items-center gap-1"><Clock className="w-3.5 h-3.5" />{stats?.monthlySubscriptions ?? 0} mensual</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Blocked Users */}
-        <Card onClick={() => navigate("/admin/bloqueados")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
+        <Card onClick={() => navigate("/admin/bloqueados")} className="group border-neutral-200/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Bloqueados</p>
-                <p className="text-2xl font-bold text-red-500">{stats?.blockedUsers || 0}</p>
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-red-50 flex items-center justify-center">
+                <UserX className="w-5 h-5 text-red-500" />
               </div>
-              <div className="w-9 h-9 rounded-lg bg-red-50 flex items-center justify-center">
-                <UserX className="w-4.5 h-4.5 text-red-500" />
-              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 transition-all group-hover:text-neutral-600 group-hover:translate-x-0.5" />
             </div>
-            <div className="mt-3 text-xs text-neutral-400">
-              {stats?.adminUsers || 0} administradores
+            <p className="text-3xl font-bold text-black tracking-tight mt-4">{stats?.blockedUsers ?? 0}</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mt-1">Bloqueados</p>
+            <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-1.5 text-xs text-neutral-400">
+              <Shield className="w-3.5 h-3.5" />
+              <span>{stats?.adminUsers ?? 0} administradores</span>
             </div>
           </CardContent>
         </Card>
 
         {/* Revenue */}
-        <Card onClick={() => navigate("/admin/ingresos")} className="border-neutral-200/80 shadow-sm hover:shadow-md hover:border-neutral-300 transition-all cursor-pointer">
+        <Card onClick={() => navigate("/admin/ingresos")} className="group border-neutral-200/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
           <CardContent className="p-5">
-            <div className="flex items-start justify-between">
-              <div className="space-y-1">
-                <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide">Ingresos totales</p>
-                <p className="text-2xl font-bold text-black">${stats?.totalRevenue || "0.00"}</p>
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-neutral-900 flex items-center justify-center">
+                <DollarSign className="w-5 h-5 text-white" />
               </div>
-              <div className="w-9 h-9 rounded-lg bg-neutral-100 flex items-center justify-center">
-                <DollarSign className="w-4.5 h-4.5 text-neutral-600" />
-              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 transition-all group-hover:text-neutral-600 group-hover:translate-x-0.5" />
             </div>
-            <div className="mt-3 flex items-center gap-1 text-xs text-emerald-600">
-              <TrendingUp className="w-3 h-3" />
-              <span>Historial de pagos</span>
+            <p className="text-3xl font-bold text-black tracking-tight mt-4">${stats?.totalRevenue ?? "0.00"}</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mt-1">Ingresos totales</p>
+            <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-1.5 text-xs text-emerald-600">
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Ver historial de pagos</span>
             </div>
           </CardContent>
         </Card>
