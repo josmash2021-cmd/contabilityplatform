@@ -208,10 +208,16 @@ export const adminRouter = createRouter({
 
     const bankAccountsCount = await db.select({ count: sql<number>`COUNT(*)` }).from(bankAccounts);
 
-    // Revenue from payments
+    // Revenue from payments.
+    // Partimos de una BASE fija ($495): los pagos historicos de prueba (anteriores
+    // al corte) no cuentan. Desde REVENUE_SINCE se suman los pagos reales nuevos, y
+    // como el panel refresca en vivo (polling 5s) el total sube en tiempo real con
+    // cada suscripcion nueva.
+    const REVENUE_BASELINE = 495;
+    const REVENUE_SINCE = new Date("2026-07-23T00:00:00Z");
     const allPayments = await db.select().from(subscriptionPayments);
-    const totalRevenue = allPayments
-      .filter((p) => p.status === "succeeded")
+    const totalRevenue = REVENUE_BASELINE + allPayments
+      .filter((p) => p.status === "succeeded" && p.paidAt && new Date(p.paidAt) >= REVENUE_SINCE)
       .reduce((sum, p) => sum + parseFloat(p.amount || "0"), 0);
 
     // Payouts (withdrawals) — auto-migration if table doesn't exist yet
