@@ -28,7 +28,7 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 // Health check endpoint
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.0.5-live-webhook" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.0.6-yonel-fix" }));
 
 // ── Stripe Webhook (raw body needed for signature verification) ──
 app.post("/api/webhooks/stripe", async (c) => {
