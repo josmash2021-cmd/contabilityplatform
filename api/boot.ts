@@ -12,6 +12,7 @@ import { getDb } from "./queries/connection";
 import { subscriptions, subscriptionPayments } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
+import { normalizeSubStatus } from "./lib/subscriptionStatus";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -171,7 +172,7 @@ app.post("/api/webhooks/stripe", async (c) => {
           .where(eq(subscriptions.stripeSubscriptionId, stripeSub.id)).limit(1);
         if (subs[0]) {
           await db.update(subscriptions).set({
-            status: stripeSub.status,
+            status: normalizeSubStatus(stripeSub.status),
             cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
             currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : subs[0].currentPeriodEnd,
           }).where(eq(subscriptions.id, subs[0].id));

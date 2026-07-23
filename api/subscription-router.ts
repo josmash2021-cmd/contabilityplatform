@@ -4,6 +4,7 @@ import { getDb } from "./queries/connection";
 import { subscriptions, subscriptionPayments, users } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
+import { normalizeSubStatus } from "./lib/subscriptionStatus";
 
 let _stripe: Stripe | null = null;
 function getStripe() {
@@ -217,7 +218,7 @@ export const subscriptionRouter = createRouter({
               stripeCustomerId: foundCustomer.id,
               stripeSubscriptionId: stripeSub.id,
               plan: plan as "monthly" | "annual",
-              status: stripeSub.status,
+              status: normalizeSubStatus(stripeSub.status),
               currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
               currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
               cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
@@ -317,7 +318,7 @@ export const subscriptionRouter = createRouter({
               stripeCustomerId: customerId,
               stripeSubscriptionId: bestSub.id,
               plan,
-              status: bestSub.status,
+              status: normalizeSubStatus(bestSub.status),
               currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : new Date(),
               currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : new Date(),
               cancelAtPeriodEnd: bestSub.cancel_at_period_end || false,
@@ -325,7 +326,7 @@ export const subscriptionRouter = createRouter({
           } else {
             // Same sub, just update it
             await db.update(subscriptions).set({
-              status: bestSub.status,
+              status: normalizeSubStatus(bestSub.status),
               plan,
               currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : sub.currentPeriodEnd,
               currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : sub.currentPeriodStart,
@@ -681,7 +682,7 @@ export const subscriptionRouter = createRouter({
           stripeCustomerId: foundCustomer.id,
           stripeSubscriptionId: stripeSub.id,
           plan: plan as "monthly" | "annual",
-          status: stripeSub.status,
+          status: normalizeSubStatus(stripeSub.status),
           currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
           currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
           cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
@@ -716,7 +717,7 @@ export const subscriptionRouter = createRouter({
 
       // Update DB
       await db.update(subscriptions).set({
-        status: stripeSub.status,
+        status: normalizeSubStatus(stripeSub.status),
         plan: plan as "monthly" | "annual",
         currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : sub.currentPeriodEnd,
         currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : sub.currentPeriodStart,
