@@ -112,7 +112,7 @@ app.post("/api/webhooks/stripe", async (c) => {
             if (existingPayment.length > 0) break; // Already recorded, skip
           }
 
-          const recordedAmount = plan === "monthly" ? "495.00" : "800.00";
+          const recordedAmount = plan === "monthly" ? "80.00" : "800.00";
           await db.insert(subscriptionPayments).values({
             userId: numericUserId,
             stripePaymentIntentId: paymentIntentId,

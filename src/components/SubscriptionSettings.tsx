@@ -42,10 +42,10 @@ const SHIMMER_CSS = `
 const BUSINESS_MONTHLY = {
   id: "monthly" as const,
   name: "Mensual",
-  price: "$495",
+  price: "$80",
   originalPrice: "$120",
   period: "/mes",
-  fullPrice: 495,
+  fullPrice: 80,
   description: "Facturado mensualmente. Cancela cuando quieras.",
   badge: "New Plan",
   features: [
@@ -87,10 +87,10 @@ const BUSINESS_ANNUAL = {
 const PERSONAL_MONTHLY = {
   id: "monthly_personal" as const,
   name: "Mensual",
-  price: "$495",
+  price: "$40",
   originalPrice: "$80",
   period: "/mes",
-  fullPrice: 495,
+  fullPrice: 40,
   description: "Facturado mensualmente. Cancela cuando quieras.",
   badge: "Oferta",
   features: [

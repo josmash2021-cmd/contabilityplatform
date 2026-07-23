@@ -73,7 +73,7 @@ export function SubscriptionExpiredOverlay() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-black">Renovar suscripcion mensual</p>
-              <p className="text-xs text-neutral-500">$495/mes — Facturado mensualmente</p>
+              <p className="text-xs text-neutral-500">$80/mes — Facturado mensualmente</p>
             </div>
             <Crown className="w-4 h-4 text-yellow-500 shrink-0" />
           </button>

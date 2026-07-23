@@ -12,7 +12,7 @@ interface SubscriptionGateProps {
 const BIZ_MONTHLY = {
   subtitle: "Suscripcion Premium",
   name: "Mensual",
-  price: "$495",
+  price: "$80",
   originalPrice: "$120",
   period: "/mes",
   badge: "New Plan",
@@ -50,7 +50,7 @@ const BIZ_ANNUAL = {
 const PERS_MONTHLY = {
   subtitle: "Suscripcion Premium",
   name: "Mensual",
-  price: "$495",
+  price: "$40",
   originalPrice: "$80",
   period: "/mes",
   badge: "Oferta",

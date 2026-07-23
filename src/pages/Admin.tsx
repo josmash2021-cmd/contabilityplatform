@@ -658,7 +658,7 @@ export default function Admin() {
                 }`}
               >
                 <p className="text-xs font-medium text-neutral-500">Mensual</p>
-                <p className="text-xl font-bold text-black mt-1">$495</p>
+                <p className="text-xl font-bold text-black mt-1">$80</p>
                 <p className="text-xs text-neutral-400 mt-0.5">1 mes</p>
               </button>
               <button
