@@ -334,22 +334,22 @@ export default function Admin() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-neutral-100 text-neutral-400 text-left text-xs uppercase tracking-wider">
-                      <th className="pb-3 font-medium">Usuario</th>
-                      <th className="pb-3 font-medium">Email</th>
-                      <th className="pb-3 font-medium">Registro</th>
-                      <th className="pb-3 font-medium">Suscripcion</th>
-                      <th className="pb-3 font-medium">Estado</th>
-                      <th className="pb-3 font-medium text-right">Acciones</th>
+                    <tr className="bg-neutral-50 border-y border-neutral-100 text-neutral-500 text-left text-[11px] uppercase tracking-wider">
+                      <th className="py-3 px-4 font-semibold">Usuario</th>
+                      <th className="py-3 px-4 font-semibold">Email</th>
+                      <th className="py-3 px-4 font-semibold">Registro</th>
+                      <th className="py-3 px-4 font-semibold">Suscripcion</th>
+                      <th className="py-3 px-4 font-semibold">Estado</th>
+                      <th className="py-3 px-4 font-semibold text-right">Acciones</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-neutral-50">
+                  <tbody className="divide-y divide-neutral-100">
                     {users?.map((user) => (
-                      <tr key={user.id} className="hover:bg-neutral-50/60 transition-colors">
+                      <tr key={user.id} className="hover:bg-neutral-50/70 transition-colors">
                         {/* Avatar + Name */}
-                        <td className="py-3">
-                          <div className="flex items-center gap-2.5">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-semibold ${
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold shadow-sm ring-1 ring-black/5 ${
                               user.isBlocked
                                 ? "bg-red-100 text-red-600"
                                 : user.isAdmin
@@ -360,26 +360,26 @@ export default function Admin() {
                             }`}>
                               {(user.name || "?").charAt(0).toUpperCase()}
                             </div>
-                            <div>
+                            <div className="flex flex-col leading-tight">
                               <span className="font-medium text-black text-sm">{user.name || "Sin nombre"}</span>
                               {user.modePreference && (
-                                <span className="ml-2 text-[10px] text-neutral-400 capitalize">{user.modePreference}</span>
+                                <span className="text-[10px] text-neutral-400 capitalize mt-0.5">{user.modePreference}</span>
                               )}
                             </div>
                           </div>
                         </td>
                         {/* Email */}
-                        <td className="py-3 text-neutral-500 text-sm">{user.email || "—"}</td>
+                        <td className="py-3.5 px-4 text-neutral-500 text-sm">{user.email || "—"}</td>
                         {/* Registration Date */}
-                        <td className="py-3 text-neutral-400 text-xs">
+                        <td className="py-3.5 px-4 text-neutral-400 text-xs whitespace-nowrap">
                           {user.createdAt ? new Date(user.createdAt).toLocaleDateString("es") : "—"}
                         </td>
                         {/* Subscription Plan */}
-                        <td className="py-3">
+                        <td className="py-3.5 px-4">
                           {user.subscription ? (
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <span className={`inline-flex items-center gap-1 font-medium ${
-                                user.subscription.plan === "annual" ? "text-emerald-600" : "text-blue-600"
+                            <div className="flex items-center gap-2 text-xs">
+                              <span className={`inline-flex items-center gap-1 font-medium px-2 py-0.5 rounded-full ${
+                                user.subscription.plan === "annual" ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"
                               }`}>
                                 {user.subscription.plan === "annual" ? (
                                   <Calendar className="w-3 h-3" />
@@ -388,8 +388,7 @@ export default function Admin() {
                                 )}
                                 {user.subscription.plan === "annual" ? "Anual" : "Mensual"}
                               </span>
-                              <span className="text-neutral-300">·</span>
-                              <span className="text-neutral-400">
+                              <span className="text-neutral-400 whitespace-nowrap">
                                 {user.subscription.currentPeriodEnd
                                   ? new Date(user.subscription.currentPeriodEnd).toLocaleDateString("es")
                                   : "—"}
@@ -400,10 +399,10 @@ export default function Admin() {
                           )}
                         </td>
                         {/* Status Badge */}
-                        <td className="py-3">{getStatusBadge(user)}</td>
+                        <td className="py-3.5 px-4">{getStatusBadge(user)}</td>
                         {/* Actions */}
-                        <td className="py-3">
-                          <div className="flex items-center justify-end gap-0.5">
+                        <td className="py-3.5 px-4">
+                          <div className="flex items-center justify-end gap-1">
                             {!user.isAdmin && (
                               <>
                                 {/* View Activity */}
