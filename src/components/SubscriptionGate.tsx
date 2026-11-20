@@ -370,17 +370,25 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 // ── Page-level gate: blocks individual pages when user has no subscription ──
 export function SubscriptionPageGate({ children }: { children: React.ReactNode }) {
   const location = useLocation();
-  const { user } = useAuth();
-  const { data: status, isLoading } = trpc.subscription.status.useQuery(undefined, {
+  const { user, isAdmin } = useAuth();
+  const { data: status, isLoading, isError } = trpc.subscription.status.useQuery(undefined, {
     refetchInterval: 10000,
+    enabled: !isAdmin,
   });
 
   const userMode = user?.modePreference || "business";
   const hasSubscription = status?.active === true;
   const currentPath = location.pathname;
 
+  // Admins never pay (the server also reports them as active).
+  if (isAdmin) return <>{children}</>;
+
   // While loading, show content (don't block)
   if (isLoading) return <>{children}</>;
+
+  // If the check itself failed (Stripe/DB hiccup), don't lock out a paying customer.
+  // An expired session is handled globally: it redirects to /login.
+  if (isError) return <>{children}</>;
 
   if (hasSubscription) return <>{children}</>;
 

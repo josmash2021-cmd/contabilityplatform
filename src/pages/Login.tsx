@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
@@ -14,6 +14,13 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [mode, setMode] = useState<"business" | "personal">("business");
+
+  // Redirected here because the session expired (see providers/trpc.tsx).
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("expired") === "1") {
+      toast.info("Tu sesion expiro. Inicia sesion de nuevo.");
+    }
+  }, []);
 
   const loginMut = trpc.auth.login.useMutation({
     onSuccess: (data) => {

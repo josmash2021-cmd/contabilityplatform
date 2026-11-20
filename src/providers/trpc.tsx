@@ -1,11 +1,26 @@
 import { useState } from "react";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink } from "@trpc/client";
+import { MutationCache, QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "../../api/router";
 
+// The session token lasts 30 days, but the app decides "logged in" from localStorage.
+// When the token expires every request fails with UNAUTHORIZED and pages showed empty
+// data or the paywall (even to admins). Send the user back to log in instead.
+function handleUnauthorized(error: unknown) {
+  if (!(error instanceof TRPCClientError) || error.data?.code !== "UNAUTHORIZED") return;
+  try {
+    if (!localStorage.getItem("auth_user")) return; // already logged out: nothing to do
+    localStorage.removeItem("auth_user");
+    localStorage.removeItem("auth_token");
+  } catch { /* storage unavailable */ }
+  if (window.location.pathname !== "/login") window.location.href = "/login?expired=1";
+}
+
 export const queryClient = new QueryClient({
+  queryCache: new QueryCache({ onError: handleUnauthorized }),
+  mutationCache: new MutationCache({ onError: handleUnauthorized }),
   defaultOptions: {
     queries: {
       staleTime: 60 * 1000,
