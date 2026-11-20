@@ -80,11 +80,27 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     hasSyncedRef.current = false;
-    queryClient.clear();
-    localStorage.removeItem("auth_user");
-    localStorage.removeItem("auth_token");
-    setUser(null);
-    window.location.href = "/login";
+    const token = localStorage.getItem("auth_token");
+    const finish = () => {
+      queryClient.clear();
+      localStorage.removeItem("auth_user");
+      localStorage.removeItem("auth_token");
+      setUser(null);
+      window.location.href = "/login";
+    };
+    // The session also lives in an HttpOnly cookie that JS can't delete:
+    // ask the server to clear it, then clear local state either way.
+    fetch("/api/trpc/auth.logout", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { "x-auth-token": token } : {}),
+      },
+      body: JSON.stringify({}),
+      credentials: "same-origin",
+    })
+      .catch(() => { /* offline: local logout still happens */ })
+      .finally(finish);
   }, []);
 
   return useMemo(

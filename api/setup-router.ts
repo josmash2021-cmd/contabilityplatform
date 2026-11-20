@@ -1,9 +1,10 @@
-import { createRouter, publicQuery } from "./middleware";
+import { createRouter, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sql } from "drizzle-orm";
 
 export const setupRouter = createRouter({
-  run: publicQuery.mutation(async () => {
+  // Schema change (DDL) + bulk UPDATE users: admin only. It used to be callable by anyone.
+  run: adminQuery.mutation(async () => {
     const db = getDb();
     const results: string[] = [];
 

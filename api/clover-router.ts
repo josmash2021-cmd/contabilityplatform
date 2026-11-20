@@ -3,7 +3,7 @@ import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { cloverAccounts, cloverTransactions, accounts, journalEntries, journalEntryLines } from "@db/schema";
 import { eq, desc, and, sql } from "drizzle-orm";
-// and already imported
+import { TRPCError } from "@trpc/server";
 
 // ─── Clover API Client ───
 const CLOVER_BASE =
@@ -419,12 +419,12 @@ export const cloverRouter = createRouter({
             cardLastFour: payment.cardTransaction?.last4 || null,
             cardType: payment.cardTransaction?.cardType || null,
             updatedAt: new Date(),
-          }).where(eq(cloverTransactions.cloverOrderId, input.orderId));
+          }).where(and(eq(cloverTransactions.cloverOrderId, input.orderId), eq(cloverTransactions.userId, userId)));
 
           // If completed, create journal entry
           if (payment.result === "SUCCESS") {
             const tx = await db.select().from(cloverTransactions)
-              .where(eq(cloverTransactions.cloverOrderId, input.orderId)).limit(1);
+              .where(and(eq(cloverTransactions.cloverOrderId, input.orderId), eq(cloverTransactions.userId, userId))).limit(1);
             if (tx[0]) {
               await createCloverJournalEntry(db, Number(tx[0].amount), `Pago Clover - ${tx[0].notes || "POS"}`, Number(userId));
             }
@@ -450,20 +450,22 @@ export const cloverRouter = createRouter({
       cloverTxId: z.number(),
       saleId: z.number().optional(),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
+      const userId = ctx.user.id;
+
+      // Only the owner can complete their own Clover transaction.
+      const own = and(eq(cloverTransactions.id, input.cloverTxId), eq(cloverTransactions.userId, userId));
+      const tx = await db.select().from(cloverTransactions).where(own).limit(1);
+      if (!tx[0]) throw new TRPCError({ code: "NOT_FOUND", message: "Transaccion no encontrada" });
 
       await db.update(cloverTransactions).set({
         saleId: input.saleId || null,
         status: "completed",
         updatedAt: new Date(),
-      }).where(eq(cloverTransactions.id, input.cloverTxId));
+      }).where(own);
 
-      const tx = await db.select().from(cloverTransactions)
-        .where(eq(cloverTransactions.id, input.cloverTxId)).limit(1);
-      if (tx[0]) {
-        await createCloverJournalEntry(db, Number(tx[0].amount), `Pago Clover - ${tx[0].notes || "POS"}`, tx[0].userId ? Number(tx[0].userId) : 0);
-      }
+      await createCloverJournalEntry(db, Number(tx[0].amount), `Pago Clover - ${tx[0].notes || "POS"}`, userId);
 
       return { success: true };
     }),

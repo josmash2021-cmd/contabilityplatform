@@ -2,29 +2,28 @@ import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { customers } from "@db/schema";
-import { eq, like, asc, sql, and } from "drizzle-orm";
+import { eq, like, asc, sql, and, or } from "drizzle-orm";
 
 export const customersRouter = createRouter({
   list: authedQuery
     .input(z.object({ type: z.string().optional(), search: z.string().optional(), limit: z.number().min(1).max(200).default(50), offset: z.number().min(0).default(0) }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();
-      const userId = ctx.user?.id ?? null;
+      const userId = ctx.user.id;
       const limit = input?.limit ?? 50;
       const offset = input?.offset ?? 0;
 
-      let conditions = [];
-      if (userId) {
-        conditions.push(sql`${customers.userId} = ${userId}`);
-      }
+      // Always scope to the current user. `or(...)` wraps the search in parentheses;
+      // a bare "a OR b" here used to escape the userId filter and leak every tenant's customers.
+      const conditions = [eq(customers.userId, userId)];
       if (input?.type && input.type !== "all") {
         conditions.push(sql`${customers.clientType} = ${input.type}`);
       }
       if (input?.search) {
-        conditions.push(sql`${like(customers.name, `%${input.search}%`)} OR ${like(customers.lastName, `%${input.search}%`)}`);
+        conditions.push(or(like(customers.name, `%${input.search}%`), like(customers.lastName, `%${input.search}%`))!);
       }
 
-      const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+      const whereClause = and(...conditions);
       return db.select().from(customers).where(whereClause).orderBy(asc(customers.name)).limit(limit).offset(offset);
     }),
 

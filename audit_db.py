@@ -3,6 +3,7 @@
 
 import json
 import os
+import urllib.parse
 import sys
 import pymysql
 
@@ -10,12 +11,16 @@ import pymysql
 if sys.platform == "win32":
     sys.stdout.reconfigure(encoding="utf-8")
 
+_db_url = os.environ.get("DATABASE_URL")
+if not _db_url:
+    sys.exit("Define DATABASE_URL antes de correr este script.")
+_u = urllib.parse.urlparse(_db_url)
 DB_CONFIG = {
-    "host": "autorack.proxy.rlwy.net",
-    "port": 25778,
-    "user": "root",
-    "password": "chLSOgeGMqHDzbtLNNovdLhggsGMmzLw",
-    "database": "railway",
+    "host": _u.hostname,
+    "port": _u.port or 3306,
+    "user": urllib.parse.unquote(_u.username or ""),
+    "password": urllib.parse.unquote(_u.password or ""),
+    "database": _u.path.lstrip("/"),
     "cursorclass": pymysql.cursors.DictCursor,
 }
 

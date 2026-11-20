@@ -86,7 +86,7 @@ export default function Register() {
 
     if (mode === "business") {
       // Save pending registration and continue to onboarding
-      localStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode }));
+      sessionStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode }));
       navigate("/onboarding");
       return;
     }

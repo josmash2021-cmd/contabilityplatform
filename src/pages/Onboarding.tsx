@@ -36,7 +36,9 @@ export default function Onboarding() {
   const addressRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const raw = localStorage.getItem("register_pending");
+    // Older versions kept the pending sign-up (with the plain-text password) in localStorage forever.
+    try { localStorage.removeItem("register_pending"); } catch { /* ignore */ }
+    const raw = sessionStorage.getItem("register_pending");
     if (!raw) {
       navigate("/register", { replace: true });
       return;
@@ -44,13 +46,13 @@ export default function Onboarding() {
     try {
       const parsed = JSON.parse(raw);
       if (!parsed.email || !parsed.password || !parsed.name || !parsed.mode) {
-        localStorage.removeItem("register_pending");
+        sessionStorage.removeItem("register_pending");
         navigate("/register", { replace: true });
         return;
       }
       setPendingRegistration(parsed);
     } catch {
-      localStorage.removeItem("register_pending");
+      sessionStorage.removeItem("register_pending");
       navigate("/register", { replace: true });
     }
   }, [navigate]);
@@ -92,14 +94,8 @@ export default function Onboarding() {
     });
   }, [autocompleteLoaded]);
 
-  // Auto-run DB migration on page load
-  const migrateQuery = trpc.settings.migrate.useQuery(undefined, {
-    retry: false,
-    refetchOnWindowFocus: false,
-  });
-
   const updateSettings = trpc.settings.update.useMutation({
-    onSuccess: () => { toast.success("Negocio configurado"); localStorage.removeItem("register_pending"); window.location.href = "/"; },
+    onSuccess: () => { toast.success("Negocio configurado"); sessionStorage.removeItem("register_pending"); window.location.href = "/"; },
     onError: (err) => toast.error(err.message),
   });
 
@@ -132,7 +128,7 @@ export default function Onboarding() {
 
   const handleCancel = () => {
     if (window.confirm("Estas seguro que quieres salirte? Perderas el progreso de registro")) {
-      localStorage.removeItem("register_pending");
+      sessionStorage.removeItem("register_pending");
       navigate("/login", { replace: true });
     }
   };

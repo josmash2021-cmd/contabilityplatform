@@ -1,4 +1,4 @@
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { z } from "zod";
 import { getDb } from "./queries/connection";
 import { bankAccounts, bankTransactions, accounts, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules } from "@db/schema";
@@ -811,6 +811,13 @@ function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: num
   return txs;
 }
 
+// Strip server-only secrets before sending an account row to the browser.
+// The Plaid access token grants full read access to the user's bank and must never leave the server.
+function toPublicAccount<T extends { plaidAccessToken?: unknown }>(acc: T): Omit<T, "plaidAccessToken"> {
+  const { plaidAccessToken: _secret, ...rest } = acc;
+  return rest;
+}
+
 export const bankRouter = createRouter({
   createLinkToken: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { linkToken: null, error: "No autenticado" };
@@ -907,7 +914,7 @@ export const bankRouter = createRouter({
     try {
       const all = await getDb().select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id)).orderBy(desc(bankAccounts.connectedAt));
       // Only return active accounts - when disconnected, show "Conectar tu banco"
-      return all.filter((a: any) => a.plaidAccessToken && a.isActive);
+      return all.filter((a: any) => a.plaidAccessToken && a.isActive).map(toPublicAccount);
     } catch (err) {
       console.error("[listAccounts] error:", err);
       return [];
@@ -917,7 +924,7 @@ export const bankRouter = createRouter({
   getAccount: authedQuery.input(z.object({ id: z.number() })).query(async ({ input, ctx }) => {
     if (!ctx.user) return null;
     const rows = await getDb().select().from(bankAccounts).where(and(eq(bankAccounts.id, input.id), eq(bankAccounts.userId, ctx.user.id)));
-    return rows[0] || null;
+    return rows[0] ? toPublicAccount(rows[0]) : null;
   }),
 
   checkConnection: authedQuery.query(async ({ ctx }) => {
@@ -1946,7 +1953,8 @@ export const bankRouter = createRouter({
     } catch (err: any) { return { applied: false, tables: [], details: `Error: ${err.message}` }; }
   }),
 
-  runMigration: publicQuery.mutation(async () => {
+  // Schema change (DDL): admin only. It used to be callable by anyone without logging in.
+  runMigration: adminQuery.mutation(async () => {
     const db = getDb();
     const results: string[] = [];
     const errors: string[] = [];
@@ -2112,7 +2120,9 @@ export const bankRouter = createRouter({
       }
       if (!targetAccountId) return { success: false, error: "No hay cuenta bancaria seleccionada", added: 0 };
 
-      const targetAcc = await db.select().from(bankAccounts).where(eq(bankAccounts.id, targetAccountId));
+      // Tenant check: the target account must belong to this user.
+      const targetAcc = await db.select().from(bankAccounts).where(and(eq(bankAccounts.id, targetAccountId), eq(bankAccounts.userId, userId)));
+      if (targetAcc.length === 0) return { success: false, error: "Cuenta bancaria no encontrada", added: 0 };
       const bankName = targetAcc[0]?.bankName ?? "Banco";
       const accountNumber = targetAcc[0]?.accountNumber ?? "";
 
@@ -2167,7 +2177,7 @@ export const bankRouter = createRouter({
       // Update account balance with latest from CSV
       if (latestBalance != null) {
         try {
-          await db.update(bankAccounts).set({ currentBalance: String(latestBalance.toFixed(2)), lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, targetAccountId));
+          await db.update(bankAccounts).set({ currentBalance: String(latestBalance.toFixed(2)), lastSyncedAt: new Date(), updatedAt: new Date() }).where(and(eq(bankAccounts.id, targetAccountId), eq(bankAccounts.userId, userId)));
         } catch { /* ignore */ }
       }
 

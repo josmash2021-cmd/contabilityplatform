@@ -1,13 +1,10 @@
 import mysql from 'mysql2/promise';
+if (!process.env.DATABASE_URL) { console.error("Define DATABASE_URL antes de correr este script."); process.exit(1); }
 
 async function main() {
   // Use Railway public proxy
   const pool = mysql.createPool({
-    host: 'autorack.proxy.rlwy.net',
-    port: 25778,
-    user: 'root',
-    password: 'chLSOgeGMqHDzbtLNNovdLhggsGMmzLw',
-    database: 'railway'
+    uri: process.env.DATABASE_URL
   });
 
   try {

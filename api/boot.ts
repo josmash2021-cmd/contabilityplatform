@@ -28,7 +28,7 @@ app.use(bodyLimit({ maxSize: 50 * 1024 * 1024 }));
 app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 // Health check endpoint
-app.get("/api/health", (c) => c.json({ status: "ok", version: "1.0.6-yonel-fix" }));
+app.get("/api/health", (c) => c.json({ status: "ok", version: "1.0.7-security" }));
 
 // ── Stripe Webhook (raw body needed for signature verification) ──
 app.post("/api/webhooks/stripe", async (c) => {
@@ -378,23 +378,6 @@ async function syncAllTransactions() {
   }
 }
 
-// ── One-time data fix: el pago real de yonel fue $495 hoy (no $80 de junio) ──
-// Se auto-desactiva: tras correr una vez el monto pasa a 495 y ya no coincide con "80.00".
-async function runStartupFixes() {
-  try {
-    const db = getDb();
-    const rows = await db.select().from(users).where(eq(users.email, "yonelamc@gmail.com")).limit(1);
-    const u = rows[0];
-    if (!u) return;
-    await db.update(subscriptionPayments)
-      .set({ amount: "495.00", paidAt: new Date("2026-07-23T12:00:00Z") })
-      .where(and(eq(subscriptionPayments.userId, u.id), eq(subscriptionPayments.amount, "80.00")));
-    console.log("[startup-fix] pago de yonel corregido a $495 con fecha de hoy");
-  } catch (e: any) {
-    console.error("[startup-fix] error:", e?.message);
-  }
-}
-
 // Run every 3 minutes in production
 if (env.isProduction) {
   // Balance sync every 5 minutes
@@ -404,15 +387,13 @@ if (env.isProduction) {
   // Transaction sync every 3 minutes
   setInterval(syncAllTransactions, 3 * 60 * 1000);
   setTimeout(syncAllTransactions, 15000); // 5s after balance sync
-
-  // One-time data fixes shortly after boot
-  setTimeout(runStartupFixes, 8000);
 }
 
 // Endpoint for Railway cron job (calls every X minutes)
 app.get("/api/sync-all", async (c) => {
   const secret = c.req.header("x-sync-secret");
-  if (secret !== process.env.SYNC_SECRET) {
+  // If SYNC_SECRET isn't configured, undefined === undefined used to let anyone in.
+  if (!process.env.SYNC_SECRET || secret !== process.env.SYNC_SECRET) {
     return c.json({ error: "Unauthorized" }, 401);
   }
   syncAllBalances();

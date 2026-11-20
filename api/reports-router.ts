@@ -3,17 +3,19 @@ import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { accounts, journalEntries, journalEntryLines, sales, expenses, bankTransactions, bankAccounts } from "@db/schema";
 import { sql, desc, eq, and, gte, lte } from "drizzle-orm";
+import { isoDate, tzOffsetHours } from "./lib/security";
 
 export const reportsRouter = createRouter({
 
   // ── Income Statement: based on ACTUAL sales and expenses ──
   incomeStatement: authedQuery
     .input(z.object({
-      startDate: z.string().optional(),
-      endDate: z.string().optional(),
-      tzOffsetHours: z.number().optional(),
-      year: z.number().optional(),
-      month: z.number().optional(),
+      // These values are interpolated into sql.raw below — keep them strictly validated.
+      startDate: isoDate.optional(),
+      endDate: isoDate.optional(),
+      tzOffsetHours: tzOffsetHours.optional(),
+      year: z.number().int().min(2000).max(2100).optional(),
+      month: z.number().int().min(1).max(12).optional(),
     }).optional())
     .query(async ({ input, ctx }) => {
       const db = getDb();

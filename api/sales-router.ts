@@ -2,7 +2,9 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales, saleServices, paymentRecords, services, customers, accounts, journalEntries, journalEntryLines } from "@db/schema";
-import { eq, desc, sql, gte, and } from "drizzle-orm";
+import { eq, desc, sql, gte, and, inArray } from "drizzle-orm";
+import { TRPCError } from "@trpc/server";
+import { isoDate, tzOffsetHours } from "./lib/security";
 
 export const salesRouter = createRouter({
   list: authedQuery
@@ -48,7 +50,7 @@ export const salesRouter = createRouter({
         .from(sales)
         .leftJoin(saleServices, eq(sales.id, saleServices.saleId))
         .leftJoin(paymentRecords, eq(sales.id, paymentRecords.saleId))
-        .leftJoin(customers, eq(sales.customerId, customers.id))
+        .leftJoin(customers, and(eq(sales.customerId, customers.id), eq(customers.userId, userId)))
         .where(and(eq(sales.id, input.id), eq(sales.createdBy, userId)));
 
       if (saleRows.length === 0) return null;
@@ -96,6 +98,20 @@ export const salesRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
+
+      // Tenant check: the customer and every referenced service must belong to this user.
+      if (input.customerId) {
+        const own = await db.select({ id: customers.id }).from(customers)
+          .where(and(eq(customers.id, input.customerId), eq(customers.userId, ctx.user.id))).limit(1);
+        if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente no encontrado" });
+      }
+      const serviceIds = [...new Set(input.items.map((i) => i.serviceId).filter((id): id is number => !!id))];
+      if (serviceIds.length > 0) {
+        const ownSvcs = await db.select({ id: services.id }).from(services)
+          .where(and(inArray(services.id, serviceIds), eq(services.userId, ctx.user.id)));
+        if (ownSvcs.length !== serviceIds.length) throw new TRPCError({ code: "NOT_FOUND", message: "Servicio no encontrado" });
+      }
+
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
 
@@ -147,7 +163,7 @@ export const salesRouter = createRouter({
         }
 
         if (!serviceName) {
-          const svc = await db.select({ name: services.name }).from(services).where(eq(services.id, resolvedServiceId)).limit(1);
+          const svc = await db.select({ name: services.name }).from(services).where(and(eq(services.id, resolvedServiceId), eq(services.userId, ctx.user.id))).limit(1);
           serviceName = svc[0]?.name ?? "Servicio";
         }
 
@@ -281,10 +297,11 @@ export const salesRouter = createRouter({
 
   stats: authedQuery
     .input(z.object({
-      todayDate: z.string().optional(),     // "2026-05-25" (local date)
-      weekStartDate: z.string().optional(), // "2026-05-19" (local date)
-      monthStartDate: z.string().optional(),// "2026-05-01" (local date)
-      tzOffsetHours: z.number().optional(), // -4 for EDT
+      // These values are interpolated into sql.raw below — keep them strictly validated.
+      todayDate: isoDate.optional(),     // "2026-05-25" (local date)
+      weekStartDate: isoDate.optional(), // "2026-05-19" (local date)
+      monthStartDate: isoDate.optional(),// "2026-05-01" (local date)
+      tzOffsetHours: tzOffsetHours.optional(), // -4 for EDT
     }).optional())
     .query(async ({ ctx, input }) => {
       const db = getDb();

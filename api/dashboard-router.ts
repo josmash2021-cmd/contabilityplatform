@@ -3,6 +3,7 @@ import { getDb } from "./queries/connection";
 import { sales, saleServices, expenses, accounts, bankTransactions, bankAccounts, journalEntries, journalEntryLines, customers } from "@db/schema";
 import { sql, desc, and, eq, gte, lte, count } from "drizzle-orm";
 import { z } from "zod";
+import { isoDate, tzOffsetHours } from "./lib/security";
 
 export const dashboardRouter = createRouter({
   debug: authedQuery.query(async ({ ctx }) => {
@@ -30,10 +31,11 @@ export const dashboardRouter = createRouter({
   }),
 
   summary: authedQuery.input(z.object({
-      todayDate: z.string().optional(),     // "2026-05-26" (local date)
-      weekStartDate: z.string().optional(), // "2026-05-20" (local date, 7 days ago)
-      monthStartDate: z.string().optional(),// "2026-05-01" (local date, 1st of month)
-      tzOffsetHours: z.number().optional(), // -4 for EDT, +1 for CET, etc.
+      // These values are interpolated into sql.raw below — keep them strictly validated.
+      todayDate: isoDate.optional(),     // "2026-05-26" (local date)
+      weekStartDate: isoDate.optional(), // "2026-05-20" (local date, 7 days ago)
+      monthStartDate: isoDate.optional(),// "2026-05-01" (local date, 1st of month)
+      tzOffsetHours: tzOffsetHours.optional(), // -4 for EDT, +1 for CET, etc.
     }).optional()).query(async ({ input, ctx }) => {
       const db = getDb();
       const userId = ctx.user.id;
@@ -169,14 +171,15 @@ export const dashboardRouter = createRouter({
 
 
       // Expenses
+      // Scoped to the caller (these used to sum every tenant's expenses).
       const todayExpAgg = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(
-        sql`DATE(${expenses.date}) = CURDATE()`
+        and(eq(expenses.createdBy, userId), sql`DATE(${expenses.date}) = CURDATE()`)
       );
       const weekExpAgg = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(
-        sql`DATE(${expenses.date}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`
+        and(eq(expenses.createdBy, userId), sql`DATE(${expenses.date}) >= DATE_SUB(CURDATE(), INTERVAL 6 DAY)`)
       );
       const monthExpAgg = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)` }).from(expenses).where(
-        sql`DATE(${expenses.date}) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`
+        and(eq(expenses.createdBy, userId), sql`DATE(${expenses.date}) >= DATE_FORMAT(CURDATE(), '%Y-%m-01')`)
       );
 
       // Bank balance (wrapped in try-catch in case table doesn't exist)

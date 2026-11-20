@@ -1,12 +1,9 @@
 import mysql from 'mysql2/promise';
+if (!process.env.DATABASE_URL) { console.error("Define DATABASE_URL antes de correr este script."); process.exit(1); }
 
 async function main() {
   const pool = mysql.createPool({
-    host: 'ep-t4ni387b5e83b7519dc8.epsrv-t4n281l4mrmemi4zls9a.ap-southeast-1.privatelink.aliyuncs.com',
-    port: 4000,
-    user: '2zPnUYeQQ7X2Hv3.root',
-    password: 'RYABLiImxNRTeN2GN107l3hBJMxMeL6l',
-    database: '19e281d4-96a2-8847-8000-09ba1551d142',
+    uri: process.env.DATABASE_URL,
   });
 
   try {

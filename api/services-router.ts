@@ -8,7 +8,8 @@ export const servicesRouter = createRouter({
   debug: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const cols = await db.execute(sql`SHOW COLUMNS FROM services`);
-    const all = await db.execute(sql`SELECT id, userId, name, description, price, cost, isActive, createdAt FROM services ORDER BY id DESC LIMIT 10`);
+    // Scoped to the caller: this used to return the latest services of ALL tenants.
+    const all = await db.execute(sql`SELECT id, userId, name, description, price, cost, isActive, createdAt FROM services WHERE userId = ${ctx.user.id} ORDER BY id DESC LIMIT 10`);
     return {
       currentUserId: ctx.user?.id ?? null,
       columns: cols,

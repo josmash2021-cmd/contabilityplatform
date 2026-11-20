@@ -5,37 +5,29 @@ import { users, passwordResetCodes } from "@db/schema";
 import { eq, and, gt } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 import { signLocalToken, LOCAL_AUTH_COOKIE } from "./local-auth";
-import { setCookie } from "hono/cookie";
+import { randomInt } from "node:crypto";
+import { RateLimiter, normalizeEmail } from "./lib/security";
 
-// Simple in-memory rate limiter
-const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
+// ── Rate limits (per email) ──
+// The reset code is only 6 digits: without an attempt limit it can be brute-forced
+// in minutes, which allows taking over any account (including admins).
+const loginLimiter = new RateLimiter(10, 15 * 60 * 1000);       // 10 logins / 15 min
+const forgotLimiter = new RateLimiter(3, 60 * 60 * 1000);       // 3 codes / hour
+const resetAttemptLimiter = new RateLimiter(5, 30 * 60 * 1000); // 5 code guesses per issued code
 
-function checkRateLimit(key: string, maxRequests: number, windowMs: number): boolean {
-  const now = Date.now();
-  const record = rateLimitMap.get(key);
-  
-  if (!record || now > record.resetAt) {
-    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs });
-    return true;
+const TOO_MANY_RESET_ATTEMPTS = "Demasiados intentos. Solicita un codigo nuevo.";
+
+/** Burns every outstanding reset code for this email (after too many wrong guesses). */
+async function invalidateResetCodes(email: string) {
+  try {
+    await getDb().update(passwordResetCodes).set({ used: true }).where(eq(passwordResetCodes.email, email));
+  } catch (err) {
+    console.error("[auth] failed to invalidate reset codes:", (err as Error).message);
   }
-  
-  if (record.count >= maxRequests) {
-    return false;
-  }
-  
-  record.count++;
-  return true;
-}
-
-function getRateLimitHeaders(key: string, maxRequests: number): { remaining: number; resetAt: number } {
-  const record = rateLimitMap.get(key);
-  if (!record) return { remaining: maxRequests, resetAt: Date.now() + 60000 };
-  return { remaining: Math.max(0, maxRequests - record.count), resetAt: record.resetAt };
 }
 
 function generateResetCode(): string {
-  const crypto = require("crypto");
-  return crypto.randomInt(100000, 999999).toString();
+  return randomInt(100000, 1000000).toString();
 }
 
 export const authRouter = createRouter({
@@ -86,10 +78,11 @@ export const authRouter = createRouter({
       mode: z.enum(["business", "personal"]).default("business"),
     }))
     .mutation(async ({ input, ctx }) => {
-      // Rate limit disabled for testing
-      // if (!checkRateLimit(`login:${input.email}`, 10, 15 * 60 * 1000)) {
-      //   return { success: false, error: "Demasiados intentos de login. Intenta mas tarde." };
-      // }
+      // Checked before any await so a batch of parallel requests can't bypass it.
+      const loginKey = normalizeEmail(input.email);
+      if (!loginLimiter.consume(loginKey)) {
+        return { success: false, error: "Demasiados intentos de login. Intenta en 15 minutos." };
+      }
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (rows.length === 0) {
@@ -118,6 +111,7 @@ export const authRouter = createRouter({
         effectiveRole = "admin";
       }
 
+      loginLimiter.reset(loginKey);
       await db.update(users).set({ lastSignInAt: new Date() }).where(eq(users.id, user.id));
       const token = await signLocalToken(String(user.id), user.email || "");
       // Set HttpOnly cookie
@@ -143,15 +137,20 @@ export const authRouter = createRouter({
       email: z.string().email("Email invalido"),
     }))
     .mutation(async ({ input }) => {
-      // Rate limit disabled for testing
-      // if (!checkRateLimit(`forgot:${input.email}`, 3, 60 * 60 * 1000)) {
-      //   return { success: false, error: "Demasiados intentos. Intenta mas tarde." };
-      // }
+      const key = normalizeEmail(input.email);
+      if (!forgotLimiter.consume(key)) {
+        return { success: false as const, error: "Demasiados intentos. Intenta en una hora." };
+      }
+      // Same answer whether or not the account exists, so this can't be used to
+      // discover which emails are registered.
+      const genericOk = { success: true as const, message: "Si el correo esta registrado, recibiras un codigo" };
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (rows.length === 0) {
-        return { success: false, error: "No existe una cuenta con este email" };
+        return genericOk;
       }
+      // A fresh code gets a fresh set of guesses.
+      resetAttemptLimiter.reset(key);
       // Generate code
       const code = generateResetCode();
       const expiresAt = new Date();
@@ -164,10 +163,9 @@ export const authRouter = createRouter({
         code,
         expiresAt,
       });
-      // TODO: Send email with code
-      // For now, return code in dev mode
-      
-      return { success: true, message: "Codigo enviado a tu correo" };
+      // TODO: Send email with code (no email provider is wired up yet).
+
+      return genericOk;
     }),
 
   // ── Verify Code ──
@@ -177,6 +175,11 @@ export const authRouter = createRouter({
       code: z.string().length(6, "Codigo de 6 digitos"),
     }))
     .mutation(async ({ input }) => {
+      // Checked before any await so a batch of parallel guesses can't bypass it.
+      if (!resetAttemptLimiter.consume(normalizeEmail(input.email))) {
+        await invalidateResetCodes(input.email);
+        return { success: false, error: TOO_MANY_RESET_ATTEMPTS };
+      }
       const db = getDb();
       const now = new Date();
       const rows = await db.select().from(passwordResetCodes)
@@ -203,6 +206,12 @@ export const authRouter = createRouter({
       newPassword: z.string().min(6, "Minimo 6 caracteres"),
     }))
     .mutation(async ({ input }) => {
+      const key = normalizeEmail(input.email);
+      // Shares the attempt budget with verifyCode; checked before any await.
+      if (!resetAttemptLimiter.consume(key)) {
+        await invalidateResetCodes(input.email);
+        return { success: false, error: TOO_MANY_RESET_ATTEMPTS };
+      }
       const db = getDb();
       const now = new Date();
       // Verify code first
@@ -225,6 +234,8 @@ export const authRouter = createRouter({
       await db.update(users).set({ password: hashedPassword }).where(eq(users.email, input.email));
       // Mark code as used
       await db.update(passwordResetCodes).set({ used: true }).where(eq(passwordResetCodes.id, codeRows[0].id));
+      resetAttemptLimiter.reset(key);
+      loginLimiter.reset(key);
       return { success: true, message: "Contrasena actualizada" };
     }),
 
@@ -250,7 +261,8 @@ export const authRouter = createRouter({
   }),
 
   // ── Logout ──
-  logout: authedQuery.mutation(async ({ ctx }) => {
+  // Public so the cookie is cleared even when the token is already expired/invalid.
+  logout: publicQuery.mutation(async ({ ctx }) => {
     // Clear the cookie
     ctx.resHeaders.set("Set-Cookie", `${LOCAL_AUTH_COOKIE}=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax`);
     return { success: true };

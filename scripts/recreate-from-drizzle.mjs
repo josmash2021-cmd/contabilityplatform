@@ -1,12 +1,14 @@
 import mysql from 'mysql2/promise';
+if (!process.env.DATABASE_URL) { console.error("Define DATABASE_URL antes de correr este script."); process.exit(1); }
+// PELIGRO: este script BORRA TODAS LAS TABLAS (incluida users). Nunca correrlo contra produccion.
+if (process.env.CONFIRM_DROP_ALL_TABLES !== "si-borrar-todo") {
+  console.error("Este script borra TODAS las tablas. Para confirmar, define CONFIRM_DROP_ALL_TABLES=si-borrar-todo");
+  process.exit(1);
+}
 
 async function main() {
   const pool = mysql.createPool({
-    host: 'autorack.proxy.rlwy.net',
-    port: 25778,
-    user: 'root',
-    password: 'chLSOgeGMqHDzbtLNNovdLhggsGMmzLw',
-    database: 'railway',
+    uri: process.env.DATABASE_URL,
     multipleStatements: true
   });
 

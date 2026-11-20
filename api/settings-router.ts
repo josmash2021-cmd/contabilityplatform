@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { companySettings } from "@db/schema";
 import { eq, sql } from "drizzle-orm";
 
 export const settingsRouter = createRouter({
-  // ── run DB migration for onboarding columns ──
-  migrate: publicQuery.query(async () => {
+  // ── run DB migration for onboarding columns (DDL: admin only) ──
+  migrate: adminQuery.query(async () => {
     const db = getDb();
     const results: string[] = [];
     const columns = [
