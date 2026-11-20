@@ -1,5 +1,7 @@
 import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { Building2, Eye, EyeOff, Loader2, User } from "lucide-react";
+import { useCopy } from "@/i18n/useI18n";
+import { authCopy } from "@/i18n/copy/auth";
 
 export type AccountMode = "business" | "personal";
 
@@ -17,13 +19,14 @@ export function AuthHeading({ title, subtitle, eyebrow }: { title: string; subti
 }
 
 /** Business / Personal segmented control with a sliding indicator. */
-export function ModeToggle({ value, onChange, label }: { value: AccountMode; onChange: (m: AccountMode) => void; label: string }) {
+export function ModeToggle({ value, onChange }: { value: AccountMode; onChange: (m: AccountMode) => void }) {
+  const { ui } = useCopy(authCopy);
   const options: Array<{ value: AccountMode; label: string; icon: typeof Building2 }> = [
-    { value: "business", label: "Negocio", icon: Building2 },
-    { value: "personal", label: "Personal", icon: User },
+    { value: "business", label: ui.business, icon: Building2 },
+    { value: "personal", label: ui.personal, icon: User },
   ];
   return (
-    <div role="radiogroup" aria-label={label} className="relative grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+    <div role="radiogroup" aria-label={ui.modeLabel} className="relative grid grid-cols-2 rounded-xl bg-slate-100 p-1">
       <span
         aria-hidden
         className="absolute bottom-1 left-0 top-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm ring-1 ring-slate-200 transition-transform duration-300 ease-out"
@@ -71,6 +74,7 @@ export function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
 }
 
 export function PasswordInput({ id, ...props }: InputHTMLAttributes<HTMLInputElement> & { id: string }) {
+  const { ui } = useCopy(authCopy);
   const [show, setShow] = useState(false);
   return (
     <div className="relative">
@@ -78,7 +82,7 @@ export function PasswordInput({ id, ...props }: InputHTMLAttributes<HTMLInputEle
       <button
         type="button"
         onClick={() => setShow((s) => !s)}
-        aria-label={show ? "Ocultar contraseña" : "Mostrar contraseña"}
+        aria-label={show ? ui.hidePassword : ui.showPassword}
         aria-controls={id}
         className="absolute right-1.5 top-1/2 flex h-9 w-9 -translate-y-1/2 items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
       >

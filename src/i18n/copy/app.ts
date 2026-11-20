@@ -1,0 +1,92 @@
+// Copy for the app shell: sidebar, trial banner, paywall messages, loaders.
+import type { Lang } from "../lang";
+
+const es = {
+  nav: {
+    "/": "Dashboard",
+    "/pos": "Cobrar",
+    "/services": "Servicios",
+    "/customers": "Clientes",
+    "/transactions": "Transacciones",
+    "/bank": "Banco",
+    "/reports": "Reportes",
+    "/settings": "Ajustes",
+    "/personal": "Inicio",
+    "/personal/transactions": "Transacciones",
+    "/personal/subscriptions": "Suscripciones",
+    "/personal/goals": "Metas",
+    settingsPersonal: "Perfil",
+    admin: "Admin",
+  } as Record<string, string>,
+  myAccount: "Mi Cuenta",
+  myCompany: "Mi Empresa",
+  personalFinance: "Finanzas Personales",
+  account: "Cuenta",
+  profile: "Perfil",
+  logout: "Cerrar sesión",
+  loading: "Cargando",
+  maintenance: {
+    title: "Bajo mantenimiento",
+    text: "Estamos realizando mejoras. Volveremos pronto.",
+    later: "Por favor intenta más tarde.",
+  },
+  trial: {
+    banner: (days: number) => `Prueba gratis: te ${days === 1 ? "queda 1 día" : `quedan ${days} días`} con acceso completo.`,
+    choosePlan: "Elegir un plan",
+    settingsTitle: (days: number) => `Estás en tu prueba gratis: te ${days === 1 ? "queda 1 día" : `quedan ${days} días`}.`,
+    settingsText: (date: string) => `Tienes acceso completo hasta el ${date}. Elige un plan cuando quieras para seguir sin interrupciones.`,
+  },
+  paywall: {
+    title: "Desbloquea el acceso completo",
+    text: "Suscríbete para acceder a esta página y todas las funciones.",
+    trialEndedTitle: "Tu prueba gratis terminó",
+    trialEndedText: "Elige un plan para seguir usando Ai Aethel. Tus datos siguen guardados.",
+  },
+};
+
+export type AppCopy = typeof es;
+
+const en: AppCopy = {
+  nav: {
+    "/": "Dashboard",
+    "/pos": "Checkout",
+    "/services": "Services",
+    "/customers": "Clients",
+    "/transactions": "Transactions",
+    "/bank": "Bank",
+    "/reports": "Reports",
+    "/settings": "Settings",
+    "/personal": "Home",
+    "/personal/transactions": "Transactions",
+    "/personal/subscriptions": "Subscriptions",
+    "/personal/goals": "Goals",
+    settingsPersonal: "Profile",
+    admin: "Admin",
+  },
+  myAccount: "My Account",
+  myCompany: "My Business",
+  personalFinance: "Personal Finance",
+  account: "Account",
+  profile: "Profile",
+  logout: "Log out",
+  loading: "Loading",
+  maintenance: {
+    title: "Under maintenance",
+    text: "We're making improvements. We'll be back soon.",
+    later: "Please try again later.",
+  },
+  trial: {
+    banner: (days: number) => `Free trial: ${days === 1 ? "1 day" : `${days} days`} of full access left.`,
+    choosePlan: "Choose a plan",
+    settingsTitle: (days: number) => `You're on your free trial: ${days === 1 ? "1 day" : `${days} days`} left.`,
+    settingsText: (date: string) => `You have full access until ${date}. Choose a plan anytime to continue without interruption.`,
+  },
+  paywall: {
+    title: "Unlock full access",
+    text: "Subscribe to access this page and every feature.",
+    trialEndedTitle: "Your free trial has ended",
+    trialEndedText: "Choose a plan to keep using Ai Aethel. Your data is still saved.",
+  },
+};
+
+export const appCopy: Record<Lang, AppCopy> = { es, en };

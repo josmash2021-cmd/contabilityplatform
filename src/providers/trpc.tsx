@@ -4,6 +4,7 @@ import { httpBatchLink, TRPCClientError } from "@trpc/client";
 import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "../../api/router";
+import { getLang } from "@/i18n/lang";
 
 // The session token lasts 30 days, but the app decides "logged in" from localStorage.
 // When the token expires every request fails with UNAUTHORIZED and pages showed empty
@@ -41,11 +42,11 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
           url: "/api/trpc",
           transformer: superjson,
           headers() {
+            // x-lang lets the server answer in the user's language (es/en).
+            const headers: Record<string, string> = { "x-lang": getLang() };
             const token = localStorage.getItem("auth_token");
-            if (token) {
-              return { "x-auth-token": token };
-            }
-            return {};
+            if (token) headers["x-auth-token"] = token;
+            return headers;
           },
         }),
       ],

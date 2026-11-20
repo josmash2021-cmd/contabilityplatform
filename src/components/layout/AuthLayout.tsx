@@ -3,32 +3,15 @@ import { ArrowLeft, Check } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { MiniInsightCard } from "@/components/marketing/Previews";
 import { TRIAL_DAYS } from "@/components/marketing/content";
-
-const copy: Record<string, { title: string; text: string }> = {
-  "/register": {
-    title: "Empieza a ordenar tus finanzas hoy",
-    text: "Crea tu cuenta en minutos y prueba todas las funciones durante una semana, sin costo.",
-  },
-  "/forgot-password": {
-    title: "Recupera el acceso a tu cuenta",
-    text: "Verifica tu identidad y elige una contraseña nueva en un par de pasos.",
-  },
-};
-const defaultCopy = {
-  title: "Tus finanzas, claras y al día",
-  text: "Conecta tu banco, organiza tus ingresos y gastos, y recibe reportes listos para tomar decisiones.",
-};
-
-const benefits = [
-  `${TRIAL_DAYS} días gratis, sin tarjeta de crédito`,
-  "Conexión bancaria segura con Plaid",
-  "Reportes que se actualizan solos",
-];
+import { useCopy } from "@/i18n/useI18n";
+import { authCopy } from "@/i18n/copy/auth";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 /** Split layout for /login, /register and /forgot-password. */
 export default function AuthLayout() {
   const { pathname } = useLocation();
-  const c = copy[pathname] ?? defaultCopy;
+  const { layout } = useCopy(authCopy);
+  const c = layout.titles[pathname] ?? layout.defaultTitle;
 
   return (
     <div className="font-brand min-h-screen bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
@@ -49,7 +32,7 @@ export default function AuthLayout() {
           <h2 className="text-4xl font-bold leading-[1.1] tracking-tight text-white xl:text-[2.6rem]">{c.title}</h2>
           <p className="mt-5 text-lg leading-relaxed text-slate-400">{c.text}</p>
           <ul className="mt-8 space-y-3">
-            {benefits.map((b) => (
+            {layout.benefits(TRIAL_DAYS).map((b) => (
               <li key={b} className="flex items-center gap-3 text-[15px] text-slate-300">
                 <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-500/15"><Check className="h-3.5 w-3.5 text-emerald-400" /></span>
                 {b}
@@ -66,17 +49,21 @@ export default function AuthLayout() {
 
       {/* Form side */}
       <div className="flex min-h-screen flex-col">
-        <div className="flex items-center justify-between px-5 py-5 sm:px-10">
+        <div className="flex items-center justify-between gap-3 px-5 py-5 sm:px-10">
           <Link to="/" className="inline-flex items-center gap-2 lg:hidden">
             <Logo className="h-8 w-8" />
             <span className="text-[15px] font-semibold text-slate-900">Ai Aethel</span>
           </Link>
-          <Link
-            to="/"
-            className="ml-auto inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
-          >
-            <ArrowLeft className="h-4 w-4" /> Volver al inicio
-          </Link>
+          <div className="ml-auto flex items-center gap-2">
+            <LanguageSwitcher />
+            <Link
+              to="/"
+              aria-label={layout.back}
+              className="inline-flex h-10 items-center gap-1.5 rounded-lg px-3 text-sm font-medium text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900"
+            >
+              <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">{layout.back}</span>
+            </Link>
+          </div>
         </div>
         <main className="flex flex-1 items-start justify-center px-5 pb-14 pt-4 sm:items-center sm:px-10 sm:pt-0">
           <div key={pathname} className="w-full max-w-[420px] animate-in fade-in slide-in-from-bottom-3 duration-500">

@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate, useLocation } from "react-router";
 import { trpc } from "@/providers/trpc";
+import { useCopy } from "@/i18n/useI18n";
+import { appCopy } from "@/i18n/copy/app";
 import { useAuth } from "@/hooks/useAuth";
 import { Crown, Landmark, CheckCircle, CalendarDays, Zap, X } from "lucide-react";
 
@@ -417,6 +419,7 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
 
 // ── Compact overlay for page blocking ──
 function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean }) {
+  const { paywall } = useCopy(appCopy);
   const navigate = useNavigate();
   const { user } = useAuth();
   const userMode = user?.modePreference || "business";
@@ -458,12 +461,10 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
                 <Crown className="w-6 h-6 text-yellow-500" />
               </div>
               <h2 className="text-xl font-semibold text-white">
-                {trialEnded ? "Tu prueba gratis terminó" : "Desbloquea el acceso completo"}
+                {trialEnded ? paywall.trialEndedTitle : paywall.title}
               </h2>
               <p className="text-sm text-neutral-300">
-                {trialEnded
-                  ? "Elige un plan para seguir usando Ai Aethel. Tus datos siguen guardados."
-                  : "Suscribete para acceder a esta pagina y todas las funciones."}
+                {trialEnded ? paywall.trialEndedText : paywall.text}
               </p>
             </div>
 

@@ -10,6 +10,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Logo } from "@/components/Logo";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
+import { useCopy } from "@/i18n/useI18n";
+import { appCopy } from "@/i18n/copy/app";
 import {
   LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
@@ -19,6 +21,7 @@ import {
 
 /** Shown at the top of the app while the user is on the free trial. */
 function TrialBanner() {
+  const t = useCopy(appCopy);
   const { isAdmin } = useAuth();
   const { data: status } = trpc.subscription.status.useQuery(undefined, {
     enabled: !isAdmin,
@@ -31,9 +34,9 @@ function TrialBanner() {
     <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-900 sm:text-sm">
       <span className="inline-flex items-center gap-1.5">
         <Gift className="h-4 w-4 text-emerald-600" />
-        Prueba gratis: te {days === 1 ? "queda 1 día" : `quedan ${days} días`} con acceso completo.
+        {t.trial.banner(days)}
       </span>
-      <Link to="/settings" className="font-semibold underline-offset-2 hover:underline">Elegir un plan</Link>
+      <Link to="/settings" className="font-semibold underline-offset-2 hover:underline">{t.trial.choosePlan}</Link>
     </div>
   );
 }
@@ -62,6 +65,7 @@ export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
+  const t = useCopy(appCopy);
   const userMode = user?.modePreference || "business";
   useAutoRepair(); // Auto-repair accounting on login (silent)
   const { data: settings } = trpc.settings.get.useQuery(undefined, {
@@ -85,9 +89,9 @@ export function AppLayout() {
   }, [user, userMode, location.pathname, navigate]);
 
   const navItems = userMode === "personal" ? personalNav : businessNav;
-  const companyName = userMode === "personal" ? (user?.name || "Mi Cuenta") : (settings?.companyName || "Mi Empresa");
+  const companyName = userMode === "personal" ? (user?.name || t.myAccount) : (settings?.companyName || t.myCompany);
   const userInitial = useMemo(() => (user?.name || "C").charAt(0).toUpperCase(), [user?.name]);
-  const displayName = useMemo(() => user?.name || "Mi Cuenta", [user?.name]);
+  const displayName = user?.name || t.myAccount;
 
   // ── Maintenance mode check ──
   const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, {
@@ -103,7 +107,7 @@ export function AppLayout() {
           <Logo className="w-7 h-7 shrink-0" />
           <div className="min-w-0">
             <h1 className="text-xs font-semibold text-black tracking-tight truncate">{companyName}</h1>
-            <p className="text-[9px] text-neutral-400 truncate">{userMode === "personal" ? "Finanzas Personales" : "Ai Aethel Accountant"}</p>
+            <p className="text-[9px] text-neutral-400 truncate">{userMode === "personal" ? t.personalFinance : "Ai Aethel Accountant"}</p>
           </div>
         </div>
       </div>
@@ -115,7 +119,7 @@ export function AppLayout() {
             <button key={item.path} onClick={() => { navigate(item.path); onNavigate?.(); }}
               className={cn("flex items-center gap-3 w-full px-3 py-2 rounded-md transition-colors duration-150", active ? "bg-neutral-100 text-black font-medium" : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50")}>
               <Icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2 : 1.5} />
-              <span className="text-sm">{item.label}</span>
+              <span className="text-sm">{item.path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : (t.nav[item.path] ?? item.label)}</span>
             </button>
           );
         })}
@@ -130,7 +134,7 @@ export function AppLayout() {
             )}
           >
             <Shield className="w-4 h-4 shrink-0" strokeWidth={isActive("/admin") ? 2 : 1.5} />
-            <span className="text-sm">Admin</span>
+            <span className="text-sm">{t.nav.admin}</span>
           </button>
         )}
       </nav>
@@ -140,13 +144,13 @@ export function AppLayout() {
             <AvatarFallback className="bg-neutral-200 text-neutral-600 text-xs font-medium">{userInitial}</AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-neutral-400">{userMode === "personal" ? "Perfil" : "Cuenta"}</p>
+            <p className="text-[10px] text-neutral-400">{userMode === "personal" ? t.profile : t.account}</p>
             <p className="text-xs text-black truncate">{displayName}</p>
             {userMode === "personal" && user?.email && (
               <p className="text-[10px] text-neutral-400 truncate">{user.email}</p>
             )}
           </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150" onClick={logout} title="Cerrar sesion">
+          <Button variant="ghost" size="icon" className="h-7 w-7 text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150" onClick={logout} title={t.logout} aria-label={t.logout}>
             <LogOut className="w-3.5 h-3.5" />
           </Button>
         </div>
@@ -160,11 +164,11 @@ export function AppLayout() {
       {isMaintenance && !isOwner && (
         <div className="fixed inset-0 z-[100] bg-neutral-900 flex flex-col items-center justify-center p-6">
           <Construction className="w-16 h-16 text-amber-400 mb-4 animate-pulse" />
-          <h2 className="text-xl font-semibold text-white mb-2 text-center">Bajo Mantenimiento</h2>
+          <h2 className="text-xl font-semibold text-white mb-2 text-center">{t.maintenance.title}</h2>
           <p className="text-sm text-neutral-400 text-center max-w-sm">
-            {maintenance?.message || "Estamos realizando mejoras. Volveremos pronto."}
+            {maintenance?.message || t.maintenance.text}
           </p>
-          <p className="text-xs text-neutral-600 mt-4">Por favor intenta mas tarde.</p>
+          <p className="text-xs text-neutral-600 mt-4">{t.maintenance.later}</p>
         </div>
       )}
 

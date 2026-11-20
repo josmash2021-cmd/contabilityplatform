@@ -8,6 +8,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { toast } from "sonner";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { appCopy } from "@/i18n/copy/app";
+import { intlLocale } from "@/i18n/lang";
 import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown, RefreshCw } from "lucide-react";
 
 // ── Shimmer animation styles for subscription titles ──
@@ -125,6 +128,8 @@ const PERSONAL_ANNUAL = {
 };
 
 export default function SubscriptionSettings() {
+  const appT = useCopy(appCopy);
+  const { lang } = useLang();
   const { user } = useAuth();
   const isPersonal = user?.modePreference === "personal";
 
@@ -520,11 +525,9 @@ export default function SubscriptionSettings() {
       <div className="space-y-6">
         {freeTrial && (
           <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
-            <p className="text-sm text-emerald-800 font-medium">
-              Estás en tu prueba gratis: te {freeTrial.daysLeft === 1 ? "queda 1 día" : `quedan ${freeTrial.daysLeft} días`}.
-            </p>
+            <p className="text-sm text-emerald-800 font-medium">{appT.trial.settingsTitle(freeTrial.daysLeft)}</p>
             <p className="text-xs text-emerald-700">
-              Tienes acceso completo hasta el {new Date(freeTrial.endsAt).toLocaleDateString("es", { day: "numeric", month: "long" })}. Elige un plan cuando quieras para seguir sin interrupciones.
+              {appT.trial.settingsText(new Date(freeTrial.endsAt).toLocaleDateString(intlLocale(lang), { day: "numeric", month: "long" }))}
             </p>
           </div>
         )}

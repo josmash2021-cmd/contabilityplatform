@@ -19,7 +19,7 @@ const app = new Hono<{ Bindings: HttpBindings }>();
 // CORS - allow frontend to send x-auth-token header
 app.use(cors({
   origin: env.isProduction ? "https://aethelaccountingplatform.com" : "http://localhost:5173",
-  allowHeaders: ["Content-Type", "Authorization", "x-auth-token"],
+  allowHeaders: ["Content-Type", "Authorization", "x-auth-token", "x-lang"],
   allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   credentials: true,
 }));

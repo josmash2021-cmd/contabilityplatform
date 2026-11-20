@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router";
 import { Loader2 } from "lucide-react";
+import { getLang } from "@/i18n/lang";
 import { useAuth } from "@/hooks/useAuth";
 import { ModeProvider } from "@/contexts/ModeContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -62,7 +63,7 @@ const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 
 function PageLoader() {
   return (
-    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="Cargando">
+    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label={getLang() === "es" ? "Cargando" : "Loading"}>
       <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
     </div>
   );

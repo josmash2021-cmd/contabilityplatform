@@ -13,11 +13,12 @@ let appRouter: any;
 
 const regularUser = { id: 999_001, email: "user@test.local", role: "user", name: "Test" };
 
-function makeCaller(user?: object): Caller {
+function makeCaller(user?: object, lang: "es" | "en" = "es"): Caller {
   return appRouter.createCaller({
     req: new Request("http://localhost/api/trpc"),
     resHeaders: new Headers(),
     user,
+    lang,
   });
 }
 
@@ -87,6 +88,16 @@ describe("password reset code can't be brute-forced", () => {
     expect(blocked).toHaveLength(25);
   }, 60_000);
 
+  it("answers in English when the client asks for it", async () => {
+    const caller = makeCaller(undefined, "en");
+    const email = `victim-en-${Date.now()}@test.local`;
+    const results = await Promise.allSettled(
+      Array.from({ length: 6 }, (_, i) => caller.auth.resetPassword({ email, code: String(300000 + i), newPassword: "Hacked123!" })),
+    );
+    const blocked = results.find((r) => r.status === "fulfilled") as PromiseFulfilledResult<any> | undefined;
+    expect(blocked?.value?.error).toBe("Too many attempts. Request a new code.");
+  }, 60_000);
+
   it("verifyCode shares the same attempt budget", async () => {
     const caller = makeCaller();
     const email = `victim2-${Date.now()}@test.local`;
@@ -100,7 +111,7 @@ describe("password reset code can't be brute-forced", () => {
 describe("logout", () => {
   it("clears the session cookie even without a valid session", async () => {
     const resHeaders = new Headers();
-    const caller = appRouter.createCaller({ req: new Request("http://localhost/"), resHeaders, user: undefined });
+    const caller = appRouter.createCaller({ req: new Request("http://localhost/"), resHeaders, user: undefined, lang: "es" });
     await expect(caller.auth.logout()).resolves.toEqual({ success: true });
     expect(resHeaders.get("set-cookie")).toMatch(/local_auth_token=;.*Max-Age=0/);
   });

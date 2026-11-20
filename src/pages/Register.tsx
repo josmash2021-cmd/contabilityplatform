@@ -9,8 +9,11 @@ import {
   AuthHeading, Field, ModeToggle, PasswordInput, SubmitButton, TextInput, type AccountMode,
 } from "@/components/auth/AuthUI";
 import { TRIAL_DAYS } from "@/components/marketing/content";
+import { useCopy } from "@/i18n/useI18n";
+import { authCopy } from "@/i18n/copy/auth";
 
 export default function Register() {
+  const { register: t } = useCopy(authCopy);
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [name, setName] = useState("");
@@ -24,15 +27,13 @@ export default function Register() {
 
   // Real-time validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const passwordReqs = {
-    length: password.length >= 8,
-    uppercase: /[A-Z]/.test(password),
-    number: /[0-9]/.test(password),
-    special: /[!@#$%^&*(),.?":{}|<>]/.test(password),
-  };
-  const isPasswordValid = mode === "business"
-    ? passwordReqs.length && passwordReqs.uppercase && passwordReqs.number && passwordReqs.special
-    : password.length >= 6;
+  const passwordReqs = [
+    password.length >= 8,
+    /[A-Z]/.test(password),
+    /[0-9]/.test(password),
+    /[!@#$%^&*(),.?":{}|<>]/.test(password),
+  ];
+  const isPasswordValid = mode === "business" ? passwordReqs.every(Boolean) : password.length >= 6;
   const confirmMismatch = confirmPassword.length > 0 && confirmPassword !== password;
 
   const personalRegisterMut = trpc.auth.register.useMutation({
@@ -42,10 +43,10 @@ export default function Register() {
           localStorage.setItem("auth_token", data.token);
         }
         localStorage.setItem("auth_user", JSON.stringify(data.user));
-        toast.success("Cuenta creada. Tu prueba gratis ya empezó.");
+        toast.success(t.created);
         window.location.href = "/personal";
       } else {
-        toast.error(data.error || "Error al crear la cuenta");
+        toast.error(data.error || t.error);
       }
     },
     onError: (err) => {
@@ -61,19 +62,19 @@ export default function Register() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !confirmPassword) {
-      toast.error("Completa todos los campos");
+      toast.error(t.fillAll);
       return;
     }
     if (!isEmailValid) {
-      toast.error("Ingresa un correo electrónico válido");
+      toast.error(t.invalidEmail);
       return;
     }
     if (!isPasswordValid) {
-      toast.error(mode === "business" ? "La contraseña no cumple con todos los requisitos" : "La contraseña debe tener al menos 6 caracteres");
+      toast.error(mode === "business" ? t.pwBusiness : t.pwPersonal);
       return;
     }
     if (password !== confirmPassword) {
-      toast.error("Las contraseñas no coinciden");
+      toast.error(t.mismatch);
       return;
     }
 
@@ -88,91 +89,79 @@ export default function Register() {
     personalRegisterMut.mutate({ email, password, name, mode });
   };
 
-  const reqs = [
-    { label: "8 o más caracteres", met: passwordReqs.length },
-    { label: "Una mayúscula", met: passwordReqs.uppercase },
-    { label: "Un número", met: passwordReqs.number },
-    { label: "Un carácter especial", met: passwordReqs.special },
-  ];
-
   return (
     <div>
       <AuthHeading
-        eyebrow={mode === "business" ? "Paso 1 de 2" : undefined}
-        title="Crea tu cuenta"
-        subtitle={mode === "business" ? "Después te pediremos algunos datos de tu negocio." : "Toma menos de un minuto."}
+        eyebrow={mode === "business" ? t.step : undefined}
+        title={t.title}
+        subtitle={mode === "business" ? t.subtitleBusiness : t.subtitlePersonal}
       />
 
       <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
         <Gift className="h-5 w-5 shrink-0 text-emerald-600" />
         <p className="text-sm text-emerald-900">
-          <span className="font-semibold">{TRIAL_DAYS} días gratis</span> con acceso completo. Sin tarjeta de crédito.
+          <span className="font-semibold">{t.trialBold(TRIAL_DAYS)}</span>{t.trialRest}
         </p>
       </div>
 
       <div className="mt-6">
-        <ModeToggle value={mode} onChange={setMode} label="Tipo de cuenta" />
+        <ModeToggle value={mode} onChange={setMode} />
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
-        <Field label={mode === "business" ? "Nombre y apellido" : "Nombre"} htmlFor={ids.name}>
+        <Field label={mode === "business" ? t.nameBusiness : t.namePersonal} htmlFor={ids.name}>
           <TextInput
             id={ids.name}
             autoComplete="name"
-            placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
+            placeholder={mode === "business" ? t.namePhBusiness : t.namePhPersonal}
             value={name}
             onChange={(e) => setName(e.target.value)}
           />
         </Field>
 
-        <Field
-          label="Correo electrónico"
-          htmlFor={ids.email}
-          error={email.length > 0 && !isEmailValid ? "Revisa el formato del correo" : undefined}
-        >
+        <Field label={t.email} htmlFor={ids.email} error={email.length > 0 && !isEmailValid ? t.emailInvalid : undefined}>
           <TextInput
             id={ids.email}
             type="email"
             autoComplete="email"
             inputMode="email"
-            placeholder="tu@correo.com"
+            placeholder={t.emailPh}
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             aria-invalid={email.length > 0 && !isEmailValid}
           />
         </Field>
 
-        <Field
-          label="Contraseña"
-          htmlFor={ids.password}
-          hint={mode === "personal" ? "Mínimo 6 caracteres." : undefined}
-        >
+        <Field label={t.password} htmlFor={ids.password} hint={mode === "personal" ? t.passwordHintPersonal : undefined}>
           <PasswordInput
             id={ids.password}
             autoComplete="new-password"
-            placeholder={mode === "business" ? "Crea una contraseña segura" : "Mínimo 6 caracteres"}
+            placeholder={mode === "business" ? t.passwordPhBusiness : t.passwordPhPersonal}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
           {mode === "business" && (
-            <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5" aria-label="Requisitos de la contraseña">
-              {reqs.map((r) => (
-                <li key={r.label} className={`flex items-center gap-1.5 text-[13px] transition-colors ${r.met ? "text-emerald-700" : "text-slate-500"}`}>
-                  <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${r.met ? "bg-emerald-500 text-white" : "border border-slate-300"}`}>
-                    {r.met && <Check className="h-3 w-3" />}
-                  </span>
-                  {r.label}
-                </li>
-              ))}
+            <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5" aria-label={t.reqsLabel}>
+              {t.reqs.map((label, i) => {
+                const met = passwordReqs[i];
+                return (
+                  <li key={label} className={`flex items-center gap-1.5 text-[13px] transition-colors ${met ? "text-emerald-700" : "text-slate-500"}`}>
+                    <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${met ? "bg-emerald-500 text-white" : "border border-slate-300"}`}>
+                      {met && <Check className="h-3 w-3" />}
+                    </span>
+                    {label}
+                  </li>
+                );
+              })}
             </ul>
           )}
         </Field>
 
-        <Field label="Confirmar contraseña" htmlFor={ids.confirm} error={confirmMismatch ? "Las contraseñas no coinciden" : undefined}>
+        <Field label={t.confirm} htmlFor={ids.confirm} error={confirmMismatch ? t.mismatch : undefined}>
           <PasswordInput
             id={ids.confirm}
             autoComplete="new-password"
-            placeholder="Repite tu contraseña"
+            placeholder={t.confirmPh}
             value={confirmPassword}
             onChange={(e) => setConfirmPassword(e.target.value)}
             aria-invalid={confirmMismatch}
@@ -180,18 +169,18 @@ export default function Register() {
         </Field>
 
         <SubmitButton loading={personalRegisterMut.isPending}>
-          {mode === "business" ? "Continuar" : "Crear cuenta gratis"}
+          {mode === "business" ? t.submitBusiness : t.submitPersonal}
         </SubmitButton>
 
         <p className="text-center text-[13px] text-slate-500">
-          Al crear tu cuenta aceptas nuestra{" "}
-          <Link to="/privacy" className="font-medium text-slate-700 underline-offset-2 hover:underline">Política de privacidad</Link>.
+          {t.privacyPrefix}{" "}
+          <Link to="/privacy" className="font-medium text-slate-700 underline-offset-2 hover:underline">{t.privacy}</Link>.
         </p>
       </form>
 
       <p className="mt-8 text-center text-sm text-slate-600">
-        ¿Ya tienes cuenta?{" "}
-        <Link to="/login" className="font-semibold text-slate-900 hover:underline">Inicia sesión</Link>
+        {t.haveAccount}{" "}
+        <Link to="/login" className="font-semibold text-slate-900 hover:underline">{t.login}</Link>
       </p>
     </div>
   );

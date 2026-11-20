@@ -7,6 +7,7 @@ import bcrypt from "bcryptjs";
 import { signLocalToken, LOCAL_AUTH_COOKIE } from "./local-auth";
 import { randomInt } from "node:crypto";
 import { RateLimiter, normalizeEmail } from "./lib/security";
+import { msg } from "./lib/i18n";
 
 // ── Rate limits (per email) ──
 // The reset code is only 6 digits: without an attempt limit it can be brute-forced
@@ -15,7 +16,6 @@ const loginLimiter = new RateLimiter(10, 15 * 60 * 1000);       // 10 logins / 1
 const forgotLimiter = new RateLimiter(3, 60 * 60 * 1000);       // 3 codes / hour
 const resetAttemptLimiter = new RateLimiter(5, 30 * 60 * 1000); // 5 code guesses per issued code
 
-const TOO_MANY_RESET_ATTEMPTS = "Demasiados intentos. Solicita un codigo nuevo.";
 
 /** Burns every outstanding reset code for this email (after too many wrong guesses). */
 async function invalidateResetCodes(email: string) {
@@ -47,7 +47,7 @@ export const authRouter = createRouter({
       const db = getDb();
       const existing = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (existing.length > 0) {
-        return { success: false, error: "Ya existe una cuenta con este email" };
+        return { success: false, error: msg(ctx.lang, "emailExists") };
       }
       const hashedPassword = await bcrypt.hash(input.password, 10);
       const isPersonal = input.mode === "personal";
@@ -81,26 +81,26 @@ export const authRouter = createRouter({
       // Checked before any await so a batch of parallel requests can't bypass it.
       const loginKey = normalizeEmail(input.email);
       if (!loginLimiter.consume(loginKey)) {
-        return { success: false, error: "Demasiados intentos de login. Intenta en 15 minutos." };
+        return { success: false, error: msg(ctx.lang, "tooManyLogins") };
       }
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (rows.length === 0) {
-        return { success: false, error: "Email o contrasena incorrectos" };
+        return { success: false, error: msg(ctx.lang, "badCredentials") };
       }
       const user = rows[0];
       if (!user.password) {
-        return { success: false, error: "Esta cuenta usa login social" };
+        return { success: false, error: msg(ctx.lang, "socialAccount") };
       }
       const valid = await bcrypt.compare(input.password, user.password);
       if (!valid) {
-        return { success: false, error: "Email o contrasena incorrectos" };
+        return { success: false, error: msg(ctx.lang, "badCredentials") };
       }
 
       // Validate mode: users can only login with their registered mode
       const userMode = user.modePreference || "business";
       if (input.mode === "personal" && userMode !== "personal") {
-        return { success: false, error: "Esta cuenta no tiene acceso al modo Personal. Registrate como Personal para acceder." };
+        return { success: false, error: msg(ctx.lang, "noPersonalMode") };
       }
 
       // AUTO-PROMOTE: Jhon Martinez is always admin
@@ -136,14 +136,14 @@ export const authRouter = createRouter({
     .input(z.object({
       email: z.string().email("Email invalido"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const key = normalizeEmail(input.email);
       if (!forgotLimiter.consume(key)) {
-        return { success: false as const, error: "Demasiados intentos. Intenta en una hora." };
+        return { success: false as const, error: msg(ctx.lang, "tooManyCodes") };
       }
       // Same answer whether or not the account exists, so this can't be used to
       // discover which emails are registered.
-      const genericOk = { success: true as const, message: "Si el correo esta registrado, recibiras un codigo" };
+      const genericOk = { success: true as const, message: msg(ctx.lang, "codeSentIfExists") };
       const db = getDb();
       const rows = await db.select().from(users).where(eq(users.email, input.email)).limit(1);
       if (rows.length === 0) {
@@ -174,11 +174,11 @@ export const authRouter = createRouter({
       email: z.string().email(),
       code: z.string().length(6, "Codigo de 6 digitos"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       // Checked before any await so a batch of parallel guesses can't bypass it.
       if (!resetAttemptLimiter.consume(normalizeEmail(input.email))) {
         await invalidateResetCodes(input.email);
-        return { success: false, error: TOO_MANY_RESET_ATTEMPTS };
+        return { success: false, error: msg(ctx.lang, "tooManyGuesses") };
       }
       const db = getDb();
       const now = new Date();
@@ -193,9 +193,9 @@ export const authRouter = createRouter({
         )
         .limit(1);
       if (rows.length === 0) {
-        return { success: false, error: "Codigo invalido o expirado" };
+        return { success: false, error: msg(ctx.lang, "invalidCode") };
       }
-      return { success: true, message: "Codigo verificado" };
+      return { success: true, message: msg(ctx.lang, "codeVerified") };
     }),
 
   // ── Reset Password ──
@@ -205,12 +205,12 @@ export const authRouter = createRouter({
       code: z.string().length(6),
       newPassword: z.string().min(6, "Minimo 6 caracteres"),
     }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const key = normalizeEmail(input.email);
       // Shares the attempt budget with verifyCode; checked before any await.
       if (!resetAttemptLimiter.consume(key)) {
         await invalidateResetCodes(input.email);
-        return { success: false, error: TOO_MANY_RESET_ATTEMPTS };
+        return { success: false, error: msg(ctx.lang, "tooManyGuesses") };
       }
       const db = getDb();
       const now = new Date();
@@ -226,7 +226,7 @@ export const authRouter = createRouter({
         )
         .limit(1);
       if (codeRows.length === 0) {
-        return { success: false, error: "Codigo invalido o expirado" };
+        return { success: false, error: msg(ctx.lang, "invalidCode") };
       }
       // Hash new password
       const hashedPassword = await bcrypt.hash(input.newPassword, 10);
@@ -236,7 +236,7 @@ export const authRouter = createRouter({
       await db.update(passwordResetCodes).set({ used: true }).where(eq(passwordResetCodes.id, codeRows[0].id));
       resetAttemptLimiter.reset(key);
       loginLimiter.reset(key);
-      return { success: true, message: "Contrasena actualizada" };
+      return { success: true, message: msg(ctx.lang, "passwordUpdated") };
     }),
 
   // ── Me (get current user) ──

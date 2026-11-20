@@ -7,6 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Logo } from "@/components/Logo";
 import { Loader2, Building2, MapPin, Phone, Mail, Home, Briefcase, Store, Building, X } from "lucide-react";
 import { toast } from "sonner";
+import { useCopy } from "@/i18n/useI18n";
+import { authCopy } from "@/i18n/copy/auth";
+import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 declare global {
   interface Window {
@@ -22,6 +25,7 @@ const ADDRESS_TYPES = [
 ];
 
 export default function Onboarding() {
+  const { onboarding: t } = useCopy(authCopy);
   const navigate = useNavigate();
   const [pendingRegistration, setPendingRegistration] = useState<{ email: string; password: string; name: string; mode: "business" | "personal" } | null>(null);
   const [companyName, setCompanyName] = useState("");
@@ -95,7 +99,7 @@ export default function Onboarding() {
   }, [autocompleteLoaded]);
 
   const updateSettings = trpc.settings.update.useMutation({
-    onSuccess: () => { toast.success("Negocio configurado"); sessionStorage.removeItem("register_pending"); window.location.href = "/"; },
+    onSuccess: () => { toast.success(t.done); sessionStorage.removeItem("register_pending"); window.location.href = "/"; },
     onError: (err) => toast.error(err.message),
   });
 
@@ -108,7 +112,7 @@ export default function Onboarding() {
         localStorage.setItem("auth_user", JSON.stringify(data.user));
         updateSettings.mutate({ companyName, address, addressType, city, state, zipCode, phone, email });
       } else {
-        toast.error(data.error || "Error al crear cuenta");
+        toast.error(data.error || t.createError);
       }
     },
     onError: (err) => toast.error(err.message),
@@ -116,18 +120,18 @@ export default function Onboarding() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!companyName.trim()) { toast.error("Nombre del negocio requerido"); return; }
-    if (!phone.trim()) { toast.error("Telefono requerido"); return; }
-    if (!email.trim()) { toast.error("Email requerido"); return; }
-    if (!address.trim()) { toast.error("Direccion requerida"); return; }
-    if (!city.trim() || !state.trim() || !zipCode.trim()) { toast.error("Completa ciudad, estado y ZIP"); return; }
-    if (!addressType) { toast.error("Selecciona tipo de ubicacion"); return; }
-    if (!pendingRegistration) { toast.error("No hay registro pendiente"); return; }
+    if (!companyName.trim()) { toast.error(t.errCompany); return; }
+    if (!phone.trim()) { toast.error(t.errPhone); return; }
+    if (!email.trim()) { toast.error(t.errEmail); return; }
+    if (!address.trim()) { toast.error(t.errAddress); return; }
+    if (!city.trim() || !state.trim() || !zipCode.trim()) { toast.error(t.errCity); return; }
+    if (!addressType) { toast.error(t.errType); return; }
+    if (!pendingRegistration) { toast.error(t.errPending); return; }
     registerMut.mutate(pendingRegistration);
   };
 
   const handleCancel = () => {
-    if (window.confirm("Estas seguro que quieres salirte? Perderas el progreso de registro")) {
+    if (window.confirm(t.cancelConfirm)) {
       sessionStorage.removeItem("register_pending");
       navigate("/login", { replace: true });
     }
@@ -137,13 +141,14 @@ export default function Onboarding() {
     <div className="font-brand relative min-h-screen bg-[#060B18] flex items-center justify-center p-4 overflow-hidden">
       <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_70%)]" />
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+      <LanguageSwitcher tone="dark" className="absolute right-4 top-4 z-10" />
       <div className="relative w-full max-w-md bg-white rounded-2xl shadow-[0_30px_80px_-20px_rgba(2,6,23,0.6)] p-6 sm:p-7 animate-in fade-in slide-in-from-bottom-3 duration-500">
         {/* Cancel button */}
         <button
           type="button"
           onClick={handleCancel}
           className="absolute top-3 right-3 p-1.5 rounded-full text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors"
-          aria-label="Cancelar registro"
+          aria-label={t.cancel}
         >
           <X className="w-5 h-5" />
         </button>
@@ -151,23 +156,23 @@ export default function Onboarding() {
         {/* Header */}
         <div className="text-center mb-5">
           <Logo className="w-9 h-9 mx-auto mb-3" />
-          <p className="text-xs font-semibold text-blue-600">Paso 2 de 2</p>
-          <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Datos de tu negocio</h1>
-          <p className="mt-1 text-sm text-slate-500">Con esto configuramos tu cuenta. Tu prueba gratis empieza al terminar.</p>
+          <p className="text-xs font-semibold text-blue-600">{t.step}</p>
+          <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+          <p className="mt-1 text-sm text-slate-500">{t.subtitle}</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">
           {/* Row 1: Company + Phone */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <Label className="text-[10px] text-neutral-500">Negocio *</Label>
+              <Label className="text-[10px] text-neutral-500">{t.company}</Label>
               <div className="relative">
                 <Building2 className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                <Input placeholder="Nombre" value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+                <Input placeholder={t.companyPh} value={companyName} onChange={(e) => setCompanyName(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
               </div>
             </div>
             <div>
-              <Label className="text-[10px] text-neutral-500">Telefono *</Label>
+              <Label className="text-[10px] text-neutral-500">{t.phone}</Label>
               <div className="relative">
                 <Phone className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
                 <Input placeholder="(555) 000-0000" value={phone} onChange={(e) => setPhone(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" type="tel" />
@@ -177,50 +182,50 @@ export default function Onboarding() {
 
           {/* Row 2: Email */}
           <div>
-            <Label className="text-[10px] text-neutral-500">Email del negocio *</Label>
+            <Label className="text-[10px] text-neutral-500">{t.email}</Label>
             <div className="relative">
               <Mail className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-              <Input type="email" placeholder="negocio@email.com" value={email} onChange={(e) => setEmail(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+              <Input type="email" placeholder={t.emailPh} value={email} onChange={(e) => setEmail(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
             </div>
           </div>
 
           {/* Row 3: Address */}
           <div>
-            <Label className="text-[10px] text-neutral-500">Direccion *</Label>
+            <Label className="text-[10px] text-neutral-500">{t.address}</Label>
             <div className="relative">
               <MapPin className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400 z-10" />
-              <Input ref={addressRef} placeholder="Escribe tu direccion..." value={address} onChange={(e) => setAddress(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
+              <Input ref={addressRef} placeholder={t.addressPh} value={address} onChange={(e) => setAddress(e.target.value)} className="pl-7 h-9 text-xs rounded-lg border-neutral-200" />
             </div>
           </div>
 
           {/* Row 4: City / State / ZIP */}
           <div className="grid grid-cols-3 gap-2">
             <div>
-              <Label className="text-[10px] text-neutral-500">Ciudad *</Label>
-              <Input placeholder="Ciudad" value={city} onChange={(e) => setCity(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" />
+              <Label className="text-[10px] text-neutral-500">{t.city}</Label>
+              <Input placeholder={t.cityPh} value={city} onChange={(e) => setCity(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" />
             </div>
             <div>
-              <Label className="text-[10px] text-neutral-500">Estado *</Label>
+              <Label className="text-[10px] text-neutral-500">{t.state}</Label>
               <Input placeholder="CA" value={state} onChange={(e) => setState(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" maxLength={2} />
             </div>
             <div>
-              <Label className="text-[10px] text-neutral-500">ZIP *</Label>
+              <Label className="text-[10px] text-neutral-500">{t.zip}</Label>
               <Input placeholder="12345" value={zipCode} onChange={(e) => setZipCode(e.target.value)} className="h-9 text-xs rounded-lg border-neutral-200" maxLength={10} />
             </div>
           </div>
 
           {/* Row 5: Address Type */}
           <div>
-            <Label className="text-[10px] text-neutral-500">Tipo *</Label>
+            <Label className="text-[10px] text-neutral-500">{t.type}</Label>
             <div className="grid grid-cols-4 gap-2 mt-0.5">
-              {ADDRESS_TYPES.map((t) => {
-                const Icon = t.icon;
-                const sel = addressType === t.value;
+              {ADDRESS_TYPES.map((addrType) => {
+                const Icon = addrType.icon;
+                const sel = addressType === addrType.value;
                 return (
-                  <button key={t.value} type="button" onClick={() => setAddressType(t.value)}
+                  <button key={addrType.value} type="button" onClick={() => setAddressType(addrType.value)}
                     className={`flex flex-col items-center gap-0.5 py-2 px-1 rounded-lg border transition-all text-[10px] font-medium ${sel ? "border-black bg-black text-white" : "border-neutral-200 text-neutral-600 hover:border-neutral-400"}`}>
                     <Icon className="w-4 h-4" />
-                    {t.value}
+                    {t.types[addrType.value] ?? addrType.value}
                   </button>
                 );
               })}
@@ -231,7 +236,7 @@ export default function Onboarding() {
           <Button type="submit" disabled={registerMut.isPending || updateSettings.isPending}
             className="w-full bg-black text-white hover:bg-neutral-800 rounded-lg h-10 text-sm mt-1">
             {registerMut.isPending || updateSettings.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-            Continuar
+            {t.submit}
           </Button>
         </form>
       </div>
