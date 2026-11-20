@@ -4,6 +4,8 @@ import { trpc } from "@/providers/trpc";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Loader2, Landmark, ShieldCheck, ArrowRight, Wallet, CheckCircle } from "lucide-react";
+import { useCopy } from "@/i18n/useI18n";
+import { bankCopy } from "@/i18n/copy/bank";
 
 interface PlaidLinkOverlayProps {
   onSuccess?: () => void;
@@ -12,6 +14,7 @@ interface PlaidLinkOverlayProps {
 }
 
 export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: PlaidLinkOverlayProps) {
+  const { plaid: t } = useCopy(bankCopy);
   const [linkToken, setLinkToken] = useState<string | null>(null);
   const [step, setStep] = useState<"intro" | "connecting" | "done">("intro");
 
@@ -23,12 +26,12 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
       if (data?.linkToken) {
         setLinkToken(data.linkToken);
       } else {
-        toast.error("No se pudo iniciar la conexion con el banco");
+        toast.error(t.startError);
         setStep("intro");
       }
     },
     onError: (err) => {
-      toast.error(err.message || "Error al conectar con Plaid");
+      toast.error(err.message || t.plaidError);
       setStep("intro");
     },
   });
@@ -37,15 +40,15 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
     onSuccess: (data) => {
       if (data.success) {
         setStep("done");
-        toast.success(`Banco conectado! ${data.accountCount} cuenta(s) vinculada(s).`);
+        toast.success(t.connected(data.accountCount));
         utils.invalidate();
       } else {
-        toast.error(data.error || "Error al conectar el banco");
+        toast.error(data.error || t.connectError);
         setStep("intro");
       }
     },
     onError: (err) => {
-      toast.error(err.message || "Error al conectar el banco");
+      toast.error(err.message || t.connectError);
       setStep("intro");
     },
   });
@@ -99,8 +102,8 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
               <Landmark className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold">Conectar Banco</h2>
-              <p className="text-xs text-neutral-400">Sincroniza tus transacciones automaticamente</p>
+              <h2 className="text-lg font-semibold">{t.title}</h2>
+              <p className="text-xs text-neutral-400">{t.subtitle}</p>
             </div>
           </div>
         </div>
@@ -113,22 +116,22 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
                 <div className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg">
                   <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-black">Seguro y Encriptado</p>
-                    <p className="text-xs text-neutral-500">Tus credenciales bancarias nunca se almacenan. Usamos encriptacion de nivel bancario.</p>
+                    <p className="text-sm font-medium text-black">{t.secureTitle}</p>
+                    <p className="text-xs text-neutral-500">{t.secureText}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg">
                   <Wallet className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-black">Contabilidad Automatica</p>
-                    <p className="text-xs text-neutral-500">Tus transacciones se clasifican automaticamente y generan asientos contables.</p>
+                    <p className="text-sm font-medium text-black">{t.autoTitle}</p>
+                    <p className="text-xs text-neutral-500">{t.autoText}</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-3 p-3 bg-neutral-50 rounded-lg">
                   <ArrowRight className="w-5 h-5 text-violet-600 shrink-0 mt-0.5" />
                   <div>
-                    <p className="text-sm font-medium text-black">Sincronizacion en Tiempo Real</p>
-                    <p className="text-xs text-neutral-500">Cada transaccion se refleja instantaneamente en tu contabilidad.</p>
+                    <p className="text-sm font-medium text-black">{t.realtimeTitle}</p>
+                    <p className="text-xs text-neutral-500">{t.realtimeText}</p>
                   </div>
                 </div>
               </div>
@@ -139,9 +142,9 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
                 className="w-full bg-black hover:bg-neutral-800 text-white h-11 rounded-xl text-sm"
               >
                 {isBusy ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Cargando...</>
+                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t.loading}</>
                 ) : (
-                  <><Landmark className="w-4 h-4 mr-2" /> Conectar mi Banco</>
+                  <><Landmark className="w-4 h-4 mr-2" /> {t.connect}</>
                 )}
               </Button>
 
@@ -152,7 +155,7 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
                   disabled={isBusy}
                   className="w-full text-neutral-500 hover:text-black h-9 text-xs"
                 >
-                  Omitir por ahora
+                  {t.skip}
                 </Button>
               )}
             </div>
@@ -161,21 +164,21 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
           {step === "connecting" && (
             <div className="text-center py-8">
               <Loader2 className="w-10 h-10 animate-spin text-black mx-auto mb-4" />
-              <p className="text-sm font-medium text-black">Conectando con tu banco...</p>
-              <p className="text-xs text-neutral-500 mt-1">Esto puede tomar unos segundos</p>
+              <p className="text-sm font-medium text-black">{t.connecting}</p>
+              <p className="text-xs text-neutral-500 mt-1">{t.connectingHint}</p>
             </div>
           )}
 
           {step === "done" && (
             <div className="text-center py-8">
               <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto mb-4" />
-              <p className="text-sm font-medium text-black">¡Banco conectado!</p>
-              <p className="text-xs text-neutral-500 mt-1 mb-4">Tus transacciones se sincronizaran automaticamente</p>
+              <p className="text-sm font-medium text-black">{t.doneTitle}</p>
+              <p className="text-xs text-neutral-500 mt-1 mb-4">{t.doneText}</p>
               <Button
                 onClick={() => { utils.invalidate(); onSuccess?.(); }}
                 className="bg-black text-white hover:bg-neutral-800"
               >
-                <ArrowRight className="w-4 h-4 mr-1.5" /> Ir al dashboard
+                <ArrowRight className="w-4 h-4 mr-1.5" /> {t.goToDashboard}
               </Button>
             </div>
           )}
@@ -184,7 +187,7 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
         {/* Footer */}
         <div className="px-6 py-3 bg-neutral-50 border-t border-neutral-100">
           <p className="text-[10px] text-neutral-400 text-center">
-            Powered by Plaid · Encriptacion AES-256
+            {t.footer}
           </p>
         </div>
       </div>

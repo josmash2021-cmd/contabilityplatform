@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
+import { billingCopy } from "@/i18n/copy/billing";
 import { intlLocale } from "@/i18n/lang";
 import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown, RefreshCw } from "lucide-react";
 
@@ -41,100 +42,53 @@ const SHIMMER_CSS = `
   }
 `;
 
+// Plans: ids and prices only. Names, badges, descriptions and features live in billingCopy.subscription
 // Business plans (original)
 const BUSINESS_MONTHLY = {
   id: "monthly" as const,
-  name: "Mensual",
   price: "$80",
   originalPrice: "$120",
-  period: "/mes",
   fullPrice: 80,
-  description: "Facturado mensualmente. Cancela cuando quieras.",
-  badge: "New Plan",
-  features: [
-    "Agente de contabilidad AI personalizado",
-    "Contabilidad completa del negocio",
-    "Manejo y almacenamiento de clientes",
-    "Seguimiento de clientes integrado",
-    "Contabilidad bancaria conectada",
-    "Soporte prioritario 24/7",
-    "Pagos y registros simplificados",
-    "Finanzas organizadas automaticamente",
-  ],
 };
 
 const BUSINESS_ANNUAL = {
   id: "annual" as const,
-  name: "Anual",
   price: "$800",
-  period: "/año",
   originalPrice: "$1200",
-  savings: "Ahorras $400",
+  savings: "$400",
   fullPrice: 800,
-  description: "Facturado anualmente. Cancela cuando quieras.",
-  badge: "Mejor valor",
-  features: [
-    "Todo lo incluido en el plan Mensual",
-    "Agente de contabilidad AI ilimitado",
-    "Clientes ilimitados en tu base de datos",
-    "Hasta 3 usuarios (tu + empleados)",
-    "Reportes contables exportables (PDF / Excel)",
-    "Recordatorios automaticos a clientes",
-    "Backups diarios automaticos",
-    "Soporte prioritario VIP",
-  ],
   highlighted: true,
 };
 
 // Personal plans (discounted)
 const PERSONAL_MONTHLY = {
   id: "monthly_personal" as const,
-  name: "Mensual",
   price: "$40",
   originalPrice: "$80",
-  period: "/mes",
   fullPrice: 40,
-  description: "Facturado mensualmente. Cancela cuando quieras.",
-  badge: "Oferta",
-  features: [
-    "Agente de contabilidad AI personal",
-    "Toda tu contabilidad personal organizada",
-    "Seguimiento de ingresos y gastos",
-    "Metas de ahorro con IA",
-    "Reportes financieros automaticos",
-    "Soporte dedicado 24/7",
-  ],
 };
 
 const PERSONAL_ANNUAL = {
   id: "annual_personal" as const,
-  name: "Anual",
   price: "$400",
-  period: "/año",
   originalPrice: "$700",
-  savings: "Ahorras $300",
+  savings: "$300",
   fullPrice: 400,
-  description: "Facturado anualmente. Cancela cuando quieras.",
-  badge: "Mejor valor",
-  features: [
-    "Todo lo incluido en el plan Mensual",
-    "Categorias ilimitadas",
-    "Reportes exportables (PDF / Excel)",
-    "Recordatorios automaticos",
-    "Backups diarios automaticos",
-    "Soporte prioritario",
-  ],
   highlighted: true,
 };
 
 export default function SubscriptionSettings() {
   const appT = useCopy(appCopy);
+  const t = useCopy(billingCopy);
+  const s = t.subscription;
   const { lang } = useLang();
   const { user } = useAuth();
   const isPersonal = user?.modePreference === "personal";
 
-  const PLAN_MONTHLY = isPersonal ? PERSONAL_MONTHLY : BUSINESS_MONTHLY;
-  const PLAN_ANNUAL = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
+  const planText = isPersonal ? s.personal : s.business;
+  const annualBase = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
+  const PLAN_MONTHLY = { ...(isPersonal ? PERSONAL_MONTHLY : BUSINESS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...planText.monthly };
+  const PLAN_ANNUAL = { ...annualBase, name: t.plans.annual, period: t.plans.perYear, ...planText.annual, savings: t.plans.savings(annualBase.savings) };
 
   const utils = trpc.useUtils();
   const [searchParams] = useSearchParams();
@@ -162,11 +116,11 @@ export default function SubscriptionSettings() {
         // Clean URL
         window.history.replaceState({}, "", window.location.pathname);
       } else {
-        toast.error(data.error || "El upgrade no pudo completarse");
+        toast.error(data.error || s.upgradeFailed);
       }
     },
     onError: (err) => {
-      toast.error(err.message || "Error al completar el upgrade");
+      toast.error(err.message || s.upgradeError);
     },
   });
 
@@ -178,7 +132,7 @@ export default function SubscriptionSettings() {
     } else if (params.get("upgrade") === "cancelled") {
       // User cancelled at Stripe
       window.history.replaceState({}, "", window.location.pathname);
-      toast.error("Pago cancelado. Tu suscripcion mensual sigue activa.");
+      toast.error(s.paymentCancelled);
     }
   }, []);
 
@@ -201,12 +155,12 @@ export default function SubscriptionSettings() {
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        toast.error("No se pudo iniciar el pago");
+        toast.error(s.checkoutFailed);
       }
     },
     onError: (err) => {
       console.error("Checkout error:", err);
-      toast.error(err.message || "Error al iniciar el pago. Intenta de nuevo.");
+      toast.error(err.message || s.checkoutError);
     },
   });
 
@@ -214,7 +168,7 @@ export default function SubscriptionSettings() {
     onSuccess: () => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
-      toast.success("Plan cancelado. Sigues con acceso hasta el final del periodo.");
+      toast.success(s.cancelled);
     },
     onError: (err) => toast.error(err.message),
   });
@@ -224,10 +178,10 @@ export default function SubscriptionSettings() {
       if (data?.url) {
         window.location.href = data.url;
       } else {
-        toast.error("No se pudo abrir el portal de facturacion");
+        toast.error(s.portalFailed);
       }
     },
-    onError: (err) => toast.error(err.message || "Error al abrir el portal"),
+    onError: (err) => toast.error(err.message || s.portalError),
   });
 
   const [confirmCancel, setConfirmCancel] = useState(false);
@@ -245,12 +199,12 @@ export default function SubscriptionSettings() {
         toast.success("✓ " + data.message);
       } else {
         // Upgrade failed but monthly subscription is still active
-        toast.error(data.error || "El upgrade no pudo completarse", { duration: 5000 });
+        toast.error(data.error || s.upgradeFailed, { duration: 5000 });
       }
     },
     onError: (err) => {
       // Upgrade failed but monthly subscription is still active
-      toast.error(err.message + " Tu suscripcion mensual sigue activa.", { duration: 5000 });
+      toast.error(err.message + s.monthlyStillActive, { duration: 5000 });
     },
   });
 
@@ -259,10 +213,10 @@ export default function SubscriptionSettings() {
     onSuccess: (data) => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
-      toast.success(data.message || "Suscripcion reanudada exitosamente");
+      toast.success(data.message || s.resumed);
     },
     onError: (err) => {
-      toast.error(err.message || "No se pudo reanudar la suscripcion");
+      toast.error(err.message || s.resumeFailed);
     },
   });
 
@@ -288,7 +242,7 @@ export default function SubscriptionSettings() {
         {upgradeSuccess && (
           <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
             <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-            <p className="text-sm text-emerald-700 font-medium">Suscripcion aplicada con exito. Ahora tienes el plan Anual.</p>
+            <p className="text-sm text-emerald-700 font-medium">{s.upgradeSuccess}</p>
           </div>
         )}
 
@@ -298,8 +252,7 @@ export default function SubscriptionSettings() {
             <div className="flex items-start gap-2">
               <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
               <p className="text-xs text-amber-800">
-                Tu plan se cancelara automaticamente al final del periodo actual.
-                Puedes reanudarla ahora y seguir disfrutando de todos los beneficios.
+                {s.cancelNotice}
               </p>
             </div>
             <Button
@@ -308,9 +261,9 @@ export default function SubscriptionSettings() {
               className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium"
             >
               {resumeMut.isPending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> Reanudando...</>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> {s.resuming}</>
               ) : (
-                <><RefreshCw className="w-3.5 h-3.5 mr-1" /> Reanudar suscripcion</>
+                <><RefreshCw className="w-3.5 h-3.5 mr-1" /> {s.resume}</>
               )}
             </Button>
           </div>
@@ -320,7 +273,7 @@ export default function SubscriptionSettings() {
         <div className="border rounded-xl p-6 bg-white relative flex flex-col">
           {/* Active badge */}
           <div className="absolute -top-2.5 right-3">
-            <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">Activo</Badge>
+            <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{s.active}</Badge>
           </div>
 
           {/* Crown icon */}
@@ -332,7 +285,7 @@ export default function SubscriptionSettings() {
 
           {/* Plan name as main title */}
           <div className="mt-2">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion {isMonthly ? "Premium" : "Elite"}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{isMonthly ? t.plans.premium : t.plans.elite}</p>
             <h3 className="text-xl font-semibold text-black">{currentPlan.name}</h3>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-3xl font-medium text-black">{currentPlan.price}</span>
@@ -344,7 +297,7 @@ export default function SubscriptionSettings() {
             )}
             <p className="text-[11px] text-neutral-500 mt-1">
               {status.currentPeriodEnd
-                ? `Vence el ${new Date(status.currentPeriodEnd).toLocaleDateString("es", { day: "numeric", month: "long", year: "numeric" })}`
+                ? s.expiresOn(new Date(status.currentPeriodEnd).toLocaleDateString(intlLocale(lang), { day: "numeric", month: "long", year: "numeric" }))
                 : currentPlan.description}
             </p>
           </div>
@@ -372,23 +325,23 @@ export default function SubscriptionSettings() {
                     className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1"
                   >
                     {portalMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <ExternalLink className="w-3 h-3 mr-1" />}
-                    Gestionar tarjeta
+                    {s.manageCard}
                   </Button>
                   <Button
                     variant="outline"
                     onClick={() => setConfirmCancel(true)}
                     className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-9 flex-1"
                   >
-                    Cancelar
+                    {s.cancel}
                   </Button>
                 </div>
               ) : (
                 <div className="space-y-2 w-full">
-                  <p className="text-xs text-neutral-500">¿Seguro? Tu acceso sigue hasta el final del periodo.</p>
+                  <p className="text-xs text-neutral-500">{s.confirmCancel}</p>
                   <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setConfirmCancel(false)} className="text-xs h-9 border-neutral-200 flex-1">Volver</Button>
+                    <Button variant="outline" onClick={() => setConfirmCancel(false)} className="text-xs h-9 border-neutral-200 flex-1">{s.back}</Button>
                     <Button onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending} className="bg-red-600 hover:bg-red-700 text-white text-xs h-9 flex-1">
-                      {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Confirmar"}
+                      {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : s.confirm}
                     </Button>
                   </div>
                 </div>
@@ -401,7 +354,7 @@ export default function SubscriptionSettings() {
             <>
               <div className="mt-6" />
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-700"><strong>Plan Anual activo.</strong> No es posible cambiar a mensual. El plan anual no tiene devolucion.</p>
+                <p className="text-xs text-amber-700"><strong>{s.annualActiveBold}</strong>{s.annualActiveText}</p>
               </div>
             </>
           )}
@@ -412,13 +365,13 @@ export default function SubscriptionSettings() {
           <div className="space-y-3">
             {!showUpgrade ? (
               <Button onClick={() => setShowUpgrade(true)} className="w-full h-9 text-xs bg-black hover:bg-neutral-800 text-white">
-                <Zap className="w-4 h-4 mr-1.5" /> Upgrade plan
+                <Zap className="w-4 h-4 mr-1.5" /> {s.upgradePlan}
               </Button>
             ) : (
               /* Upgrade Card — Same design */
               <div className="border rounded-xl p-6 bg-white relative flex flex-col">
                 <div className="absolute -top-2.5 right-3">
-                  <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">Upgrade</Badge>
+                  <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">{s.upgradeBadge}</Badge>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -428,8 +381,8 @@ export default function SubscriptionSettings() {
                 </div>
 
                 <div className="mt-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Elite</p>
-                  <h3 className="text-xl font-semibold text-black">Anual</h3>
+                  <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.elite}</p>
+                  <h3 className="text-xl font-semibold text-black">{t.plans.annual}</h3>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
                     <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
@@ -449,12 +402,12 @@ export default function SubscriptionSettings() {
                 </ul>
 
                 <p className="text-[11px] text-neutral-500 mt-3">
-                  Solo pagas <strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong> de diferencia. Los <strong>{PLAN_MONTHLY.price}</strong> ya pagados se aplican como credito.
+                  {s.upgradeDiff.pre}<strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong>{s.upgradeDiff.mid}<strong>{PLAN_MONTHLY.price}</strong>{s.upgradeDiff.post}
                 </p>
 
                 <div className="mt-6" />
                 <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => setShowUpgrade(false)} className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1">Cancelar</Button>
+                  <Button variant="outline" onClick={() => setShowUpgrade(false)} className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1">{s.cancel}</Button>
                   <Button
                     onClick={() => upgradeMut.mutate({ from: "monthly", to: "annual" }, {
                       onSuccess: (data) => { if (data.success && data.url) window.location.href = data.url; },
@@ -463,7 +416,7 @@ export default function SubscriptionSettings() {
                     className="bg-black hover:bg-neutral-800 text-white text-xs h-9 flex-1"
                   >
                     {upgradeMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Crown className="w-3.5 h-3.5 text-yellow-500 mr-1" />}
-                    Upgrade a Anual
+                    {s.upgradeToAnnual}
                   </Button>
                 </div>
               </div>
@@ -479,7 +432,7 @@ export default function SubscriptionSettings() {
               className="w-full flex items-center justify-between text-left"
             >
               <h4 className="text-xs font-medium text-black flex items-center gap-1.5">
-                <Receipt className="w-3.5 h-3.5 text-neutral-400" /> Historial de pagos
+                <Receipt className="w-3.5 h-3.5 text-neutral-400" /> {s.paymentHistory}
               </h4>
               <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${showHistory ? "rotate-180" : ""}`} />
             </button>
@@ -489,11 +442,11 @@ export default function SubscriptionSettings() {
                   <div key={p.id} className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50 last:border-0">
                     <div className="flex items-center gap-2">
                       <span className="text-black font-medium">${p.amount}</span>
-                      <span className="text-neutral-400">{p.plan === "monthly" ? "Mensual" : "Anual"}</span>
+                      <span className="text-neutral-400">{p.plan === "monthly" ? t.plans.monthly : t.plans.annual}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-neutral-400">
-                        {p.paidAt ? new Date(p.paidAt).toLocaleDateString("es") : "-"}
+                        {p.paidAt ? new Date(p.paidAt).toLocaleDateString(intlLocale(lang)) : "-"}
                       </span>
                       {p.status === "succeeded" ? (
                         <Check className="w-3 h-3 text-emerald-500" />
@@ -533,15 +486,14 @@ export default function SubscriptionSettings() {
         )}
         {freeTrial ? null : wasBroken ? (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
-            <p className="text-sm text-amber-800 font-medium">Suscripcion interrumpida</p>
+            <p className="text-sm text-amber-800 font-medium">{s.interruptedTitle}</p>
             <p className="text-xs text-amber-700">
-              Tu suscripcion anterior fue cancelada por un problema de pago.
-              Selecciona el plan Mensual y suscribete de nuevo — tu tarjeta sera cobrada automaticamente.
+              {s.interruptedText}
             </p>
           </div>
         ) : (
           <p className="text-xs text-neutral-400">
-            Configura tu plan para desbloquear el acceso completo a Accounting Platform.
+            {s.setupText}
           </p>
         )}
 
@@ -561,7 +513,7 @@ export default function SubscriptionSettings() {
             </div>
             <div className="mt-2">
               {/* Subtitle */}
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Premium</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.premium}</p>
               {/* Plan name as main title */}
               <h3 className="text-xl font-semibold text-black">{PLAN_MONTHLY.name}</h3>
               {/* Price */}
@@ -590,9 +542,9 @@ export default function SubscriptionSettings() {
               className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
             >
               {createCheckout.isPending && createCheckout.variables?.plan === "monthly" ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t.plans.processing}</>
               ) : (
-                <><Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse Mensual</>
+                <><Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}</>
               )}
             </Button>
           </div>
@@ -612,7 +564,7 @@ export default function SubscriptionSettings() {
             </div>
             <div className="mt-2">
               {/* Subtitle */}
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">Suscripcion Elite</p>
+              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.elite}</p>
               {/* Plan name as main title */}
               <h3 className="text-xl font-semibold text-black">{PLAN_ANNUAL.name}</h3>
               {/* Price */}
@@ -645,9 +597,9 @@ export default function SubscriptionSettings() {
               className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
             >
               {createCheckout.isPending && createCheckout.variables?.plan === "annual" ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Procesando...</>
+                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t.plans.processing}</>
               ) : (
-                <><Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse Anual</>
+                <><Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}</>
               )}
             </Button>
           </div>

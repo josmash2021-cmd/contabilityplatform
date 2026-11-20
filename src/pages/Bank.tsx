@@ -12,6 +12,9 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { bankCopy, type BankCopy } from "@/i18n/copy/bank";
 import {
   RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
   ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
@@ -32,6 +35,7 @@ function AccountDropdown({
   onChange: (id: string) => void;
   isLoading?: boolean;
 }) {
+  const { bank: t } = useCopy(bankCopy);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -50,7 +54,7 @@ function AccountDropdown({
     return (
       <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 animate-pulse">
         <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-        <span className="text-neutral-400">Cargando cuentas...</span>
+        <span className="text-neutral-400">{t.loadingAccounts}</span>
       </div>
     );
   }
@@ -60,7 +64,7 @@ function AccountDropdown({
     return (
       <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 opacity-60">
         <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-        <span className="text-neutral-400">Sin cuentas</span>
+        <span className="text-neutral-400">{t.noAccounts}</span>
       </div>
     );
   }
@@ -73,7 +77,7 @@ function AccountDropdown({
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
         <span className="truncate flex-1 text-left">
-          {selected ? `${selected.bankName || selected.accountType} ${selected.accountNumber ? `(${selected.accountNumber})` : ""}` : "Seleccionar cuenta"}
+          {selected ? `${selected.bankName || selected.accountType} ${selected.accountNumber ? `(${selected.accountNumber})` : ""}` : t.selectAccount}
         </span>
         <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
       </button>
@@ -103,17 +107,17 @@ function AccountDropdown({
 }
 
 /* helpers */
-function getMonthRangeLabel(month: number, year: number): string {
+function getMonthRangeLabel(month: number, year: number, copy: BankCopy): string {
   const now = new Date();
   const isCurrentMonth = now.getMonth() + 1 === month && now.getFullYear() === year;
-  const monthNames = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
-  const monthName = monthNames[month - 1];
+  const monthName = copy.monthsShort[month - 1];
+  const { dayMonth } = copy.bank;
   if (isCurrentMonth) {
     const today = now.getDate();
-    return `1 ${monthName} - ${today} ${monthName}`;
+    return `${dayMonth(1, monthName)} - ${dayMonth(today, monthName)}`;
   }
   const lastDay = new Date(year, month, 0).getDate();
-  return `1 ${monthName} - ${lastDay} ${monthName}`;
+  return `${dayMonth(1, monthName)} - ${dayMonth(lastDay, monthName)}`;
 }
 
 const CATEGORY_ICONS: Record<string, typeof Banknote> = {
@@ -132,29 +136,23 @@ const CATEGORY_COLORS: Record<string, string> = {
   business_expense: "bg-slate-50 text-slate-600", home_expense: "bg-orange-50 text-orange-600",
 };
 
-const CATEGORY_LABELS: Record<string, string> = {
-  zelle_income: "Zelle Recibidos", zelle_sent: "Zelle Enviados", deposit: "Depositos",
-  cash_deposit: "Depositos de Efectivo", cash_withdrawal: "Retiros de Efectivo",
-  subscription: "Suscripciones", transfer: "Transferencias", transfer_income: "Transferencias",
-  business_expense: "Gastos de Negocio", home_expense: "Gastos del Hogar", shopping: "Compras",
-  cash_income: "Efectivo Recibido", other: "Otros",
-  medical: "Farmacia", food: "Comida",
-};
+// Category labels come from bankCopy.categories (keys are stored in the database).
 
 /* Plaid Link Button */
 function PlaidLinkButton({ onSuccess, onStart, onExchangeStart }: { onSuccess: () => void; onStart?: () => void; onExchangeStart?: () => void }) {
+  const { bank: t } = useCopy(bankCopy);
   const utils = trpc.useUtils();
   const exchangeMut = trpc.bank.exchangePublicToken.useMutation({
     onSuccess: (data) => {
       if (data.success) { onSuccess(); utils.invalidate(); }
-      else { toast.error(data.error || "Error al conectar"); }
+      else { toast.error(data.error || t.toast.connectError); }
     },
     onError: (err) => { toast.error(err.message); },
   });
 
   const createLinkMut = trpc.bank.createLinkToken.useMutation({
     onSuccess: (data) => {
-      if (!data.success || !data.linkToken) { toast.error(data.error || "No se pudo crear el link"); return; }
+      if (!data.success || !data.linkToken) { toast.error(data.error || t.toast.linkError); return; }
       const scriptId = "plaid-link-script";
       let script = document.getElementById(scriptId) as HTMLScriptElement | null;
       const openPlaid = () => {
@@ -179,29 +177,25 @@ function PlaidLinkButton({ onSuccess, onStart, onExchangeStart }: { onSuccess: (
 
   return (
     <Button onClick={() => { onStart?.(); createLinkMut.mutate(); }} disabled={createLinkMut.isPending} className="bg-black text-white hover:bg-neutral-800 rounded-lg">
-      {createLinkMut.isPending ? "Cargando..." : <><Link2 className="w-4 h-4 mr-2" /> Conectar Banco</>}
+      {createLinkMut.isPending ? t.loading : <><Link2 className="w-4 h-4 mr-2" /> {t.connectBank}</>}
     </Button>
   );
 }
 
 /* Selectors */
 function MonthSelector({ value, onChange, selectedYear }: { value: string; onChange: (m: string) => void; selectedYear: string }) {
+  const copy = useCopy(bankCopy);
   const now = new Date();
   const currentMonth = now.getMonth() + 1;
   const currentYear = now.getFullYear();
-  const allMonths = [
-    { value: "1", label: "Enero" }, { value: "2", label: "Febrero" }, { value: "3", label: "Marzo" },
-    { value: "4", label: "Abril" }, { value: "5", label: "Mayo" }, { value: "6", label: "Junio" },
-    { value: "7", label: "Julio" }, { value: "8", label: "Agosto" }, { value: "9", label: "Septiembre" },
-    { value: "10", label: "Octubre" }, { value: "11", label: "Noviembre" }, { value: "12", label: "Diciembre" },
-  ];
+  const allMonths = copy.months.map((label, i) => ({ value: String(i + 1), label }));
   // Only filter future months when selected year is current year
   const maxMonth = parseInt(selectedYear) === currentYear ? currentMonth : 12;
   const months = allMonths.filter((m) => parseInt(m.value) <= maxMonth);
   return (
     <Select value={value} onValueChange={onChange}>
       <SelectTrigger className="h-8 w-[90px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
-        <SelectValue placeholder="Mes" />
+        <SelectValue placeholder={copy.bank.monthPh} />
       </SelectTrigger>
       <SelectContent className="bg-white border-neutral-200">
         {months.map((m) => <SelectItem key={m.value} value={m.value} className="text-xs focus:bg-neutral-50">{m.label}</SelectItem>)}
@@ -227,6 +221,9 @@ function YearSelector({ value, onChange }: { value: string; onChange: (y: string
 
 /* MAIN COMPONENT */
 export default function Bank() {
+  const copy = useCopy(bankCopy);
+  const t = copy.bank;
+  const { lang } = useLang();
   const utils = trpc.useUtils();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -276,6 +273,7 @@ export default function Bank() {
 
   // Merge Plaid + DB accounts using useMemo for stable references
   // Priority: Plaid accounts (live) merged with DB accounts (reliable)
+  const accountFallback = t.accountFallback;
   const allAccounts = useMemo(() => {
     // If we have Plaid accounts, use them as primary (they have fresh balances)
     if (plaidAccounts.length > 0) {
@@ -295,7 +293,7 @@ export default function Bank() {
       return dbAccountsList.map((db: any) => ({
         id: db.id,
         plaidAccountId: db.plaidAccountId,
-        bankName: db.bankName || db.name || "Cuenta",
+        bankName: db.bankName || db.name || accountFallback,
         accountType: db.type || db.accountType || "",
         accountNumber: db.accountNumber || "",
         currentBalance: db.currentBalance || "0",
@@ -304,7 +302,7 @@ export default function Bank() {
       }));
     }
     return [];
-  }, [plaidAccounts, dbAccountsList]);
+  }, [plaidAccounts, dbAccountsList, accountFallback]);
 
   // Stable account selection using useMemo
   const account = useMemo(() => {
@@ -370,21 +368,21 @@ export default function Bank() {
         handleSuccess();
         if (data.added === 0) {
           showToastOnce("sync-no-new", () => {
-            toast.info(data.message || "No se encontraron transacciones nuevas para este periodo en tu banco.");
+            toast.info(data.message || t.toast.noNew);
           });
         } else {
           showToastOnce("sync-success", () => {
-            toast.success(`${data.added} transacciones sincronizadas. Los asientos contables se crearon automaticamente.`);
+            toast.success(t.toast.synced(data.added ?? 0));
           });
         }
       } else if (data.error === "TOKEN_INVALID") {
         showToastOnce("sync-token-invalid", () => {
-          toast.error("Tu sesion con el banco expiro. Reconecta tu cuenta.");
+          toast.error(t.toast.tokenInvalid);
         });
         handleSuccess();
       } else {
         showToastOnce("sync-error", () => {
-          toast.error(data.error || "Error al sincronizar");
+          toast.error(data.error || t.toast.syncError);
         });
       }
     },
@@ -397,8 +395,8 @@ export default function Bank() {
   const syncHistoricalMutation = trpc.bank.syncHistorical.useMutation({
     onSuccess: (data) => {
       setSyncing(false);
-      if (data.success) { setJustSynced(true); setTimeout(() => setJustSynced(false), 3000); handleSuccess(); showToastOnce("sync-hist-success", () => toast.success(`${data.totalAdded} transacciones sincronizadas en ${data.monthsSynced} meses. Los asientos contables se crearon automaticamente.`)); }
-      else { showToastOnce("sync-hist-error", () => toast.error(data.error || "Error al sincronizar historial")); }
+      if (data.success) { setJustSynced(true); setTimeout(() => setJustSynced(false), 3000); handleSuccess(); showToastOnce("sync-hist-success", () => toast.success(t.toast.syncedHistorical(data.totalAdded, data.monthsSynced))); }
+      else { showToastOnce("sync-hist-error", () => toast.error(data.error || t.toast.syncHistoricalError)); }
     },
     onError: (err: { message: string }) => { setSyncing(false); showToastOnce("sync-hist-error", () => toast.error(err.message)); },
   });
@@ -522,14 +520,14 @@ export default function Bank() {
     try {
       const result = await importMutation.mutateAsync({ csv: text, accountId: accountIdNum, format: "auto" });
       if (result.success) {
-        toast.success(`${result.added} transacciones importadas${result.latestBalance ? `. Balance: $${result.latestBalance}` : ""}`);
+        toast.success(t.toast.imported(result.added, result.latestBalance));
         utils.bank.getLiveBalance.invalidate();
         utils.bank.getMonthData.invalidate();
       } else {
-        toast.error(result.error || "Error al importar");
+        toast.error(result.error || t.toast.importError);
       }
     } catch (err: any) {
-      toast.error(err.message || "Error al importar CSV");
+      toast.error(err.message || t.toast.importCsvError);
     }
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
@@ -542,16 +540,16 @@ export default function Bank() {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
-          <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
+          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
+          <p className="text-sm text-neutral-400 mt-1">{t.connectSubtitle}</p>
         </div>
         <Card className="border-neutral-200 rounded-xl shadow-none">
           <CardContent className="p-16 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5 animate-pulse">
               <Loader2 className="w-8 h-8 text-neutral-900 animate-spin" />
             </div>
-            <h3 className="text-lg font-semibold text-black mb-2">Conectando tu banco...</h3>
-            <p className="text-sm text-neutral-400 max-w-sm mb-6">Esto puede tomar unos segundos. Estamos sincronizando tus cuentas y transacciones.</p>
+            <h3 className="text-lg font-semibold text-black mb-2">{t.connectingTitle}</h3>
+            <p className="text-sm text-neutral-400 max-w-sm mb-6">{t.connectingText}</p>
           </CardContent>
         </Card>
       </div>
@@ -563,8 +561,8 @@ export default function Bank() {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
-          <p className="text-sm text-neutral-400 mt-1">Verificando conexion bancaria...</p>
+          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
+          <p className="text-sm text-neutral-400 mt-1">{t.checkingConnection}</p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
@@ -578,8 +576,8 @@ export default function Bank() {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
-          <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
+          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
+          <p className="text-sm text-neutral-400 mt-1">{t.connectSubtitle}</p>
         </div>
         {showPlaidOverlay && (
           <PlaidLinkOverlay
@@ -593,13 +591,13 @@ export default function Bank() {
               <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
                 <Landmark className="w-8 h-8 text-neutral-400" />
               </div>
-              <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-              <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
+              <h3 className="text-lg font-semibold text-black mb-2">{t.noBankTitle}</h3>
+              <p className="text-sm text-neutral-400 max-w-sm mb-6">{t.noBankText}</p>
               <Button
                 onClick={() => setShowPlaidOverlay(true)}
                 className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6"
               >
-                <Landmark className="w-4 h-4 mr-2" /> Conectar Banco
+                <Landmark className="w-4 h-4 mr-2" /> {t.connectBank}
               </Button>
             </CardContent>
           </Card>
@@ -635,15 +633,15 @@ export default function Bank() {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
+              <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
               {isPlaidConnected && (
                 justSynced ? (
-                  <Badge className="bg-blue-100 text-blue-700 text-xs animate-pulse"><RefreshCw className="w-3 h-3 mr-1" /> Sincronizado</Badge>
+                  <Badge className="bg-blue-100 text-blue-700 text-xs animate-pulse"><RefreshCw className="w-3 h-3 mr-1" /> {t.synced}</Badge>
                 ) : (
-                  <Badge className="bg-emerald-100 text-emerald-700 text-xs"><CheckCircle2 className="w-3 h-3 mr-1" /> Conectado</Badge>
+                  <Badge className="bg-emerald-100 text-emerald-700 text-xs"><CheckCircle2 className="w-3 h-3 mr-1" /> {t.connected}</Badge>
                 )
               )}
-              {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> Reconexion necesaria</Badge>}
+              {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> {t.reconnectNeeded}</Badge>}
               {/* Autonomous Agent Status Indicator */}
               {isPlaidConnected && (
                 <div className="flex items-center gap-1.5">
@@ -681,19 +679,19 @@ export default function Bank() {
             <YearSelector value={selectedYear} onChange={setSelectedYear} />
             {/* Auto-sync handled by autonomous agent — manual button removed */}
             <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-            <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title="Importar estado de cuenta CSV">
-              <Landmark className="w-3 h-3 mr-1" /> Importar CSV
+            <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title={t.importCsvTitle}>
+              <Landmark className="w-3 h-3 mr-1" /> {t.importCsv}
             </Button>
             {account && (
               confirmDisconnect ? (
                 <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-xs text-red-600 mr-1">Seguro?</span>
-                  <Button onClick={() => setConfirmDisconnect(false)} variant="outline" className="h-7 px-2 text-xs border-neutral-200">No</Button>
-                  <Button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white">Si</Button>
+                  <span className="text-xs text-red-600 mr-1">{t.confirmDisconnect}</span>
+                  <Button onClick={() => setConfirmDisconnect(false)} variant="outline" className="h-7 px-2 text-xs border-neutral-200">{t.no}</Button>
+                  <Button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white">{t.yes}</Button>
                 </div>
               ) : (
                 <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-8 px-2 rounded-lg text-xs shrink-0">
-                  <LogOut className="w-3 h-3 mr-1" /> Desconectar
+                  <LogOut className="w-3 h-3 mr-1" /> {t.disconnect}
                 </Button>
               )
             )}
@@ -707,8 +705,8 @@ export default function Bank() {
           <Card className="border-amber-200 bg-amber-50/50 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <p className="text-sm font-medium text-amber-800">Tu sesion con el banco expiro</p>
-                <p className="text-xs text-amber-600">Reconecta tu cuenta para seguir sincronizando automaticamente.</p>
+                <p className="text-sm font-medium text-amber-800">{t.sessionExpiredTitle}</p>
+                <p className="text-xs text-amber-600">{t.sessionExpiredText}</p>
               </div>
               <PlaidLinkButton onSuccess={() => { setAutoSyncDone(false); handleSuccess(); }} onStart={() => setIsConnecting(true)} onExchangeStart={() => setIsConnecting(true)} />
             </CardContent>
@@ -719,10 +717,10 @@ export default function Bank() {
       {/* 4 KPI CARDS */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Saldo Actual", value: formatCurrency(balance), sub: isPlaidConnected ? "En vivo desde tu banco" : "Sincroniza para actualizar", icon: Wallet, color: "bg-blue-50 text-blue-600", valColor: Number(balance) >= 0 ? "text-blue-600" : "text-red-600" },
-          { label: "Ingresos", value: formatCurrency(monthData?.income ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
-          { label: "Gastos", value: formatCurrency(monthData?.expense ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear)), icon: TrendingDown, color: "bg-red-50 text-red-600", valColor: "text-red-600" },
-          { label: "Transacciones", value: `${(monthData?.transactions ?? []).length}`, sub: `${(monthData?.transactions ?? []).filter((t: any) => t.type === "income").length} ingresos . ${(monthData?.transactions ?? []).filter((t: any) => t.type === "expense").length} gastos`, icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
+          { label: t.currentBalance, value: formatCurrency(balance), sub: isPlaidConnected ? t.liveFromBank : t.syncToUpdate, icon: Wallet, color: "bg-blue-50 text-blue-600", valColor: Number(balance) >= 0 ? "text-blue-600" : "text-red-600" },
+          { label: t.income, value: formatCurrency(monthData?.income ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear), copy), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
+          { label: t.expenses, value: formatCurrency(monthData?.expense ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear), copy), icon: TrendingDown, color: "bg-red-50 text-red-600", valColor: "text-red-600" },
+          { label: t.transactions, value: `${(monthData?.transactions ?? []).length}`, sub: t.incomeExpenseCount((monthData?.transactions ?? []).filter((tx: any) => tx.type === "income").length, (monthData?.transactions ?? []).filter((tx: any) => tx.type === "expense").length), icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
         ].map((s, i) => (
           <AnimatedCard key={s.label} delay={100 + i * 80}>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
@@ -748,7 +746,7 @@ export default function Bank() {
         <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
           <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
           <p className="text-xs text-amber-700">
-            No hay transacciones para {monthData?.monthName || "este periodo"}. Mostrando transacciones de otros meses.
+            {t.fallbackNotice(monthData?.monthName ? `${copy.months[parseInt(selectedMonth) - 1]} ${selectedYear}` : t.thisPeriod)}
           </p>
         </div>
       )}
@@ -762,7 +760,7 @@ export default function Bank() {
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <ArrowUpRight className="w-4 h-4 text-emerald-500" /> Ingresos por Categoria
+                  <ArrowUpRight className="w-4 h-4 text-emerald-500" /> {t.incomeByCategory}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
@@ -776,8 +774,8 @@ export default function Bank() {
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg ${colorClass}`}><Icon className="w-4 h-4" /></div>
                             <div>
-                              <p className="text-sm text-neutral-700 font-medium">{CATEGORY_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-                              <p className="text-[10px] text-neutral-400">{data.count} transacciones</p>
+                              <p className="text-sm text-neutral-700 font-medium">{copy.categories[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
+                              <p className="text-[10px] text-neutral-400">{t.txCount(data.count)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -789,7 +787,7 @@ export default function Bank() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-400 text-center py-6">No hay ingresos este periodo</p>
+                  <p className="text-sm text-neutral-400 text-center py-6">{t.noIncome}</p>
                 )}
               </CardContent>
             </Card>
@@ -800,7 +798,7 @@ export default function Bank() {
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <ArrowDownRight className="w-4 h-4 text-red-500" /> Gastos por Categoria
+                  <ArrowDownRight className="w-4 h-4 text-red-500" /> {t.expensesByCategory}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0">
@@ -814,8 +812,8 @@ export default function Bank() {
                           <div className="flex items-center gap-3">
                             <div className={`p-2 rounded-lg ${colorClass}`}><Icon className="w-4 h-4" /></div>
                             <div>
-                              <p className="text-sm text-neutral-700 font-medium">{CATEGORY_LABELS[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-                              <p className="text-[10px] text-neutral-400">{data.count} transacciones</p>
+                              <p className="text-sm text-neutral-700 font-medium">{copy.categories[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
+                              <p className="text-[10px] text-neutral-400">{t.txCount(data.count)}</p>
                             </div>
                           </div>
                           <div className="flex items-center gap-2">
@@ -827,7 +825,7 @@ export default function Bank() {
                     })}
                   </div>
                 ) : (
-                  <p className="text-sm text-neutral-400 text-center py-6">No hay gastos este periodo</p>
+                  <p className="text-sm text-neutral-400 text-center py-6">{t.noExpenses}</p>
                 )}
               </CardContent>
             </Card>
@@ -838,16 +836,16 @@ export default function Bank() {
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-3 flex flex-row items-center justify-between">
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-neutral-500" /> Transacciones del Mes
+                  <Receipt className="w-4 h-4 text-neutral-500" /> {t.monthTransactions}
                 </CardTitle>
-                <span className="text-xs text-neutral-400">{(monthData?.transactions ?? []).length} total</span>
+                <span className="text-xs text-neutral-400">{t.totalCount((monthData?.transactions ?? []).length)}</span>
               </CardHeader>
               <CardContent className="pt-0">
                 {loadingMonth && !monthData ? (
                   <div className="space-y-2"><Skeleton className="h-12" /><Skeleton className="h-12" /><Skeleton className="h-12" /></div>
                 ) : (monthData?.transactions ?? []).length === 0 ? (
                   <div className="py-8 text-center space-y-3">
-                    <p className="text-sm text-neutral-400">No hay transacciones sincronizadas para {(() => { const names = ["","Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"]; return `${names[parseInt(selectedMonth)]} ${selectedYear}`; })()}</p>
+                    <p className="text-sm text-neutral-400">{t.noSyncedTx(`${copy.months[parseInt(selectedMonth) - 1]} ${selectedYear}`)}</p>
                     {isPlaidConnected && (
                       <div className="flex flex-col items-center gap-2">
                         {/* Auto-sync handled by autonomous agent */}
@@ -856,27 +854,27 @@ export default function Bank() {
                           variant="ghost"
                           className="text-xs text-neutral-500 hover:text-neutral-700 h-7"
                         >
-                          Verificar conexion con el banco
+                          {t.checkConnection}
                         </Button>
                       </div>
                     )}
                     {showDiagnosis && (
                       <div className="mt-3 text-left bg-neutral-50 border border-neutral-200 rounded-lg p-3 mx-auto max-w-md">
                         {loadingDiagnosis ? (
-                          <p className="text-xs text-neutral-500">Verificando...</p>
+                          <p className="text-xs text-neutral-500">{t.checking}</p>
                         ) : diagnosis ? (
                           <div className="space-y-1">
-                            <p className="text-xs font-medium text-neutral-700">Diagnostico de Plaid:</p>
-                            <p className="text-xs text-neutral-600">Rango: {diagnosis.dateRange}</p>
-                            <p className="text-xs text-neutral-600">Transacciones en Plaid: <span className={diagnosis.plaidTxCount > 0 ? "text-emerald-600 font-medium" : "text-red-500"}>{diagnosis.plaidTxCount}</span></p>
-                            <p className="text-xs text-neutral-600">Transacciones en BD: {diagnosis.dbTxCount}</p>
+                            <p className="text-xs font-medium text-neutral-700">{t.diagnosisTitle}</p>
+                            <p className="text-xs text-neutral-600">{t.range} {diagnosis.dateRange}</p>
+                            <p className="text-xs text-neutral-600">{t.plaidTx} <span className={diagnosis.plaidTxCount > 0 ? "text-emerald-600 font-medium" : "text-red-500"}>{diagnosis.plaidTxCount}</span></p>
+                            <p className="text-xs text-neutral-600">{t.dbTx} {diagnosis.dbTxCount}</p>
                             {diagnosis.error && <p className="text-xs text-red-500">Error: {diagnosis.error}</p>}
                             {diagnosis.tokenValid && diagnosis.plaidTxCount === 0 && (
-                              <p className="text-xs text-amber-600">Plaid no tiene transacciones para este mes. Esto es normal si conectaste tu banco despues de este periodo, o si tu banco no retiene datos tan antiguos.</p>
+                              <p className="text-xs text-amber-600">{t.noPlaidTx}</p>
                             )}
                             {diagnosis.details && diagnosis.details.length > 0 && (
                               <details className="mt-1">
-                                <summary className="text-[10px] text-neutral-500 cursor-pointer">Ver muestra de transacciones</summary>
+                                <summary className="text-[10px] text-neutral-500 cursor-pointer">{t.sampleTx}</summary>
                                 <ul className="mt-1 space-y-0.5">
                                   {diagnosis.details.map((tx: any, i: number) => (
                                     <li key={i} className="text-[10px] text-neutral-500">{tx.date} - {tx.name} (${tx.amount})</li>
@@ -886,13 +884,13 @@ export default function Bank() {
                             )}
                           </div>
                         ) : (
-                          <p className="text-xs text-neutral-500">Haz clic para verificar</p>
+                          <p className="text-xs text-neutral-500">{t.clickToCheck}</p>
                         )}
                       </div>
                     )}
                     {isPlaidConnected && (
                       <p className="text-[11px] text-neutral-400">
-                        Si este mes tiene transacciones en tu banco, haz clic para sincronizarlas.
+                        {t.syncHint}
                       </p>
                     )}
                   </div>
@@ -912,9 +910,9 @@ export default function Bank() {
                               try {
                                 const dateObj = d instanceof Date ? d : new Date(d);
                                 if (isNaN(dateObj.getTime())) return "";
-                                return dateObj.toLocaleDateString("es", { day: "2-digit", month: "short" });
+                                return dateObj.toLocaleDateString(intlLocale(lang), { day: "2-digit", month: "short" });
                               } catch { return ""; }
-                            })()}{tx.isReversed ? " · Reversada" : ""}</p>
+                            })()}{tx.isReversed ? ` · ${t.reversed}` : ""}</p>
                           </div>
                         </div>
                         <div className="flex items-center gap-3">
@@ -923,8 +921,8 @@ export default function Bank() {
                           </span>
                           {confirmDeleteTx === tx.id ? (
                             <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-neutral-400 hover:text-neutral-600" onClick={() => setConfirmDeleteTx(null)} title="Cancelar"><X className="w-3.5 h-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={() => { deleteMut.mutate({ id: tx.id }); setConfirmDeleteTx(null); }} title="Confirmar"><Check className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-neutral-400 hover:text-neutral-600" onClick={() => setConfirmDeleteTx(null)} title={t.cancel}><X className="w-3.5 h-3.5" /></Button>
+                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={() => { deleteMut.mutate({ id: tx.id }); setConfirmDeleteTx(null); }} title={t.confirm}><Check className="w-3.5 h-3.5" /></Button>
                             </div>
                           ) : (
                             <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-7 w-7 p-0 text-neutral-300 hover:text-red-500 transition-opacity duration-150" onClick={() => setConfirmDeleteTx(tx.id)}>
@@ -940,7 +938,7 @@ export default function Bank() {
                         onClick={() => navigate(`/transactions`)}
                         className="w-full mt-2 h-10 text-sm text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg border border-dashed border-neutral-200 font-normal"
                       >
-                        Mostrar mas <ChevronRight className="w-4 h-4 ml-1" />
+                        {t.showMore} <ChevronRight className="w-4 h-4 ml-1" />
                       </Button>
                     )}
                   </div>
@@ -957,20 +955,20 @@ export default function Bank() {
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <PiggyBank className="w-4 h-4 text-neutral-500" /> Resumen del Año
+                  <PiggyBank className="w-4 h-4 text-neutral-500" /> {t.yearSummary}
                 </CardTitle>
               </CardHeader>
               <CardContent className="pt-0 space-y-4">
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">Ingresos</span>
+                  <span className="text-sm text-neutral-500">{t.income}</span>
                   <span className="text-sm font-bold text-emerald-600">{formatCurrency(yearData?.income ?? monthIncome)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">Gastos</span>
+                  <span className="text-sm text-neutral-500">{t.expenses}</span>
                   <span className="text-sm font-bold text-red-600">{formatCurrency(yearData?.expense ?? monthExpense)}</span>
                 </div>
                 <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">Transacciones</span>
+                  <span className="text-sm text-neutral-500">{t.transactions}</span>
                   <span className="text-sm text-black font-medium">{yearData?.transactionCount ?? (monthData?.transactions ?? []).length}</span>
                 </div>
 
@@ -981,7 +979,7 @@ export default function Bank() {
                       .filter((m: any) => m.transactionCount > 0)
                       .map((m: any) => (
                         <div key={m.monthNum} className="flex justify-between items-center">
-                          <span className="text-xs text-neutral-500">{m.month}</span>
+                          <span className="text-xs text-neutral-500">{copy.months[m.monthNum - 1] ?? m.month}</span>
                           <div className="flex items-center gap-2">
                             <span className="text-xs text-emerald-600">+{formatCurrency(m.income)}</span>
                             <span className="text-xs text-red-500">-{formatCurrency(m.expense)}</span>
@@ -993,12 +991,12 @@ export default function Bank() {
 
                 <div className="pt-2 border-t border-neutral-100">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-black">Saldo en Banco</span>
+                    <span className="text-sm font-medium text-black">{t.bankBalance}</span>
                     <span className={`text-lg font-bold ${Number(balance) >= 0 ? "text-blue-600" : "text-red-600"}`}>
                       {formatCurrency(balance)}
                     </span>
                   </div>
-                  <p className="text-[10px] text-neutral-400 pt-1">Saldo real segun tu banco</p>
+                  <p className="text-[10px] text-neutral-400 pt-1">{t.bankBalanceHint}</p>
                 </div>
               </CardContent>
             </Card>

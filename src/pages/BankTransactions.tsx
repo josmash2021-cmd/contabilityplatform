@@ -8,8 +8,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { Trash2, ArrowLeft, Search } from "lucide-react";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { bankCopy } from "@/i18n/copy/bank";
 
 export default function BankTransactions() {
+  const { transactions: t } = useCopy(bankCopy);
+  const { lang } = useLang();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnMonth = searchParams.get("month") ?? String(new Date().getMonth() + 1);
@@ -20,7 +25,7 @@ export default function BankTransactions() {
   const { data: transactions, isLoading } = trpc.bank.listTransactions.useQuery();
 
   const deleteMut = trpc.bank.delete.useMutation({
-    onSuccess: () => { toast.success("Eliminada"); utils.invalidate(); },
+    onSuccess: () => { toast.success(t.deleted); utils.invalidate(); },
   });
 
   const filtered = (transactions ?? []).filter((tx: any) => {
@@ -46,9 +51,9 @@ export default function BankTransactions() {
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
-          <h1 className="text-xl font-medium text-black">Todas las Transacciones</h1>
+          <h1 className="text-xl font-medium text-black">{t.title}</h1>
           <p className="text-sm text-neutral-400">
-            {transactions?.length ?? 0} transacciones en total
+            {t.total(transactions?.length ?? 0)}
           </p>
         </div>
       </div>
@@ -58,7 +63,7 @@ export default function BankTransactions() {
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400" />
         <input
           type="text"
-          placeholder="Buscar por descripcion, categoria o monto..."
+          placeholder={t.searchPh}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-10 pr-4 py-2.5 border border-neutral-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-black/5 focus:border-neutral-300 transition-all"
@@ -77,7 +82,7 @@ export default function BankTransactions() {
           </div>
         ) : filtered.length === 0 ? (
           <p className="text-sm text-neutral-400 py-8 text-center">
-            {search.trim() ? "No se encontraron transacciones." : "No hay transacciones."}
+            {search.trim() ? t.noResults : t.empty}
           </p>
         ) : (
           <ScrollArea className="h-[calc(100vh-260px)]">
@@ -100,7 +105,7 @@ export default function BankTransactions() {
                       <p className="text-[10px] text-neutral-400">
                         {tx.category} &middot;{" "}
                         {tx.transactionDate
-                          ? new Date(tx.transactionDate).toLocaleDateString("es")
+                          ? new Date(tx.transactionDate).toLocaleDateString(intlLocale(lang))
                           : ""}
                         {" "}&middot;{" "}
                         {tx.bankName}

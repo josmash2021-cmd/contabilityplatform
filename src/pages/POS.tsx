@@ -11,6 +11,8 @@ import {
   Package, ChevronDown
 } from "lucide-react";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { useCopy } from "@/i18n/useI18n";
+import { businessCopy } from "@/i18n/copy/business";
 
 interface CartItem {
   id: string;
@@ -21,13 +23,15 @@ interface CartItem {
   isCustom?: boolean;
 }
 
+// Labels come from businessCopy.paymentMethods (keyed by id).
 const PAYMENT_METHODS = [
-  { id: "cash" as const, label: "Efectivo", icon: Banknote },
-  { id: "zelle" as const, label: "Zelle", icon: Smartphone },
-  { id: "card" as const, label: "Tarjeta", icon: Receipt },
+  { id: "cash" as const, icon: Banknote },
+  { id: "zelle" as const, icon: Smartphone },
+  { id: "card" as const, icon: Receipt },
 ];
 
 export default function POS() {
+  const { pos: t, common } = useCopy(businessCopy);
   const { data: servicesList } = trpc.services.list.useQuery();
   const { data: customers } = trpc.customers.list.useQuery({ type: "all" });
   const { data: settings } = trpc.settings.get.useQuery();
@@ -37,7 +41,7 @@ export default function POS() {
     onSuccess: () => {
       utils.sales.list.invalidate();
       utils.dashboard.summary.invalidate();
-      toast.success("Venta registrada");
+      toast.success(t.saleRecorded);
       setCart([]);
       setSelectedCustomer(undefined);
       setSelectedService(null);
@@ -113,13 +117,13 @@ export default function POS() {
   const addToCart = () => {
     const price = parseFloat(amount);
     if (Number.isNaN(price) || price <= 0) {
-      toast.error("Ingresa un monto válido");
+      toast.error(t.invalidAmount);
       return false;
     }
     const item: CartItem = {
       id: crypto.randomUUID(),
       serviceId: selectedService?.id,
-      name: selectedService?.name || "Cargo personalizado",
+      name: selectedService?.name || t.customCharge,
       price,
       quantity: 1,
       isCustom: !selectedService,
@@ -139,7 +143,7 @@ export default function POS() {
   const discountAmt = discountType === "percentage" ? Math.min(subtotal * (discountRaw / 100), subtotal) : Math.min(discountRaw, subtotal);
   const total = Math.max(0, subtotal - discountAmt);
 
-  const companyZelleEmail = settings?.zelleEmail || "No configurado";
+  const companyZelleEmail = settings?.zelleEmail || t.notConfigured;
   const hasCompanyZelle = !!settings?.zelleEmail;
 
   const handleSale = (method: string) => {
@@ -160,7 +164,7 @@ export default function POS() {
   };
 
   const handleCheckout = () => {
-    if (cart.length === 0) { toast.error("Carrito vacio"); return; }
+    if (cart.length === 0) { toast.error(t.emptyCart); return; }
     handleSale(activePayment);
   };
 
@@ -192,7 +196,7 @@ export default function POS() {
           <div className="max-w-md mx-auto h-full flex flex-col">
             {/* Amount display */}
             <div className="shrink-0 py-1.5 mb-1 text-center bg-neutral-50 rounded-xl border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">Monto a cobrar</p>
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">{t.amountToCharge}</p>
               <p className="text-3xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
@@ -220,13 +224,13 @@ export default function POS() {
                 onClick={() => setMobilePanel("services")}
                 className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
               >
-                <Package className="w-4 h-4" /> Servicio / Producto
+                <Package className="w-4 h-4" /> {t.serviceProduct}
               </button>
               <button
                 onClick={() => setMobilePanel("customers")}
                 className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
               >
-                <User className="w-4 h-4" /> Cliente
+                <User className="w-4 h-4" /> {t.customer}
               </button>
             </div>
 
@@ -251,10 +255,10 @@ export default function POS() {
             {/* Bottom row */}
             <div className="shrink-0 grid grid-cols-2 gap-2">
               <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-11 rounded-xl border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50">
-                <Plus className="w-4 h-4 mr-1" /> Agregar
+                <Plus className="w-4 h-4 mr-1" /> {t.add}
               </Button>
               <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-11 rounded-xl bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50">
-                Cobrar
+                {t.charge}
               </Button>
             </div>
 
@@ -263,7 +267,7 @@ export default function POS() {
               {cart.length > 0 && (
                 <div className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5">
                   <button onClick={() => setShowCart(!showCart)} className="text-xs font-medium text-black flex items-center gap-1">
-                    Items ({cart.length}) <ChevronDown className={`w-3 h-3 transition-transform ${showCart ? "rotate-180" : ""}`} />
+                    {t.itemsToggle(cart.length)} <ChevronDown className={`w-3 h-3 transition-transform ${showCart ? "rotate-180" : ""}`} />
                   </button>
                   <span className="text-sm font-bold text-black">{formatCurrency(total)}</span>
                 </div>
@@ -274,7 +278,7 @@ export default function POS() {
                     <div key={item.id} className="flex items-center gap-2">
                       <div className="flex-1 min-w-0">
                         <p className="text-xs text-black truncate">{item.name}</p>
-                        <p className="text-[10px] text-neutral-400">{formatCurrency(item.price)} c/u</p>
+                        <p className="text-[10px] text-neutral-400">{t.each(formatCurrency(item.price))}</p>
                       </div>
                       <div className="flex items-center gap-1">
                         <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Minus className="w-2.5 h-2.5" /></button>
@@ -297,7 +301,7 @@ export default function POS() {
           <div className="max-w-md mx-auto h-full flex flex-col">
             {/* Amount display */}
             <div className="shrink-0 py-3 mb-2 text-center bg-neutral-50 rounded-2xl border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-1">Monto a cobrar</p>
+              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-1">{t.amountToCharge}</p>
               <p className="text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
             </div>
 
@@ -340,10 +344,10 @@ export default function POS() {
             {/* Bottom row */}
             <div className="shrink-0 grid grid-cols-2 gap-2">
               <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-14 rounded-lg border-neutral-200 text-black text-base font-medium hover:bg-neutral-50 disabled:opacity-50">
-                <Plus className="w-5 h-5 mr-1" /> Agregar
+                <Plus className="w-5 h-5 mr-1" /> {t.add}
               </Button>
               <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-14 rounded-lg bg-black hover:bg-neutral-800 text-white text-base font-medium disabled:opacity-50">
-                Cobrar
+                {t.charge}
               </Button>
             </div>
           </div>
@@ -358,13 +362,13 @@ export default function POS() {
             onClick={() => setLeftPanel("services")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
-            <Package className="w-4 h-4" /> Servicios
+            <Package className="w-4 h-4" /> {t.services}
           </button>
           <button
             onClick={() => setLeftPanel("customers")}
             className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
           >
-            <User className="w-4 h-4" /> Clientes
+            <User className="w-4 h-4" /> {t.customers}
           </button>
         </div>
 
@@ -375,13 +379,13 @@ export default function POS() {
               <div className="p-3 border-b border-neutral-100">
                 <div className="relative">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                  <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
+                  <Input placeholder={t.searchServices} value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
                 </div>
               </div>
               <ScrollArea className="flex-1 px-3">
                 <div className="space-y-0.5">
                   {filteredServices.length === 0 ? (
-                    <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
+                    <p className="text-sm text-neutral-400 text-center py-8">{t.noServices}</p>
                   ) : (
                     filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
                       <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
@@ -400,7 +404,7 @@ export default function POS() {
           {leftPanel === "customers" && (
             <>
               <div className="px-4 py-3 border-b border-neutral-100">
-                <h3 className="text-sm font-medium text-black">Seleccionar cliente</h3>
+                <h3 className="text-sm font-medium text-black">{t.selectCustomer}</h3>
               </div>
               <ScrollArea className="flex-1 px-3 py-2">
                 <div className="space-y-0.5">
@@ -424,19 +428,19 @@ export default function POS() {
         <div className="absolute inset-0 bg-black/40" onClick={() => setMobilePanel("none")} />
         <div className={`absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out ${mobilePanel !== "none" ? "translate-y-0" : "translate-y-full"}`}>
           <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
-            <h3 className="text-base font-medium text-black">{mobilePanel === "services" ? "Seleccionar servicio" : "Seleccionar cliente"}</h3>
+            <h3 className="text-base font-medium text-black">{mobilePanel === "services" ? t.selectService : t.selectCustomer}</h3>
             <button onClick={() => setMobilePanel("none")} className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-black"><X className="w-5 h-5" /></button>
           </div>
           {mobilePanel === "services" && (
             <div className="p-3">
               <div className="relative mb-2">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                <Input placeholder="Buscar servicios..." value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
+                <Input placeholder={t.searchServices} value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
               </div>
               <ScrollArea className="h-[60vh]">
                 <div className="space-y-0.5">
                   {filteredServices.length === 0 ? (
-                    <p className="text-sm text-neutral-400 text-center py-8">No hay servicios</p>
+                    <p className="text-sm text-neutral-400 text-center py-8">{t.noServices}</p>
                   ) : (
                     filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
                       <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
@@ -474,7 +478,7 @@ export default function POS() {
       {/* Payment Dialog */}
       <Dialog open={showPayment} onOpenChange={setShowPayment}>
         <DialogContent className="bg-white border-neutral-200 max-w-md">
-          <DialogHeader><DialogTitle className="text-black font-medium">Metodo de cobro</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle className="text-black font-medium">{t.paymentMethod}</DialogTitle></DialogHeader>
           <PaymentDialog
             activePayment={activePayment}
             setActivePayment={setActivePayment}
@@ -493,16 +497,16 @@ export default function POS() {
       {/* Desktop right: cart sidebar */}
       <div className="hidden lg:flex fixed right-0 top-0 bottom-0 w-[380px] border-l border-neutral-200 bg-white flex-col">
         <div className="px-5 pt-4 pb-2 border-b border-neutral-100">
-          <p className="text-xs text-neutral-400">{cart.length} items</p>
+          <p className="text-xs text-neutral-400">{common.items(cart.length)}</p>
         </div>
         <ScrollArea className="flex-1 px-5 py-2">
-          {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">Agrega un monto para cobrar</p> : (
+          {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">{t.emptyCartHint}</p> : (
             <div className="space-y-3">
               {cart.map((item) => (
                 <div key={item.id} className="flex items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="text-sm text-black truncate">{item.name}</p>
-                    <p className="text-xs text-neutral-400">{formatCurrency(item.price)} c/u</p>
+                    <p className="text-xs text-neutral-400">{t.each(formatCurrency(item.price))}</p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Minus className="w-3 h-3" /></button>
@@ -517,9 +521,9 @@ export default function POS() {
           )}
         </ScrollArea>
         <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
-          <div className="flex justify-between text-sm"><span className="text-neutral-400">Subtotal</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
+          <div className="flex justify-between text-sm"><span className="text-neutral-400">{t.subtotal}</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
           <div className="flex justify-between text-sm items-center">
-            <span className="text-neutral-400">Descuento</span>
+            <span className="text-neutral-400">{t.discount}</span>
             <div className="flex items-center gap-2">
               <div className="flex bg-gray-100 rounded-full p-0.5">
                 <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
@@ -530,12 +534,12 @@ export default function POS() {
           </div>
           {discountType === "percentage" && discountRaw > 0 && (
             <div className="flex justify-between text-xs">
-              <span className="text-neutral-400">Equivale a</span>
+              <span className="text-neutral-400">{t.equals}</span>
               <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
             </div>
           )}
-          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">Total</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
-          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">Cobrar</Button>
+          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">{t.total}</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
+          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">{t.charge}</Button>
         </div>
       </div>
     </div>
@@ -547,6 +551,7 @@ function PaymentDialog({
   showZellePanel, setShowZellePanel, companyZelleEmail, hasCompanyZelle,
   handleZelleConfirm
 }: any) {
+  const { pos: t, paymentMethods } = useCopy(businessCopy);
   return (
     <div className="relative flex flex-col h-full">
       {/* Payment Method Selection */}
@@ -561,7 +566,7 @@ function PaymentDialog({
                 className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 text-sm font-medium transition-all duration-200 ${activePayment === m.id ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"}`}
               >
                 <Icon className={`w-6 h-6 ${activePayment === m.id ? "text-white" : "text-neutral-500"}`} />
-                {m.label}
+                {paymentMethods[m.id]}
               </button>
             );
           })}
@@ -573,7 +578,7 @@ function PaymentDialog({
         {activePayment === "cash" && (
           <div className="text-center space-y-3">
             <Banknote className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">Pago en efectivo</p>
+            <p className="text-sm text-neutral-400">{t.cashPayment}</p>
             <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
           </div>
         )}
@@ -581,7 +586,7 @@ function PaymentDialog({
         {activePayment === "zelle" && !showZellePanel && (
           <div className="text-center space-y-4">
             <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">Cobro via Zelle</p>
+            <p className="text-sm text-neutral-400">{t.zellePayment}</p>
             <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
           </div>
         )}
@@ -589,7 +594,7 @@ function PaymentDialog({
         {activePayment === "zelle" && showZellePanel && (
           <div className="text-center space-y-4 w-full">
             <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">Enviar Zelle a:</p>
+            <p className="text-sm text-neutral-400">{t.sendZelleTo}</p>
             <div className="bg-white border border-neutral-200 rounded-xl p-4 mx-8">
               <p className="text-lg font-semibold text-black">{companyZelleEmail}</p>
             </div>
@@ -600,7 +605,7 @@ function PaymentDialog({
         {activePayment === "card" && (
           <div className="text-center space-y-3">
             <Receipt className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">Pago con tarjeta</p>
+            <p className="text-sm text-neutral-400">{t.cardPayment}</p>
             <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
           </div>
         )}
@@ -610,20 +615,20 @@ function PaymentDialog({
       <div className="relative z-10 flex-shrink-0 pb-6 pt-4">
         {activePayment === "zelle" && !showZellePanel && (
           <Button onClick={() => setShowZellePanel(true)} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-            <Smartphone className="w-5 h-5 mr-2" /> Mostrar datos de Zelle
+            <Smartphone className="w-5 h-5 mr-2" /> {t.showZelle}
           </Button>
         )}
         {activePayment === "zelle" && showZellePanel && (
           <div className="flex gap-3">
-            <Button onClick={() => setShowZellePanel(false)} variant="outline" className="flex-1 border-neutral-200 h-14 text-base rounded-xl">Volver</Button>
+            <Button onClick={() => setShowZellePanel(false)} variant="outline" className="flex-1 border-neutral-200 h-14 text-base rounded-xl">{t.back}</Button>
             <Button onClick={handleZelleConfirm} disabled={createSalePending || !hasCompanyZelle} className="flex-1 bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-              {createSalePending ? "Procesando..." : <><Check className="w-5 h-5 mr-1" /> Confirmar</>}
+              {createSalePending ? t.processing : <><Check className="w-5 h-5 mr-1" /> {t.confirm}</>}
             </Button>
           </div>
         )}
         {activePayment !== "zelle" && (
           <Button onClick={handleCheckout} disabled={createSalePending} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-            {createSalePending ? "Procesando..." : <><Check className="w-5 h-5 mr-2" /> {activePayment === "cash" ? "Cobrar en Efectivo" : "Cobrar con Tarjeta"}</>}
+            {createSalePending ? t.processing : <><Check className="w-5 h-5 mr-2" /> {activePayment === "cash" ? t.chargeCash : t.chargeCard}</>}
           </Button>
         )}
       </div>

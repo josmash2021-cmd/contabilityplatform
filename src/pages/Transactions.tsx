@@ -7,6 +7,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDateTime } from "@/lib/utils";
 import { toast } from "sonner";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { businessCopy } from "@/i18n/copy/business";
 import {
   ArrowUpRight, ArrowDownRight, ArrowLeftRight, RefreshCw, Landmark,
   ChevronDown, TrendingUp, TrendingDown, Wallet,
@@ -23,6 +26,7 @@ function AccountDropdown({
   selectedId: string;
   onChange: (id: string) => void;
 }) {
+  const { transactions: copy } = useCopy(businessCopy);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,7 +47,7 @@ function AccountDropdown({
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
+        <span className="truncate max-w-[90px]">{selected?.bankName ?? copy.account}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -72,6 +76,8 @@ function AccountDropdown({
 }
 
 export default function Transactions() {
+  const { transactions: copy, common, paymentMethods } = useCopy(businessCopy);
+  const locale = intlLocale(useLang().lang);
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
@@ -143,7 +149,7 @@ export default function Transactions() {
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
         utils.bank.getMonthData.invalidate();
-        toast.success(`${data.added} transacciones nuevas sincronizadas`);
+        toast.success(copy.syncedNew(data.added));
       }
     },
     onError: () => { /* silent */ },
@@ -157,7 +163,7 @@ export default function Transactions() {
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
-        toast.success(`${data.added} transacciones sincronizadas`);
+        toast.success(copy.synced(data.added));
       }
       utils.bank.getMonthData.invalidate();
     },
@@ -313,40 +319,28 @@ export default function Transactions() {
   const hasP2P = allBankTransactions.some((t: any) => isP2P(t));
 
   const bankFilters = [
-    { key: "all", label: "Todos" },
-    ...(hasIncome ? [{ key: "income", label: "Ingresos" }] : []),
-    ...(hasExpense ? [{ key: "expense", label: "Gastos" }] : []),
-    ...(hasDevoluciones ? [{ key: "devoluciones", label: "Devoluciones" }] : []),
-    ...(hasZelleIn ? [{ key: "zelle_in", label: "Zelle Recibidos" }] : []),
-    ...(hasZelleOut ? [{ key: "zelle_out", label: "Zelle Enviados" }] : []),
-    ...(hasCashDeposit ? [{ key: "cash_deposit", label: "Dep. Efectivo" }] : []),
-    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: "Ret. Efectivo" }] : []),
-    ...(hasGas ? [{ key: "gasolina", label: "Gasolina" }] : []),
-    ...(hasStreaming ? [{ key: "streaming", label: "Streaming" }] : []),
-    ...(hasP2P ? [{ key: "p2p", label: "P2P" }] : []),
+    { key: "all", label: copy.filters.all },
+    ...(hasIncome ? [{ key: "income", label: copy.filters.income }] : []),
+    ...(hasExpense ? [{ key: "expense", label: copy.filters.expense }] : []),
+    ...(hasDevoluciones ? [{ key: "devoluciones", label: copy.filters.devoluciones }] : []),
+    ...(hasZelleIn ? [{ key: "zelle_in", label: copy.filters.zelle_in }] : []),
+    ...(hasZelleOut ? [{ key: "zelle_out", label: copy.filters.zelle_out }] : []),
+    ...(hasCashDeposit ? [{ key: "cash_deposit", label: copy.filters.cash_deposit }] : []),
+    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: copy.filters.cash_withdrawal }] : []),
+    ...(hasGas ? [{ key: "gasolina", label: copy.filters.gasolina }] : []),
+    ...(hasStreaming ? [{ key: "streaming", label: copy.filters.streaming }] : []),
+    ...(hasP2P ? [{ key: "p2p", label: copy.filters.p2p }] : []),
   ];
 
   const nonBankFilters = [
-    { key: "all", label: "Todos" },
-    { key: "ventas", label: "Ventas" },
-    { key: "devoluciones", label: "Devoluciones" },
+    { key: "all", label: copy.filters.all },
+    { key: "ventas", label: copy.filters.ventas },
+    { key: "devoluciones", label: copy.filters.devoluciones },
   ];
 
   const filterButtons = hasBankConnected ? bankFilters : nonBankFilters;
 
-  const filterTitle =
-    filterType === "income" ? "Ingresos" :
-    filterType === "expense" ? "Gastos" :
-    filterType === "ventas" ? "Ventas" :
-    filterType === "devoluciones" ? "Devoluciones" :
-    filterType === "zelle_in" ? "Zelle Recibidos" :
-    filterType === "zelle_out" ? "Zelle Enviados" :
-    filterType === "cash_deposit" ? "Depósitos de Efectivo" :
-    filterType === "cash_withdrawal" ? "Retiros de Efectivo" :
-    filterType === "gasolina" ? "Gasolina" :
-    filterType === "streaming" ? "Streaming (Netflix, Spotify, Disney, HBO, etc.)" :
-    filterType === "p2p" ? "P2P (Cash App, Venmo, Square, Clover, PayPal)" :
-    "Transacciones";
+  const filterTitle = copy.titles[filterType] ?? copy.defaultTitle;
 
   const isLoading = isLoadingBank || isLoadingSales;
 
@@ -358,8 +352,8 @@ export default function Transactions() {
           <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
           <p className="text-xs text-neutral-500">
             {filterType === "ventas" || filterType === "devoluciones"
-              ? `${salesMapped.length} registros`
-              : `${searchFilteredTransactions.length} de ${allBankTransactions.length} registros${searchQuery.trim() ? ` · Buscando "${searchQuery}"` : ""} · ${monthData?.monthName ?? ""}`}
+              ? common.records(salesMapped.length)
+              : `${copy.countOf(searchFilteredTransactions.length, allBankTransactions.length)}${searchQuery.trim() ? ` · ${copy.searching(searchQuery)}` : ""} · ${monthData?.monthName ? `${copy.monthsLong[parseInt(month) - 1]} ${year}` : ""}`}
           </p>
         </div>
       </div>
@@ -383,7 +377,7 @@ export default function Transactions() {
                 const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
                 return Array.from({ length: maxMonth }, (_, i) => (
                   <SelectItem key={i + 1} value={String(i + 1)}>
-                    {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                    {copy.months[i]}
                   </SelectItem>
                 ));
               })()}
@@ -417,7 +411,7 @@ export default function Transactions() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
           <input
             type="text"
-            placeholder="Buscar en descripciones... (Netflix, Spotify, Disney, etc.)"
+            placeholder={copy.searchPh}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full h-9 pl-8 pr-3 text-xs border border-neutral-200 rounded-lg bg-white focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-200 transition-colors"
@@ -451,7 +445,7 @@ export default function Transactions() {
                 <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
                   <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                 </div>
-                <p className="text-[10px] text-neutral-500">Ingresos</p>
+                <p className="text-[10px] text-neutral-500">{copy.income}</p>
               </div>
               <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
             </CardContent>
@@ -462,7 +456,7 @@ export default function Transactions() {
                 <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
                   <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
                 </div>
-                <p className="text-[10px] text-neutral-500">Gastos</p>
+                <p className="text-[10px] text-neutral-500">{copy.expenses}</p>
               </div>
               <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
             </CardContent>
@@ -473,7 +467,7 @@ export default function Transactions() {
                 <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
                   <Wallet className="w-3.5 h-3.5 text-sky-600" />
                 </div>
-                <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
+                <p className="text-[10px] text-neutral-500">{copy.accountBalance}</p>
               </div>
               <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
             </CardContent>
@@ -487,14 +481,14 @@ export default function Transactions() {
           <div className="w-16 h-16 rounded-full bg-neutral-100 flex items-center justify-center mb-4">
             <Landmark className="w-8 h-8 text-neutral-400" />
           </div>
-          <h3 className="text-base font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-          <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">Conecta tu cuenta bancaria para ver transacciones automaticas, saldo en tiempo real y analisis de flujo de caja.</p>
+          <h3 className="text-base font-semibold text-black mb-2">{copy.noBankTitle}</h3>
+          <p className="text-sm text-neutral-400 text-center max-w-xs mb-6">{copy.noBankText}</p>
           <button
             onClick={() => window.location.href = "/bank"}
             className="flex items-center gap-2 h-10 px-5 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors"
           >
             <Landmark className="w-4 h-4" />
-            Conectar Banco
+            {copy.connectBank}
           </button>
         </div>
       )}
@@ -510,17 +504,17 @@ export default function Transactions() {
             <div className="text-center py-10">
               <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
               <p className="text-sm text-neutral-400">
-                {filterType === "ventas" ? "No hay ventas registradas" : filterType === "devoluciones" ? "No hay devoluciones registradas" : "No hay transacciones este mes"}
+                {filterType === "ventas" ? copy.noSales : filterType === "devoluciones" ? copy.noRefunds : copy.noTransactions}
               </p>
               <p className="text-xs text-neutral-400 mt-1">
-                {filterType === "ventas" || filterType === "devoluciones" ? "Crea una factura para verla aqui" : "Presiona sincronizar para traer datos del banco"}
+                {filterType === "ventas" || filterType === "devoluciones" ? copy.createInvoiceHint : copy.syncHint}
               </p>
             </div>
           ) : (
             displayTransactions.map((tx: any) => {
               const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
-              const dateStr = txDate ? txDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
-              const timeStr = txDate ? txDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              const dateStr = txDate ? txDate.toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
+              const timeStr = txDate ? txDate.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
               return (
                 <div
                   key={tx.id}
@@ -529,12 +523,12 @@ export default function Transactions() {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-normal text-black truncate">{tx.description}</p>
                     {tx._source === "sale" && tx.subtitle && (
-                      <p className="text-[11px] text-neutral-400 mt-0.5">{tx.subtitle} · {tx.customerName || "General"}</p>
+                      <p className="text-[11px] text-neutral-400 mt-0.5">{tx.subtitle} · {tx.customerName || copy.walkIn}</p>
                     )}
                     <div className="flex items-center gap-2 mt-1">
                       <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
                       <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
-                        {tx._source === "sale" ? (tx.paymentMethod || "Venta") : getCategoryLabel(tx.category ?? "")}
+                        {tx._source === "sale" ? (paymentMethods[tx.paymentMethod] || tx.paymentMethod || copy.sale) : getCategoryLabel(tx.category ?? "", copy.categories)}
                       </span>
                     </div>
                   </div>
@@ -558,24 +552,7 @@ export default function Transactions() {
   );
 }
 
-function getCategoryLabel(cat: string): string {
-  const labels: Record<string, string> = {
-    zelle_income: "Zelle Recibido",
-    zelle_sent: "Zelle Enviado",
-    deposit: "Deposito",
-    cash_deposit: "Dep. Efectivo",
-    cash_withdrawal: "Retiro ATM",
-    subscription: "Suscripcion",
-    transfer: "P2P",
-    p2p: "P2P",
-    business_expense: "Negocio",
-    gasolina: "Gasolina",
-    home_expense: "Hogar",
-    shopping: "Compras",
-    cash_income: "Efectivo",
-    sale: "Venta",
-    refund: "Devolucion",
-    other: "Otro",
-  };
+// Labels for category keys live in businessCopy.transactions.categories.
+function getCategoryLabel(cat: string, labels: Record<string, string>): string {
   return labels[cat] || cat;
 }

@@ -1,9 +1,12 @@
 import { trpc } from "@/providers/trpc";
-import { formatCurrency, formatDateShort, formatTimeLocal, getUserTimezoneShort } from "@/lib/utils";
+import { formatCurrency, getUserTimezoneShort } from "@/lib/utils";
 import { Link } from "react-router";
 import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock } from "lucide-react";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 import { useState, useEffect } from "react";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { businessCopy } from "@/i18n/copy/business";
 
 // Hook to detect user's location for timezone verification
 function useUserLocation() {
@@ -36,9 +39,16 @@ function useUserLocation() {
   return { location, permission };
 }
 
-const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
+// Short weekday for a local "YYYY-MM-DD" date (the server's dayName is always Spanish).
+function weekdayShort(date: string | undefined, locale: string): string | undefined {
+  const [yy, mm, dd] = (date ?? "").split("-").map(Number);
+  if (!yy || !mm || !dd) return undefined;
+  return new Date(yy, mm - 1, dd).toLocaleDateString(locale, { weekday: "short" });
+}
 
 export default function Dashboard() {
+  const { dashboard: t, paymentMethods, common: { noProducts } } = useCopy(businessCopy);
+  const locale = intlLocale(useLang().lang);
   // Build local date strings (YYYY-MM-DD) and timezone offset for backend
   const now = new Date();
   const y = now.getFullYear();
@@ -85,8 +95,8 @@ export default function Dashboard() {
       <AnimatedPage>
         <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-medium text-black tracking-tight">Inicio</h1>
-            <p className="text-neutral-400 text-sm mt-1">Todo lo que pasa en tu negocio</p>
+            <h1 className="text-2xl font-medium text-black tracking-tight">{t.title}</h1>
+            <p className="text-neutral-400 text-sm mt-1">{t.subtitle}</p>
           </div>
           {/* Timezone indicator */}
           <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100">
@@ -98,17 +108,17 @@ export default function Dashboard() {
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600 text-sm">Error: {error.message}</p>
+          <p className="text-red-600 text-sm">{t.error(error.message)}</p>
         </div>
       )}
 
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "Hoy", value: formatCurrency(safeData.todaySales.total ?? 0), sub: `${safeData.todaySales.count ?? 0} ventas`, icon: DollarSign, iconColor: "text-emerald-600" },
-          { label: "Esta Semana", value: formatCurrency(safeData.weekSales.total ?? 0), net: netWeek, icon: Receipt, iconColor: "text-blue-600" },
-          { label: "Este Mes", value: formatCurrency(safeData.monthSales.total ?? 0), net: netMonth, icon: TrendingUp, iconColor: "text-violet-600" },
-          { label: "Clientes", value: String(safeData.customerCount ?? 0), sub: "Registrados", icon: Users, iconColor: "text-amber-600" },
+          { label: t.today, value: formatCurrency(safeData.todaySales.total ?? 0), sub: t.salesCount(safeData.todaySales.count ?? 0), icon: DollarSign, iconColor: "text-emerald-600" },
+          { label: t.thisWeekKpi, value: formatCurrency(safeData.weekSales.total ?? 0), net: netWeek, icon: Receipt, iconColor: "text-blue-600" },
+          { label: t.thisMonthKpi, value: formatCurrency(safeData.monthSales.total ?? 0), net: netMonth, icon: TrendingUp, iconColor: "text-violet-600" },
+          { label: t.customers, value: String(safeData.customerCount ?? 0), sub: t.registered, icon: Users, iconColor: "text-amber-600" },
         ].map((s, i) => (
           <AnimatedCard key={s.label} delay={i * 80}>
             <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
@@ -122,7 +132,7 @@ export default function Dashboard() {
               ) : s.net !== undefined ? (
                 <div className="flex items-center gap-1 mt-1">
                   {s.net >= 0 ? <ArrowUpRight className="w-3 h-3 text-emerald-500" /> : <ArrowDownRight className="w-3 h-3 text-red-500" />}
-                  <span className={`text-xs ${s.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(Math.abs(s.net))} neto</span>
+                  <span className={`text-xs ${s.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>{t.net(formatCurrency(Math.abs(s.net)))}</span>
                 </div>
               ) : null}
             </div>
@@ -136,8 +146,8 @@ export default function Dashboard() {
         <AnimatedCard delay={200} className="lg:col-span-2">
           <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">Ventas ultimos 7 dias</span>
-              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">Ver reportes <ArrowUpRight className="w-3 h-3" /></Link>
+              <span className="text-xs text-neutral-400">{t.last7Days}</span>
+              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewReports} <ArrowUpRight className="w-3 h-3" /></Link>
             </div>
             <div className="h-48 flex items-end gap-2">
               {safeData.dailySales?.length ? safeData.dailySales.map((d: any, i: number) => (
@@ -145,9 +155,9 @@ export default function Dashboard() {
                   <div className="w-full bg-neutral-100 rounded-t-sm relative overflow-hidden" style={{ height: `${Math.max((Number(d.total) / Math.max(...safeData.dailySales.map((x: any) => Number(x.total)))) * 160, 4)}px` }}>
                     <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 rounded-t-sm" style={{ height: "100%" }} />
                   </div>
-                  <span className="text-[10px] text-neutral-400">{d.dayName}</span>
+                  <span className="text-[10px] text-neutral-400">{weekdayShort(d.date, locale) ?? d.dayName}</span>
                 </div>
-              )) : <p className="text-sm text-neutral-400 w-full text-center">Sin datos</p>}
+              )) : <p className="text-sm text-neutral-400 w-full text-center">{t.noData}</p>}
             </div>
           </div>
         </AnimatedCard>
@@ -155,13 +165,13 @@ export default function Dashboard() {
         {/* Side Panel */}
         <AnimatedCard delay={280}>
           <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <p className="text-xs text-neutral-400 mb-3">Pagos de hoy</p>
+            <p className="text-xs text-neutral-400 mb-3">{t.todayPayments}</p>
             {safeData.paymentBreakdown?.length ? safeData.paymentBreakdown.map((p: any) => (
               <div key={p.method} className="flex items-center justify-between py-1.5">
-                <span className="text-xs text-neutral-500">{PAYMENT_LABELS[p.method] || p.method}</span>
+                <span className="text-xs text-neutral-500">{paymentMethods[p.method] || p.method}</span>
                 <span className="text-xs font-medium text-black">{formatCurrency(p.total)}</span>
               </div>
-            )) : <p className="text-sm text-neutral-400 text-center py-4">Sin cobros hoy</p>}
+            )) : <p className="text-sm text-neutral-400 text-center py-4">{t.noPaymentsToday}</p>}
           </div>
         </AnimatedCard>
       </div>
@@ -171,16 +181,16 @@ export default function Dashboard() {
         <AnimatedCard delay={400}>
           <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">Resumen financiero</span>
-              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">Ver mas <ArrowUpRight className="w-3 h-3" /></Link>
+              <span className="text-xs text-neutral-400">{t.financialSummary}</span>
+              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewMore} <ArrowUpRight className="w-3 h-3" /></Link>
             </div>
             <div className="space-y-3">
               {[
-                { label: "Hoy", value: formatCurrency(safeData.todaySales.total ?? 0) },
-                { label: "Esta semana", value: formatCurrency(safeData.weekSales.total ?? 0) },
-                { label: "Este mes", value: formatCurrency(safeData.monthSales.total ?? 0) },
-                { label: "Gastos semana", value: formatCurrency(safeData.weekExpenses ?? 0), color: "text-red-600" },
-                { label: "Gastos mes", value: formatCurrency(safeData.monthExpenses ?? 0), color: "text-red-600" },
+                { label: t.today, value: formatCurrency(safeData.todaySales.total ?? 0) },
+                { label: t.thisWeek, value: formatCurrency(safeData.weekSales.total ?? 0) },
+                { label: t.thisMonth, value: formatCurrency(safeData.monthSales.total ?? 0) },
+                { label: t.weekExpenses, value: formatCurrency(safeData.weekExpenses ?? 0), color: "text-red-600" },
+                { label: t.monthExpenses, value: formatCurrency(safeData.monthExpenses ?? 0), color: "text-red-600" },
               ].map((item) => (
                 <div key={item.label} className="flex items-center justify-between">
                   <span className="text-xs text-neutral-500">{item.label}</span>
@@ -194,14 +204,14 @@ export default function Dashboard() {
         <AnimatedCard delay={480}>
           <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
             <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">Ventas recientes</span>
-              <Link to="/transactions" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">Ver todo <ArrowUpRight className="w-3 h-3" /></Link>
+              <span className="text-xs text-neutral-400">{t.recentSales}</span>
+              <Link to="/transactions" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewAll} <ArrowUpRight className="w-3 h-3" /></Link>
             </div>
             {safeData.recentSales?.length ? safeData.recentSales.map((sale: any) => {
-              const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || "Sin productos";
-              const dateStr = sale.createdAt ? formatDateShort(sale.createdAt) : "";
-              const timeStr = sale.createdAt ? formatTimeLocal(sale.createdAt) : "";
-              const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+              const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || noProducts;
+              const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
+              const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+              const paymentLabel = paymentMethods[sale.paymentMethod] || sale.paymentMethod;
               return (
                 <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
                   <div className="min-w-0 flex-1">
@@ -214,7 +224,7 @@ export default function Dashboard() {
                   <span className="text-xs font-semibold text-black ml-3 shrink-0">{formatCurrency(sale.total)}</span>
                 </div>
               );
-            }) : <p className="text-sm text-neutral-400 text-center py-8">No hay ventas aun. Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar.</p>}
+            }) : <p className="text-sm text-neutral-400 text-center py-8">{t.noSalesBefore}<Link to="/pos" className="font-medium text-black">{t.noSalesLink}</Link>{t.noSalesAfter}</p>}
           </div>
         </AnimatedCard>
       </div>

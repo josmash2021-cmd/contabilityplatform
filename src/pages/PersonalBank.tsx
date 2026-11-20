@@ -4,15 +4,17 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Landmark, Link2, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
+import { useCopy } from "@/i18n/useI18n";
+import { personalCopy } from "@/i18n/copy/personal";
 
 // Load Plaid Link SDK dynamically
-function loadPlaidSdk(): Promise<void> {
+function loadPlaidSdk(errorMessage: string): Promise<void> {
   return new Promise((resolve, reject) => {
     if (window.Plaid) { resolve(); return; }
     const script = document.createElement("script");
     script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
     script.onload = () => resolve();
-    script.onerror = () => reject(new Error("Failed to load Plaid SDK"));
+    script.onerror = () => reject(new Error(errorMessage));
     document.head.appendChild(script);
   });
 }
@@ -24,6 +26,7 @@ declare global {
 }
 
 export default function PersonalBank() {
+  const { bank: t } = useCopy(personalCopy);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "success" | "error">("idle");
   const [errorMsg, setErrorMsg] = useState("");
   const [linkToken, setLinkToken] = useState<string | null>(null);
@@ -33,11 +36,11 @@ export default function PersonalBank() {
       if (data.success && data.linkToken) {
         setLinkToken(data.linkToken);
         setStatus("ready");
-        toast.success("Listo para conectar");
+        toast.success(t.ready);
       } else {
         setStatus("error");
-        setErrorMsg(data.error || "Error al iniciar conexion");
-        toast.error(data.error || "Error al iniciar conexion");
+        setErrorMsg(data.error || t.startError);
+        toast.error(data.error || t.startError);
       }
     },
     onError: (err) => {
@@ -51,12 +54,12 @@ export default function PersonalBank() {
     onSuccess: (data) => {
       if (data.success) {
         setStatus("success");
-        toast.success("Banco conectado exitosamente");
+        toast.success(t.connected);
         setTimeout(() => window.location.href = "/personal", 1500);
       } else {
         setStatus("error");
-        setErrorMsg(data.error || "Error al conectar");
-        toast.error(data.error || "Error al conectar");
+        setErrorMsg(data.error || t.connectError);
+        toast.error(data.error || t.connectError);
       }
     },
     onError: (err) => {
@@ -75,7 +78,7 @@ export default function PersonalBank() {
     }
 
     try {
-      await loadPlaidSdk();
+      await loadPlaidSdk(t.sdkError);
       const handler = window.Plaid.create({
         token: linkToken,
         onSuccess: (public_token: string) => {
@@ -97,7 +100,7 @@ export default function PersonalBank() {
       setErrorMsg(err.message);
       toast.error(err.message);
     }
-  }, [linkToken, createLinkMut, exchangeMut]);
+  }, [linkToken, createLinkMut, exchangeMut, t.sdkError]);
 
   return (
     <div className="flex items-center justify-center min-h-screen bg-neutral-50 p-4">
@@ -110,10 +113,10 @@ export default function PersonalBank() {
 
           {/* Title */}
           <h1 className="text-xl font-semibold text-black mb-2">
-            Conectar tu banco
+            {t.title}
           </h1>
           <p className="text-sm text-neutral-400 mb-8">
-            Conecta tu cuenta bancaria para ver transacciones automaticas, balance en tiempo real y analisis de flujo de caja.
+            {t.text}
           </p>
 
           {/* Error display */}
@@ -128,7 +131,7 @@ export default function PersonalBank() {
           <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
             <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
             <p className="text-xs text-emerald-700">
-              Tus datos estan protegidos con encriptacion de nivel bancario
+              {t.security}
             </p>
           </div>
 
@@ -139,11 +142,11 @@ export default function PersonalBank() {
             className="w-full h-12 bg-black text-white rounded-xl hover:bg-neutral-800 text-sm font-medium"
           >
             {status === "loading" ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Preparando...</>
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t.preparing}</>
             ) : status === "success" ? (
-              <><CheckCircle className="w-4 h-4 mr-2" /> Conectado</>
+              <><CheckCircle className="w-4 h-4 mr-2" /> {t.connectedBtn}</>
             ) : (
-              <><Link2 className="w-4 h-4 mr-2" /> Conectar Banco</>
+              <><Link2 className="w-4 h-4 mr-2" /> {t.connect}</>
             )}
           </Button>
 
@@ -152,7 +155,7 @@ export default function PersonalBank() {
             onClick={() => window.location.href = "/personal"}
             className="mt-4 text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
           >
-            Volver al inicio
+            {t.back}
           </button>
         </CardContent>
       </Card>

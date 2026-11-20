@@ -3,8 +3,11 @@ import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { AlertTriangle, Crown, CalendarDays, Zap, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useCopy } from "@/i18n/useI18n";
+import { billingCopy } from "@/i18n/copy/billing";
 
 export function SubscriptionExpiredOverlay() {
+  const { plans, expired: t } = useCopy(billingCopy);
   const navigate = useNavigate();
   const [dismissed, setDismissed] = useState(false);
 
@@ -40,8 +43,8 @@ export function SubscriptionExpiredOverlay() {
               <AlertTriangle className="w-6 h-6 text-amber-600" />
             </div>
             <div>
-              <h2 className="text-lg font-semibold text-black">Suscripcion expirada</h2>
-              <p className="text-xs text-neutral-500">Tu plan ha finalizado</p>
+              <h2 className="text-lg font-semibold text-black">{t.title}</h2>
+              <p className="text-xs text-neutral-500">{t.subtitle}</p>
             </div>
           </div>
           <button
@@ -54,8 +57,7 @@ export function SubscriptionExpiredOverlay() {
 
         {/* Message */}
         <p className="text-sm text-neutral-600 leading-relaxed">
-          Tu suscripcion ha expirado. Para seguir usando todas las funciones de AI Aethel Accountant,
-          renueva tu plan ahora.
+          {t.text}
         </p>
 
         {/* Renewal Options */}
@@ -72,8 +74,8 @@ export function SubscriptionExpiredOverlay() {
               <CalendarDays className="w-5 h-5 text-neutral-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-black">Renovar suscripcion mensual</p>
-              <p className="text-xs text-neutral-500">$80/mes — Facturado mensualmente</p>
+              <p className="text-sm font-medium text-black">{t.renewMonthly}</p>
+              <p className="text-xs text-neutral-500">$80{plans.perMonth} — {t.billedMonthly}</p>
             </div>
             <Crown className="w-4 h-4 text-yellow-500 shrink-0" />
           </button>
@@ -90,18 +92,18 @@ export function SubscriptionExpiredOverlay() {
               <Zap className="w-5 h-5 text-yellow-600" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-black">Renovar suscripcion anual</p>
-              <p className="text-xs text-neutral-500">$800/año — <span className="text-emerald-600 font-medium">Ahorras $400</span></p>
+              <p className="text-sm font-medium text-black">{t.renewAnnual}</p>
+              <p className="text-xs text-neutral-500">$800{plans.perYear} — <span className="text-emerald-600 font-medium">{plans.savings("$400")}</span></p>
             </div>
             <div className="shrink-0">
-              <span className="text-[10px] bg-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">Mejor valor</span>
+              <span className="text-[10px] bg-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">{plans.bestValue}</span>
             </div>
           </button>
         </div>
 
         {/* Footer */}
         <p className="text-[10px] text-neutral-400 text-center">
-          Al renovar, aceptas los terminos de servicio de AI Aethel Accountant.
+          {t.terms}
         </p>
       </div>
     </div>

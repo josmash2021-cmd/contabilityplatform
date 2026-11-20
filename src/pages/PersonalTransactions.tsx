@@ -12,6 +12,9 @@ import {
   Receipt, CheckCircle, Search, Tv,
 } from "lucide-react";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { personalCopy } from "@/i18n/copy/personal";
 
 /** Account dropdown - avoids scroll issues */
 function AccountDropdown({
@@ -23,6 +26,7 @@ function AccountDropdown({
   selectedId: string;
   onChange: (id: string) => void;
 }) {
+  const { common } = useCopy(personalCopy);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -43,7 +47,7 @@ function AccountDropdown({
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected ? selected.bankName : "Todas las cuentas"}</span>
+        <span className="truncate max-w-[90px]">{selected ? selected.bankName : common.allAccounts}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -55,7 +59,7 @@ function AccountDropdown({
             }`}
           >
             <Landmark className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>Todas las cuentas</span>
+            <span>{common.allAccounts}</span>
           </button>
           <div className="border-t border-neutral-100 my-1" />
           {accounts.map((acc: any) => (
@@ -82,6 +86,8 @@ function AccountDropdown({
 }
 
 export default function PersonalTransactions() {
+  const { lang } = useLang();
+  const { transactions: copy, common, categories } = useCopy(personalCopy);
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
@@ -132,7 +138,7 @@ export default function PersonalTransactions() {
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
       if (data.success && data.added && data.added > 0) {
-        toast.success(`${data.added} transacciones sincronizadas`);
+        toast.success(common.txSynced(data.added));
       }
       utils.bank.getMonthData.invalidate();
     },
@@ -247,31 +253,31 @@ export default function PersonalTransactions() {
   const hasP2P = accountFilteredTransactions.some((t: any) => isP2P(t));
 
   const filterButtons = [
-    { key: "all", label: "Todos" },
-    ...(hasIncome ? [{ key: "income", label: "Ingresos" }] : []),
-    ...(hasExpense ? [{ key: "expense", label: "Gastos" }] : []),
-    ...(hasDevoluciones ? [{ key: "devoluciones", label: "Devoluciones" }] : []),
-    ...(hasZelleIn ? [{ key: "zelle_in", label: "Zelle Recibidos" }] : []),
-    ...(hasZelleOut ? [{ key: "zelle_out", label: "Zelle Enviados" }] : []),
-    ...(hasCashDeposit ? [{ key: "cash_deposit", label: "Dep. Efectivo" }] : []),
-    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: "Ret. Efectivo" }] : []),
-    ...(hasGas ? [{ key: "gasolina", label: "Gasolina" }] : []),
-    ...(hasStreaming ? [{ key: "streaming", label: "Streaming" }] : []),
-    ...(hasP2P ? [{ key: "p2p", label: "P2P" }] : []),
+    { key: "all", label: copy.filters.all },
+    ...(hasIncome ? [{ key: "income", label: copy.filters.income }] : []),
+    ...(hasExpense ? [{ key: "expense", label: copy.filters.expense }] : []),
+    ...(hasDevoluciones ? [{ key: "devoluciones", label: copy.filters.devoluciones }] : []),
+    ...(hasZelleIn ? [{ key: "zelle_in", label: copy.filters.zelle_in }] : []),
+    ...(hasZelleOut ? [{ key: "zelle_out", label: copy.filters.zelle_out }] : []),
+    ...(hasCashDeposit ? [{ key: "cash_deposit", label: copy.filters.cash_deposit }] : []),
+    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: copy.filters.cash_withdrawal }] : []),
+    ...(hasGas ? [{ key: "gasolina", label: copy.filters.gasolina }] : []),
+    ...(hasStreaming ? [{ key: "streaming", label: copy.filters.streaming }] : []),
+    ...(hasP2P ? [{ key: "p2p", label: copy.filters.p2p }] : []),
   ];
 
   const filterTitle =
-    filterType === "income" ? "Ingresos" :
-    filterType === "expense" ? "Gastos" :
-    filterType === "devoluciones" ? "Devoluciones" :
-    filterType === "zelle_in" ? "Zelle Recibidos" :
-    filterType === "zelle_out" ? "Zelle Enviados" :
-    filterType === "cash_deposit" ? "Depósitos de Efectivo" :
-    filterType === "cash_withdrawal" ? "Retiros de Efectivo" :
-    filterType === "gasolina" ? "Gasolina" :
-    filterType === "streaming" ? "Streaming (Netflix, Spotify, Disney, HBO, etc.)" :
-    filterType === "p2p" ? "P2P (Cash App, Venmo, Square, Clover, PayPal)" :
-    "Transacciones";
+    filterType === "income" ? copy.titles.income :
+    filterType === "expense" ? copy.titles.expense :
+    filterType === "devoluciones" ? copy.titles.devoluciones :
+    filterType === "zelle_in" ? copy.titles.zelle_in :
+    filterType === "zelle_out" ? copy.titles.zelle_out :
+    filterType === "cash_deposit" ? copy.titles.cash_deposit :
+    filterType === "cash_withdrawal" ? copy.titles.cash_withdrawal :
+    filterType === "gasolina" ? copy.titles.gasolina :
+    filterType === "streaming" ? copy.titles.streaming :
+    filterType === "p2p" ? copy.titles.p2p :
+    copy.titles.default;
 
   const isLoading = isLoadingBank;
 
@@ -286,9 +292,9 @@ export default function PersonalTransactions() {
         <div>
           <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
           <p className="text-xs text-neutral-500">
-            {searchFilteredTransactions.length} de {accountFilteredTransactions.length} registros
-            {searchQuery.trim() ? ` · Buscando "${searchQuery}"` : ""}
-            {" · "}{monthData?.monthName ?? ""}
+            {copy.records(searchFilteredTransactions.length, accountFilteredTransactions.length)}
+            {searchQuery.trim() ? copy.searching(searchQuery) : ""}
+            {" · "}{monthData?.monthName ? `${common.months[parseInt(month) - 1]} ${year}` : ""}
           </p>
         </div>
       </div>
@@ -300,10 +306,10 @@ export default function PersonalTransactions() {
             <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-3">
               <Landmark className="w-6 h-6 text-neutral-400" />
             </div>
-            <h3 className="text-base font-semibold text-black mb-1">Sin cuenta bancaria conectada</h3>
-            <p className="text-xs text-neutral-400 max-w-sm mb-4">Conecta tu cuenta bancaria para sincronizar transacciones automaticas.</p>
+            <h3 className="text-base font-semibold text-black mb-1">{common.noBank.title}</h3>
+            <p className="text-xs text-neutral-400 max-w-sm mb-4">{common.noBank.text}</p>
             <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-9 px-5 text-xs">
-              <Landmark className="w-3.5 h-3.5 mr-2" /> Conectar Banco
+              <Landmark className="w-3.5 h-3.5 mr-2" /> {common.noBank.connect}
             </Button>
           </CardContent>
         </Card>
@@ -328,7 +334,7 @@ export default function PersonalTransactions() {
                   const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
                   return Array.from({ length: maxMonth }, (_, i) => (
                     <SelectItem key={i + 1} value={String(i + 1)}>
-                      {["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][i]}
+                      {common.monthsShort[i]}
                     </SelectItem>
                   ));
                 })()}
@@ -360,7 +366,7 @@ export default function PersonalTransactions() {
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
             <input
               type="text"
-              placeholder="Buscar en descripciones..."
+              placeholder={copy.searchPh}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full h-9 pl-8 pr-3 text-xs border border-neutral-200 rounded-lg bg-white focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-200 transition-colors"
@@ -392,7 +398,7 @@ export default function PersonalTransactions() {
                   <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
                     <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                   </div>
-                  <p className="text-[10px] text-neutral-500">Ingresos</p>
+                  <p className="text-[10px] text-neutral-500">{common.income}</p>
                 </div>
                 <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
               </CardContent>
@@ -403,7 +409,7 @@ export default function PersonalTransactions() {
                   <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
                     <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
                   </div>
-                  <p className="text-[10px] text-neutral-500">Gastos</p>
+                  <p className="text-[10px] text-neutral-500">{common.expenses}</p>
                 </div>
                 <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
               </CardContent>
@@ -414,7 +420,7 @@ export default function PersonalTransactions() {
                   <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
                     <Wallet className="w-3.5 h-3.5 text-sky-600" />
                   </div>
-                  <p className="text-[10px] text-neutral-500">Balance Cuenta</p>
+                  <p className="text-[10px] text-neutral-500">{copy.accountBalance}</p>
                 </div>
                 <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
               </CardContent>
@@ -430,14 +436,14 @@ export default function PersonalTransactions() {
             ) : displayTransactions.length === 0 ? (
               <div className="text-center py-10">
                 <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-                <p className="text-sm text-neutral-400">No hay transacciones este mes</p>
-                <p className="text-xs text-neutral-400 mt-1">Presiona sincronizar para traer datos del banco</p>
+                <p className="text-sm text-neutral-400">{common.noTxThisMonth}</p>
+                <p className="text-xs text-neutral-400 mt-1">{copy.pressSync}</p>
               </div>
             ) : (
               displayTransactions.map((tx: any) => {
                 const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
-                const dateStr = txDate ? txDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
-                const timeStr = txDate ? txDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                const dateStr = txDate ? txDate.toLocaleDateString(intlLocale(lang), { day: "numeric", month: "short" }) : "";
+                const timeStr = txDate ? txDate.toLocaleTimeString(intlLocale(lang), { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
                 return (
                   <div
                     key={tx.id}
@@ -448,7 +454,7 @@ export default function PersonalTransactions() {
                       <div className="flex items-center gap-2 mt-1">
                         <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
                         <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
-                          {getCategoryLabel(tx.category ?? "")}
+                          {getCategoryLabel(tx.category ?? "", categories.short)}
                         </span>
                       </div>
                     </div>
@@ -466,24 +472,7 @@ export default function PersonalTransactions() {
   );
 }
 
-function getCategoryLabel(cat: string): string {
-  const labels: Record<string, string> = {
-    zelle_income: "Zelle Recibido",
-    zelle_sent: "Zelle Enviado",
-    deposit: "Deposito",
-    cash_deposit: "Dep. Efectivo",
-    cash_withdrawal: "Retiro ATM",
-    subscription: "Suscripcion",
-    transfer: "P2P",
-    p2p: "P2P",
-    business_expense: "Negocio",
-    gasolina: "Gasolina",
-    home_expense: "Hogar",
-    shopping: "Compras",
-    cash_income: "Efectivo",
-    sale: "Venta",
-    refund: "Devolucion",
-    other: "Otro",
-  };
+/** Display label for a category key; labels come from the copy (keys are database values). */
+function getCategoryLabel(cat: string, labels: Record<string, string>): string {
   return labels[cat] || cat;
 }

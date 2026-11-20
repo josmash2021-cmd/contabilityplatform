@@ -16,42 +16,47 @@ import {
 import { useNavigate } from "react-router";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { personalCopy } from "@/i18n/copy/personal";
 
-const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
-  zelle_income: { label: "Zelle Recibidos", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  transfer_income: { label: "Transferencias", icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
-  deposit: { label: "Depositos Directos", icon: Building2, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  cash_deposit: { label: "Deposito de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  cash_income: { label: "Efectivo Recibido", icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  income: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  paycheck: { label: "Nomina", icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  transfer: { label: "Transferencias", icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
+const INCOME_CATS: Record<string, { icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
+  zelle_income: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
+  transfer_income: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
+  deposit: { icon: Building2, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
+  cash_deposit: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+  cash_income: { icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  income: { icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  paycheck: { icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
+  transfer: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
 };
 
-const EXPENSE_CATS: Record<string, { label: string; icon: typeof TrendingDown; iconBg: string; iconColor: string }> = {
-  zelle_sent: { label: "Zelle Enviados", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  cash_withdrawal: { label: "Retiro de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  subscription: { label: "Suscripciones", icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
-  shopping: { label: "Compras", icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-  home_expense: { label: "Comida y Hogar", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  business_expense: { label: "Negocio", icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  gasolina: { label: "Gasolina", icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  transfer: { label: "Transferencias", icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  other: { label: "Otros", icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
-  medical: { label: "Farmacia", icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
-  food: { label: "Comida", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+const EXPENSE_CATS: Record<string, { icon: typeof TrendingDown; iconBg: string; iconColor: string }> = {
+  zelle_sent: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
+  cash_withdrawal: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+  subscription: { icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
+  shopping: { icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
+  home_expense: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+  business_expense: { icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+  gasolina: { icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+  transfer: { icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+  other: { icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
+  medical: { icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
+  food: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
 };
 
 function buildBreakdown(
   byCategory: Array<{ category: string; type: string; total: string; count: number }>,
   type: "income" | "expense",
-  catConfig: Record<string, { label: string; icon: any; iconBg: string; iconColor: string }>
+  catConfig: Record<string, { icon: any; iconBg: string; iconColor: string }>,
+  labels: Record<string, string>,
 ) {
   return byCategory
     .filter((c) => c.type === type && parseFloat(c.total) > 0)
     .map((c) => {
-      const config = catConfig[c.category] || { label: c.category, icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" };
-      return { category: c.category, label: config.label, icon: config.icon, iconBg: config.iconBg, iconColor: config.iconColor, amount: parseFloat(c.total), count: c.count };
+      const config = catConfig[c.category] || { icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" };
+      const label = (catConfig[c.category] && labels[c.category]) || c.category;
+      return { category: c.category, label, icon: config.icon, iconBg: config.iconBg, iconColor: config.iconColor, amount: parseFloat(c.total), count: c.count };
     })
     .sort((a, b) => b.amount - a.amount);
 }
@@ -61,6 +66,7 @@ function AccountDropdown({ accounts, selectedId, onChange }: {
   selectedId: string;
   onChange: (id: string) => void;
 }) {
+  const { common } = useCopy(personalCopy);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -79,7 +85,7 @@ function AccountDropdown({ accounts, selectedId, onChange }: {
         className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
       >
         <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected?.bankName ?? "Cuenta"}</span>
+        <span className="truncate max-w-[90px]">{selected?.bankName ?? common.account}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -108,11 +114,11 @@ function AccountDropdown({ accounts, selectedId, onChange }: {
 }
 
 // ─── Extract unique accounts from transactions as fallback ───
-function extractAccountsFromTxs(txs: any[]): Array<{ id: number; bankName: string; accountType: string | null }> {
+function extractAccountsFromTxs(txs: any[], fallbackName: string): Array<{ id: number; bankName: string; accountType: string | null }> {
   const map = new Map<number, { id: number; bankName: string; accountType: string | null }>();
   for (const t of txs) {
     if (t.bankAccountId && !map.has(t.bankAccountId)) {
-      map.set(t.bankAccountId, { id: t.bankAccountId, bankName: t.bankName || "Cuenta bancaria", accountType: null });
+      map.set(t.bankAccountId, { id: t.bankAccountId, bankName: t.bankName || fallbackName, accountType: null });
     }
   }
   return Array.from(map.values());
@@ -120,6 +126,8 @@ function extractAccountsFromTxs(txs: any[]): Array<{ id: number; bankName: strin
 
 export default function PersonalDashboard() {
   const navigate = useNavigate();
+  const { lang } = useLang();
+  const { dashboard: copy, common, categories } = useCopy(personalCopy);
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
@@ -269,10 +277,10 @@ export default function PersonalDashboard() {
   const refreshMutation = trpc.bank.refreshAllBalances.useMutation({
     onSuccess: (data) => {
       utils.bank.listAccounts.invalidate();
-      if (data.added && data.added > 0) toast.success(`${data.added} cuenta(s) nueva(s) encontradas`);
-      else if (data.updated && data.updated > 0) toast.success(`${data.updated} balances actualizados`);
+      if (data.added && data.added > 0) toast.success(copy.newAccounts(data.added));
+      else if (data.updated && data.updated > 0) toast.success(copy.balancesUpdated(data.updated));
       else if (data.total === 1 && accounts.length === 1) {
-        toast.info("Plaid reporta solo 1 cuenta. Si tienes mas cuentas, desconecta y vuelve a conectar el banco.");
+        toast.info(copy.onlyOneAccount);
       }
     },
     onError: (err) => toast.error(err.message),
@@ -292,7 +300,7 @@ export default function PersonalDashboard() {
   // ─── Disconnect ───
   const disconnectMut = trpc.bank.disconnect.useMutation({
     onSuccess: () => {
-      toast.success("Banco desconectado");
+      toast.success(copy.disconnected);
       setConfirmDisconnect(false);
       setSelectedAccountId("");
       hasAutoSelected.current = false;
@@ -317,36 +325,33 @@ export default function PersonalDashboard() {
     else categoryGroups.set(key, { category: t.category, type: t.type, total: parseFloat(t.amount), count: 1 });
   }
   const byCategory = Array.from(categoryGroups.values()).map(c => ({ ...c, total: String(c.total.toFixed(2)) }));
-  const incomeBreakdown = buildBreakdown(byCategory, "income", INCOME_CATS);
-  const expenseBreakdown = buildBreakdown(byCategory, "expense", EXPENSE_CATS);
+  const incomeBreakdown = buildBreakdown(byCategory, "income", INCOME_CATS, categories.income);
+  const expenseBreakdown = buildBreakdown(byCategory, "expense", EXPENSE_CATS, categories.expense);
+  const categoryLabel = (cat: string) =>
+    (INCOME_CATS[cat] && categories.income[cat]) || (EXPENSE_CATS[cat] && categories.expense[cat]) || cat;
 
   const displayedTransactions = showAllTxs ? transactions : transactions.slice(0, 5);
   const hasMore = transactions.length > 5;
 
-  const months = [
-    { value: "1", label: "Enero" }, { value: "2", label: "Febrero" }, { value: "3", label: "Marzo" },
-    { value: "4", label: "Abril" }, { value: "5", label: "Mayo" }, { value: "6", label: "Junio" },
-    { value: "7", label: "Julio" }, { value: "8", label: "Agosto" }, { value: "9", label: "Septiembre" },
-    { value: "10", label: "Octubre" }, { value: "11", label: "Noviembre" }, { value: "12", label: "Diciembre" },
-  ];
+  const months = common.months.map((label, i) => ({ value: String(i + 1), label }));
 
   // ─── NOT CONNECTED: Early return, same as business Bank.tsx ───
   if (!userHasBank) {
     return (
       <div className="max-w-5xl mx-auto p-6 lg:p-10">
         <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">Mi Banco</h1>
-          <p className="text-sm text-neutral-400 mt-1">Conecta tu cuenta para sincronizar transacciones automaticamente</p>
+          <h1 className="text-2xl font-semibold text-black">{copy.myBank}</h1>
+          <p className="text-sm text-neutral-400 mt-1">{copy.connectSubtitle}</p>
         </div>
         <Card className="border-neutral-200 rounded-xl shadow-none">
           <CardContent className="p-16 flex flex-col items-center justify-center text-center">
             <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
               <Landmark className="w-8 h-8 text-neutral-400" />
             </div>
-            <h3 className="text-lg font-semibold text-black mb-2">Sin cuenta bancaria conectada</h3>
-            <p className="text-sm text-neutral-400 max-w-sm mb-6">Conecta tu cuenta bancaria para ver saldo en tiempo real, transacciones automaticas y analisis de flujo de caja.</p>
+            <h3 className="text-lg font-semibold text-black mb-2">{common.noBank.title}</h3>
+            <p className="text-sm text-neutral-400 max-w-sm mb-6">{copy.noBankText}</p>
             <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6">
-              <Landmark className="w-4 h-4 mr-2" /> Conectar Banco
+              <Landmark className="w-4 h-4 mr-2" /> {common.noBank.connect}
             </Button>
           </CardContent>
         </Card>
@@ -360,8 +365,8 @@ export default function PersonalDashboard() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <div>
-          <h1 className="text-lg font-semibold text-black">Inicio</h1>
-          <p className="text-xs text-neutral-500">{monthData?.monthName ?? "Contabilidad Personal"}</p>
+          <h1 className="text-lg font-semibold text-black">{copy.title}</h1>
+          <p className="text-xs text-neutral-500">{monthData ? (monthData.monthName ? `${common.months[parseInt(selectedMonth) - 1]} ${selectedYear}` : "") : copy.subtitleFallback}</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           <AccountDropdown accounts={accounts} selectedId={activeId} onChange={setSelectedAccountId} />
@@ -391,12 +396,12 @@ export default function PersonalDashboard() {
           {accounts.length > 0 && (
             confirmDisconnect ? (
               <div className="flex items-center gap-1">
-                <span className="text-[10px] text-red-600 font-medium">Seguro?</span>
-                <button onClick={() => setConfirmDisconnect(false)} className="h-7 px-1.5 text-[10px] border border-neutral-200 rounded bg-white hover:bg-neutral-50">No</button>
-                <button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-1.5 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">Si</button>
+                <span className="text-[10px] text-red-600 font-medium">{copy.confirmDisconnect}</span>
+                <button onClick={() => setConfirmDisconnect(false)} className="h-7 px-1.5 text-[10px] border border-neutral-200 rounded bg-white hover:bg-neutral-50">{copy.no}</button>
+                <button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-1.5 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">{copy.yes}</button>
               </div>
             ) : (
-              <button onClick={() => setConfirmDisconnect(true)} className="h-8 w-8 flex items-center justify-center border border-red-200 text-red-500 rounded-md bg-white hover:bg-red-50 transition-colors shrink-0" title="Desconectar banco">
+              <button onClick={() => setConfirmDisconnect(true)} className="h-8 w-8 flex items-center justify-center border border-red-200 text-red-500 rounded-md bg-white hover:bg-red-50 transition-colors shrink-0" title={copy.disconnectBank}>
                 <LogOut className="w-3.5 h-3.5" />
               </button>
             )
@@ -413,25 +418,25 @@ export default function PersonalDashboard() {
               <div>
                 <div className="flex items-center gap-2 mb-1">
                   <Landmark className="w-4 h-4 text-neutral-400" />
-                  <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? "Banco"}</span>
+                  <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? common.bank}</span>
                   {accounts[0]?.id === activeAccount?.id && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
                   {monthData?.fromPlaid ? (
                     <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      En vivo
+                      {copy.live}
                     </span>
                   ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full" title="Sin conexion con el banco">
+                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full" title={copy.noBankConnection}>
                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      Desactualizado
+                      {copy.outdated}
                     </span>
                   )}
                 </div>
                 <p className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(balance)}</p>
-                <p className="text-[11px] text-neutral-400 mt-0.5">{balance >= 0 ? "Balance disponible" : "Sobregiro / Balance negativo"}</p>
+                <p className="text-[11px] text-neutral-400 mt-0.5">{balance >= 0 ? copy.available : copy.overdraft}</p>
                 {monthData?.lastSyncedAt && (
                   <p className="text-[10px] text-neutral-400 mt-0.5">
-                    Actualizado: {new Date(monthData.lastSyncedAt).toLocaleString("es", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                    {copy.updated(new Date(monthData.lastSyncedAt).toLocaleString(intlLocale(lang), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}
                   </p>
                 )}
               </div>
@@ -449,30 +454,30 @@ export default function PersonalDashboard() {
           <>
             <Card className="border-emerald-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><TrendingUp className="w-4 h-4 text-emerald-600" /></div><span className="text-xs text-neutral-500">Ingresos</span></div>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><TrendingUp className="w-4 h-4 text-emerald-600" /></div><span className="text-xs text-neutral-500">{common.income}</span></div>
                 <p className="text-lg font-semibold text-emerald-700">+{formatCurrency(incomeVal)}</p>
-                <p className="text-[10px] text-neutral-400">{transactions.filter((t: any) => t.type === "income").length} transacciones</p>
+                <p className="text-[10px] text-neutral-400">{common.txCount(transactions.filter((t: any) => t.type === "income").length)}</p>
               </CardContent>
             </Card>
             <Card className="border-rose-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-rose-300 transition-all">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center"><TrendingDown className="w-4 h-4 text-rose-600" /></div><span className="text-xs text-neutral-500">Gastos</span></div>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center"><TrendingDown className="w-4 h-4 text-rose-600" /></div><span className="text-xs text-neutral-500">{common.expenses}</span></div>
                 <p className="text-lg font-semibold text-rose-700">-{formatCurrency(expenseVal)}</p>
-                <p className="text-[10px] text-neutral-400">{transactions.filter((t: any) => t.type === "expense").length} transacciones</p>
+                <p className="text-[10px] text-neutral-400">{common.txCount(transactions.filter((t: any) => t.type === "expense").length)}</p>
               </CardContent>
             </Card>
             <Card className="border-sky-200 rounded-xl shadow-none">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Wallet className="w-4 h-4 text-sky-600" /></div><span className="text-xs text-neutral-500">Balance Total</span></div>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Wallet className="w-4 h-4 text-sky-600" /></div><span className="text-xs text-neutral-500">{copy.totalBalance}</span></div>
                 <p className="text-lg font-semibold text-sky-700">{formatCurrency(balance)}</p>
-                <p className="text-[10px] text-neutral-400">{accounts.length} cuenta{accounts.length !== 1 ? "s" : ""}</p>
+                <p className="text-[10px] text-neutral-400">{copy.accountsCount(accounts.length)}</p>
               </CardContent>
             </Card>
             <Card className="border-violet-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-violet-300 transition-all">
               <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><Zap className="w-4 h-4 text-violet-600" /></div><span className="text-xs text-neutral-500">Transacciones</span></div>
+                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><Zap className="w-4 h-4 text-violet-600" /></div><span className="text-xs text-neutral-500">{common.transactions}</span></div>
                 <p className="text-lg font-semibold text-violet-700">{transactions.length}</p>
-                <p className="text-[10px] text-neutral-400">Este mes</p>
+                <p className="text-[10px] text-neutral-400">{common.thisMonth}</p>
               </CardContent>
             </Card>
           </>
@@ -482,27 +487,27 @@ export default function PersonalDashboard() {
       {/* Income Breakdown — clickable, navigates to category detail */}
       {!isLoading && incomeBreakdown.length > 0 && (
         <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-600" /> Desglose de Ingresos</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{incomeBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-emerald-600">+{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-600" /> {copy.incomeBreakdown}</CardTitle></CardHeader>
+          <CardContent className="pt-0"><div className="space-y-1">{incomeBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{common.txCount(item.count)}</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-emerald-600">+{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
         </Card>
       )}
 
       {/* Expense Breakdown — clickable, navigates to category detail */}
       {!isLoading && expenseBreakdown.length > 0 && (
         <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingDown className="w-4 h-4 text-rose-600" /> Desglose de Gastos</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{expenseBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{item.count} transacciones</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-rose-600">-{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingDown className="w-4 h-4 text-rose-600" /> {copy.expenseBreakdown}</CardTitle></CardHeader>
+          <CardContent className="pt-0"><div className="space-y-1">{expenseBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{common.txCount(item.count)}</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-rose-600">-{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
         </Card>
       )}
 
       {/* All Transactions */}
       <Card className="border-neutral-200 rounded-xl shadow-none">
-        <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-black">Transacciones del Mes {transactions.length > 0 && <span className="text-neutral-400 font-normal ml-1">({transactions.length})</span>}</CardTitle></CardHeader>
+        <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-black">{copy.monthTransactions} {transactions.length > 0 && <span className="text-neutral-400 font-normal ml-1">({transactions.length})</span>}</CardTitle></CardHeader>
         <CardContent className="pt-0">
           <div className="space-y-0">
             {isLoading ? <div className="space-y-2 py-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
               : transactions.length === 0 ? (
-                <div className="text-center py-10"><Landmark className="w-10 h-10 text-neutral-300 mx-auto mb-3" /><p className="text-sm text-neutral-400">No hay transacciones este mes</p></div>
+                <div className="text-center py-10"><Landmark className="w-10 h-10 text-neutral-300 mx-auto mb-3" /><p className="text-sm text-neutral-400">{common.noTxThisMonth}</p></div>
               ) : displayedTransactions.map((tx: any) => (
                 <div key={tx.id} className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors">
                   <div className="flex items-center gap-3 min-w-0">
@@ -512,16 +517,16 @@ export default function PersonalDashboard() {
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-black truncate">{tx.description}</p>
                       <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                        <span>{(INCOME_CATS[tx.category]?.label || EXPENSE_CATS[tx.category]?.label || tx.category)}</span>
+                        <span>{categoryLabel(tx.category)}</span>
                         <span>·</span>
-                        <span>{tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}</span>
+                        <span>{tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString(intlLocale(lang)) : ""}</span>
                       </div>
                     </div>
                   </div>
                   <span className={`text-sm font-semibold shrink-0 ml-3 ${tx.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>{tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}</span>
                 </div>
               ))}
-            {!isLoading && hasMore && (<button onClick={() => setShowAllTxs(!showAllTxs)} className="w-full py-3 text-center text-sm font-medium text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg transition-colors mt-1">{showAllTxs ? "Ver menos" : `Ver mas (${transactions.length - 5} restantes)`}</button>)}
+            {!isLoading && hasMore && (<button onClick={() => setShowAllTxs(!showAllTxs)} className="w-full py-3 text-center text-sm font-medium text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg transition-colors mt-1">{showAllTxs ? common.showLess : copy.showMore(transactions.length - 5)}</button>)}
           </div>
         </CardContent>
       </Card>

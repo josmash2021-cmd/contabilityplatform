@@ -21,6 +21,9 @@ import {
   Landmark, ChevronDown, ChevronUp, Link2, Unlink,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { bankCopy } from "@/i18n/copy/bank";
 
 /** Account dropdown — simple absolute positioning, parent must NOT have overflow:hidden */
 function AccountDropdown({
@@ -32,6 +35,7 @@ function AccountDropdown({
   selectedId: string;
   onChange: (id: string) => void;
 }) {
+  const { reports: t } = useCopy(bankCopy);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -52,7 +56,7 @@ function AccountDropdown({
         className="flex items-center gap-1.5 h-10 px-3 border border-neutral-200 rounded-xl bg-white text-sm hover:border-neutral-300 transition-colors w-full"
       >
         <Landmark className="w-4 h-4 text-neutral-400 shrink-0" />
-        <span className="truncate flex-1 text-left">{selected?.bankName ?? "Seleccionar cuenta"}</span>
+        <span className="truncate flex-1 text-left">{selected?.bankName ?? t.selectAccount}</span>
         <ChevronDown className={`w-4 h-4 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
       {open && (
@@ -80,20 +84,9 @@ function AccountDropdown({
   );
 }
 
-const PAYMENT_LABELS: Record<string, string> = {
-  cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto", transfer: "Transferencia", other: "Otro",
-};
+// Payment method labels come from bankCopy.reports.payment (keys are stored values).
 
 const PIE_COLORS = ["#22c55e", "#86efac", "#a3a3a3", "#d4d4d4", "#e5e5e5", "#f5f5f5"];
-
-const CATEGORY_LABELS: Record<string, string> = {
-  zelle_income: "Zelle Recibidos", zelle_sent: "Zelle Enviados", deposit: "Depositos",
-  cash_deposit: "Depositos de Efectivo", cash_withdrawal: "Retiros de Efectivo",
-  subscription: "Suscripciones", transfer: "Transferencias", transfer_income: "Transferencias",
-  business_expense: "Gastos de Negocio", home_expense: "Gastos del Hogar", shopping: "Compras",
-  cash_income: "Efectivo Recibido", other: "Otros",
-  medical: "Farmacia", food: "Comida",
-};
 
 // Build local date strings + timezone offset for backend queries
 function getLocalDateInputs() {
@@ -113,6 +106,10 @@ function getLocalDateInputs() {
 }
 
 export default function Reports() {
+  const copy = useCopy(bankCopy);
+  const t = copy.reports;
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
   const [tab, setTab] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState<number>(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState<number>(new Date().getFullYear());
@@ -190,7 +187,7 @@ export default function Reports() {
   if (isLoading) {
     return (
       <div className="p-6 lg:p-10 bg-white min-h-screen">
-        <h1 className="text-2xl font-semibold text-black">Cargando reportes...</h1>
+        <h1 className="text-2xl font-semibold text-black">{t.loading}</h1>
       </div>
     );
   }
@@ -200,13 +197,13 @@ export default function Reports() {
       <div className="p-6 lg:p-10 bg-white min-h-screen">
         <div className="text-center py-12">
           <AlertTriangle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <h2 className="text-lg font-semibold text-black mb-2">Error al cargar reportes</h2>
+          <h2 className="text-lg font-semibold text-black mb-2">{t.loadError}</h2>
           <div className="text-sm text-neutral-400 mb-4 space-y-1">
-            {incomeQuery.error && <p>Income: {incomeQuery.error.message}</p>}
-            {balanceQuery.error && <p>Balance: {balanceQuery.error.message}</p>}
-            {salesQuery.error && <p>Sales: {salesQuery.error.message}</p>}
+            {incomeQuery.error && <p>{t.errIncome}: {incomeQuery.error.message}</p>}
+            {balanceQuery.error && <p>{t.errBalance}: {balanceQuery.error.message}</p>}
+            {salesQuery.error && <p>{t.errSales}: {salesQuery.error.message}</p>}
           </div>
-          <Button onClick={() => utils.invalidate()} variant="outline" className="text-xs">Reintentar</Button>
+          <Button onClick={() => utils.invalidate()} variant="outline" className="text-xs">{t.retry}</Button>
         </div>
       </div>
     );
@@ -253,15 +250,17 @@ export default function Reports() {
   const yearSales = Number(incomeData?.totalRevenue ?? 0);
 
   const kpiRevenue = periodFilter === "today" ? todaySales : periodFilter === "week" ? weekSales : periodFilter === "year" ? yearSales : monthSales;
-  const kpiLabel = periodFilter === "today" ? "Ingresos Hoy" : periodFilter === "week" ? "Ingresos Sem." : periodFilter === "year" ? "Ingresos Año" : "Ingresos Mes";
+  // Label for the current period filter (any other value falls back to the month label)
+  const byPeriod = (l: { today: string; week: string; month: string; year: string }) =>
+    periodFilter === "today" ? l.today : periodFilter === "week" ? l.week : periodFilter === "year" ? l.year : l.month;
+  const kpiLabel = byPeriod(t.kpi.revenue);
 
   const years = Array.from({ length: 5 }, (_, i) => new Date().getFullYear() - i);
-  const months = [
-    { value: 1, label: "Enero" }, { value: 2, label: "Febrero" }, { value: 3, label: "Marzo" },
-    { value: 4, label: "Abril" }, { value: 5, label: "Mayo" }, { value: 6, label: "Junio" },
-    { value: 7, label: "Julio" }, { value: 8, label: "Agosto" }, { value: 9, label: "Septiembre" },
-    { value: 10, label: "Octubre" }, { value: 11, label: "Noviembre" }, { value: 12, label: "Diciembre" },
-  ];
+  const months = copy.months.map((label, i) => ({ value: i + 1, label }));
+  // Month title for the daily sales chart, formatted in the UI language (same month the server reports)
+  const monthTitle = monthlyData?.monthName
+    ? new Date(selectedYear, selectedMonth - 1, 15).toLocaleDateString(locale, { month: "long", year: "numeric" })
+    : "";
 
   const totalMonthlySales = Number(monthlyData?.totalSales ?? 0);
   const totalMonthlyExpenses = Number(monthlyData?.totalExpenses ?? 0);
@@ -272,24 +271,26 @@ export default function Reports() {
   const avgDaily = dailySales.length > 0 ? totalDaily / dailySales.length : 0;
 
   const pieData = paymentBreakdown.map((p) => ({
-    name: PAYMENT_LABELS[p.method] || p.method,
+    name: t.payment[p.method] || p.method,
     value: Number(p.total),
   }));
 
   // 3-segment pie chart: Ventas vs Gastos del Negocio
+  // Slices are identified by a stable key; the translated name is only for display.
   const salesRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
   const businessExp = Number(incomeData?.businessExpenses ?? 0);
+  const pie3Names: Record<string, string> = { sales: t.pieSales, businessExpenses: t.pieBusinessExpenses };
   const pie3Data = [
-    { name: "Ventas", value: salesRevenue, color: "#22c55e" },
-    { name: "Gastos del Negocio", value: businessExp, color: "#ef4444" },
+    { key: "sales", name: pie3Names.sales, value: salesRevenue, color: "#22c55e" },
+    { key: "businessExpenses", name: pie3Names.businessExpenses, value: businessExp, color: "#ef4444" },
   ].filter((d) => d.value > 0);
 
   // Period filter options
   const periodOptions = [
-    { key: "today", label: "Hoy" },
-    { key: "week", label: "Semana" },
-    { key: "month", label: "Mes" },
-    { key: "year", label: "Año" },
+    { key: "today", label: t.periods.today },
+    { key: "week", label: t.periods.week },
+    { key: "month", label: t.periods.month },
+    { key: "year", label: t.periods.year },
   ];
 
 
@@ -299,8 +300,8 @@ export default function Reports() {
       {/* Header */}
       <AnimatedPage>
         <div>
-          <h1 className="text-2xl font-semibold text-black">Reportes Financieros</h1>
-          <p className="text-neutral-400 text-sm mt-1">Estados contables y analisis de tu negocio</p>
+          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
+          <p className="text-neutral-400 text-sm mt-1">{t.subtitle}</p>
         </div>
 
         {/* Period Filter Carousel */}
@@ -319,9 +320,9 @@ export default function Reports() {
       {/* KPI Cards — 4 equal-sized cards with horizontal titles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {(() => {
-          const expenseLabel = periodFilter === "today" ? "Gastos Hoy" : periodFilter === "week" ? "Gastos Sem." : periodFilter === "year" ? "Gastos Ano" : "Gastos Mes";
-          const profitLabel = periodFilter === "today" ? "Utilidad Hoy" : periodFilter === "week" ? "Utilidad Sem." : periodFilter === "year" ? "Utilidad Ano" : "Utilidad Mes";
-          const salesLabel = periodFilter === "today" ? "Ventas Hoy" : periodFilter === "week" ? "Ventas Sem." : periodFilter === "year" ? "Ventas Ano" : "Ventas Mes";
+          const expenseLabel = byPeriod(t.kpi.expenses);
+          const profitLabel = byPeriod(t.kpi.profit);
+          const salesLabel = byPeriod(t.kpi.sales);
           const yearExpenses = Number(incomeData?.businessExpenses ?? 0);
           const yearRevenue = Number(incomeData?.breakdown.salesRevenue ?? 0);
           const yearNet = yearRevenue - yearExpenses;
@@ -357,9 +358,9 @@ export default function Reports() {
           style={{ scrollbarWidth: "none" }}
         >
           {[
-            { key: "monthly", label: "Ventas del Mes" },
-            { key: "income", label: "Ingresos y Gastos" },
-            { key: "journal", label: "Movimientos Detallados" },
+            { key: "monthly", label: t.tabs.monthly },
+            { key: "income", label: t.tabs.income },
+            { key: "journal", label: t.tabs.journal },
           ].map((t) => (
             <button
               key={t.key}
@@ -376,13 +377,13 @@ export default function Reports() {
           <AnimatedPage>
             <div className="flex gap-3">
               <Select value={String(selectedMonth)} onValueChange={(v) => setSelectedMonth(Number(v))}>
-                <SelectTrigger className="w-40 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Mes" /></SelectTrigger>
+                <SelectTrigger className="w-40 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder={t.monthPh} /></SelectTrigger>
                 <SelectContent>
                   {months.map((m) => (<SelectItem key={m.value} value={String(m.value)} className="text-xs">{m.label}</SelectItem>))}
                 </SelectContent>
               </Select>
               <Select value={String(selectedYear)} onValueChange={(v) => setSelectedYear(Number(v))}>
-                <SelectTrigger className="w-28 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder="Ano" /></SelectTrigger>
+                <SelectTrigger className="w-28 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder={t.yearPh} /></SelectTrigger>
                 <SelectContent>
                   {years.map((y) => (<SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>))}
                 </SelectContent>
@@ -394,7 +395,7 @@ export default function Reports() {
             <AnimatedCard delay={200} className="lg:col-span-2">
               <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                 <CardContent className="p-5">
-                  <p className="text-xs text-neutral-400 mb-4">Ventas diarias - {monthlyData?.monthName || ""}</p>
+                  <p className="text-xs text-neutral-400 mb-4">{t.dailySales(monthTitle)}</p>
                   <div className="border border-neutral-100 rounded-lg p-4 bg-neutral-50/30">
                     <div className="flex items-end gap-2 h-40 overflow-hidden">
                       {(() => {
@@ -426,9 +427,9 @@ export default function Reports() {
             <AnimatedCard delay={280}>
               <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                 <CardContent className="p-5">
-                  <p className="text-xs text-neutral-400 mb-4">Metodos de pago</p>
+                  <p className="text-xs text-neutral-400 mb-4">{t.paymentMethods}</p>
                   <div className="space-y-3">
-                    {paymentBreakdown.length === 0 && <p className="text-xs text-neutral-400 text-center py-8">Sin cobros este mes</p>}
+                    {paymentBreakdown.length === 0 && <p className="text-xs text-neutral-400 text-center py-8">{t.noPayments}</p>}
                     {paymentBreakdown.map((item) => {
                       const pct = totalMonthlySales > 0 ? (Number(item.total) / totalMonthlySales) * 100 : 0;
                       return (
@@ -439,7 +440,7 @@ export default function Reports() {
                               {item.method === "zelle" && <CreditCard className="w-3.5 h-3.5 text-neutral-400" />}
                               {item.method === "card" && <Receipt className="w-3.5 h-3.5 text-neutral-400" />}
                               {item.method === "mixed" && <Activity className="w-3.5 h-3.5 text-neutral-400" />}
-                              <span className="text-sm text-neutral-600">{PAYMENT_LABELS[item.method] || item.method}</span>
+                              <span className="text-sm text-neutral-600">{t.payment[item.method] || item.method}</span>
                             </div>
                             <div className="text-right">
                               <span className="text-sm font-medium text-black">{formatCurrency(item.total)}</span>
@@ -466,33 +467,33 @@ export default function Reports() {
               <AnimatedCard delay={100} className="lg:col-span-2">
                 <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                   <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-semibold text-black">Ingresos y Gastos</CardTitle>
+                    <CardTitle className="text-sm font-semibold text-black">{t.incomeExpenses}</CardTitle>
                     <p className="text-[11px] text-neutral-400">{incomeData.period.start} - {incomeData.period.end}</p>
                   </CardHeader>
                   <CardContent className="p-5 space-y-4">
                     <div>
-                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Ingresos</p>
+                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">{t.revenue}</p>
                       <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Ventas de Servicios</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-neutral-600">{t.serviceSales}</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
                         <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Ingresos del Negocio</span><span className="text-green-600">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
+                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">{t.totalRevenue}</span><span className="text-green-600">{formatCurrency(incomeData.breakdown.salesRevenue)}</span></div>
                       </div>
                     </div>
                     <Separator />
                     <div>
-                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">Gastos</p>
+                      <p className="text-xs font-semibold text-neutral-500 uppercase tracking-wide mb-2">{t.expenses}</p>
                       <div className="space-y-2">
-                        <div className="flex justify-between text-sm"><span className="text-neutral-600">Gastos Operativos</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.operExpenses)}</span></div>
+                        <div className="flex justify-between text-sm"><span className="text-neutral-600">{t.operatingExpenses}</span><span className="font-medium text-black">{formatCurrency(incomeData.breakdown.operExpenses)}</span></div>
                         <Separator />
-                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">Total Gastos del Negocio</span><span className="text-red-500">{formatCurrency(incomeData.businessExpenses ?? 0)}</span></div>
-                        <p className="text-[10px] text-neutral-400 mt-1">Gastos bancarios personales no incluidos</p>
+                        <div className="flex justify-between text-sm font-semibold"><span className="text-black">{t.totalExpenses}</span><span className="text-red-500">{formatCurrency(incomeData.businessExpenses ?? 0)}</span></div>
+                        <p className="text-[10px] text-neutral-400 mt-1">{t.personalExcluded}</p>
                       </div>
                     </div>
                     <Separator />
                     <div className="flex justify-between items-center">
-                      <span className="text-sm font-bold text-black">Utilidad Neta</span>
+                      <span className="text-sm font-bold text-black">{t.netIncome}</span>
                       <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-[10px] ${margin >= 0 ? "text-green-600 border-green-200" : "text-red-500 border-red-200"}`}>{margin.toFixed(1)}% margen</Badge>
+                        <Badge variant="outline" className={`text-[10px] ${margin >= 0 ? "text-green-600 border-green-200" : "text-red-500 border-red-200"}`}>{t.margin(margin.toFixed(1))}</Badge>
                         <span className={`text-sm font-bold ${netIncome >= 0 ? "text-green-600" : "text-red-500"}`}>{formatCurrency(netIncome)}</span>
                       </div>
                     </div>
@@ -504,7 +505,7 @@ export default function Reports() {
                 <div className="space-y-4">
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5">
-                      <p className="text-xs text-neutral-400 mb-3">Ingresos y Gastos</p>
+                      <p className="text-xs text-neutral-400 mb-3">{t.incomeExpenses}</p>
                       <div className="h-48 relative">
                         <ResponsiveContainer width="100%" height="100%">
                           <PieChart>
@@ -516,8 +517,8 @@ export default function Reports() {
                                 <Cell
                                   key={i}
                                   fill={entry.color}
-                                  opacity={activePieSlice === null || activePieSlice === entry.name ? 1 : 0.4}
-                                  onClick={() => setActivePieSlice(activePieSlice === entry.name ? null : entry.name)}
+                                  opacity={activePieSlice === null || activePieSlice === entry.key ? 1 : 0.4}
+                                  onClick={() => setActivePieSlice(activePieSlice === entry.key ? null : entry.key)}
                                   style={{ cursor: "pointer" }}
                                 />
                               ))}
@@ -530,12 +531,12 @@ export default function Reports() {
                           <div className="text-center">
                             {activePieSlice ? (
                               <>
-                                <p className="text-[10px] text-neutral-400">{activePieSlice}</p>
-                                <p className="text-sm font-semibold text-black">{formatCurrency(pie3Data.find((d) => d.name === activePieSlice)?.value ?? 0)}</p>
+                                <p className="text-[10px] text-neutral-400">{pie3Names[activePieSlice] ?? activePieSlice}</p>
+                                <p className="text-sm font-semibold text-black">{formatCurrency(pie3Data.find((d) => d.key === activePieSlice)?.value ?? 0)}</p>
                               </>
                             ) : (
                               <>
-                                <p className="text-[10px] text-neutral-400">Total</p>
+                                <p className="text-[10px] text-neutral-400">{t.total}</p>
                                 <p className="text-sm font-semibold text-black">{formatCurrency(pie3Data.reduce((s, d) => s + d.value, 0))}</p>
                               </>
                             )}
@@ -545,9 +546,9 @@ export default function Reports() {
                       <div className="flex justify-center gap-3 mt-2 flex-wrap">
                         {pie3Data.map((entry) => (
                           <button
-                            key={entry.name}
-                            onClick={() => setActivePieSlice(activePieSlice === entry.name ? null : entry.name)}
-                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${activePieSlice === entry.name ? "bg-neutral-100" : ""}`}
+                            key={entry.key}
+                            onClick={() => setActivePieSlice(activePieSlice === entry.key ? null : entry.key)}
+                            className={`flex items-center gap-1.5 px-2 py-1 rounded-full transition-all ${activePieSlice === entry.key ? "bg-neutral-100" : ""}`}
                           >
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: entry.color }} />
                             <span className="text-[10px] text-neutral-500">{entry.name}</span>
@@ -559,8 +560,8 @@ export default function Reports() {
 
                   <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
                     <CardContent className="p-5 space-y-3">
-                      <p className="text-xs text-neutral-400">Resumen de pagos</p>
-                      {pieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">Sin datos</p>}
+                      <p className="text-xs text-neutral-400">{t.paymentSummary}</p>
+                      {pieData.length === 0 && <p className="text-xs text-neutral-400 text-center py-4">{t.noData}</p>}
                       {pieData.map((p, i) => (
                         <div key={p.name} className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -583,8 +584,8 @@ export default function Reports() {
           <AnimatedPage>
             <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
               <CardHeader className="pb-2">
-                <CardTitle className="text-sm font-semibold text-black">Movimientos Detallados</CardTitle>
-                <p className="text-[11px] text-neutral-400">{monthlyData?.recentSales ? `${monthlyData.recentSales.length} ventas` : "Cargando..."}</p>
+                <CardTitle className="text-sm font-semibold text-black">{t.detailedActivity}</CardTitle>
+                <p className="text-[11px] text-neutral-400">{monthlyData?.recentSales ? t.salesCount(monthlyData.recentSales.length) : t.loadingShort}</p>
               </CardHeader>
               <CardContent className="p-5">
                 {monthlyData?.recentSales && monthlyData.recentSales.length > 0 ? (
@@ -592,9 +593,9 @@ export default function Reports() {
                     {monthlyData.recentSales.map((sale: any) => {
                       const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || sale.invoiceNumber;
                       const saleDate = sale.createdAt ? new Date(sale.createdAt) : null;
-                      const dateStr = saleDate ? saleDate.toLocaleDateString("es", { day: "numeric", month: "short" }) : "";
-                      const timeStr = saleDate ? saleDate.toLocaleTimeString("es", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-                      const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+                      const dateStr = saleDate ? saleDate.toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
+                      const timeStr = saleDate ? saleDate.toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                      const paymentLabel = t.payment[sale.paymentMethod] || sale.paymentMethod;
                       return (
                         <div key={sale.id} className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors">
                           <div className="min-w-0 flex-1">
@@ -612,8 +613,8 @@ export default function Reports() {
                 ) : (
                   <div className="text-center py-8">
                     <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-                    <p className="text-sm text-neutral-400">No hay ventas este mes</p>
-                    <p className="text-xs text-neutral-400 mt-1">Ve a <Link to="/pos" className="font-medium text-black">Vender</Link> para empezar</p>
+                    <p className="text-sm text-neutral-400">{t.noSales}</p>
+                    <p className="text-xs text-neutral-400 mt-1">{t.goToPrefix}<Link to="/pos" className="font-medium text-black">{t.goToLink}</Link>{t.goToSuffix}</p>
                   </div>
                 )}
               </CardContent>

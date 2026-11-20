@@ -8,42 +8,49 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ArrowLeft, Trash2, Calendar, LayoutList, RotateCcw } from "lucide-react";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { bankCopy } from "@/i18n/copy/bank";
 
-const categoryMeta: Record<string, { label: string; type: "income" | "expense" }> = {
-  zelle_income: { label: "Zelle Recibidos", type: "income" },
-  transfer_income: { label: "Transferencias", type: "income" },
-  deposit: { label: "Depositos", type: "income" },
-  cash_deposit: { label: "Depositos de Efectivo", type: "income" },
-  general: { label: "Ingresos", type: "income" },
-  income: { label: "Ingresos", type: "income" },
-  paycheck: { label: "Nomina", type: "income" },
-  refund: { label: "Reembolsos", type: "income" },
-  investment: { label: "Inversiones", type: "income" },
-  interest: { label: "Intereses", type: "income" },
-  cash_withdrawal: { label: "Retiros de Efectivo", type: "expense" },
-  zelle_sent: { label: "Zelle Enviados", type: "expense" },
-  subscription: { label: "Suscripciones", type: "expense" },
-  transfer: { label: "Transferencias", type: "expense" },
-  medical: { label: "Farmacia", type: "expense" },
-  food: { label: "Comida", type: "expense" },
-  shopping: { label: "Compras", type: "expense" },
-  gasolina: { label: "Gasolina", type: "expense" },
-  loan: { label: "Prestamos", type: "expense" },
-  insurance: { label: "Seguros", type: "expense" },
-  utilities: { label: "Servicios", type: "expense" },
+// Category keys are stored in the database; labels come from bankCopy.categories.
+const categoryTypes: Record<string, "income" | "expense"> = {
+  zelle_income: "income",
+  transfer_income: "income",
+  deposit: "income",
+  cash_deposit: "income",
+  general: "income",
+  income: "income",
+  paycheck: "income",
+  refund: "income",
+  investment: "income",
+  interest: "income",
+  cash_withdrawal: "expense",
+  zelle_sent: "expense",
+  subscription: "expense",
+  transfer: "expense",
+  medical: "expense",
+  food: "expense",
+  shopping: "expense",
+  gasolina: "expense",
+  loan: "expense",
+  insurance: "expense",
+  utilities: "expense",
 };
 
-function getCategoryMeta(category: string): { label: string; type: "income" | "expense" } {
-  if (categoryMeta[category]) return categoryMeta[category];
+function getCategoryMeta(category: string, labels: Record<string, string>): { label: string; type: "income" | "expense" } {
+  const fallbackLabel = category.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+  if (categoryTypes[category]) return { label: labels[category] || fallbackLabel, type: categoryTypes[category] };
   // Fallback for unknown categories - infer type from common patterns
   const isIncome = category.includes("income") || category.includes("deposit") || category.includes("recib");
   return {
-    label: category.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase()),
+    label: labels[category] || fallbackLabel,
     type: isIncome ? "income" : "expense",
   };
 }
 
 export default function BankCategoryDetail() {
+  const { categories, category: t } = useCopy(bankCopy);
+  const { lang } = useLang();
   const { category } = useParams<{ category: string }>();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -55,10 +62,10 @@ export default function BankCategoryDetail() {
   const now = new Date();
   const isCurrentMonth = parseInt(returnMonth) === (now.getMonth() + 1) && parseInt(returnYear) === now.getFullYear();
   const monthLabel = isCurrentMonth
-    ? "Este mes"
-    : new Date(parseInt(returnYear), parseInt(returnMonth) - 1, 1).toLocaleDateString("es", { month: "short", year: "2-digit" }).replace(".", "").replace(" ", " ");
+    ? t.thisMonth
+    : new Date(parseInt(returnYear), parseInt(returnMonth) - 1, 1).toLocaleDateString(intlLocale(lang), { month: "short", year: "2-digit" }).replace(".", "").replace(" ", " ");
 
-  const meta = getCategoryMeta(category || "");
+  const meta = getCategoryMeta(category || "", categories);
 
   // Get selected account ID from localStorage (set by Bank page)
   const selectedAccountId = (() => {
@@ -86,29 +93,29 @@ export default function BankCategoryDetail() {
 
   const utils = trpc.useUtils();
   const deleteMut = trpc.bank.delete.useMutation({
-    onSuccess: () => { toast.success("Eliminada"); utils.invalidate(); },
+    onSuccess: () => { toast.success(t.deleted); utils.invalidate(); },
   });
 
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
       <Button variant="ghost" onClick={() => navigate(`/bank?month=${returnMonth}&year=${returnYear}`)} className="text-neutral-500 hover:text-black text-sm">
-        <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Volver al Banco
+        <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> {t.back}
       </Button>
 
       <div>
         <p className="text-xs text-neutral-400 uppercase tracking-wider mb-1">
-          {meta.type === "income" ? "Ingresos" : "Gastos"}
+          {meta.type === "income" ? t.income : t.expenses}
         </p>
         <h1 className="text-xl font-medium text-black">{meta.label}</h1>
         <div className="flex gap-6 mt-3">
           <div>
-            <p className="text-xs text-neutral-400">Total</p>
+            <p className="text-xs text-neutral-400">{t.total}</p>
             <p className={`text-2xl font-semibold ${meta.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
               {meta.type === "income" ? "+" : "-"}{formatCurrency(displayTotal)}
             </p>
           </div>
           <div>
-            <p className="text-xs text-neutral-400">Transacciones</p>
+            <p className="text-xs text-neutral-400">{t.transactions}</p>
             <p className="text-2xl font-semibold text-black">{displayCount}</p>
           </div>
         </div>
@@ -137,12 +144,12 @@ export default function BankCategoryDetail() {
 
       <div>
         <p className="text-xs text-neutral-400 uppercase tracking-wider mb-3">
-          Transacciones {filterMonth ? `· ${monthLabel}` : `· ${returnYear}`}
+          {t.transactions} {filterMonth ? `· ${monthLabel}` : `· ${returnYear}`}
         </p>
         {isLoading ? (
           <div className="space-y-2"><Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" /></div>
         ) : (transactions ?? []).length === 0 ? (
-          <p className="text-sm text-neutral-400 py-4">No hay transacciones en esta categoria.</p>
+          <p className="text-sm text-neutral-400 py-4">{t.empty}</p>
         ) : (
           <ScrollArea className="h-[500px]">
             <div className="space-y-0">
@@ -159,9 +166,9 @@ export default function BankCategoryDetail() {
                     <div>
                       <p className={`text-sm ${tx.isReversed ? "text-neutral-400 line-through" : "text-neutral-800"}`}>{tx.description}</p>
                       <p className="text-[10px] text-neutral-400">
-                        {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}
-                        {tx.importedFrom === "plaid" && " · Sync"}
-                        {tx.isReversed && " · Reversada"}
+                        {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString(intlLocale(lang)) : ""}
+                        {tx.importedFrom === "plaid" && ` · ${t.synced}`}
+                        {tx.isReversed && ` · ${t.reversed}`}
                       </p>
                     </div>
                   </div>

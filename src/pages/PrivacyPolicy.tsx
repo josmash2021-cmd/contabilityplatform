@@ -1,11 +1,22 @@
+import { Fragment } from "react";
 import { AnimatedPage } from "@/components/AnimatedPage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
+import { useCopy } from "@/i18n/useI18n";
+import { billingCopy } from "@/i18n/copy/billing";
+
+const CONTACT_EMAIL = "josmash2021@gmail.com";
+
+/** Renders copy segments: even items as plain text, odd items in bold. */
+function Rich({ parts }: { parts: string[] }) {
+  return <>{parts.map((part, i) => <Fragment key={i}>{i % 2 ? <strong>{part}</strong> : part}</Fragment>)}</>;
+}
 
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
+  const t = useCopy(billingCopy).privacy;
 
   return (
     <AnimatedPage className="p-4 lg:p-6 max-w-3xl mx-auto">
@@ -16,9 +27,9 @@ export default function PrivacyPolicy() {
         <div>
           <h1 className="text-xl font-semibold text-black flex items-center gap-2">
             <Shield className="w-5 h-5 text-neutral-600" />
-            Politica de Privacidad
+            {t.title}
           </h1>
-          <p className="text-xs text-neutral-400">Ultima actualizacion: 28 de Mayo 2026</p>
+          <p className="text-xs text-neutral-400">{t.updated}</p>
         </div>
       </div>
 
@@ -26,31 +37,25 @@ export default function PrivacyPolicy() {
         <CardContent className="p-6 space-y-6 text-sm text-neutral-700">
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">1. Informacion que recopilamos</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.collect.title}</h2>
             <p>
-              Aethel Accounting Platform recopila informacion necesaria para proporcionar servicios de contabilidad y gestion financiera, incluyendo:
+              {t.collect.intro}
             </p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li><strong>Informacion de cuenta:</strong> nombre, correo electronico y datos de autenticacion.</li>
-              <li><strong>Datos bancarios:</strong> transacciones, saldos y numeros de cuenta (enmascarados) cuando conectas tu cuenta bancaria a traves de Plaid.</li>
-              <li><strong>Datos de ventas:</strong> informacion sobre productos vendidos y clientes que ingresas manualmente.</li>
+              {t.collect.items.map((item, i) => <li key={i}><Rich parts={item} /></li>)}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">2. Uso de Plaid para conectar cuentas bancarias</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.plaid.title}</h2>
             <p>
-              Utilizamos <strong>Plaid Inc.</strong> para permitirte conectar tus cuentas bancarias de forma segura. 
-              Cuando usas la funcion "Conectar Banco":
+              <Rich parts={t.plaid.intro} />
             </p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li>Tus credenciales bancarias <strong>nunca</strong> son almacenadas en nuestros servidores.</li>
-              <li>Plaid maneja la autenticacion directamente con tu banco.</li>
-              <li>Solo recibimos tokens de acceso encriptados y datos de transacciones.</li>
-              <li>Puedes desconectar tu cuenta bancaria en cualquier momento.</li>
+              {t.plaid.items.map((item, i) => <li key={i}><Rich parts={item} /></li>)}
             </ul>
             <p className="mt-2">
-              Para mas informacion sobre como Plaid maneja tus datos, visita su politica de privacidad en{" "}
+              {t.plaid.more}{" "}
               <a href="https://plaid.com/legal/" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
                 plaid.com/legal
               </a>.
@@ -58,74 +63,57 @@ export default function PrivacyPolicy() {
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">3. Como usamos tu informacion</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.use.title}</h2>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li>Proporcionar reportes financieros y analisis de transacciones.</li>
-              <li>Generar categorizaciones automaticas de ingresos y gastos.</li>
-              <li>Mostrar saldos y movimientos bancarios en tiempo real.</li>
-              <li>Mejorar nuestros servicios de contabilidad.</li>
+              {t.use.items.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">4. Comparticion de datos</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.sharing.title}</h2>
             <p>
-              <strong>No vendemos ni compartimos</strong> tu informacion personal con terceros para fines de marketing. 
-              Solo compartimos datos con:
+              <Rich parts={t.sharing.intro} />
             </p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li><strong>Plaid Inc.</strong> - para la conexion bancaria (segun su politica de privacidad).</li>
-              <li><strong>Proveedores de infraestructura</strong> - solo lo necesario para operar la plataforma.</li>
-              <li><strong>Obligaciones legales</strong> - si es requerido por ley.</li>
+              {t.sharing.items.map((item, i) => <li key={i}><Rich parts={item} /></li>)}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">5. Retencion y Eliminacion de Datos</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.retention.title}</h2>
             <p>
-              <strong>Retencion:</strong> Conservamos tus datos financieros y personales mientras mantengas una cuenta activa en nuestra plataforma. 
-              Los datos bancarios obtenidos a traves de Plaid se sincronizan y almacenan para mostrar reportes historicos.
+              <Rich parts={t.retention.retention} />
             </p>
             <p className="mt-2">
-              <strong>Eliminacion:</strong> Cuando eliminas tu cuenta:
+              <Rich parts={t.retention.deletion} />
             </p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li>Todos tus datos personales y financieros se eliminan permanentemente de nuestra base de datos dentro de <strong>30 dias</strong>.</li>
-              <li>Los tokens de acceso a Plaid se revocan inmediatamente.</li>
-              <li>Las transacciones bancarias almacenadas se borran completamente (no se mantienen copias de respaldo con datos personales).</li>
-              <li>Puedes solicitar la eliminacion de datos enviando un correo a <strong>josmash2021@gmail.com</strong>.</li>
+              {t.retention.items(CONTACT_EMAIL).map((item, i) => <li key={i}><Rich parts={item} /></li>)}
             </ul>
             <p className="mt-2">
-              <strong>Revision periodica:</strong> Revisamos nuestra politica de retencion de datos cada <strong>6 meses</strong> 
-              para asegurar el cumplimiento con las leyes de privacidad aplicables (CCPA, GDPR donde aplique).
+              <Rich parts={t.retention.review} />
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">7. Seguridad</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.security.title}</h2>
             <p>
-              Implementamos medidas de seguridad tecnicas y organizativas para proteger tus datos, 
-              incluyendo encriptacion en transito y en reposo, autenticacion segura y acceso restringido 
-              solo a personal autorizado.
+              {t.security.text}
             </p>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">8. Tus derechos</h2>
-            <p>Puedes:</p>
+            <h2 className="text-base font-semibold text-black mb-2">{t.rights.title}</h2>
+            <p>{t.rights.intro}</p>
             <ul className="list-disc ml-5 mt-2 space-y-1">
-              <li>Acceder a tus datos personales en cualquier momento.</li>
-              <li>Solicitar la eliminacion de tu cuenta y datos asociados.</li>
-              <li>Desconectar tus cuentas bancarias cuando lo desees.</li>
-              <li>Exportar tus datos financieros.</li>
+              {t.rights.items.map((item, i) => <li key={i}>{item}</li>)}
             </ul>
           </section>
 
           <section>
-            <h2 className="text-base font-semibold text-black mb-2">9. Contacto</h2>
+            <h2 className="text-base font-semibold text-black mb-2">{t.contact.title}</h2>
             <p>
-              Si tienes preguntas sobre esta politica de privacidad, contactanos a{" "}
-              <strong>josmash2021@gmail.com</strong>.
+              <Rich parts={t.contact.text(CONTACT_EMAIL)} />
             </p>
           </section>
 

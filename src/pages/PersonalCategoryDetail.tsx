@@ -13,36 +13,39 @@ import {
   CircleDollarSign, TrendingUp, TrendingDown, ShoppingBag,
   Utensils, Fuel, Tv, Receipt, HeartPulse,
 } from "lucide-react";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { personalCopy, type PersonalCopy } from "@/i18n/copy/personal";
 
 // ─── Category metadata (mirrors PersonalDashboard) ───
-const INCOME_CATS: Record<string, { label: string; icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
-  zelle_income: { label: "Zelle Recibidos", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  transfer_income: { label: "Transferencias", icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
-  deposit: { label: "Depositos Directos", icon: Building2, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  cash_deposit: { label: "Deposito de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  cash_income: { label: "Efectivo Recibido", icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  income: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  general: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  income: { label: "Ingresos", icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  paycheck: { label: "Nomina", icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  transfer: { label: "Transferencias", icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
+const INCOME_CATS: Record<string, { icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
+  zelle_income: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
+  transfer_income: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
+  deposit: { icon: Building2, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
+  cash_deposit: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+  cash_income: { icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  income: { icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  general: { icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  income: { icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
+  paycheck: { icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
+  transfer: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
 };
 
-const EXPENSE_CATS: Record<string, { label: string; icon: typeof TrendingDown; iconBg: string; iconColor: string }> = {
-  zelle_sent: { label: "Zelle Enviados", icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  cash_withdrawal: { label: "Retiro de Efectivo", icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  subscription: { label: "Suscripciones", icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
-  shopping: { label: "Compras", icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-  home_expense: { label: "Comida y Hogar", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  business_expense: { label: "Negocio", icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  gasolina: { label: "Gasolina", icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  transfer: { label: "Transferencias", icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  other: { label: "Otros", icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
-  medical: { label: "Farmacia", icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
-  food: { label: "Comida", icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+const EXPENSE_CATS: Record<string, { icon: typeof TrendingDown; iconBg: string; iconColor: string }> = {
+  zelle_sent: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
+  cash_withdrawal: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
+  subscription: { icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
+  shopping: { icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
+  home_expense: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+  business_expense: { icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+  gasolina: { icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
+  transfer: { icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
+  other: { icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
+  medical: { icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
+  food: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
 };
 
-function getCategoryMeta(category: string): {
+function getCategoryMeta(category: string, labels: PersonalCopy["categories"]): {
   label: string;
   type: "income" | "expense";
   icon: typeof TrendingUp;
@@ -51,11 +54,11 @@ function getCategoryMeta(category: string): {
 } {
   const income = INCOME_CATS[category];
   if (income) {
-    return { label: income.label, type: "income", icon: income.icon, iconBg: income.iconBg, iconColor: income.iconColor };
+    return { label: labels.income[category] || category, type: "income", icon: income.icon, iconBg: income.iconBg, iconColor: income.iconColor };
   }
   const expense = EXPENSE_CATS[category];
   if (expense) {
-    return { label: expense.label, type: "expense", icon: expense.icon, iconBg: expense.iconBg, iconColor: expense.iconColor };
+    return { label: labels.expense[category] || category, type: "expense", icon: expense.icon, iconBg: expense.iconBg, iconColor: expense.iconColor };
   }
   // Fallback
   const isIncome = category.includes("income") || category.includes("deposit");
@@ -70,6 +73,8 @@ function getCategoryMeta(category: string): {
 
 export default function PersonalCategoryDetail() {
   const { category } = useParams<{ category: string }>();
+  const { lang } = useLang();
+  const { categoryDetail: t, common, categories } = useCopy(personalCopy);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const returnMonth = searchParams.get("month") ?? String(new Date().getMonth() + 1);
@@ -80,10 +85,10 @@ export default function PersonalCategoryDetail() {
   const now = new Date();
   const isCurrentMonth = parseInt(returnMonth) === (now.getMonth() + 1) && parseInt(returnYear) === now.getFullYear();
   const monthLabel = isCurrentMonth
-    ? "Este mes"
-    : new Date(parseInt(returnYear), parseInt(returnMonth) - 1, 1).toLocaleDateString("es", { month: "short", year: "2-digit" }).replace(".", "").replace(" ", " ");
+    ? common.thisMonth
+    : new Date(parseInt(returnYear), parseInt(returnMonth) - 1, 1).toLocaleDateString(intlLocale(lang), { month: "short", year: "2-digit" }).replace(".", "").replace(" ", " ");
 
-  const meta = getCategoryMeta(category || "");
+  const meta = getCategoryMeta(category || "", categories);
   const Icon = meta.icon;
 
   // Get selected account ID from localStorage (set by PersonalDashboard)
@@ -112,7 +117,7 @@ export default function PersonalCategoryDetail() {
 
   const utils = trpc.useUtils();
   const deleteMut = trpc.bank.delete.useMutation({
-    onSuccess: () => { toast.success("Eliminada"); utils.invalidate(); },
+    onSuccess: () => { toast.success(t.deleted); utils.invalidate(); },
   });
 
   return (
@@ -123,7 +128,7 @@ export default function PersonalCategoryDetail() {
         onClick={() => navigate(`/personal?month=${returnMonth}&year=${returnYear}`)}
         className="text-neutral-500 hover:text-black text-sm -ml-2"
       >
-        <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> Volver al Inicio
+        <ArrowLeft className="w-3.5 h-3.5 mr-1.5" /> {t.back}
       </Button>
 
       {/* Header with icon and title */}
@@ -133,18 +138,18 @@ export default function PersonalCategoryDetail() {
         </div>
         <div className="flex-1">
           <p className="text-xs text-neutral-400 uppercase tracking-wider mb-0.5">
-            {meta.type === "income" ? "Ingresos" : "Gastos"}
+            {meta.type === "income" ? common.income : common.expenses}
           </p>
           <h1 className="text-xl font-semibold text-black">{meta.label}</h1>
           <div className="flex gap-6 mt-3">
             <div>
-              <p className="text-xs text-neutral-400">Total</p>
+              <p className="text-xs text-neutral-400">{t.total}</p>
               <p className={`text-2xl font-semibold ${meta.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
                 {meta.type === "income" ? "+" : "-"}{formatCurrency(displayTotal)}
               </p>
             </div>
             <div>
-              <p className="text-xs text-neutral-400">Transacciones</p>
+              <p className="text-xs text-neutral-400">{common.transactions}</p>
               <p className="text-2xl font-semibold text-black">{displayCount}</p>
             </div>
           </div>
@@ -177,7 +182,7 @@ export default function PersonalCategoryDetail() {
       <Card className="border-neutral-200 rounded-xl shadow-none">
         <div className="p-4 border-b border-neutral-100">
           <p className="text-xs text-neutral-400 uppercase tracking-wider">
-            Transacciones {filterMonth ? `· ${monthLabel}` : `· ${returnYear}`}
+            {common.transactions} {filterMonth ? `· ${monthLabel}` : `· ${returnYear}`}
           </p>
         </div>
         <div className="p-4">
@@ -191,7 +196,7 @@ export default function PersonalCategoryDetail() {
           ) : (transactions ?? []).length === 0 ? (
             <div className="text-center py-10">
               <Icon className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-              <p className="text-sm text-neutral-400">No hay transacciones en esta categoria.</p>
+              <p className="text-sm text-neutral-400">{t.empty}</p>
             </div>
           ) : (
             <ScrollArea className="h-[500px]">
@@ -216,9 +221,9 @@ export default function PersonalCategoryDetail() {
                           {tx.description}
                         </p>
                         <p className="text-[10px] text-neutral-400">
-                          {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString("es") : ""}
-                          {tx.importedFrom === "plaid" && " · Sync"}
-                          {tx.isReversed && " · Reversada"}
+                          {tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString(intlLocale(lang)) : ""}
+                          {tx.importedFrom === "plaid" && ` · ${t.sync}`}
+                          {tx.isReversed && ` · ${t.reversed}`}
                           {tx.bankName && ` · ${tx.bankName}`}
                         </p>
                       </div>

@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useCopy } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
+import { billingCopy, type BillingCopy } from "@/i18n/copy/billing";
 import { useAuth } from "@/hooks/useAuth";
 import { Crown, Landmark, CheckCircle, CalendarDays, Zap, X } from "lucide-react";
 
@@ -10,81 +11,21 @@ interface SubscriptionGateProps {
   children: React.ReactNode;
 }
 
-// ── Business Plans ──
-const BIZ_MONTHLY = {
-  subtitle: "Suscripcion Premium",
-  name: "Mensual",
-  price: "$80",
-  originalPrice: "$120",
-  period: "/mes",
-  badge: "New Plan",
-  description: "Facturado mensualmente. Cancela cuando quieras.",
-  features: [
-    "Agente de contabilidad AI personalizado",
-    "Contabilidad completa del negocio",
-    "Manejo y almacenamiento de clientes",
-    "Contabilidad bancaria conectada",
-    "Soporte prioritario 24/7",
-    "Finanzas organizadas automaticamente",
-  ],
-};
+// ── Plans: prices only. Names, badges, descriptions and features live in billingCopy.gate ──
+const BIZ_MONTHLY = { price: "$80", originalPrice: "$120" };
+const BIZ_ANNUAL = { price: "$800", originalPrice: "$1200", savings: "$400" };
+const PERS_MONTHLY = { price: "$40", originalPrice: "$80" };
+const PERS_ANNUAL = { price: "$400", originalPrice: "$700", savings: "$300" };
 
-const BIZ_ANNUAL = {
-  subtitle: "Suscripcion elite",
-  name: "Anual",
-  price: "$800",
-  originalPrice: "$1200",
-  period: "/año",
-  badge: "Mejor valor",
-  savings: "Ahorras $400",
-  description: "Facturado anualmente. Pago unico.",
-  features: [
-    "Todo lo incluido en el plan Mensual",
-    "Agente de contabilidad AI ilimitado",
-    "Clientes ilimitados",
-    "Reportes contables exportables (PDF/Excel)",
-    "Backups diarios automaticos",
-    "Soporte VIP prioritario",
-  ],
-};
-
-// ── Personal Plans ──
-const PERS_MONTHLY = {
-  subtitle: "Suscripcion Premium",
-  name: "Mensual",
-  price: "$40",
-  originalPrice: "$80",
-  period: "/mes",
-  badge: "Oferta",
-  description: "Facturado mensualmente. Cancela cuando quieras.",
-  features: [
-    "Agente de contabilidad AI personal",
-    "Toda tu contabilidad personal organizada",
-    "Seguimiento de ingresos y gastos",
-    "Metas de ahorro con IA",
-    "Reportes financieros automaticos",
-    "Soporte dedicado 24/7",
-  ],
-};
-
-const PERS_ANNUAL = {
-  subtitle: "Suscripcion elite",
-  name: "Anual",
-  price: "$400",
-  originalPrice: "$700",
-  period: "/año",
-  badge: "Mejor valor",
-  savings: "Ahorras $300",
-  description: "Facturado anualmente. Pago unico.",
-  features: [
-    "Todo lo incluido en el plan Mensual",
-    "Agente de contabilidad AI ilimitado",
-    "Metas de ahorro avanzadas con IA",
-    "Reportes anuales exportables",
-    "Backups diarios automaticos",
-    "Soporte VIP prioritario",
-  ],
-};
+/** Combines the plan prices with the copy for the current language. */
+function buildPlans(t: BillingCopy, isBusiness: boolean) {
+  const text = isBusiness ? t.gate.business : t.gate.personal;
+  const annual = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
+  return {
+    monthlyPlan: { ...(isBusiness ? BIZ_MONTHLY : PERS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...text.monthly },
+    annualPlan: { ...annual, name: t.plans.annual, period: t.plans.perYear, ...text.annual, savings: t.plans.savings(annual.savings) },
+  };
+}
 
 // ── Shimmer animation styles ──
 const SHIMMER_STYLES = `
@@ -126,6 +67,7 @@ const SHIMMER_STYLES = `
 `;
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
+  const t = useCopy(billingCopy);
   const navigate = useNavigate();
   const [phase, setPhase] = useState<"checking" | "connect_bank" | "subscribe" | "active">("checking");
   const [dismissed, setDismissed] = useState(false);
@@ -169,11 +111,11 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       if (data.success && data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Error al crear la sesion de pago");
+        alert(data.error || t.gate.checkoutError);
       }
     },
     onError: (err) => {
-      alert("Error: " + err.message);
+      alert(t.gate.errorPrefix + err.message);
     },
   });
 
@@ -211,13 +153,13 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
           <div className="w-16 h-16 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto">
             <Landmark className="w-8 h-8 text-neutral-400" />
           </div>
-          <h2 className="text-lg font-semibold text-black">Conecta tu banco primero</h2>
-          <p className="text-sm text-neutral-500">Conecta tu cuenta bancaria para desbloquear todas las funciones.</p>
+          <h2 className="text-lg font-semibold text-black">{t.gate.connectBankTitle}</h2>
+          <p className="text-sm text-neutral-500">{t.gate.connectBankText}</p>
           <button
             onClick={() => navigate(userMode === "personal" ? "/bank?mode=personal" : "/bank")}
             className="w-full h-11 bg-black text-white text-sm font-medium rounded-lg hover:bg-neutral-800 transition-colors flex items-center justify-center gap-2"
           >
-            <Landmark className="w-4 h-4" /> Conectar banco
+            <Landmark className="w-4 h-4" /> {t.gate.connectBank}
           </button>
         </div>
       </div>
@@ -226,8 +168,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   // ── SUBSCRIBE FULL-SCREEN OVERLAY — Glassmorphism, shows page behind ──
   const isBusiness = userMode === "business";
-  const monthlyPlan = isBusiness ? BIZ_MONTHLY : PERS_MONTHLY;
-  const annualPlan = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
+  const { monthlyPlan, annualPlan } = buildPlans(t, isBusiness);
   const title = isBusiness ? "Negocio" : "Personal";
 
   return (
@@ -254,7 +195,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
               <p className="text-sm text-emerald-200">
-                <strong>Banco conectado.</strong> Suscribete para acceso completo.
+                <strong>{t.gate.bankConnected}</strong>{t.gate.bankConnectedText}
               </p>
             </div>
 
@@ -263,9 +204,9 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-6 h-6 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
+              <h2 className="text-xl font-semibold text-white">{t.gate.title}</h2>
               <p className="text-sm text-neutral-300">
-                Suscribete para acceder a esta pagina y todas las funciones.
+                {t.gate.text}
               </p>
             </div>
 
@@ -308,7 +249,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   disabled={checkoutMut.isPending}
                   className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
+                  <Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}
                 </button>
               </div>
 
@@ -353,14 +294,14 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
                   disabled={checkoutMut.isPending}
                   className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
+                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}
                 </button>
               </div>
             </div>
 
             {/* Footer */}
             <p className="text-[10px] text-neutral-400 text-center pb-4">
-              Al suscribirte, aceptas los terminos de servicio de <span className="text-white">AI Aethel Accountant</span>.
+              {t.gate.termsPre}<span className="text-white">AI Aethel Accountant</span>{t.gate.termsPost}
             </p>
           </div>
         </div>
@@ -420,13 +361,13 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
 // ── Compact overlay for page blocking ──
 function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean }) {
   const { paywall } = useCopy(appCopy);
+  const t = useCopy(billingCopy);
   const navigate = useNavigate();
   const { user } = useAuth();
   const userMode = user?.modePreference || "business";
   const isBusiness = userMode === "business";
 
-  const monthlyPlan = isBusiness ? BIZ_MONTHLY : PERS_MONTHLY;
-  const annualPlan = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
+  const { monthlyPlan, annualPlan } = buildPlans(t, isBusiness);
   const title = isBusiness ? "Negocio" : "Personal";
 
   const checkoutMut = trpc.subscription.createCheckout.useMutation({
@@ -434,11 +375,11 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
       if (data.success && data.url) {
         window.location.href = data.url;
       } else {
-        alert(data.error || "Error al crear la sesion de pago");
+        alert(data.error || t.gate.checkoutError);
       }
     },
     onError: (err) => {
-      alert("Error: " + err.message);
+      alert(t.gate.errorPrefix + err.message);
     },
   });
 
@@ -501,7 +442,7 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
                   disabled={checkoutMut.isPending}
                   className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Crown className="w-3.5 h-3.5 text-gray-300" /> Suscribirse {monthlyPlan.name}
+                  <Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}
                 </button>
               </div>
 
@@ -541,7 +482,7 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
                   disabled={checkoutMut.isPending}
                   className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
                 >
-                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> Suscribirse {annualPlan.name}
+                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}
                 </button>
               </div>
             </div>

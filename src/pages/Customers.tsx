@@ -9,11 +9,14 @@ import { Search, Plus, Pencil, Trash2, Mail, Phone, MapPin, ShoppingBag, Calenda
 import * as XLSX from "xlsx";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 import { formatCurrency } from "@/lib/utils";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { businessCopy } from "@/i18n/copy/business";
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-const PAYMENT_LABELS: Record<string, string> = { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta", mixed: "Mixto" };
 
 export default function Customers() {
+  const { customers: t, common } = useCopy(businessCopy);
   const [letter, setLetter] = useState<string | undefined>();
   const [search, setSearch] = useState("");
   const [showAdd, setShowAdd] = useState(false);
@@ -28,19 +31,19 @@ export default function Customers() {
   const { data: stats } = trpc.customers.stats.useQuery();
 
   const create = trpc.customers.create.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setShowAdd(false); reset(); toast.success("Cliente creado"); },
+    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setShowAdd(false); reset(); toast.success(t.created); },
     onError: (err) => toast.error(err.message),
   });
   const update = trpc.customers.update.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setEditing(null); reset(); toast.success("Actualizado"); },
+    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setEditing(null); reset(); toast.success(common.updated); },
     onError: (err) => toast.error(err.message),
   });
   const del = trpc.customers.delete.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success("Eliminado"); },
+    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success(common.deleted); },
     onError: (err) => toast.error(err.message),
   });
   const importExcel = trpc.customers.importExcel.useMutation({
-    onSuccess: (res) => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success(`${res.created} importados${res.errors > 0 ? `, ${res.errors} errores` : ""}`); setImportOpen(false); setPreviewData([]); },
+    onSuccess: (res) => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success(t.imported(res.created, res.errors)); setImportOpen(false); setPreviewData([]); },
     onError: (err) => toast.error(err.message),
   });
 
@@ -68,7 +71,7 @@ export default function Customers() {
         const wb = XLSX.read(bstr, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json<Array<string | number>>(ws, { header: 1 });
-        if (data.length < 2) { toast.error("El archivo esta vacio"); return; }
+        if (data.length < 2) { toast.error(t.emptyFile); return; }
         const headers = (data[0] as Array<string | number>).map((h) => String(h).toLowerCase().trim());
         const rows = data.slice(1).map((row) => {
           const obj: Record<string, string> = {};
@@ -84,7 +87,7 @@ export default function Customers() {
           };
         }).filter((m) => m.name);
         setPreviewData(mapped);
-      } catch { toast.error("Error al leer el archivo"); }
+      } catch { toast.error(t.readError); }
     };
     reader.readAsBinaryString(file);
   };
@@ -107,32 +110,32 @@ export default function Customers() {
       <AnimatedPage>
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-medium text-black">Clientes</h1>
-            <p className="text-neutral-400 text-sm mt-1">{stats?.total ?? 0} clientes</p>
+            <h1 className="text-2xl font-medium text-black">{t.title}</h1>
+            <p className="text-neutral-400 text-sm mt-1">{t.count(stats?.total ?? 0)}</p>
           </div>
           <div className="flex gap-2">
             <Dialog open={importOpen} onOpenChange={setImportOpen}>
               <DialogTrigger asChild>
-                <Button variant="outline" className="border-neutral-200 text-neutral-600 text-sm">Importar Excel</Button>
+                <Button variant="outline" className="border-neutral-200 text-neutral-600 text-sm">{t.importExcel}</Button>
               </DialogTrigger>
               <DialogContent className="bg-white border-neutral-200 max-w-2xl">
-                <DialogHeader><DialogTitle className="text-black font-medium text-base">Importar desde Excel</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="text-black font-medium text-base">{t.importTitle}</DialogTitle></DialogHeader>
                 <div className="space-y-4">
                   <div className="border-2 border-dashed border-neutral-200 rounded-lg p-6 text-center">
-                    <p className="text-xs text-neutral-400 mb-3">Columnas: Nombre, Apellido, Telefono, Email, Direccion</p>
+                    <p className="text-xs text-neutral-400 mb-3">{t.columnsHint}</p>
                     <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
-                    <Button variant="outline" className="border-neutral-200 text-sm" onClick={() => fileRef.current?.click()}>Seleccionar archivo</Button>
+                    <Button variant="outline" className="border-neutral-200 text-sm" onClick={() => fileRef.current?.click()}>{t.selectFile}</Button>
                   </div>
                   {previewData.length > 0 && (
                     <>
                       <div className="flex items-center justify-between">
-                        <p className="text-sm text-black font-medium">{previewData.length} registros</p>
+                        <p className="text-sm text-black font-medium">{common.records(previewData.length)}</p>
                         <button onClick={() => setPreviewData([])} className="text-neutral-400 hover:text-black transition-colors duration-150"><X className="w-4 h-4" /></button>
                       </div>
                       <ScrollArea className="max-h-64 border border-neutral-200 rounded-lg">
-                        <table className="w-full text-xs"><thead className="bg-neutral-50 sticky top-0"><tr>{["Nombre", "Apellido", "Telefono", "Email"].map((h) => (<th key={h} className="text-left px-3 py-2 text-neutral-500 font-normal">{h}</th>))}</tr></thead><tbody>{previewData.slice(0, 50).map((row, idx) => (<tr key={idx} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors duration-150">{["name", "lastName", "phone", "email"].map((k) => (<td key={k} className="px-3 py-1.5 text-neutral-600">{row[k]}</td>))}</tr>))}</tbody></table>
+                        <table className="w-full text-xs"><thead className="bg-neutral-50 sticky top-0"><tr>{t.previewHeaders.map((h) => (<th key={h} className="text-left px-3 py-2 text-neutral-500 font-normal">{h}</th>))}</tr></thead><tbody>{previewData.slice(0, 50).map((row, idx) => (<tr key={idx} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors duration-150">{["name", "lastName", "phone", "email"].map((k) => (<td key={k} className="px-3 py-1.5 text-neutral-600">{row[k]}</td>))}</tr>))}</tbody></table>
                       </ScrollArea>
-                      <Button className="w-full bg-black hover:bg-neutral-800 text-white" onClick={() => importExcel.mutate(previewData as any)} disabled={importExcel.isPending}>{importExcel.isPending ? "Importando..." : `Importar ${previewData.length}`}</Button>
+                      <Button className="w-full bg-black hover:bg-neutral-800 text-white" onClick={() => importExcel.mutate(previewData as any)} disabled={importExcel.isPending}>{importExcel.isPending ? t.importing : t.importN(previewData.length)}</Button>
                     </>
                   )}
                 </div>
@@ -140,21 +143,21 @@ export default function Customers() {
             </Dialog>
             <Dialog open={showAdd} onOpenChange={setShowAdd}>
               <DialogTrigger asChild>
-                <Button className="bg-black hover:bg-neutral-800 text-white text-sm" onClick={() => { setEditing(null); reset(); }}><Plus className="w-3.5 h-3.5 mr-1" /> Nuevo</Button>
+                <Button className="bg-black hover:bg-neutral-800 text-white text-sm" onClick={() => { setEditing(null); reset(); }}><Plus className="w-3.5 h-3.5 mr-1" /> {common.new}</Button>
               </DialogTrigger>
               <DialogContent className="bg-white border-neutral-200 max-w-md">
-                <DialogHeader><DialogTitle className="text-black font-medium">{editing ? "Editar" : "Nuevo"} Cliente</DialogTitle></DialogHeader>
+                <DialogHeader><DialogTitle className="text-black font-medium">{t.dialogTitle(!!editing)}</DialogTitle></DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-neutral-400 mb-1 block">Nombre *</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-neutral-200 text-sm" required /></div>
-                    <div><label className="text-xs text-neutral-400 mb-1 block">Apellido</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.firstName} *</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-neutral-200 text-sm" required /></div>
+                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.lastName}</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="border-neutral-200 text-sm" /></div>
                   </div>
                   <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-neutral-400 mb-1 block">Telefono</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                    <div><label className="text-xs text-neutral-400 mb-1 block">Email</label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.phone}</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.email}</label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-200 text-sm" /></div>
                   </div>
-                  <div><label className="text-xs text-neutral-400 mb-1 block">Direccion</label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                  <Button type="submit" className="w-full bg-black hover:bg-neutral-800 text-white">{editing ? "Actualizar" : "Crear"}</Button>
+                  <div><label className="text-xs text-neutral-400 mb-1 block">{t.address}</label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-neutral-200 text-sm" /></div>
+                  <Button type="submit" className="w-full bg-black hover:bg-neutral-800 text-white">{editing ? common.update : common.create}</Button>
                 </form>
               </DialogContent>
             </Dialog>
@@ -165,7 +168,7 @@ export default function Customers() {
       <AnimatedPage delay={80}>
         <div className="relative max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-          <Input placeholder="Buscar..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm border-neutral-200" />
+          <Input placeholder={common.search} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm border-neutral-200" />
         </div>
       </AnimatedPage>
 
@@ -184,7 +187,7 @@ export default function Customers() {
       {search.trim() ? (
         <AnimatedPage delay={160}>
           <div className="space-y-2">
-            {filtered.map((c: typeof filtered[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm("Eliminar?")) del.mutate({ id }); }} />)}
+            {filtered.map((c: typeof filtered[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm(common.confirmDelete)) del.mutate({ id }); }} />)}
           </div>
         </AnimatedPage>
       ) : (
@@ -199,7 +202,7 @@ export default function Customers() {
                     <div className="flex-1 h-px bg-neutral-100" />
                     <span className="text-xs text-neutral-400">{group.length}</span>
                   </div>
-                  <div className="space-y-2 pl-8">{group.map((c: typeof group[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm("Eliminar?")) del.mutate({ id }); }} />)}</div>
+                  <div className="space-y-2 pl-8">{group.map((c: typeof group[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm(common.confirmDelete)) del.mutate({ id }); }} />)}</div>
                 </div>
               );
             })}
@@ -211,6 +214,8 @@ export default function Customers() {
 }
 
 function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => void; onDelete: (id: number) => void }) {
+  const { customers: t, common, paymentMethods } = useCopy(businessCopy);
+  const locale = intlLocale(useLang().lang);
   const fullName = `${c.name}${c.lastName ? ` ${c.lastName}` : ""}`;
   const [expanded, setExpanded] = useState(false);
   const { data: purchaseHistory } = trpc.sales.byCustomer.useQuery({ customerId: c.id }, { enabled: expanded });
@@ -228,7 +233,7 @@ function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => voi
             {c.address && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{c.address}</span>}
           </div>
           <div className="flex items-center gap-3 mt-2 text-xs text-neutral-400">
-            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />Desde {new Date(c.createdAt).toLocaleDateString("es-ES")}</span>
+            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{t.since(new Date(c.createdAt).toLocaleDateString(locale))}</span>
           </div>
         </div>
         <div className="flex gap-1 ml-3">
@@ -239,20 +244,20 @@ function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => voi
 
       <button onClick={() => setExpanded(!expanded)} className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500 hover:text-black transition-colors duration-150">
         <ShoppingBag className="w-3.5 h-3.5" />
-        {expanded ? "Ocultar historial" : "Ver historial"}
+        {expanded ? t.hideHistory : t.showHistory}
         {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
       </button>
 
       {expanded && (
         <div className="mt-3 pt-3 border-t border-neutral-100">
-          {purchaseHistory === undefined ? (<p className="text-xs text-neutral-400">Cargando...</p>) :
-            purchaseHistory.length === 0 ? (<p className="text-xs text-neutral-400">Sin compras registradas</p>) : (
+          {purchaseHistory === undefined ? (<p className="text-xs text-neutral-400">{common.loading}</p>) :
+            purchaseHistory.length === 0 ? (<p className="text-xs text-neutral-400">{t.noPurchases}</p>) : (
               <div>
                 {purchaseHistory.map((sale: any) => {
-                  const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || "Sin productos";
-                  const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString("es-ES", { day: "numeric", month: "short" }) : "";
-                  const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString("es-ES", { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-                  const paymentLabel = PAYMENT_LABELS[sale.paymentMethod] || sale.paymentMethod;
+                  const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || common.noProducts;
+                  const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
+                  const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
+                  const paymentLabel = paymentMethods[sale.paymentMethod] || sale.paymentMethod;
                   return (
                     <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
                       <div className="min-w-0 flex-1">
