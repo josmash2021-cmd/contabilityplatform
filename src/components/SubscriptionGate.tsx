@@ -379,6 +379,8 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
   const userMode = user?.modePreference || "business";
   const hasSubscription = status?.active === true;
   const currentPath = location.pathname;
+  // The free trial existed and is over (only accounts created after the trial launch have one).
+  const trialEnded = !!status?.trial && !status.trial.active;
 
   // Admins never pay (the server also reports them as active).
   if (isAdmin) return <>{children}</>;
@@ -396,7 +398,7 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
     return (
       <>
         <div className="relative">{children}</div>
-        <SubscriptionOverlayOnly />
+        <SubscriptionOverlayOnly trialEnded={trialEnded} />
       </>
     );
   }
@@ -405,7 +407,7 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
     return (
       <>
         <div className="relative">{children}</div>
-        <SubscriptionOverlayOnly />
+        <SubscriptionOverlayOnly trialEnded={trialEnded} />
       </>
     );
   }
@@ -414,7 +416,7 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
 }
 
 // ── Compact overlay for page blocking ──
-function SubscriptionOverlayOnly() {
+function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const userMode = user?.modePreference || "business";
@@ -455,9 +457,13 @@ function SubscriptionOverlayOnly() {
               <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-6 h-6 text-yellow-500" />
               </div>
-              <h2 className="text-xl font-semibold text-white">Desbloquea el acceso completo</h2>
+              <h2 className="text-xl font-semibold text-white">
+                {trialEnded ? "Tu prueba gratis terminó" : "Desbloquea el acceso completo"}
+              </h2>
               <p className="text-sm text-neutral-300">
-                Suscribete para acceder a esta pagina y todas las funciones.
+                {trialEnded
+                  ? "Elige un plan para seguir usando Ai Aethel. Tus datos siguen guardados."
+                  : "Suscribete para acceder a esta pagina y todas las funciones."}
               </p>
             </div>
 

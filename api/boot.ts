@@ -112,7 +112,10 @@ app.post("/api/webhooks/stripe", async (c) => {
             if (existingPayment.length > 0) break; // Already recorded, skip
           }
 
-          const recordedAmount = plan === "monthly" ? "80.00" : "800.00";
+          // Record what Stripe actually charged (personal plans cost less than business).
+          const recordedAmount = typeof session.amount_total === "number"
+            ? (session.amount_total / 100).toFixed(2)
+            : (plan === "monthly" ? "80.00" : "800.00");
           await db.insert(subscriptionPayments).values({
             userId: numericUserId,
             stripePaymentIntentId: paymentIntentId,

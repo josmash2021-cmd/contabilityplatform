@@ -134,8 +134,10 @@ export default function Onboarding() {
   };
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4 overflow-hidden">
-      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-xl p-6">
+    <div className="font-brand relative min-h-screen bg-[#060B18] flex items-center justify-center p-4 overflow-hidden">
+      <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_70%)]" />
+      <div className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+      <div className="relative w-full max-w-md bg-white rounded-2xl shadow-[0_30px_80px_-20px_rgba(2,6,23,0.6)] p-6 sm:p-7 animate-in fade-in slide-in-from-bottom-3 duration-500">
         {/* Cancel button */}
         <button
           type="button"
@@ -147,10 +149,11 @@ export default function Onboarding() {
         </button>
 
         {/* Header */}
-        <div className="text-center mb-4">
-          <Logo className="w-8 h-8 mx-auto mb-2" />
-          <h1 className="text-lg font-semibold text-black">Tu negocio</h1>
-          <p className="text-[11px] text-neutral-400">Completa para comenzar</p>
+        <div className="text-center mb-5">
+          <Logo className="w-9 h-9 mx-auto mb-3" />
+          <p className="text-xs font-semibold text-blue-600">Paso 2 de 2</p>
+          <h1 className="mt-1 text-xl font-bold tracking-tight text-slate-900">Datos de tu negocio</h1>
+          <p className="mt-1 text-sm text-slate-500">Con esto configuramos tu cuenta. Tu prueba gratis empieza al terminar.</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-3">

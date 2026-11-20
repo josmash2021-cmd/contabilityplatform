@@ -90,6 +90,18 @@ module.exports = {
           "0%": { opacity: "0", transform: "translateX(-8px)" },
           "100%": { opacity: "1", transform: "translateX(0)" },
         },
+        "soft-float": {
+          "0%, 100%": { transform: "translateY(0)" },
+          "50%": { transform: "translateY(-8px)" },
+        },
+        "hero-in": {
+          "0%": { opacity: "0", transform: "translateY(18px)" },
+          "100%": { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      fontFamily: {
+        // Marketing site + auth screens (loaded from Google Fonts in index.html)
+        brand: ["Inter", "ui-sans-serif", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"],
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
@@ -99,6 +111,8 @@ module.exports = {
         "fade-up": "fade-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "scale-in": "scale-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "slide-right": "slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+        "soft-float": "soft-float 6s ease-in-out infinite",
+        "hero-in": "hero-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both",
       },
       transitionTimingFunction: {
         "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",

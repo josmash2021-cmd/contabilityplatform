@@ -269,8 +269,11 @@ export default function SubscriptionSettings() {
     );
   }
 
+  // Free trial (no paid plan yet): show the plans with a trial notice instead of an "active plan" card.
+  const freeTrial = status?.status === "trialing" && status.trial?.active ? status.trial : null;
+
   // ─── ACTIVE SUBSCRIBER VIEW — same card design as overlay ───
-  if (status?.active) {
+  if (status?.active && !freeTrial) {
     const currentPlan = status.plan === "monthly" ? PLAN_MONTHLY : PLAN_ANNUAL;
     const isMonthly = status.plan === "monthly";
 
@@ -515,7 +518,17 @@ export default function SubscriptionSettings() {
     <>
       <style>{SHIMMER_CSS}</style>
       <div className="space-y-6">
-        {wasBroken ? (
+        {freeTrial && (
+          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
+            <p className="text-sm text-emerald-800 font-medium">
+              Estás en tu prueba gratis: te {freeTrial.daysLeft === 1 ? "queda 1 día" : `quedan ${freeTrial.daysLeft} días`}.
+            </p>
+            <p className="text-xs text-emerald-700">
+              Tienes acceso completo hasta el {new Date(freeTrial.endsAt).toLocaleDateString("es", { day: "numeric", month: "long" })}. Elige un plan cuando quieras para seguir sin interrupciones.
+            </p>
+          </div>
+        )}
+        {freeTrial ? null : wasBroken ? (
           <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
             <p className="text-sm text-amber-800 font-medium">Suscripcion interrumpida</p>
             <p className="text-xs text-amber-700">

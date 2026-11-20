@@ -1,24 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
-import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield, Building2, User, PiggyBank, Target, BarChart3, CreditCard } from "lucide-react";
 import { toast } from "sonner";
-import { Logo } from "@/components/Logo";
+import { useFieldIds } from "@/components/auth/useFieldIds";
+import { trpc } from "@/providers/trpc";
+import {
+  AuthHeading, Field, ModeToggle, PasswordInput, SubmitButton, TextInput, type AccountMode,
+} from "@/components/auth/AuthUI";
+import { TRIAL_DAYS } from "@/components/marketing/content";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [mode, setMode] = useState<"business" | "personal">("business");
+  const [mode, setMode] = useState<AccountMode>("business");
+  const ids = useFieldIds("email", "password");
 
   // Redirected here because the session expired (see providers/trpc.tsx).
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get("expired") === "1") {
-      toast.info("Tu sesion expiro. Inicia sesion de nuevo.");
+      toast.info("Tu sesión expiró. Inicia sesión de nuevo.");
     }
   }, []);
 
@@ -34,7 +33,7 @@ export default function Login() {
         const isPersonal = data.user.modePreference === "personal";
         window.location.href = isPersonal ? "/personal" : "/";
       } else {
-        toast.error(data.error || "Error al iniciar sesion");
+        toast.error(data.error || "Error al iniciar sesión");
       }
     },
     onError: (err) => {
@@ -52,187 +51,52 @@ export default function Login() {
   };
 
   return (
-    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
-      mode === "business" ? "bg-black" : "bg-white"
-    }`}>
-        {/* Mobile: centered form below Spline / desktop: centered form */}
-        <div className="flex-1 flex items-center justify-center animate-in fade-in duration-700">
-          <div className="w-full max-w-sm lg:max-w-md space-y-4">
-            {/* Mobile logo */}
-            <div className="lg:hidden flex items-center justify-center gap-3 mb-6">
-              <Logo className="w-10 h-10" />
-              <div className="text-center">
-                <span className={`font-semibold text-xl block ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
-                <p className={`text-xs ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>Accountant</p>
-              </div>
-            </div>
+    <div>
+      <AuthHeading title="Bienvenido de vuelta" subtitle="Inicia sesión para continuar con tus finanzas." />
 
-            {/* Headline - desktop only */}
-            <div className="hidden lg:block space-y-1">
-              <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
-                {mode === "business" ? (
-                  <>Tu negocio,<br /><span className="text-neutral-400">organizado.</span></>
-                ) : (
-                  <>Tus finanzas,<br /><span className="text-neutral-500">en control.</span></>
-                )}
-              </h2>
-              <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
-                {mode === "business"
-                  ? "La plataforma contable que automatiza tus finanzas, conecta tu banco y simplifica tu día a día."
-                  : "Conecta tu banco, categoriza tus gastos y toma el control de tu dinero personal con inteligencia artificial."
-                }
-              </p>
-            </div>
-
-            <div className="text-center space-y-1">
-              <h1 className={`text-2xl lg:text-3xl font-semibold transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Bienvenido de vuelta</h1>
-              <p className={`text-base transition-colors duration-500 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>Inicia sesion en tu cuenta</p>
-            </div>
-
-            <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
-              mode === "personal"
-                ? "bg-black border-white/20 text-white"
-                : "bg-white border-neutral-200 text-black"
-            }`}>
-              <CardContent className="p-6 sm:p-8">
-                {/* Mode Toggle */}
-                <div className="flex items-center justify-center mb-5">
-                  <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
-                    mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
-                  }`}>
-                    {/* Sliding background pill */}
-                    <div
-                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                        mode === "personal" ? "bg-white" : "bg-black"
-                      }`}
-                      style={{
-                        left: mode === "business" ? "4px" : "calc(50%)",
-                      }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setMode("business")}
-                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                        mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
-                      }`}
-                    >
-                      <Building2 className={`w-4 h-4 transition-transform duration-300 ${mode === "business" ? "scale-110" : "scale-100"}`} /> Negocios
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode("personal")}
-                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium transition-colors duration-300 ${
-                        mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
-                      }`}
-                    >
-                      <User className={`w-4 h-4 transition-transform duration-300 ${mode === "personal" ? "scale-110" : "scale-100"}`} /> Personal
-                    </button>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-5">
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Email</Label>
-                    <Input
-                      type="email"
-                      placeholder="tu@email.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className={`mt-1.5 rounded-xl h-12 text-base transition-colors duration-300 ${
-                        mode === "personal"
-                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Contrasena</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Tu contrasena"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={`pr-10 rounded-xl h-12 text-base transition-colors duration-300 ${
-                          mode === "personal"
-                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={loginMut.isPending}
-                    className={`w-full rounded-lg h-10 mt-2 transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
-                  >
-                    {loginMut.isPending ? (
-                      <Loader2 className="w-4 h-4 animate-spin mr-2" />
-                    ) : null}
-                    Iniciar Sesion
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-
-            <div className="text-center space-y-3">
-              <p className="text-sm">
-                <Link to="/forgot-password" className={`transition-colors duration-300 hover:underline ${mode === "business" ? "text-neutral-300 hover:text-white lg:text-neutral-400 lg:hover:text-white" : "text-neutral-600 hover:text-black lg:text-neutral-500 lg:hover:text-black"}`}>Olvidaste tu contrasena?</Link>
-              </p>
-              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>
-                No tienes cuenta?{" "}
-                <Link to="/register" className={`transition-colors duration-300 hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200 lg:text-white lg:hover:text-neutral-200" : "text-black hover:text-neutral-600 lg:text-black lg:hover:text-neutral-600"}`}>Registrate</Link>
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Feature cards - desktop only, centered in right panel */}
-        <div className="hidden lg:block mt-6 w-full" key={mode}>
-          <div className="max-w-md mx-auto">
-            <div className="grid grid-cols-4 gap-2">
-              {(mode === "business" ? [
-                { icon: Wallet, label: "Contabilidad" },
-                { icon: TrendingUp, label: "Análisis" },
-                { icon: Shield, label: "Fiscal" },
-                { icon: Receipt, label: "Banca" },
-              ] : [
-                { icon: CreditCard, label: "Gastos" },
-                { icon: Target, label: "Presupuesto" },
-                { icon: PiggyBank, label: "Ahorro" },
-                { icon: BarChart3, label: "Banca" },
-              ]).map((f, i) => (
-                <div
-                  key={f.label}
-                  className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
-                  style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
-                >
-                  <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
-                  <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom tagline - desktop only, centered in right panel */}
-        <div className="hidden lg:block mt-4 w-full">
-          <div className="max-w-md mx-auto text-center">
-            <p className={`text-xs transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
-              {mode === "business"
-                ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
-                : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
-              }
-            </p>
-          </div>
-        </div>
+      <div className="mt-8">
+        <ModeToggle value={mode} onChange={setMode} label="Tipo de cuenta" />
+        <p className="mt-2 text-[13px] text-slate-500">Elige el tipo de cuenta con el que te registraste.</p>
       </div>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
+        <Field label="Correo electrónico" htmlFor={ids.email}>
+          <TextInput
+            id={ids.email}
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="tu@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </Field>
+        <Field
+          label="Contraseña"
+          htmlFor={ids.password}
+          action={
+            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          }
+        >
+          <PasswordInput
+            id={ids.password}
+            autoComplete="current-password"
+            placeholder="Tu contraseña"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        <SubmitButton loading={loginMut.isPending}>Iniciar sesión</SubmitButton>
+      </form>
+
+      <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
+        ¿Aún no tienes cuenta?{" "}
+        <Link to="/register" className="font-semibold text-slate-900 hover:underline">
+          Prueba {TRIAL_DAYS} días gratis
+        </Link>
+      </div>
+    </div>
   );
 }

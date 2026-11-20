@@ -1,43 +1,80 @@
-import { Routes, Route, Navigate } from "react-router";
+import { lazy, Suspense, type ComponentType } from "react";
+import { Routes, Route, Navigate, useLocation } from "react-router";
+import { Loader2 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { ModeProvider } from "@/contexts/ModeContext";
-import { AppLayout } from "@/components/layout/AppLayout";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { PersonalBankGate } from "@/components/PersonalBankGate";
-import Dashboard from "@/pages/Dashboard";
-import POS from "@/pages/POS";
-import Services from "@/pages/Services";
-import Customers from "@/pages/Customers";
-import Transactions from "@/pages/Transactions";
-import Bank from "@/pages/Bank";
-import BankCategoryDetail from "@/pages/BankCategoryDetail";
-import BankTransactions from "@/pages/BankTransactions";
-import Reports from "@/pages/Reports";
-import Settings from "@/pages/Settings";
-import PersonalDashboard from "@/pages/PersonalDashboard";
-import PersonalTransactions from "@/pages/PersonalTransactions";
-import PersonalGoals from "@/pages/PersonalGoals";
-import PersonalSubscriptions from "@/pages/PersonalSubscriptions";
-import PersonalBank from "@/pages/PersonalBank";
-import PersonalCategoryDetail from "@/pages/PersonalCategoryDetail";
+// Public pages load with the first bundle so the site opens fast.
+import Landing from "@/pages/Landing";
 import Login from "@/pages/Login";
 import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
-import Onboarding from "@/pages/Onboarding";
-import Setup from "@/pages/Setup";
 import NotFound from "@/pages/NotFound";
-import Diagnostico from "@/pages/Diagnostico";
-import Admin from "@/pages/Admin";
-import AdminDetail from "@/pages/AdminDetail";
-import AdminUserActivity from "@/pages/AdminUserActivity";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import AuthLayout from "@/components/layout/AuthLayout";
 
+/**
+ * Lazy-load a page. After a deploy, the old chunk files no longer exist; if a
+ * chunk fails to load, reload once to pick up the new version.
+ */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- same constraint as React.lazy
+function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+  return lazy(() =>
+    load().catch((err) => {
+      const key = "chunk-reload-at";
+      let last = 0;
+      try { last = Number(sessionStorage.getItem(key) || 0); } catch { /* ignore */ }
+      if (Date.now() - last > 10_000) {
+        try { sessionStorage.setItem(key, String(Date.now())); } catch { /* ignore */ }
+        window.location.reload();
+        return new Promise<{ default: T }>(() => {}); // wait for the reload
+      }
+      throw err;
+    }),
+  );
+}
+
+// App pages are split out of the landing bundle.
+const AppLayout = lazyPage(() => import("@/components/layout/AppLayout").then((m) => ({ default: m.AppLayout })));
+const Dashboard = lazyPage(() => import("@/pages/Dashboard"));
+const POS = lazyPage(() => import("@/pages/POS"));
+const Services = lazyPage(() => import("@/pages/Services"));
+const Customers = lazyPage(() => import("@/pages/Customers"));
+const Transactions = lazyPage(() => import("@/pages/Transactions"));
+const Bank = lazyPage(() => import("@/pages/Bank"));
+const BankCategoryDetail = lazyPage(() => import("@/pages/BankCategoryDetail"));
+const BankTransactions = lazyPage(() => import("@/pages/BankTransactions"));
+const Reports = lazyPage(() => import("@/pages/Reports"));
+const Settings = lazyPage(() => import("@/pages/Settings"));
+const PersonalDashboard = lazyPage(() => import("@/pages/PersonalDashboard"));
+const PersonalTransactions = lazyPage(() => import("@/pages/PersonalTransactions"));
+const PersonalGoals = lazyPage(() => import("@/pages/PersonalGoals"));
+const PersonalSubscriptions = lazyPage(() => import("@/pages/PersonalSubscriptions"));
+const PersonalBank = lazyPage(() => import("@/pages/PersonalBank"));
+const PersonalCategoryDetail = lazyPage(() => import("@/pages/PersonalCategoryDetail"));
+const Onboarding = lazyPage(() => import("@/pages/Onboarding"));
+const Setup = lazyPage(() => import("@/pages/Setup"));
+const Diagnostico = lazyPage(() => import("@/pages/Diagnostico"));
+const Admin = lazyPage(() => import("@/pages/Admin"));
+const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
+const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
+
+function PageLoader() {
+  return (
+    <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-label="Cargando">
+      <Loader2 className="h-6 w-6 animate-spin text-neutral-400" />
+    </div>
+  );
+}
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
+  const { pathname } = useLocation();
 
   if (!isAuthenticated) {
+    // Visitors see the company landing page at "/"; other app URLs ask them to log in.
+    if (pathname === "/") return <Landing />;
     return <Navigate to="/login" replace />;
   }
   return <>{children}</>;
@@ -53,55 +90,57 @@ function PublicGuard({ children }: { children: React.ReactNode }) {
 
 export default function App() {
   return (
-    <Routes>
-      {/* Public auth routes - shared layout keeps Spline from reloading */}
-      <Route element={<AuthLayout />}>
-        <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
-        <Route path="/register" element={<Register />} />
-      </Route>
-      <Route path="/forgot-password" element={<PublicGuard><ForgotPassword /></PublicGuard>} />
+    <Suspense fallback={<PageLoader />}>
+      <Routes>
+        {/* Public auth routes */}
+        <Route element={<AuthLayout />}>
+          <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
+          <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<PublicGuard><ForgotPassword /></PublicGuard>} />
+        </Route>
 
-      {/* Onboarding - accessible when logged in */}
-      <Route path="/onboarding" element={<Onboarding />} />
+        {/* Onboarding - accessible when logged in */}
+        <Route path="/onboarding" element={<Onboarding />} />
 
-      {/* Setup - no auth required, run once */}
-      <Route path="/setup" element={<Setup />} />
+        {/* Setup - admin only on the server */}
+        <Route path="/setup" element={<Setup />} />
 
-      {/* Diagnostico - hidden page for debugging */}
-      <Route path="/diagnostico" element={<Diagnostico />} />
+        {/* Diagnostico - hidden page for debugging */}
+        <Route path="/diagnostico" element={<Diagnostico />} />
 
-      {/* Privacy Policy - public, required by Plaid */}
-      <Route path="/privacy" element={<PrivacyPolicy />} />
+        {/* Privacy Policy - public, required by Plaid */}
+        <Route path="/privacy" element={<PrivacyPolicy />} />
 
-      {/* Protected routes with ModeProvider */}
-      <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>
-        {/* Business routes */}
-        <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
-        <Route path="/pos" element={<POS />} />
-        <Route path="/services" element={<Services />} />
-        <Route path="/customers" element={<Customers />} />
-        <Route path="/transactions" element={<Transactions />} />
-        <Route path="/bank" element={<Bank />} />
-        <Route path="/bank/category/:category" element={<BankCategoryDetail />} />
-        <Route path="/bank/transactions" element={<BankTransactions />} />
-        <Route path="/reports" element={<Reports />} />
-        <Route path="/settings" element={<Settings />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
-        <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
-        <Route path="/admin/bloqueados" element={<AdminDetail section="blocked" />} />
-        <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
-        <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
-        {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
-        <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
-        <Route path="/personal/bank" element={<PersonalBank />} />
-        <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />
-        <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
-        <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
-        <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
-      </Route>
+        {/* Protected routes with ModeProvider ("/" shows the landing page to visitors) */}
+        <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>
+          {/* Business routes */}
+          <Route path="/" element={<ErrorBoundary><Dashboard /></ErrorBoundary>} />
+          <Route path="/pos" element={<POS />} />
+          <Route path="/services" element={<Services />} />
+          <Route path="/customers" element={<Customers />} />
+          <Route path="/transactions" element={<Transactions />} />
+          <Route path="/bank" element={<Bank />} />
+          <Route path="/bank/category/:category" element={<BankCategoryDetail />} />
+          <Route path="/bank/transactions" element={<BankTransactions />} />
+          <Route path="/reports" element={<Reports />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/admin" element={<Admin />} />
+          <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
+          <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
+          <Route path="/admin/bloqueados" element={<AdminDetail section="blocked" />} />
+          <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
+          <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
+          {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
+          <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
+          <Route path="/personal/bank" element={<PersonalBank />} />
+          <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />
+          <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
+          <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
+          <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
+        </Route>
 
-      <Route path="*" element={<NotFound />} />
-    </Routes>
+        <Route path="*" element={<NotFound />} />
+      </Routes>
+    </Suspense>
   );
 }

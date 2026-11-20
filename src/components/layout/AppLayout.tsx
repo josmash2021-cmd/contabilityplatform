@@ -1,4 +1,4 @@
-import { useState, useMemo, memo, useEffect } from "react";
+import { useState, useMemo, memo, useEffect, Suspense } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
@@ -14,8 +14,29 @@ import {
   LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
   Target, ArrowLeftRight, User, Tv, Shield,
-  AlertTriangle, Construction,
+  AlertTriangle, Construction, Gift, Loader2,
 } from "lucide-react";
+
+/** Shown at the top of the app while the user is on the free trial. */
+function TrialBanner() {
+  const { isAdmin } = useAuth();
+  const { data: status } = trpc.subscription.status.useQuery(undefined, {
+    enabled: !isAdmin,
+    refetchInterval: 10000, // same query (and cache) as the page gate
+  });
+  const trial = status?.status === "trialing" ? status.trial : null;
+  if (!trial?.active) return null;
+  const days = trial.daysLeft;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-900 sm:text-sm">
+      <span className="inline-flex items-center gap-1.5">
+        <Gift className="h-4 w-4 text-emerald-600" />
+        Prueba gratis: te {days === 1 ? "queda 1 día" : `quedan ${days} días`} con acceso completo.
+      </span>
+      <Link to="/settings" className="font-semibold underline-offset-2 hover:underline">Elegir un plan</Link>
+    </div>
+  );
+}
 
 const businessNav = [
   { path: "/", label: "Dashboard", icon: LayoutDashboard },
@@ -180,8 +201,12 @@ export function AppLayout() {
       </div>
 
       <main className="flex-1 overflow-y-auto pt-14 lg:pt-0 relative">
+        <TrialBanner />
         <SubscriptionPageGate>
-          <Outlet />
+          {/* Pages are lazy-loaded; keep the sidebar while one loads */}
+          <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>}>
+            <Outlet />
+          </Suspense>
         </SubscriptionPageGate>
       </main>
 

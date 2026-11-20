@@ -1,28 +1,26 @@
 import { useState } from "react";
-import { Link, Navigate, useNavigate } from "react-router";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
+import { Check, Gift } from "lucide-react";
+import { toast } from "sonner";
+import { useFieldIds } from "@/components/auth/useFieldIds";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent } from "@/components/ui/card";
 import {
-  Loader2, Eye, EyeOff, Receipt, Wallet, TrendingUp, Shield,
-  Building2, User, CreditCard, Target, PiggyBank, BarChart3,
-  Check, X,
-} from "lucide-react";
-import { toast } from "sonner";
-import { Logo } from "@/components/Logo";
-import { useFadeIn } from "@/hooks/useFadeIn";
+  AuthHeading, Field, ModeToggle, PasswordInput, SubmitButton, TextInput, type AccountMode,
+} from "@/components/auth/AuthUI";
+import { TRIAL_DAYS } from "@/components/marketing/content";
 
 export default function Register() {
   const navigate = useNavigate();
+  const [params] = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [mode, setMode] = useState<"business" | "personal">("business");
+  // Pricing cards link here with ?mode=personal|business
+  const [mode, setMode] = useState<AccountMode>(params.get("mode") === "personal" ? "personal" : "business");
+  const ids = useFieldIds("name", "email", "password", "confirm");
+  const { isAuthenticated, user } = useAuth();
 
   // Real-time validation
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
@@ -35,13 +33,7 @@ export default function Register() {
   const isPasswordValid = mode === "business"
     ? passwordReqs.length && passwordReqs.uppercase && passwordReqs.number && passwordReqs.special
     : password.length >= 6;
-
-  const { isAuthenticated, user } = useAuth();
-
-  // If already authenticated, redirect based on mode
-  if (isAuthenticated && user?.modePreference) {
-    return <Navigate to={user.modePreference === "personal" ? "/personal" : "/"} replace />;
-  }
+  const confirmMismatch = confirmPassword.length > 0 && confirmPassword !== password;
 
   const personalRegisterMut = trpc.auth.register.useMutation({
     onSuccess: (data) => {
@@ -50,10 +42,10 @@ export default function Register() {
           localStorage.setItem("auth_token", data.token);
         }
         localStorage.setItem("auth_user", JSON.stringify(data.user));
-        toast.success("Cuenta creada exitosamente");
+        toast.success("Cuenta creada. Tu prueba gratis ya empezó.");
         window.location.href = "/personal";
       } else {
-        toast.error(data.error || "Error al crear cuenta");
+        toast.error(data.error || "Error al crear la cuenta");
       }
     },
     onError: (err) => {
@@ -61,31 +53,32 @@ export default function Register() {
     },
   });
 
+  // If already authenticated, redirect based on mode (after all hooks run)
+  if (isAuthenticated && user?.modePreference) {
+    return <Navigate to={user.modePreference === "personal" ? "/personal" : "/"} replace />;
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password || !confirmPassword) {
       toast.error("Completa todos los campos");
       return;
     }
-    if (mode === "business" && !isEmailValid) {
-      toast.error("Ingresa un correo electronico valido");
+    if (!isEmailValid) {
+      toast.error("Ingresa un correo electrónico válido");
       return;
     }
-    if (mode === "business" && !isPasswordValid) {
-      toast.error("La contrasena no cumple con todos los requisitos");
-      return;
-    }
-    if (mode === "personal" && password.length < 6) {
-      toast.error("La contrasena debe tener al menos 6 caracteres");
+    if (!isPasswordValid) {
+      toast.error(mode === "business" ? "La contraseña no cumple con todos los requisitos" : "La contraseña debe tener al menos 6 caracteres");
       return;
     }
     if (password !== confirmPassword) {
-      toast.error("Las contrasenas no coinciden");
+      toast.error("Las contraseñas no coinciden");
       return;
     }
 
     if (mode === "business") {
-      // Save pending registration and continue to onboarding
+      // Save pending registration (this tab only) and continue to onboarding
       sessionStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode }));
       navigate("/onboarding");
       return;
@@ -95,266 +88,111 @@ export default function Register() {
     personalRegisterMut.mutate({ email, password, name, mode });
   };
 
-  // Fade-in wrapper for sections
-  function FadeInSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-    const { ref, isVisible } = useFadeIn();
-    return (
-      <div
-        ref={ref}
-        className={`transition-all duration-700 ease-out ${className} ${
-          isVisible ? "opacity-100 translate-y-0" : "opacity-0 translate-y-4"
-        }`}
-      >
-        {children}
-      </div>
-    );
-  }
+  const reqs = [
+    { label: "8 o más caracteres", met: passwordReqs.length },
+    { label: "Una mayúscula", met: passwordReqs.uppercase },
+    { label: "Un número", met: passwordReqs.number },
+    { label: "Un carácter especial", met: passwordReqs.special },
+  ];
 
   return (
-    <div className={`relative z-10 w-full min-h-screen lg:min-h-0 lg:h-full flex flex-col lg:overflow-y-auto p-4 sm:p-6 lg:py-4 lg:px-2 xl:py-5 xl:px-3 transition-colors duration-500 ${
-      mode === "business" ? "bg-black" : "bg-white"
-    }`}>
-        <div className="flex-1 flex items-center justify-center">
-          <div className="w-full max-w-sm lg:max-w-md space-y-4">
-            {/* Mobile logo */}
-            <FadeInSection className="lg:hidden flex items-center justify-center gap-3 mb-6">
-              <Logo className="w-10 h-10" />
-              <div className="text-center">
-                <span className={`font-semibold text-xl block ${mode === "business" ? "text-white" : "text-black"}`}>Ai Aethel</span>
-                <p className={`text-xs ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>Accountant</p>
-              </div>
-            </FadeInSection>
+    <div>
+      <AuthHeading
+        eyebrow={mode === "business" ? "Paso 1 de 2" : undefined}
+        title="Crea tu cuenta"
+        subtitle={mode === "business" ? "Después te pediremos algunos datos de tu negocio." : "Toma menos de un minuto."}
+      />
 
-            {/* Headline - desktop only */}
-            <div className="hidden lg:block space-y-1">
-              <h2 className={`text-3xl xl:text-4xl font-bold leading-tight transition-all duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>
-                {mode === "business" ? (
-                  <>Empieza a<br /><span className="text-neutral-400">crecer hoy.</span></>
-                ) : (
-                  <>Toma el control<br /><span className="text-neutral-500">de tu dinero.</span></>
-                )}
-              </h2>
-              <p className={`text-sm transition-all duration-500 ${mode === "business" ? "text-neutral-300" : "text-neutral-600"}`}>
-                {mode === "business"
-                  ? "Unete a miles de empresarios que ya gestionan sus finanzas con Aethel. Rapido, seguro y sin complicaciones."
-                  : "Conecta tus cuentas, categoriza tus gastos y descubre donde va tu dinero con inteligencia artificial."
-                }
-              </p>
-            </div>
-
-            <FadeInSection className="text-center space-y-1">
-              <h1 className={`text-2xl lg:text-3xl font-semibold transition-colors duration-500 ${mode === "business" ? "text-white" : "text-black"}`}>Crea tu cuenta</h1>
-              <p className={`text-sm transition-colors duration-500 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>Empieza gratis, sin tarjeta de credito</p>
-            </FadeInSection>
-
-            <FadeInSection>
-            <Card className={`rounded-2xl shadow-xl border transition-colors duration-300 ${
-              mode === "personal"
-                ? "bg-black border-white/20 text-white"
-                : "bg-white border-neutral-200 text-black"
-            }`}>
-              <CardContent className="p-5 sm:p-6">
-                {/* Mode Toggle */}
-                <div className="flex items-center justify-center mb-4">
-                  <div className={`relative flex items-center p-1 rounded-xl w-full max-w-[280px] overflow-hidden transition-colors duration-300 ${
-                    mode === "personal" ? "bg-black" : "bg-white border border-neutral-200"
-                  }`}>
-                    <div
-                      className={`absolute top-1 bottom-1 w-[calc(50%-4px)] rounded-lg shadow-lg transition-all duration-300 ease-out ${
-                        mode === "personal" ? "bg-white" : "bg-black"
-                      }`}
-                      style={{ left: mode === "business" ? "4px" : "calc(50%)" }}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setMode("business")}
-                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
-                        mode === "business" ? "text-white" : "text-neutral-500 hover:text-neutral-300"
-                      }`}
-                    >
-                      <Building2 className="w-4 h-4" /> Negocios
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setMode("personal")}
-                      className={`relative z-10 flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors duration-300 ${
-                        mode === "personal" ? "text-black" : "text-neutral-500 hover:text-neutral-700"
-                      }`}
-                    >
-                      <User className="w-4 h-4" /> Personal
-                    </button>
-                  </div>
-                </div>
-
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>
-                      {mode === "business" ? "Nombre y Apellido" : "Nombre completo"}
-                    </Label>
-                    <Input
-                      placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
-                      value={name}
-                      onChange={(e) => setName(e.target.value)}
-                      className={`mt-1 rounded-xl h-11 text-sm transition-colors duration-300 ${
-                        mode === "personal"
-                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                      }`}
-                    />
-                  </div>
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Email</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        type="email"
-                        placeholder="tu@email.com"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className={`rounded-xl h-11 text-sm pr-10 transition-colors duration-300 ${
-                          mode === "personal"
-                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                        }`}
-                      />
-                      {email.length > 0 && (
-                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                          {isEmailValid ? (
-                            <Check className="w-5 h-5 text-green-500" />
-                          ) : (
-                            <X className="w-5 h-5 text-red-500" />
-                          )}
-                        </div>
-                      )}
-                    </div>
-                    {mode === "business" && email.length > 0 && !isEmailValid && (
-                      <p className="text-[11px] text-red-500 mt-1">Formato de correo invalido</p>
-                    )}
-                  </div>
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Contrasena</Label>
-                    <div className="relative mt-1">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        placeholder={mode === "business" ? "Minimo 8 caracteres" : "Minimo 6 caracteres"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className={`pr-10 rounded-xl h-11 text-sm transition-colors duration-300 ${
-                          mode === "personal"
-                            ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                            : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                        }`}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 hover:text-neutral-600"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    {mode === "business" && password.length > 0 && (
-                      <div className="mt-2 space-y-1.5">
-                        {[
-                          { label: "8+ caracteres", met: passwordReqs.length },
-                          { label: "Una mayuscula", met: passwordReqs.uppercase },
-                          { label: "Un numero", met: passwordReqs.number },
-                          { label: "Un caracter especial", met: passwordReqs.special },
-                        ].map((req) => (
-                          <div key={req.label} className="flex items-center gap-2">
-                            {req.met ? (
-                              <Check className="w-3.5 h-3.5 text-green-500 shrink-0" />
-                            ) : (
-                              <div className="w-3.5 h-3.5 rounded-full border border-neutral-400 shrink-0" />
-                            )}
-                            <span className={`text-[11px] ${req.met ? "text-green-600" : "text-neutral-500"}`}>
-                              {req.label}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div>
-                    <Label className={`text-xs transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-500" : "text-neutral-600 lg:text-neutral-500"}`}>Confirmar contrasena</Label>
-                    <Input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="Repite tu contrasena"
-                      value={confirmPassword}
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      className={`mt-1 rounded-xl h-11 text-sm transition-colors duration-300 ${
-                        mode === "personal"
-                          ? "border-white/30 bg-black text-white placeholder:text-neutral-500"
-                          : "border-neutral-200 bg-white text-black placeholder:text-neutral-400"
-                      }`}
-                    />
-                  </div>
-                  <Button
-                    type="submit"
-                    disabled={personalRegisterMut.isPending}
-                    className={`w-full rounded-lg h-10 font-medium transition-colors duration-300 !text-white ${mode === "personal" ? "bg-white !text-black hover:bg-neutral-200" : "bg-black hover:bg-neutral-800"}`}
-                  >
-                    {personalRegisterMut.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                    Crear Cuenta
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
-            </FadeInSection>
-
-            <FadeInSection className="text-center space-y-2">
-              <p className={`text-xs transition-colors duration-300 text-neutral-300 ${mode === "business" ? "lg:text-neutral-400" : "lg:text-neutral-500"}`}>
-                Al registrarte, aceptas nuestros{" "}
-                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white lg:text-white" : "text-black lg:text-black"}`}>Terminos</Link>{" "}
-                y{" "}
-                <Link to="#" className={`hover:underline ${mode === "business" ? "text-white lg:text-white" : "text-black lg:text-black"}`}>Privacidad</Link>
-              </p>
-              <p className={`text-sm transition-colors duration-300 ${mode === "business" ? "text-neutral-300 lg:text-neutral-400" : "text-neutral-600 lg:text-neutral-500"}`}>
-                Ya tienes cuenta?{" "}
-                <Link to="/login" className={`hover:underline font-medium ${mode === "business" ? "text-white hover:text-neutral-200 lg:text-white lg:hover:text-neutral-200" : "text-black hover:text-neutral-600 lg:text-black lg:hover:text-neutral-600"}`}>Inicia sesion</Link>
-              </p>
-            </FadeInSection>
-          </div>
-        </div>
-
-        {/* Feature cards - desktop only, centered in right panel */}
-        <div className="hidden lg:block mt-6 w-full" key={mode}>
-          <div className="max-w-md mx-auto">
-            <div className="grid grid-cols-4 gap-2">
-              {(mode === "business" ? [
-                { icon: Wallet, label: "Contabilidad" },
-                { icon: TrendingUp, label: "Análisis" },
-                { icon: Shield, label: "Fiscal" },
-                { icon: Receipt, label: "Banca" },
-              ] : [
-                { icon: CreditCard, label: "Gastos" },
-                { icon: Target, label: "Presupuesto" },
-                { icon: PiggyBank, label: "Ahorro" },
-                { icon: BarChart3, label: "Banca" },
-              ]).map((f, i) => (
-                <div
-                  key={f.label}
-                  className="bg-black border border-white/20 rounded-lg p-2 text-center animate-in fade-in slide-in-from-bottom-4 duration-500"
-                  style={{ animationDelay: `${i * 100}ms`, animationFillMode: "both" }}
-                >
-                  <f.icon className="w-5 h-5 text-white mx-auto mb-1" />
-                  <p className="text-white text-[10px] font-medium leading-tight">{f.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Bottom tagline - desktop only, centered in right panel */}
-        <div className="hidden lg:block mt-4 w-full">
-          <div className="max-w-md mx-auto text-center">
-            <p className={`text-xs transition-all duration-500 ${mode === "business" ? "text-neutral-400" : "text-neutral-500"}`}>
-              {mode === "business"
-                ? "Agente de AI contable profesional para tu negocio, marketing y asistencia artificial para tu base de datos de clientes"
-                : "Asistente de finanzas personales con AI: presupuestos, ahorro y análisis de gastos automatizado"
-              }
-            </p>
-          </div>
-        </div>
+      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
+        <Gift className="h-5 w-5 shrink-0 text-emerald-600" />
+        <p className="text-sm text-emerald-900">
+          <span className="font-semibold">{TRIAL_DAYS} días gratis</span> con acceso completo. Sin tarjeta de crédito.
+        </p>
       </div>
+
+      <div className="mt-6">
+        <ModeToggle value={mode} onChange={setMode} label="Tipo de cuenta" />
+      </div>
+
+      <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
+        <Field label={mode === "business" ? "Nombre y apellido" : "Nombre"} htmlFor={ids.name}>
+          <TextInput
+            id={ids.name}
+            autoComplete="name"
+            placeholder={mode === "business" ? "Tu nombre y apellido" : "Tu nombre"}
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+        </Field>
+
+        <Field
+          label="Correo electrónico"
+          htmlFor={ids.email}
+          error={email.length > 0 && !isEmailValid ? "Revisa el formato del correo" : undefined}
+        >
+          <TextInput
+            id={ids.email}
+            type="email"
+            autoComplete="email"
+            inputMode="email"
+            placeholder="tu@correo.com"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            aria-invalid={email.length > 0 && !isEmailValid}
+          />
+        </Field>
+
+        <Field
+          label="Contraseña"
+          htmlFor={ids.password}
+          hint={mode === "personal" ? "Mínimo 6 caracteres." : undefined}
+        >
+          <PasswordInput
+            id={ids.password}
+            autoComplete="new-password"
+            placeholder={mode === "business" ? "Crea una contraseña segura" : "Mínimo 6 caracteres"}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+          {mode === "business" && (
+            <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5" aria-label="Requisitos de la contraseña">
+              {reqs.map((r) => (
+                <li key={r.label} className={`flex items-center gap-1.5 text-[13px] transition-colors ${r.met ? "text-emerald-700" : "text-slate-500"}`}>
+                  <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${r.met ? "bg-emerald-500 text-white" : "border border-slate-300"}`}>
+                    {r.met && <Check className="h-3 w-3" />}
+                  </span>
+                  {r.label}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Field>
+
+        <Field label="Confirmar contraseña" htmlFor={ids.confirm} error={confirmMismatch ? "Las contraseñas no coinciden" : undefined}>
+          <PasswordInput
+            id={ids.confirm}
+            autoComplete="new-password"
+            placeholder="Repite tu contraseña"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            aria-invalid={confirmMismatch}
+          />
+        </Field>
+
+        <SubmitButton loading={personalRegisterMut.isPending}>
+          {mode === "business" ? "Continuar" : "Crear cuenta gratis"}
+        </SubmitButton>
+
+        <p className="text-center text-[13px] text-slate-500">
+          Al crear tu cuenta aceptas nuestra{" "}
+          <Link to="/privacy" className="font-medium text-slate-700 underline-offset-2 hover:underline">Política de privacidad</Link>.
+        </p>
+      </form>
+
+      <p className="mt-8 text-center text-sm text-slate-600">
+        ¿Ya tienes cuenta?{" "}
+        <Link to="/login" className="font-semibold text-slate-900 hover:underline">Inicia sesión</Link>
+      </p>
+    </div>
   );
 }

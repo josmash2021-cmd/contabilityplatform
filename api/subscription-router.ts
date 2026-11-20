@@ -5,6 +5,8 @@ import { subscriptions, subscriptionPayments, users } from "@db/schema";
 import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
+import { getTrialInfo, type TrialInfo } from "./lib/trial";
+import { accountMode, planAmountCents, priceLookupKey, type AccountMode, type Plan } from "./lib/plans";
 
 let _stripe: Stripe | null = null;
 function getStripe() {
@@ -20,13 +22,17 @@ function getAppUrl() {
   return process.env.APP_URL || "https://aethelaccountingplatform.com";
 }
 
-const PLAN_PRICES = {
-  monthly: { amount: 8000, name: "AI AETHEL - Mensual" },  // $80 for business monthly
-  annual: { amount: 80000, name: "AI AETHEL - Anual" },     // $800 for business annual
-};
+// Prices live in ./lib/plans (business $80/$800, personal $40/$400).
 
-const STRIPE_MONTHLY_LOOKUP = "contability_monthly_80";
-const STRIPE_ANNUAL_LOOKUP = "contability_annual_800";
+/**
+ * Adds the free-trial state to a status result. A user with no paid access
+ * who is still inside the trial gets full access ("trialing").
+ */
+function withTrial<T extends { active: boolean }>(result: T, trial: TrialInfo | null) {
+  if (result.active || !trial) return { ...result, trial: null as TrialInfo | null };
+  if (trial.active) return { ...result, active: true, status: "trialing", trial: trial as TrialInfo | null };
+  return { ...result, trial: trial as TrialInfo | null }; // ended: lets the UI say "your trial ended"
+}
 
 // ── Shared: recover a subscription from past_due/unpaid/incomplete state ──
 // Returns { success, finalSub? } where finalSub is the new Stripe subscription
@@ -104,28 +110,27 @@ async function recoverSubscription(db: any, stripe: Stripe, userId: number) {
   }
 }
 
-// Cache price IDs in memory to avoid repeated Stripe API calls
-let _monthlyPriceId: string | null = null;
-let _annualPriceId: string | null = null;
+// Cache price IDs in memory to avoid repeated Stripe API calls (keyed by lookup key)
+const _priceIdCache = new Map<string, string>();
 
-async function getOrCreatePrice(stripe: any, plan: "monthly" | "annual"): Promise<string> {
-  const cached = plan === "monthly" ? _monthlyPriceId : _annualPriceId;
+async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "business"): Promise<string> {
+  const lookupKey = priceLookupKey(plan, mode);
+  const cached = _priceIdCache.get(lookupKey);
   if (cached) return cached;
 
-  const lookupKey = plan === "monthly" ? STRIPE_MONTHLY_LOOKUP : STRIPE_ANNUAL_LOOKUP;
-  const amount = plan === "monthly" ? PLAN_PRICES.monthly.amount : PLAN_PRICES.annual.amount;
+  const amount = planAmountCents(plan, mode);
   const interval = plan === "monthly" ? "month" : "year";
-  const productName = plan === "monthly" ? "AI AETHEL - Mensual" : "AI AETHEL - Anual";
+  const modeLabel = mode === "personal" ? "Personal " : "";
+  const productName = `AI AETHEL - ${modeLabel}${plan === "monthly" ? "Mensual" : "Anual"}`;
   const productDesc = plan === "monthly"
     ? "Acceso completo a Accounting Platform - Facturado mensualmente"
     : "Acceso completo a Accounting Platform - Facturado anualmente";
 
   // Try to find existing price by lookup_key via list
-  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 });
+  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], active: true, limit: 1 });
   if (existing.data.length > 0) {
     const priceId = existing.data[0].id;
-    if (plan === "monthly") _monthlyPriceId = priceId;
-    else _annualPriceId = priceId;
+    _priceIdCache.set(lookupKey, priceId);
     return priceId;
   }
 
@@ -135,24 +140,27 @@ async function getOrCreatePrice(stripe: any, plan: "monthly" | "annual"): Promis
     description: productDesc,
   });
 
+  // lookup_key lets the next server start find this price instead of creating
+  // a new product + price on every deploy.
   const price = await stripe.prices.create({
     unit_amount: amount,
     currency: "usd",
     recurring: { interval },
     product: product.id,
+    lookup_key: lookupKey,
   });
 
-  // Store the lookup key separately (Stripe doesn't accept it in create)
-  // We'll just cache the ID
-  if (plan === "monthly") _monthlyPriceId = price.id;
-  else _annualPriceId = price.id;
-
+  _priceIdCache.set(lookupKey, price.id);
   return price.id;
 }
 
 export const subscriptionRouter = createRouter({
   // ── Get subscription status ──
   status: authedQuery.query(async ({ ctx }) => {
+    // Free trial for new accounts (see lib/trial.ts). Admins don't need one.
+    const trial = ctx.user.role === "admin" ? null : getTrialInfo(ctx.user.createdAt);
+    // The paid-status logic below is unchanged; withTrial() is applied to its result.
+    const result = await (async () => {
     if (!ctx.user) return { active: false, plan: null, status: "no_user", currentPeriodEnd: null };
 
     // Admins nunca pagan suscripcion: acceso completo siempre, sin verificar Stripe.
@@ -170,8 +178,10 @@ export const subscriptionRouter = createRouter({
       .orderBy(desc(subscriptions.createdAt))
       .limit(1);
 
-    // Step 2: If no subscription in DB, search Stripe aggressively
-    if (subs.length === 0) {
+    // Step 2: If no subscription in DB, search Stripe aggressively.
+    // Skipped during the free trial: a brand-new account has nothing in Stripe yet,
+    // and this runs on every status poll.
+    if (subs.length === 0 && !trial?.active) {
       try {
         const stripe = getStripe();
         let foundCustomer: any = null;
@@ -216,7 +226,7 @@ export const subscriptionRouter = createRouter({
             if (priceId) {
               try {
                 const priceData = await stripe.prices.retrieve(priceId);
-                plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+                plan = priceData.recurring?.interval === "year" ? "annual" : "monthly";
               } catch { /* default monthly */ }
             }
             // Insert into DB
@@ -311,7 +321,7 @@ export const subscriptionRouter = createRouter({
           if (priceId) {
             try {
               const priceData = await stripe.prices.retrieve(priceId);
-              plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+              plan = priceData.recurring?.interval === "year" ? "annual" : "monthly";
             } catch { /* keep existing plan */ }
           }
 
@@ -383,6 +393,8 @@ export const subscriptionRouter = createRouter({
       currentPeriodEnd: sub.currentPeriodEnd?.toISOString() || null,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
     };
+    })();
+    return withTrial(result, trial);
   }),
 
   // ── Force sync: find subscription in Stripe by user email and sync to DB ──
@@ -431,7 +443,7 @@ export const subscriptionRouter = createRouter({
       if (priceId) {
         try {
           const priceData = await stripe.prices.retrieve(priceId);
-          plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+          plan = priceData.recurring?.interval === "year" ? "annual" : "monthly";
         } catch { /* default monthly */ }
       }
 
@@ -494,7 +506,8 @@ export const subscriptionRouter = createRouter({
     .input(z.object({ plan: z.enum(["monthly", "annual"]) }))
     .mutation(async ({ input, ctx }) => {
       const stripe = getStripe();
-      const priceId = await getOrCreatePrice(stripe, input.plan);
+      // Price depends on the account's mode as stored in the DB (personal = $40/$400).
+      const priceId = await getOrCreatePrice(stripe, input.plan, accountMode(ctx.user.modePreference));
       if (!priceId) throw new Error("No se pudo crear el plan de precios");
 
       // Create or get Stripe customer
@@ -685,7 +698,7 @@ export const subscriptionRouter = createRouter({
         if (priceId) {
           try {
             const priceData = await stripe.prices.retrieve(priceId);
-            plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+            plan = priceData.recurring?.interval === "year" ? "annual" : "monthly";
           } catch { /* default monthly */ }
         }
 
@@ -724,7 +737,7 @@ export const subscriptionRouter = createRouter({
       if (priceId) {
         try {
           const priceData = await stripe.prices.retrieve(priceId);
-          plan = priceData.unit_amount === 80000 ? "annual" : "monthly";
+          plan = priceData.recurring?.interval === "year" ? "annual" : "monthly";
         } catch { /* keep existing plan */ }
       }
 
@@ -907,7 +920,9 @@ export const subscriptionRouter = createRouter({
       const stripe = getStripe();
       const db = getDb();
       const userId = Number(ctx.user.id);
-      const userMode = input.mode || "business";
+      // The account's mode decides the price. input.mode is ignored on purpose:
+      // trusting it would let a business account pay the personal price.
+      const userMode = accountMode(ctx.user.modePreference);
 
       // Get or create Stripe customer
       let customerId: string;
@@ -927,10 +942,11 @@ export const subscriptionRouter = createRouter({
       }
 
       const appUrl = getAppUrl();
-      const planConfig = PLAN_PRICES[input.plan];
+      const amountCents = planAmountCents(input.plan, userMode);
       const productName = userMode === "personal"
         ? (input.plan === "monthly" ? "AI Aethel - Personal Mensual" : "AI Aethel - Personal Anual")
-        : planConfig.name;
+        : (input.plan === "monthly" ? "AI AETHEL - Mensual" : "AI AETHEL - Anual");
+      const annualSavings = userMode === "personal" ? "$80" : "$160";
 
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
@@ -939,10 +955,10 @@ export const subscriptionRouter = createRouter({
         line_items: [{
           price_data: {
             currency: "usd",
-            unit_amount: planConfig.amount,
+            unit_amount: amountCents,
             product_data: {
               name: productName,
-              description: input.plan === "monthly" ? "Suscripcion mensual - Cancela cuando quieras" : "Suscripcion anual - Ahorra $400",
+              description: input.plan === "monthly" ? "Suscripcion mensual - Cancela cuando quieras" : `Suscripcion anual - Ahorra ${annualSavings} frente al pago mensual`,
             },
           },
           quantity: 1,
