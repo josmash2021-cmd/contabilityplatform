@@ -328,10 +328,11 @@ export function PhonePreview() {
 }
 
 // ── How it works: one small picture per step ──
-function StepFrame({ label, children }: { label: string; children: ReactNode }) {
+function StepFrame({ label, children, decor }: { label: string; children: ReactNode; decor?: ReactNode }) {
   return (
     <div role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/70 p-5">
       <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.08),transparent_60%)]" />
+      {decor}
       <div aria-hidden className="relative w-full max-w-[260px]">{children}</div>
     </div>
   );
@@ -401,16 +402,46 @@ export function ConnectStepPreview() {
   );
 }
 
+// A soft radar behind the numbers: the beam sweeps slowly and a few points light up,
+// as if the app were finding and sorting your transactions. Still for reduced motion.
+const RADAR_BLIPS = [
+  { top: "22%", left: "18%", delay: "0s" },
+  { top: "70%", left: "80%", delay: "1.3s" },
+  { top: "16%", left: "76%", delay: "2.6s" },
+  { top: "78%", left: "24%", delay: "3.9s" },
+];
+function Radar() {
+  return (
+    <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 h-[440px] w-[440px] -translate-x-1/2 -translate-y-1/2">
+      {["inset-0", "inset-[70px]", "inset-[140px]"].map((i) => (
+        <span key={i} className={`absolute ${i} rounded-full border border-emerald-500/20`} />
+      ))}
+      <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-emerald-500/10" />
+      <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-emerald-500/10" />
+      <span
+        className="absolute inset-0 rounded-full motion-safe:animate-[spin_5s_linear_infinite]"
+        style={{ background: "conic-gradient(from 0deg, rgba(16,185,129,0.28), rgba(16,185,129,0.08) 50deg, transparent 90deg, transparent 360deg)" }}
+      />
+      {RADAR_BLIPS.map((b) => (
+        <span key={b.top + b.left} className="absolute h-2 w-2" style={{ top: b.top, left: b.left }}>
+          <span className="absolute inset-0 rounded-full bg-emerald-400 motion-safe:animate-ping" style={{ animationDuration: "2.6s", animationDelay: b.delay }} />
+          <span className="absolute inset-0 rounded-full bg-emerald-500/80" />
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export function NumbersStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
   const n = v.numbers;
   const bars = [{ inc: 70, exp: 44 }, { inc: 76, exp: 52 }, { inc: 72, exp: 41 }, { inc: 86, exp: 47 }];
   return (
-    <StepFrame label={v.aria[2]}>
+    <StepFrame label={v.aria[2]} decor={<Radar />}>
       <div className={cardCls}>
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold text-slate-900">{n.month}</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700"><RefreshCw className="h-2.5 w-2.5" />{n.auto}</span>
+          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700"><RefreshCw className="h-2.5 w-2.5 motion-safe:animate-[spin_5s_linear_infinite]" />{n.auto}</span>
         </div>
         <ul className="mt-2 divide-y divide-slate-100">
           {n.rows.map((r) => (
