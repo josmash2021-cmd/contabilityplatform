@@ -153,7 +153,7 @@ const es = {
           "Asistente de inteligencia artificial · límite x5",
         ],
         lead: "",
-        note: "La preparación de la declaración se cobra aparte.",
+        note: "",
       },
       personalPro: {
         name: "Pro",
@@ -201,7 +201,7 @@ const es = {
           "Vista para tu contador, Excel y PDF",
         ],
         lead: "",
-        note: "La preparación de la declaración se cobra aparte.",
+        note: "",
       },
       business: {
         name: "Negocio",
@@ -213,7 +213,7 @@ const es = {
           "10 usuarios y acceso para tu contador",
         ],
         lead: "Todo lo de Pro, más:",
-        note: "La preparación de la declaración se cobra aparte.",
+        note: "",
       },
     },
   },
@@ -536,7 +536,7 @@ const en: MarketingCopy = {
           "Artificial intelligence assistant · limit x5",
         ],
         lead: "",
-        note: "Preparing your tax return is charged separately.",
+        note: "",
       },
       personalPro: {
         name: "Pro",
@@ -584,7 +584,7 @@ const en: MarketingCopy = {
           "Accountant view, Excel and PDF",
         ],
         lead: "",
-        note: "Preparing your tax return is charged separately.",
+        note: "",
       },
       business: {
         name: "Business",
@@ -596,7 +596,7 @@ const en: MarketingCopy = {
           "10 users plus access for your accountant",
         ],
         lead: "Everything in Pro, plus:",
-        note: "Preparing your tax return is charged separately.",
+        note: "",
       },
     },
   },
