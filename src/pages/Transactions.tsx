@@ -258,6 +258,8 @@ export default function Transactions() {
                         "relative inline-flex min-h-11 shrink-0 items-center gap-[7px] whitespace-nowrap pb-3 pt-2.5 text-sm font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                         "after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:origin-center after:rounded-full after:bg-blue-600 after:transition-transform after:duration-200",
                         on ? "text-slate-900 after:scale-x-100" : "text-slate-500 after:scale-x-0 hover:text-slate-900",
+                        // On a phone the three tabs of the 2.0 design; "Todos" stays on a computer (and behind "ver todos").
+                        k === "all" && !on && "hidden sm:inline-flex",
                       )}>
                       <span>{tabLabel(k)}{k === "done" && <span className="hidden sm:inline">{r.tabDoneDesk}</span>}</span>
                       {n !== null && (

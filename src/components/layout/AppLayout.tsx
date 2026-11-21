@@ -310,28 +310,39 @@ export function AppLayout() {
           </button>
         </nav>
         <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
-          <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl p-0 lg:hidden">
-            <SheetHeader className="px-5 pb-1 pt-5 text-left"><SheetTitle>{t.shell.moreTitle}</SheetTitle></SheetHeader>
-            <ul className="grid gap-1 px-3 pb-6">
-              {rest.map((i) => {
-                const Icon = i.icon;
-                const on = isOn(pathname, i.path);
-                return (
-                  <li key={i.path}>
-                    <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined}
-                      className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left", on ? "bg-slate-900 text-white" : "hover:bg-slate-50")}>
-                      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", on ? "bg-white/10" : "bg-slate-100 text-slate-700")}><Icon className="h-5 w-5" aria-hidden /></span>
-                      <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold">{label(i.path)}</span>
-                        {t.shell.desc[i.path] && <span className={cn("block truncate text-xs", on ? "text-white/70" : "text-slate-500")}>{t.shell.desc[i.path]}</span>}
-                      </span>
-                      {!locked(i) && <CountPill n={counts[i.path] ?? 0} on={on} />}
-                      {locked(i) && <Lock className="h-4 w-4 shrink-0 text-slate-300" aria-label={t.shell.locked} />}
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
+          <SheetContent side="bottom" className="max-h-[86vh] gap-0 overflow-y-auto rounded-t-[18px] p-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden">
+            {/* The title on the same line as the close button, like the 2.0 sheet. */}
+            <SheetHeader className="min-h-8 justify-center p-0 pr-10 text-left"><SheetTitle className="text-[19px] font-[750] tracking-tight text-slate-900">{t.shell.moreTitle}</SheetTitle></SheetHeader>
+            {groups.map((g, gi) => {
+              const items = g.items.filter((i) => rest.includes(i));
+              if (!items.length) return null;
+              return (
+                <section key={g.title ?? `g${gi}`} aria-label={g.title ? t.shell.groups[g.title] : undefined}>
+                  {g.title && <p className="mx-0.5 mb-1.5 mt-3.5 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500">{t.shell.groups[g.title]}</p>}
+                  <ul className={cn("grid gap-1.5", !g.title && "mt-3.5")}>
+                    {items.map((i) => {
+                      const Icon = i.icon;
+                      const on = isOn(pathname, i.path);
+                      return (
+                        <li key={i.path}>
+                          <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined}
+                            className={cn("flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                              on ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100")}>
+                            <Icon className={cn("h-5 w-5 shrink-0", on ? "text-blue-600" : "text-slate-800")} aria-hidden />
+                            <span className="min-w-0 flex-1">
+                              <span className="block text-sm font-semibold text-slate-900">{label(i.path)}</span>
+                              {t.shell.desc[i.path] && <span className="block truncate text-xs font-medium text-slate-500">{t.shell.desc[i.path]}</span>}
+                            </span>
+                            {!locked(i) && <CountPill n={counts[i.path] ?? 0} on={false} />}
+                            {locked(i) && <Lock className="h-4 w-4 shrink-0 text-slate-400" aria-label={t.shell.locked} />}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              );
+            })}
           </SheetContent>
         </Sheet>
       </div>
