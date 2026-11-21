@@ -559,35 +559,6 @@ export function ConnectStepPreview() {
   );
 }
 
-// Step 3: a soft radar behind the card, and the numbers and bars glide to new values.
-const RADAR_BLIPS = [
-  { top: "22%", left: "18%", delay: "0s" },
-  { top: "70%", left: "80%", delay: "1.3s" },
-  { top: "16%", left: "76%", delay: "2.6s" },
-  { top: "78%", left: "24%", delay: "3.9s" },
-];
-function Radar() {
-  return (
-    <div aria-hidden className="pointer-events-none absolute left-1/2 top-1/2 h-[440px] w-[440px] -translate-x-1/2 -translate-y-1/2">
-      {["inset-0", "inset-[70px]", "inset-[140px]"].map((i) => (
-        <span key={i} className={`absolute ${i} rounded-full border border-emerald-500/20`} />
-      ))}
-      <span className="absolute left-1/2 top-0 h-full w-px -translate-x-1/2 bg-emerald-500/10" />
-      <span className="absolute left-0 top-1/2 h-px w-full -translate-y-1/2 bg-emerald-500/10" />
-      <span
-        className="absolute inset-0 rounded-full motion-safe:animate-[spin_5s_linear_infinite]"
-        style={{ background: "conic-gradient(from 0deg, rgba(16,185,129,0.28), rgba(16,185,129,0.08) 50deg, transparent 90deg, transparent 360deg)" }}
-      />
-      {RADAR_BLIPS.map((b) => (
-        <span key={b.top + b.left} className="absolute h-2 w-2" style={{ top: b.top, left: b.left }}>
-          <span className="absolute inset-0 rounded-full bg-emerald-400 motion-safe:animate-ping" style={{ animationDuration: "2.6s", animationDelay: b.delay }} />
-          <span className="absolute inset-0 rounded-full bg-emerald-500/80" />
-        </span>
-      ))}
-    </div>
-  );
-}
-
 // Step 3, as in the Ai Aethel 2.0 "To review" inbox: each transaction arrives already
 // sorted or matched, you confirm it, and the month's report (In / Out / You kept) updates.
 const REVIEW_BASE = { inn: 23730, out: 8902.48 };
@@ -609,7 +580,7 @@ export function NumbersStepPreview() {
   const row = r.rows[item];
   const reviewed = 3 + doneCount;
   return (
-    <StepFrame label={v.aria[2]} decor={<Radar />} frameRef={ref}>
+    <StepFrame label={v.aria[2]} frameRef={ref}>
       <div className={cardCls}>
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[13px] font-bold text-slate-900"><Inbox className="h-4 w-4 text-blue-600" />{r.title}</span>
@@ -634,15 +605,15 @@ export function NumbersStepPreview() {
           </span>
           <div className="mt-2 flex h-7 items-center gap-1.5">
             {phase === 2 ? (
-              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
+              <span key="done" className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
                 <CheckCircle2 className="h-3.5 w-3.5" />{row.done}
               </span>
             ) : (
               <>
-                <span className={`inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[10.5px] font-semibold text-white transition-all duration-200 ${phase === 1 ? "scale-95 bg-blue-700" : "bg-blue-600"}`}>
+                <span key="go" className={`inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[10.5px] font-semibold text-white transition-[transform,background-color] duration-200 ${phase === 1 ? "scale-95 bg-blue-700" : "bg-blue-600"}`}>
                   {row.link ? <Link2 className="h-3 w-3" /> : <Check className="h-3 w-3" />}{row.action}
                 </span>
-                <span className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[10.5px] font-semibold text-slate-700">{r.other}</span>
+                <span key="other" className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[10.5px] font-semibold text-slate-700">{r.other}</span>
               </>
             )}
           </div>
