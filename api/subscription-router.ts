@@ -8,7 +8,8 @@ import { normalizeSubStatus } from "./lib/subscriptionStatus";
 import { getTrialInfo, type TrialInfo } from "./lib/trial";
 import { accountMode, defaultTier, isPaidTier, planAmountCents, priceLookupKey, tierName, type AccountMode, type Plan, type Tier } from "./lib/plans";
 import { subscriptionPeriod } from "./lib/stripePeriod";
-import { lastPaidTier } from "./lib/planAccess";
+import { contextHas, getPlanContext, lastPaidTier } from "./lib/planAccess";
+import { assistantMonthlyLimit, type Feature } from "@contracts/planFeatures";
 
 let _stripe: Stripe | null = null;
 function getStripe() {
@@ -559,6 +560,17 @@ export const subscriptionRouter = createRouter({
       });
       return { url: session.url!, sessionId: session.id };
     }),
+
+  // ── What the user's plan includes right now (screens use it to show or lock features) ──
+  planInfo: authedQuery.query(async ({ ctx }) => {
+    const plan = await getPlanContext(getDb(), ctx.user);
+    const all: Feature[] = ["taxes", "budgets", "receipts", "vendors", "quotes", "accountant", "clientReports", "team"];
+    return {
+      ...plan,
+      features: all.filter((f) => contextHas(plan, f)),
+      assistantLimit: plan.tier ? assistantMonthlyLimit(plan.mode, plan.tier) : 0,
+    };
+  }),
 
   // ── Which plan (Básico / Negocio / Pro) the user paid for, from their latest payment ──
   // Tiers aren't stored: the amount Stripe charged tells them apart.

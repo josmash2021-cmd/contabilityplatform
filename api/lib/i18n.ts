@@ -30,6 +30,7 @@ const messages = {
     taxLocked: "Tu declaración ya se envió al IRS; ya no se pueden cambiar documentos.",
     taxNotReady: "Todavía falta algo para enviar. Revisa la lista de documentos.",
     taxNotFound: "No encontramos ese documento.",
+    planMissingFeature: "Tu plan no incluye esta función. Puedes cambiar de plan en Ajustes.",
   },
   en: {
     emailExists: "An account with this email already exists",
@@ -51,6 +52,7 @@ const messages = {
     taxLocked: "Your return was already sent to the IRS; documents can't change anymore.",
     taxNotReady: "Something is still missing before you can send. Check the document list.",
     taxNotFound: "We couldn't find that document.",
+    planMissingFeature: "Your plan doesn't include this feature. You can change your plan in Settings.",
   },
 } as const;
 

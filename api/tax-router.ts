@@ -8,10 +8,9 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { subscriptions, taxDocuments, taxMessages, taxReturns, users } from "@db/schema";
+import { taxDocuments, taxMessages, taxReturns, users } from "@db/schema";
 import { accountMode } from "./lib/plans";
-import { lastPaidTier } from "./lib/planAccess";
-import { getTrialInfo } from "./lib/trial";
+import { contextHas, getPlanContext } from "./lib/planAccess";
 import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
 import {
@@ -106,16 +105,7 @@ export async function deleteUserTaxData(db: Db, userId: number): Promise<void> {
 // ── Who can use Impuestos ──
 /** Personal: everyone (Básico is free). Business: Pro and Negocio, and the free trial. */
 export async function taxAccess(db: Db, user: CtxUser): Promise<{ allowed: boolean }> {
-  if (user.role === "admin") return { allowed: true };
-  const mode = accountMode(user.modePreference);
-  if (mode === "personal") return { allowed: true };
-  if (getTrialInfo(user.createdAt)?.active) return { allowed: true };
-  const userId = Number(user.id);
-  if ((await lastPaidTier(db, userId, mode)) === "basic") return { allowed: false };
-  const sub = (await db.select({ status: subscriptions.status, currentPeriodEnd: subscriptions.currentPeriodEnd }).from(subscriptions)
-    .where(eq(subscriptions.userId, userId)).orderBy(desc(subscriptions.createdAt)).limit(1))[0];
-  const active = !!sub && (sub.status === "active" || sub.status === "trialing") && (!sub.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date());
-  return { allowed: active };
+  return { allowed: contextHas(await getPlanContext(db, user), "taxes") };
 }
 
 async function requireAccess(db: Db, user: CtxUser, lang: Lang) {
