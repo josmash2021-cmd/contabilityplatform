@@ -3,90 +3,42 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router";
 import { useSubscriptionAgent } from "@/hooks/useSubscriptionAgent";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-
 import { toast } from "sonner";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
 import { billingCopy } from "@/i18n/copy/billing";
 import { marketingCopy } from "@/i18n/copy/marketing";
 import { PlanPicker } from "@/components/billing/PlanPicker";
+import { Skeleton } from "@/components/ui/skeleton";
 import { findPlan } from "@/components/marketing/content";
 import { intlLocale } from "@/i18n/lang";
-import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown, RefreshCw } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { AlertTriangle, CheckCircle2, CreditCard, ExternalLink, Loader2, RefreshCw, Zap } from "lucide-react";
 
-// ── Shimmer animation styles for subscription titles ──
-const SHIMMER_CSS = `
-  @keyframes shimmer-silver {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-  @keyframes shimmer-elite {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-  .shimmer-premium {
-    background: linear-gradient(90deg, #9ca3af 0%, #d1d5db 25%, #f3f4f6 50%, #d1d5db 75%, #9ca3af 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-silver 3s linear infinite;
-  }
-  .shimmer-elite {
-    background: linear-gradient(90deg, #000000 0%, #4b5563 25%, #9ca3af 50%, #4b5563 75%, #000000 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-elite 3s linear infinite;
-  }
-`;
+const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1";
+const BTN_SM = `inline-flex min-h-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border border-slate-200 bg-white px-[11px] py-1.5 text-[13px] font-semibold text-slate-900 transition hover:bg-slate-50 disabled:opacity-60 ${FOCUS}`;
+const BTN_SM_PRIMARY = `inline-flex min-h-[34px] items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border border-blue-600 bg-blue-600 px-[11px] py-1.5 text-[13px] font-semibold text-white transition hover:brightness-110 disabled:opacity-60 ${FOCUS}`;
+const SET_SUB = "mb-0.5 mt-4 text-[11px] font-bold uppercase tracking-[0.06em] text-slate-500";
 
-// Plans: ids and prices only. Names, badges, descriptions and features live in billingCopy.subscription
-// Business plans (original)
-const BUSINESS_MONTHLY = {
-  id: "monthly" as const,
-  price: "$80",
-  originalPrice: "$120",
-  fullPrice: 80,
-};
+/** The prototype's status dot + label (.dst). */
+function Dst({ tone, children }: { tone: "good" | "open" | "warn"; children: React.ReactNode }) {
+  const color = { good: "text-emerald-600", open: "text-blue-600", warn: "text-amber-700" }[tone];
+  return <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap text-[13px] font-semibold", color)}><i className="h-[7px] w-[7px] rounded-full bg-current" aria-hidden />{children}</span>;
+}
 
-const BUSINESS_ANNUAL = {
-  id: "annual" as const,
-  price: "$800",
-  originalPrice: "$1200",
-  savings: "$400",
-  fullPrice: 800,
-  highlighted: true,
-};
-
-// Personal plans (discounted)
-const PERSONAL_MONTHLY = {
-  id: "monthly_personal" as const,
-  price: "$40",
-  originalPrice: "$80",
-  fullPrice: 40,
-};
-
-const PERSONAL_ANNUAL = {
-  id: "annual_personal" as const,
-  price: "$400",
-  originalPrice: "$700",
-  savings: "$300",
-  fullPrice: 400,
-  highlighted: true,
-};
-
+/**
+ * Ajustes › Plan y pagos (2.0 prototype). Stripe does the work: checkout for a new plan, the billing
+ * portal for the card, cancel / resume, and the monthly → annual upgrade. Payments come from Stripe's webhooks.
+ */
 export default function SubscriptionSettings() {
   const appT = useCopy(appCopy);
   const t = useCopy(billingCopy);
   const s = t.subscription;
+  const v = t.planView;
   const { lang } = useLang();
+  const locale = intlLocale(lang);
   const { user } = useAuth();
   const isPersonal = user?.modePreference === "personal";
-
   const mode = isPersonal ? "personal" : "business";
   const pricing = useCopy(marketingCopy).pricing;
   const { data: tierData } = trpc.subscription.currentTier.useQuery();
@@ -94,91 +46,67 @@ export default function SubscriptionSettings() {
   const tierPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, "pro")!;
   const tierCopy = pricing.plans[tierPlan.key];
 
-  const planText = isPersonal ? s.personal : s.business;
-  const annualBase = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
-  const PLAN_MONTHLY = {
-    ...(isPersonal ? PERSONAL_MONTHLY : BUSINESS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...planText.monthly,
-    price: `$${tierPlan.monthly}`, fullPrice: tierPlan.monthly, features: tierCopy.features,
-  };
-  const PLAN_ANNUAL = {
-    ...annualBase, name: t.plans.annual, period: t.plans.perYear, ...planText.annual,
-    price: `$${tierPlan.annual.toLocaleString("en-US")}`, fullPrice: tierPlan.annual, features: tierCopy.features,
-    savings: t.plans.savings(`$${tierPlan.monthly * 2}`),
-  };
-
   const utils = trpc.useUtils();
   const [searchParams] = useSearchParams();
   const renewParam = searchParams.get("renew"); // "monthly" or "annual" from overlay
 
-  // KEY FIX: Poll every 5 seconds for subscription status.
-  // When a user pays via Stripe but the webhook hasn't arrived yet,
-  // the status endpoint searches Stripe directly and finds the subscription.
+  // Poll every 5 seconds: when someone pays in Stripe and the webhook hasn't arrived yet,
+  // the status endpoint looks in Stripe directly and finds the subscription.
   const { data: status, isLoading: statusLoading } = trpc.subscription.status.useQuery(
     undefined,
-    { refetchInterval: 5000, refetchIntervalInBackground: true }
+    { refetchInterval: 5000, refetchIntervalInBackground: true },
   );
   const { data: payments } = trpc.subscription.payments.useQuery();
 
   // Subscription Recovery Agent — auto-detects lost subs and auto-reverts failed upgrades
   useSubscriptionAgent();
 
-  // Handle returning from Stripe Checkout upgrade
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [showUpgrade, setShowUpgrade] = useState(false);
+  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
+
+  // Coming back from Stripe Checkout after paying the upgrade: complete it.
   const completeUpgradeMut = trpc.subscription.completeUpgrade.useMutation({
     onSuccess: (data) => {
       if (data.success) {
         setUpgradeSuccess(true);
         utils.subscription.status.invalidate();
         utils.subscription.payments.invalidate();
-        // Clean URL
         window.history.replaceState({}, "", window.location.pathname);
       } else {
         toast.error(data.error || s.upgradeFailed);
       }
     },
-    onError: (err) => {
-      toast.error(err.message || s.upgradeError);
-    },
+    onError: (err) => toast.error(err.message || s.upgradeError),
   });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("upgrade") === "success") {
-      // Coming back from Stripe Checkout after payment — complete the upgrade
       completeUpgradeMut.mutate();
     } else if (params.get("upgrade") === "cancelled") {
-      // User cancelled at Stripe
       window.history.replaceState({}, "", window.location.pathname);
       toast.error(s.paymentCancelled);
     }
-  }, []);
-
-  // Pre-select plan from URL ?renew= parameter (from expired overlay)
-  useEffect(() => {
-    // Clean URL param from Stripe redirect
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("subscription") === "success") {
-      window.history.replaceState({}, "", window.location.pathname);
-    }
+    // Clean the URL after a Stripe checkout.
+    if (params.get("subscription") === "success") window.history.replaceState({}, "", window.location.pathname);
+    // Once, on arrival from Stripe.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error(s.checkoutFailed);
-      }
+      if (data?.url) window.location.href = data.url;
+      else toast.error(s.checkoutFailed);
     },
-    onError: (err) => {
-      console.error("Checkout error:", err);
-      toast.error(err.message || s.checkoutError);
-    },
+    onError: (err) => toast.error(err.message || s.checkoutError),
   });
 
   const cancelMut = trpc.subscription.cancel.useMutation({
     onSuccess: () => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
+      setConfirmCancel(false);
       toast.success(s.cancelled);
     },
     onError: (err) => toast.error(err.message),
@@ -186,326 +114,190 @@ export default function SubscriptionSettings() {
 
   const portalMut = trpc.subscription.createPortalSession.useMutation({
     onSuccess: (data) => {
-      if (data?.url) {
-        window.location.href = data.url;
-      } else {
-        toast.error(s.portalFailed);
-      }
+      if (data?.url) window.location.href = data.url;
+      else toast.error(s.portalFailed);
     },
     onError: (err) => toast.error(err.message || s.portalError),
   });
 
-  const [confirmCancel, setConfirmCancel] = useState(false);
-  const [showUpgrade, setShowUpgrade] = useState(false);
-  const [upgradeSuccess, setUpgradeSuccess] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-
+  // Monthly → annual: Stripe Checkout charges the difference; on return, completeUpgrade applies it.
   const upgradeMut = trpc.subscription.upgrade.useMutation({
     onSuccess: (data) => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
-      if (data.success) {
-        setUpgradeSuccess(true);
-        setShowUpgrade(false);
-        toast.success("✓ " + data.message);
+      if (data.success && data.url) {
+        window.location.href = data.url;
       } else {
-        // Upgrade failed but monthly subscription is still active
+        // The upgrade didn't start, but the monthly subscription is still active.
         toast.error(data.error || s.upgradeFailed, { duration: 5000 });
       }
     },
-    onError: (err) => {
-      // Upgrade failed but monthly subscription is still active
-      toast.error(err.message + s.monthlyStillActive, { duration: 5000 });
-    },
+    onError: (err) => toast.error(err.message + s.monthlyStillActive, { duration: 5000 }),
   });
 
-  // ── Resume subscription — Re-activate a cancelled subscription ──
   const resumeMut = trpc.subscription.resume.useMutation({
     onSuccess: (data) => {
       utils.subscription.status.invalidate();
       utils.subscription.payments.invalidate();
       toast.success(data.message || s.resumed);
     },
-    onError: (err) => {
-      toast.error(err.message || s.resumeFailed);
-    },
+    onError: (err) => toast.error(err.message || s.resumeFailed),
   });
+
+  const longDate = (d: string | Date) => new Date(d).toLocaleDateString(locale, { day: "numeric", month: "long", year: "numeric" });
+  const shortDate = (d: string | Date) => new Date(d).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
+  const money = (n: number | string) => `$${Number(n).toLocaleString("en-US", { minimumFractionDigits: Number(n) % 1 ? 2 : 0, maximumFractionDigits: 2 })}`;
 
   if (statusLoading) {
     return (
-      <div className="flex items-center justify-center py-8">
-        <Loader2 className="w-5 h-5 animate-spin text-neutral-400" />
+      <div className="space-y-3" role="status" aria-label={v.loading}>
+        <Skeleton className="h-6 w-40" /><Skeleton className="h-9 w-32" /><Skeleton className="h-4 w-64 max-w-full" /><Skeleton className="h-24 rounded-xl" />
       </div>
     );
   }
 
-  // Free trial (no paid plan yet): show the plans with a trial notice instead of an "active plan" card.
+  // Free trial (no paid plan yet): the plans with a trial notice instead of an "active plan" card.
   const freeTrial = status?.status === "trialing" && status.trial?.active ? status.trial : null;
 
-  // ─── ACTIVE SUBSCRIBER VIEW — same card design as overlay ───
+  // ─── PAYING SUBSCRIBER ───
   if (status?.active && !freeTrial) {
-    const currentPlan = status.plan === "monthly" ? PLAN_MONTHLY : PLAN_ANNUAL;
     const isMonthly = status.plan === "monthly";
+    const price = isMonthly ? tierPlan.monthly : tierPlan.annual;
+    const annualDiff = tierPlan.annual - tierPlan.monthly;
+    const end = status.currentPeriodEnd ? longDate(status.currentPeriodEnd) : null;
+    type Payment = { id: number; amount: string | number; plan: string; status: string; receiptUrl: string | null; paidAt: string | Date | null };
+    const list: Payment[] = payments ?? [];
 
     return (
-      <div className="space-y-4">
-        {/* Success message after upgrade */}
-        {upgradeSuccess && (
-          <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg">
-            <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-            <p className="text-sm text-emerald-700 font-medium">{s.upgradeSuccess}</p>
-          </div>
-        )}
-
-        {/* Cancel warning + Resume button */}
-        {status.cancelAtPeriodEnd && (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-              <p className="text-xs text-amber-800">
-                {s.cancelNotice}
-              </p>
-            </div>
-            <Button
-              onClick={() => resumeMut.mutate()}
-              disabled={resumeMut.isPending}
-              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium"
-            >
-              {resumeMut.isPending ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> {s.resuming}</>
-              ) : (
-                <><RefreshCw className="w-3.5 h-3.5 mr-1" /> {s.resume}</>
-              )}
-            </Button>
-          </div>
-        )}
-
-        {/* Current Plan Card — Same design as subscription cards */}
-        <div className="border rounded-xl p-6 bg-white relative flex flex-col">
-          {/* Active badge */}
-          <div className="absolute -top-2.5 right-3">
-            <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{s.active}</Badge>
-          </div>
-
-          {/* Crown icon */}
-          <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-full border-2 flex items-center justify-center ${isMonthly ? "border-gray-400" : "border-black bg-neutral-100 shadow-sm"}`}>
-              <Crown className={`w-4 h-4 ${isMonthly ? "text-gray-400" : "text-black drop-shadow-sm"}`} />
-            </div>
-          </div>
-
-          {/* Plan name as main title */}
-          <div className="mt-2">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{tierCopy.name}</p>
-            <h3 className="text-xl font-semibold text-black">{currentPlan.name}</h3>
-            <div className="flex items-baseline gap-2 mt-1">
-              <span className="text-3xl font-medium text-black">{currentPlan.price}</span>
-              <span className="text-xs text-neutral-400">{currentPlan.period}</span>
-            </div>
-            {currentPlan.savings && (
-              <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{currentPlan.savings}</p>
-            )}
-            <p className="text-[11px] text-neutral-500 mt-1">
-              {status.currentPeriodEnd
-                ? s.expiresOn(new Date(status.currentPeriodEnd).toLocaleDateString(intlLocale(lang), { day: "numeric", month: "long", year: "numeric" }))
-                : currentPlan.description}
-            </p>
-          </div>
-
-          {/* Features list */}
-          <ul className="space-y-0.5 mt-2 flex-1">
-            {currentPlan.features.map((f) => (
-              <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                {f}
-              </li>
-            ))}
-          </ul>
-
-          {/* Action buttons — only for monthly */}
-          {!status.cancelAtPeriodEnd && isMonthly && (
-            <>
-              <div className="mt-6" />
-              {!confirmCancel ? (
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => portalMut.mutate()}
-                    disabled={portalMut.isPending}
-                    className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1"
-                  >
-                    {portalMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <ExternalLink className="w-3 h-3 mr-1" />}
-                    {s.manageCard}
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => setConfirmCancel(true)}
-                    className="border-red-200 text-red-600 hover:bg-red-50 text-xs h-9 flex-1"
-                  >
-                    {s.cancel}
-                  </Button>
-                </div>
-              ) : (
-                <div className="space-y-2 w-full">
-                  <p className="text-xs text-neutral-500">{s.confirmCancel}</p>
-                  <div className="flex gap-2">
-                    <Button variant="outline" onClick={() => setConfirmCancel(false)} className="text-xs h-9 border-neutral-200 flex-1">{s.back}</Button>
-                    <Button onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending} className="bg-red-600 hover:bg-red-700 text-white text-xs h-9 flex-1">
-                      {cancelMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : s.confirm}
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
-
-          {/* Annual no-cancel message */}
-          {!isMonthly && (
-            <>
-              <div className="mt-6" />
-              <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                <p className="text-xs text-amber-700"><strong>{s.annualActiveBold}</strong>{s.annualActiveText}</p>
-              </div>
-            </>
-          )}
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-[17px] font-bold text-slate-900">{v.title}</h3>
+          <Dst tone={status.cancelAtPeriodEnd ? "warn" : "open"}>{v.planName(tierCopy.name)}</Dst>
         </div>
 
-        {/* Upgrade Section — Only for monthly subscribers */}
-        {isMonthly && (
-          <div className="space-y-3">
-            {!showUpgrade ? (
-              <Button onClick={() => setShowUpgrade(true)} className="w-full h-9 text-xs bg-black hover:bg-neutral-800 text-white">
-                <Zap className="w-4 h-4 mr-1.5" /> {s.upgradePlan}
-              </Button>
-            ) : (
-              /* Upgrade Card — Same design */
-              <div className="border rounded-xl p-6 bg-white relative flex flex-col">
-                <div className="absolute -top-2.5 right-3">
-                  <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">{s.upgradeBadge}</Badge>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
-                    <Crown className="w-4 h-4 text-black drop-shadow-sm" />
-                  </div>
-                </div>
-
-                <div className="mt-2">
-                  <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.elite}</p>
-                  <h3 className="text-xl font-semibold text-black">{t.plans.annual}</h3>
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
-                    <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
-                  <p className="text-[11px] text-neutral-500 mt-1">{PLAN_ANNUAL.description}</p>
-                </div>
-
-                <ul className="space-y-0.5 mt-2 flex-1">
-                  {PLAN_ANNUAL.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                      <Check className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                      {f}
-                    </li>
-                  ))}
-                </ul>
-
-                <p className="text-[11px] text-neutral-500 mt-3">
-                  {s.upgradeDiff.pre}<strong>${PLAN_ANNUAL.fullPrice - PLAN_MONTHLY.fullPrice}</strong>{s.upgradeDiff.mid}<strong>{PLAN_MONTHLY.price}</strong>{s.upgradeDiff.post}
-                </p>
-
-                <div className="mt-6" />
-                <div className="flex flex-wrap gap-2">
-                  <Button variant="outline" onClick={() => setShowUpgrade(false)} className="border-neutral-200 text-neutral-700 hover:bg-neutral-50 text-xs h-9 flex-1">{s.cancel}</Button>
-                  <Button
-                    onClick={() => upgradeMut.mutate({ from: "monthly", to: "annual" }, {
-                      onSuccess: (data) => { if (data.success && data.url) window.location.href = data.url; },
-                    })}
-                    disabled={upgradeMut.isPending}
-                    className="bg-black hover:bg-neutral-800 text-white text-xs h-9 flex-1"
-                  >
-                    {upgradeMut.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Crown className="w-3.5 h-3.5 text-yellow-500 mr-1" />}
-                    {s.upgradeToAnnual}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* Payment History — Collapsible */}
-        {payments && payments.length > 0 && (
-          <div className="border-t border-neutral-100 pt-4">
-            <button
-              onClick={() => setShowHistory(!showHistory)}
-              className="w-full flex items-center justify-between text-left"
-            >
-              <h4 className="text-xs font-medium text-black flex items-center gap-1.5">
-                <Receipt className="w-3.5 h-3.5 text-neutral-400" /> {s.paymentHistory}
-              </h4>
-              <ChevronDown className={`w-4 h-4 text-neutral-400 transition-transform duration-200 ${showHistory ? "rotate-180" : ""}`} />
-            </button>
-            {showHistory && (
-              <div className="space-y-1.5 mt-3">
-                {payments.map((p: typeof payments[0]) => (
-                  <div key={p.id} className="flex items-center justify-between text-xs py-1.5 border-b border-neutral-50 last:border-0">
-                    <div className="flex items-center gap-2">
-                      <span className="text-black font-medium">${p.amount}</span>
-                      <span className="text-neutral-400">{p.plan === "monthly" ? t.plans.monthly : t.plans.annual}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-neutral-400">
-                        {p.paidAt ? new Date(p.paidAt).toLocaleDateString(intlLocale(lang)) : "-"}
-                      </span>
-                      {p.status === "succeeded" ? (
-                        <Check className="w-3 h-3 text-emerald-500" />
-                      ) : (
-                        <AlertTriangle className="w-3 h-3 text-amber-500" />
-                      )}
-                      {p.receiptUrl && (
-                        <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" className="text-neutral-400 hover:text-black">
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ─── NO SUBSCRIPTION — SHOW PLANS (same design as SubscriptionGate overlay) ───
-  const wasBroken = status?.status === "past_due" || status?.status === "incomplete" || status?.status === "unpaid";
-
-  return (
-    <>
-      <style>{SHIMMER_CSS}</style>
-      <div className="space-y-6">
-        {freeTrial && (
-          <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg space-y-1">
-            <p className="text-sm text-emerald-800 font-medium">{appT.trial.settingsTitle(freeTrial.daysLeft)}</p>
-            <p className="text-xs text-emerald-700">
-              {appT.trial.settingsText(new Date(freeTrial.endsAt).toLocaleDateString(intlLocale(lang), { day: "numeric", month: "long" }))}
-            </p>
-          </div>
-        )}
-        {freeTrial ? null : wasBroken ? (
-          <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-1">
-            <p className="text-sm text-amber-800 font-medium">{s.interruptedTitle}</p>
-            <p className="text-xs text-amber-700">
-              {s.interruptedText}
-            </p>
-          </div>
-        ) : (
-          <p className="text-xs text-neutral-400">
-            {s.setupText}
+        {upgradeSuccess && (
+          <p className="mb-3 flex items-center gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-sm font-medium text-emerald-800" role="status">
+            <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />{s.upgradeSuccess}
           </p>
         )}
 
+        <p className="text-[30px] font-extrabold leading-tight tracking-tight text-slate-900 tabular-nums">
+          {money(price)}<span className="text-sm font-medium text-slate-500"> {isMonthly ? v.perMonth : v.perYear}</span>
+        </p>
+        <p className="mt-0.5 text-[13px] text-slate-500">
+          {end ? (status.cancelAtPeriodEnd ? v.ends(end) : v.renews(end)) : null}{end ? " · " : ""}{isMonthly ? v.monthly : v.annual}
+        </p>
+
+        {status.cancelAtPeriodEnd && (
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3">
+            <p className="flex items-start gap-2 text-[13px] text-amber-900"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />{s.cancelNotice}</p>
+            <button type="button" onClick={() => resumeMut.mutate()} disabled={resumeMut.isPending} className={`mt-2.5 ${BTN_SM_PRIMARY}`}>
+              {resumeMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              {resumeMut.isPending ? s.resuming : s.resume}
+            </button>
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-2">
+          <button type="button" onClick={() => portalMut.mutate()} disabled={portalMut.isPending} className={BTN_SM}>
+            {portalMut.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CreditCard className="h-3.5 w-3.5" />}{v.changeCard}
+          </button>
+          {isMonthly && !status.cancelAtPeriodEnd && (
+            <button type="button" onClick={() => setShowUpgrade((x) => !x)} aria-expanded={showUpgrade} className={BTN_SM_PRIMARY}>
+              <Zap className="h-3.5 w-3.5" />{v.toAnnual}
+            </button>
+          )}
+        </div>
+
+        {showUpgrade && isMonthly && (
+          <div className="mt-3 rounded-xl bg-slate-100 p-3.5">
+            <p className="text-sm font-semibold text-slate-900">{v.upgradeTitle}</p>
+            <p className="mt-1 text-[22px] font-extrabold tabular-nums text-slate-900">{money(tierPlan.annual)}<span className="text-sm font-medium text-slate-500"> {v.perYear}</span></p>
+            <p className="text-[13px] font-medium text-emerald-700">{t.plans.savings(money(tierPlan.monthly * 2))}</p>
+            <p className="mt-1 text-[13px] text-slate-600">
+              {s.upgradeDiff.pre}<strong>{money(annualDiff)}</strong>{s.upgradeDiff.mid}<strong>{money(tierPlan.monthly)}</strong>{s.upgradeDiff.post}
+            </p>
+            <div className="mt-2.5 flex flex-wrap gap-2">
+              <button type="button" onClick={() => setShowUpgrade(false)} className={BTN_SM}>{v.back}</button>
+              <button type="button" onClick={() => upgradeMut.mutate({ from: "monthly", to: "annual" })} disabled={upgradeMut.isPending} className={BTN_SM_PRIMARY}>
+                {upgradeMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{v.upgradeConfirm}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isMonthly && <p className="mt-3 text-[13px] text-slate-500">{v.annualNote}</p>}
+
+        <p className={SET_SUB}>{v.invoicesTitle}</p>
+        {list.length === 0 ? (
+          <p className="text-sm text-slate-500">{v.noInvoices}</p>
+        ) : (
+          <ul className="grid gap-2">
+            {list.map((p) => {
+              const ok = p.status === "succeeded";
+              return (
+                <li key={p.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl bg-slate-100 px-3 py-[11px]">
+                  {ok ? <CheckCircle2 className="h-[18px] w-[18px] text-emerald-600" aria-hidden /> : <AlertTriangle className="h-[18px] w-[18px] text-amber-600" aria-hidden />}
+                  <div className="min-w-0">
+                    <b className="block text-sm font-semibold text-slate-900">{p.paidAt ? shortDate(p.paidAt) : "—"}</b>
+                    <span className="block text-xs text-slate-500">{ok ? v.paid : p.status === "pending" ? v.pending : v.failed} · {p.plan === "monthly" ? v.monthly : v.annual}</span>
+                  </div>
+                  {p.receiptUrl ? (
+                    <a href={p.receiptUrl} target="_blank" rel="noopener noreferrer" className={BTN_SM} aria-label={v.receipt(money(p.amount))}>
+                      <span className="tabular-nums">{money(p.amount)}</span><ExternalLink className="h-3.5 w-3.5 text-slate-500" aria-hidden />
+                    </a>
+                  ) : <span className="text-sm font-semibold tabular-nums text-slate-900">{money(p.amount)}</span>}
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        {isMonthly && !status.cancelAtPeriodEnd && (
+          <div className="mt-3.5">
+            {!confirmCancel ? (
+              <button type="button" onClick={() => setConfirmCancel(true)} className={`min-h-[34px] text-sm font-semibold text-red-600 underline-offset-2 hover:underline ${FOCUS}`}>{v.cancel}</button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-600/25 bg-red-50 p-3" role="alert">
+                <AlertTriangle className="h-4 w-4 shrink-0 text-red-600" aria-hidden />
+                <span className="min-w-0 flex-[1_1_220px] text-[13px] text-slate-800">{v.cancelConfirm}</span>
+                <button type="button" onClick={() => cancelMut.mutate()} disabled={cancelMut.isPending} className={`${BTN_SM_PRIMARY} border-red-600 bg-red-600`}>
+                  {cancelMut.isPending && <Loader2 className="h-3.5 w-3.5 animate-spin" />}{v.cancelYes}
+                </button>
+                <button type="button" onClick={() => setConfirmCancel(false)} className={BTN_SM}>{v.back}</button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── NO PAID PLAN: THE PLANS (same cards as the landing page) ───
+  const wasBroken = status?.status === "past_due" || status?.status === "incomplete" || status?.status === "unpaid";
+
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+        <h3 className="text-[17px] font-bold text-slate-900">{v.title}</h3>
+        {freeTrial && <Dst tone="good">{v.trial}</Dst>}
+      </div>
+      {freeTrial ? (
+        <div className="rounded-xl bg-emerald-50 px-3 py-2.5">
+          <p className="text-sm font-semibold text-emerald-900">{appT.trial.settingsTitle(freeTrial.daysLeft)}</p>
+          <p className="text-[13px] text-emerald-800">{appT.trial.settingsText(new Date(freeTrial.endsAt).toLocaleDateString(locale, { day: "numeric", month: "long" }))}</p>
+        </div>
+      ) : wasBroken ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5">
+          <p className="text-sm font-semibold text-amber-900">{s.interruptedTitle}</p>
+          <p className="text-[13px] text-amber-800">{s.interruptedText}</p>
+        </div>
+      ) : (
+        <p className="text-[13px] text-slate-500">{s.setupText}</p>
+      )}
+
+      <p className={SET_SUB}>{v.choose}</p>
+      <div className="mt-2">
         <PlanPicker
           mode={mode}
           initialBilling={renewParam === "annual" ? "annual" : "monthly"}
@@ -513,6 +305,6 @@ export default function SubscriptionSettings() {
           onPick={(plan, tier) => createCheckout.mutate({ plan, tier })}
         />
       </div>
-    </>
+    </div>
   );
 }

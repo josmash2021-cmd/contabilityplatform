@@ -25,10 +25,16 @@ const ALWAYS = new Set([
 const NEVER_PREFIXES = ["admin.", "team.", "tax.", "subscription.", "auth.", "setup.", "debug.", "clover.", "personal.", "assistant."];
 
 /** An employee: sells, looks after clients, photographs receipts. Reads only what that needs. */
-const STAFF_QUERY_PREFIXES = ["sales.", "customers.", "services.", "receipts."];
+// Like the prototype's sales role, employees also invoice and collect.
+const STAFF_QUERY_PREFIXES = ["sales.", "customers.", "services.", "receipts.", "invoices."];
 /** Staff can search too; the search only returns clients, sales and services for them. */
 const STAFF_QUERIES = new Set(["settings.get", "search.global"]);
-const STAFF_MUTATIONS = new Set(["sales.create", "customers.create", "customers.update", "receipts.create"]);
+// sales.cashCount.save: counting the drawer at the end of the day (Cobrar → Cierre del día) is part of selling.
+/** Voiding, refunding, writing off, due dates and invoice settings stay with the owner. */
+const STAFF_MUTATIONS = new Set([
+  "sales.create", "sales.cashCount.save", "customers.create", "customers.update", "receipts.create",
+  "invoices.create", "invoices.issue", "invoices.pay", "invoices.markSent", "invoices.markReminded",
+]);
 
 export function memberCan(role: TeamRole, path: string, type: ProcType): boolean {
   if (ALWAYS.has(path) || UPKEEP.has(path)) return true;

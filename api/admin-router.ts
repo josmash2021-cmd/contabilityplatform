@@ -5,6 +5,8 @@ import { deleteUserTaxData } from "./tax-router";
 import { deleteUserReceipts } from "./receipts-router";
 import { deleteUserVendorsData } from "./vendors-router";
 import { deleteUserQuotesData } from "./quotes-router";
+import { deleteUserReconcileData } from "./reconcile-router";
+import { deleteUserFirstUseData } from "./lib/userDataCleanup";
 import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
@@ -222,6 +224,8 @@ export const adminRouter = createRouter({
         await deleteUserReceipts(db, input.userId);
         await deleteUserVendorsData(db, input.userId);
         await deleteUserQuotesData(db, input.userId);
+        await deleteUserReconcileData(db, input.userId);
+        await deleteUserFirstUseData(db, input.userId); // review, expenses, budgets, goals, subscriptions, logo, team, notices…
         await db.delete(users).where(eq(users.id, input.userId));
         return { success: true, message: `Usuario ${targetUser.name || targetUser.email} eliminado` };
       } catch (e: any) {

@@ -249,7 +249,7 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
         <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
           {/* Floating close button - no header bar */}
           <button
-            onClick={() => navigate("/settings")}
+            onClick={() => navigate("/settings?sec=plan")}
             className="absolute top-4 right-4 z-20 w-9 h-9 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white hover:bg-black/50 transition-colors"
           >
             <X className="w-4 h-4" />

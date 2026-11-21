@@ -8,11 +8,12 @@ import { TRPCError } from "@trpc/server";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { createRouter, authedQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { users } from "@db/schema";
+import { companySettings, users } from "@db/schema";
 import { teamInvites, teamMembers } from "@db/teamSchema";
 import { requireFeature } from "./lib/planAccess";
 import { TEAM_STAFF_SEATS, type TeamRole } from "./lib/team";
 import { teamTablesExist } from "./lib/teamContext";
+import { companyLogoDataUrl } from "./settings-router";
 import type { Lang } from "./lib/i18n";
 
 type Db = ReturnType<typeof getDb>;
@@ -71,12 +72,28 @@ export function ensureTeamTables(db: Db): Promise<void> {
         INDEX teamInvites_owner (ownerId)
       )
     `);
+    // The invited person's name (optional), for the list and the message. Additive; "duplicate column" means it's there.
+    try {
+      await db.execute(sql`ALTER TABLE teamInvites ADD COLUMN name VARCHAR(255) NULL`);
+    } catch (e: unknown) {
+      if (!isDuplicateColumn(e)) throw e;
+    }
     teamTablesExist();
   })().catch((e) => {
     tablesReady = null;
     throw e;
   });
   return tablesReady;
+}
+
+function isDuplicateColumn(e: unknown): boolean {
+  for (let cur: unknown = e, depth = 0; cur && depth < 5; depth++) {
+    const err = cur as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
+    if (err.code === "ER_DUP_FIELDNAME" || err.errno === 1060) return true;
+    if (typeof err.message === "string" && /Duplicate column/i.test(err.message)) return true;
+    cur = err.cause;
+  }
+  return false;
 }
 
 const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -86,17 +103,43 @@ function appUrl() {
   return process.env.APP_URL || "https://aethelaccountingplatform.com";
 }
 
-/** The owner's team: members with their names, open invitations and seats. */
+/** What happened on the team, newest first: invitations, people joining, last time each one came in. */
+export type TeamActivity = { kind: "invited" | "joined" | "signedIn"; at: Date; name: string | null; email: string | null; role: TeamRole };
+
+/** The owner's team: members with their names and last sign-in, open invitations, seats and recent activity. */
 async function teamOf(db: Db, ownerId: number) {
-  type Member = { id: number; userId: number; role: TeamRole; name: string | null; email: string | null; createdAt: Date };
-  const members: Member[] = await db.select({ id: teamMembers.id, userId: teamMembers.memberUserId, role: teamMembers.role, name: users.name, email: users.email, createdAt: teamMembers.createdAt })
+  type Member = { id: number; userId: number; role: TeamRole; name: string | null; email: string | null; createdAt: Date; lastSignInAt: Date | null };
+  const members: Member[] = await db.select({ id: teamMembers.id, userId: teamMembers.memberUserId, role: teamMembers.role, name: users.name, email: users.email, createdAt: teamMembers.createdAt, lastSignInAt: users.lastSignInAt })
     .from(teamMembers).leftJoin(users, eq(users.id, teamMembers.memberUserId)).where(eq(teamMembers.ownerId, ownerId));
-  type Invite = { id: number; email: string; role: TeamRole; expiresAt: Date; createdAt: Date };
-  const invites: Invite[] = await db.select({ id: teamInvites.id, email: teamInvites.email, role: teamInvites.role, expiresAt: teamInvites.expiresAt, createdAt: teamInvites.createdAt })
-    .from(teamInvites).where(and(eq(teamInvites.ownerId, ownerId), isNull(teamInvites.acceptedAt), sql`${teamInvites.expiresAt} > NOW()`));
+  type InviteRow = { id: number; email: string; role: TeamRole; name: string | null; expiresAt: Date; createdAt: Date; acceptedAt: Date | null };
+  const all = (await db.execute(sql`
+    SELECT id, email, role, name, expiresAt, createdAt, acceptedAt FROM teamInvites
+    WHERE ownerId = ${ownerId} ORDER BY id DESC LIMIT 100`) as unknown as [InviteRow[]])[0];
+  const now = Date.now();
+  const invites = all.filter((i) => !i.acceptedAt && new Date(i.expiresAt).getTime() > now)
+    .map((i) => ({ id: Number(i.id), email: i.email, role: i.role, name: i.name ?? null, expiresAt: i.expiresAt, createdAt: i.createdAt }));
   const staffUsed = members.filter((m) => m.role === "staff").length + invites.filter((i) => i.role === "staff").length;
   const accountantUsed = members.some((m) => m.role === "accountant") || invites.some((i) => i.role === "accountant");
-  return { members, invites, staffSeats: TEAM_STAFF_SEATS, staffUsed, accountantUsed };
+
+  const byEmail = new Map(members.map((m) => [norm(m.email ?? ""), m]));
+  const activity: TeamActivity[] = [];
+  for (const i of all) {
+    const m = byEmail.get(norm(i.email));
+    activity.push({ kind: "invited", at: i.createdAt, name: i.name ?? m?.name ?? null, email: i.email, role: i.role });
+    if (i.acceptedAt) activity.push({ kind: "joined", at: i.acceptedAt, name: m?.name ?? i.name ?? null, email: i.email, role: m?.role ?? i.role });
+  }
+  for (const m of members) {
+    // Someone who joined without an invitation row left (older data): their joining date still shows.
+    if (!all.some((i) => i.acceptedAt && norm(i.email) === norm(m.email ?? ""))) activity.push({ kind: "joined", at: m.createdAt, name: m.name, email: m.email, role: m.role });
+    // Their last sign-in, if it came after they joined (a sign-in before that was in their own account).
+    if (m.lastSignInAt && new Date(m.lastSignInAt).getTime() > new Date(m.createdAt).getTime()) activity.push({ kind: "signedIn", at: m.lastSignInAt, name: m.name, email: m.email, role: m.role });
+  }
+  activity.sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+
+  return {
+    members: members.map((m) => ({ ...m, id: Number(m.id), userId: Number(m.userId) })),
+    invites, staffSeats: TEAM_STAFF_SEATS, staffUsed, accountantUsed, activity: activity.slice(0, 8),
+  };
 }
 
 export const teamRouter = createRouter({
@@ -109,7 +152,7 @@ export const teamRouter = createRouter({
   }),
 
   invite: authedQuery
-    .input(z.object({ email: z.string().trim().email().max(320), role: z.enum(["staff", "accountant"]) }))
+    .input(z.object({ email: z.string().trim().email().max(320), role: z.enum(["staff", "accountant"]), name: z.string().trim().max(255).optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       await requireFeature(db, ctx.user, "team", ctx.lang);
@@ -119,15 +162,21 @@ export const teamRouter = createRouter({
       if (email === norm(ctx.user.email ?? "")) throw fail(ctx.lang, "ownTeam");
       const team = await teamOf(db, ownerId);
       if (team.members.some((m) => norm(m.email ?? "") === email)) throw fail(ctx.lang, "already");
-      if (input.role === "staff" && team.staffUsed >= TEAM_STAFF_SEATS) throw fail(ctx.lang, "seats", "FORBIDDEN");
-      if (input.role === "accountant" && team.accountantUsed) throw fail(ctx.lang, "oneAccountant", "FORBIDDEN");
+      // A new link for someone already invited replaces theirs: their open invitation doesn't count against the seat.
+      const open = team.invites.find((i) => norm(i.email) === email);
+      const staffUsed = team.staffUsed - (open?.role === "staff" ? 1 : 0);
+      const accountantTaken = team.members.some((m) => m.role === "accountant") || team.invites.some((i) => i.role === "accountant" && norm(i.email) !== email);
+      if (input.role === "staff" && staffUsed >= TEAM_STAFF_SEATS) throw fail(ctx.lang, "seats", "FORBIDDEN");
+      if (input.role === "accountant" && accountantTaken) throw fail(ctx.lang, "oneAccountant", "FORBIDDEN");
       // A new link replaces any open invitation for the same email.
       await db.delete(teamInvites).where(and(eq(teamInvites.ownerId, ownerId), eq(teamInvites.email, email), isNull(teamInvites.acceptedAt)));
       const token = randomBytes(24).toString("base64url");
-      await db.insert(teamInvites).values({
-        ownerId, email, role: input.role, tokenHash: hashToken(token), expiresAt: new Date(Date.now() + INVITE_DAYS * 86_400_000),
-      });
-      return { link: `${appUrl()}/join?invite=${token}`, expiresInDays: INVITE_DAYS };
+      const tokenHash = hashToken(token);
+      const expiresAt = new Date(Date.now() + INVITE_DAYS * 86_400_000);
+      await db.insert(teamInvites).values({ ownerId, email, role: input.role, tokenHash, expiresAt });
+      const name = input.name?.trim() || null;
+      if (name) await db.execute(sql`UPDATE teamInvites SET name = ${name} WHERE tokenHash = ${tokenHash}`);
+      return { link: `${appUrl()}/join?invite=${token}`, expiresInDays: INVITE_DAYS, expiresAt, email, role: input.role, name };
     }),
 
   revokeInvite: authedQuery.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
@@ -169,11 +218,17 @@ export const teamRouter = createRouter({
   invitePreview: publicQuery.input(z.object({ token: z.string().min(10).max(100) })).query(async ({ input }) => {
     const db = getDb();
     await ensureTeamTables(db);
-    type Row = { email: string; role: TeamRole; expiresAt: Date; acceptedAt: Date | null; ownerName: string | null };
-    const row: Row | undefined = (await db.select({ email: teamInvites.email, role: teamInvites.role, expiresAt: teamInvites.expiresAt, acceptedAt: teamInvites.acceptedAt, ownerName: users.name })
-      .from(teamInvites).leftJoin(users, eq(users.id, teamInvites.ownerId)).where(eq(teamInvites.tokenHash, hashToken(input.token))).limit(1))[0];
+    type Row = { ownerId: number; email: string; role: TeamRole; expiresAt: Date; acceptedAt: Date | null; ownerName: string | null; companyName: string | null };
+    const row: Row | undefined = (await db.select({ ownerId: teamInvites.ownerId, email: teamInvites.email, role: teamInvites.role, expiresAt: teamInvites.expiresAt, acceptedAt: teamInvites.acceptedAt, ownerName: users.name, companyName: companySettings.companyName })
+      .from(teamInvites).leftJoin(users, eq(users.id, teamInvites.ownerId)).leftJoin(companySettings, eq(companySettings.userId, teamInvites.ownerId))
+      .where(eq(teamInvites.tokenHash, hashToken(input.token))).limit(1))[0];
     if (!row || row.acceptedAt || new Date(row.expiresAt) < new Date()) return { valid: false as const };
-    return { valid: true as const, email: row.email, role: row.role, ownerName: row.ownerName };
+    // The name they were invited with (to start the sign-up form), and the business's name and logo, as on its invoices.
+    const named = (await db.execute(sql`SELECT name FROM teamInvites WHERE tokenHash = ${hashToken(input.token)} LIMIT 1`) as unknown as [Array<{ name: string | null }>])[0][0];
+    return {
+      valid: true as const, email: row.email, role: row.role, ownerName: row.ownerName, name: named?.name ?? null,
+      companyName: row.companyName?.trim() || null, logo: await companyLogoDataUrl(db, Number(row.ownerId)), expiresAt: row.expiresAt,
+    };
   }),
 
   acceptInvite: authedQuery.input(z.object({ token: z.string().min(10).max(100) })).mutation(async ({ ctx, input }) => {

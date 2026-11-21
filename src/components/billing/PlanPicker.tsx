@@ -76,23 +76,23 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
           const chosen = chosenKey === plan.key;
           const price = billing === "monthly" ? plan.monthly : plan.annual;
           const pending = pendingTier === plan.tier;
-          const ring = chosen ? "ring-2 ring-blue-600" : plan.featured ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200";
+          const ring = chosen ? "ring-2 ring-blue-600" : plan.featured ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200"; // the prototype's card: 14px corners, 1px line
           const badge = chosen ? g.chosen : plan.featured ? p.featured : null;
           return (
-            <div key={plan.key} className={`relative flex flex-col rounded-2xl bg-white p-5 text-slate-900 shadow-sm sm:p-6 ${ring}`}>
+            <div key={plan.key} className={`relative flex flex-col rounded-[14px] bg-white p-4 text-slate-900 sm:p-5 ${ring}`}>
               {badge && (
                 <span className={`absolute -top-2.5 right-5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white ${chosen ? "bg-blue-600" : "bg-slate-900"}`}>{badge}</span>
               )}
-              <h3 className="text-lg font-semibold">{c.name}</h3>
+              <h3 className="text-[17px] font-bold">{c.name}</h3>
               <p className="mt-1 min-h-10 text-sm text-slate-600">{c.tagline}</p>
 
               <div className="mt-4 flex items-baseline gap-1.5">
                 {plan.free ? (
-                  <span className="text-4xl font-bold tracking-tight text-slate-900">{p.free}</span>
+                  <span className="text-[30px] font-extrabold tracking-tight text-slate-900">{p.free}</span>
                 ) : (
                   <>
-                    <span className="text-4xl font-bold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
-                    <span className="text-slate-500">{billing === "monthly" ? p.perMonth : p.perYear}</span>
+                    <span className="text-[30px] font-extrabold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
+                    <span className="text-sm text-slate-500">{billing === "monthly" ? p.perMonth : p.perYear}</span>
                   </>
                 )}
               </div>
@@ -115,15 +115,15 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
                   type="button"
                   onClick={() => onPick(billing, plan.tier)}
                   disabled={pendingTier !== null}
-                  className={`mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-[10px] text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${chosen || plan.featured ? "bg-blue-600 hover:bg-blue-500" : "bg-slate-900 hover:bg-slate-800"}`}
+                  className={`mt-4 inline-flex h-11 items-center justify-center gap-2 rounded-[10px] text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${chosen || plan.featured ? "bg-blue-600 hover:bg-blue-500" : "bg-slate-900 hover:bg-slate-800"}`}
                 >
                   {pending && <Loader2 className="h-4 w-4 animate-spin" />}
                   {g.choose(c.name)}
                 </button>
               )}
 
-              {c.lead && <p className="mt-5 text-sm font-semibold">{c.lead}</p>}
-              <ul className={`${c.lead ? "mt-2.5" : "mt-5"} space-y-2 text-sm`}>
+              {c.lead && <p className="mt-4 text-[13px] font-semibold">{c.lead}</p>}
+              <ul className={`${c.lead ? "mt-2" : "mt-4"} space-y-1.5 text-[13px]`}>
                 {c.features.map((f) => (
                   <li key={f} className="flex gap-2.5">
                     <Check className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" />
