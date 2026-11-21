@@ -13,9 +13,12 @@ createRoot(document.getElementById('root')!).render(
       <I18nProvider>
       <TRPCProvider>
         <App />
+        {/* Bottom right on computer and phone, above whatever is fixed at the bottom (--toast-bottom in index.css). */}
         <Toaster
-          position="top-center"
-          className="z-[9999] pt-6"
+          position="bottom-right"
+          className="z-[9999]"
+          offset={{ bottom: "var(--toast-bottom)", right: 24 }}
+          mobileOffset={{ bottom: "var(--toast-bottom)", left: 12, right: 12 }}
           richColors
           closeButton
         />

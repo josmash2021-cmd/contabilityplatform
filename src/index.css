@@ -162,3 +162,12 @@ html { scroll-behavior: smooth; }
 
 /* Landing: sections off screen pause their CSS animations (see usePauseOffscreenSections). */
 section[data-offscreen] *, section[data-offscreen] *::before, section[data-offscreen] *::after { animation-play-state: paused !important; }
+
+/* Notifications (sonner, bottom right): how far from the bottom. On phones and tablets they sit above the
+   tab bar (AppLayout, data-tabbar) and, in Cobrar, above the sale's bar (data-pos-bar). */
+:root { --toast-bottom: 24px; }
+@media (max-width: 1023px) {
+  :root { --toast-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+  :root:has([data-tabbar]) { --toast-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
+  :root:has([data-pos-bar]) { --toast-bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
+}

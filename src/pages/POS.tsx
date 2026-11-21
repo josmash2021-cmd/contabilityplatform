@@ -281,7 +281,7 @@ export default function POS() {
 
       {/* Phone: the sale's total sits above the tab bar while the sale is out of view (outside the animated wrapper so `fixed` works). */}
       {showBar && (
-        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-30 px-3 lg:hidden">
+        <div data-pos-bar className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-30 px-3 lg:hidden">
           <button
             type="button"
             onClick={() => saleRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })}

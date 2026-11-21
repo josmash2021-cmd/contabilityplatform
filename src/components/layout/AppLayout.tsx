@@ -297,7 +297,7 @@ export function AppLayout() {
         </main>
 
         {/* ── Phone tab bar ── */}
-        <nav aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[calc(6px+env(safe-area-inset-bottom,0px))] pt-1.5 lg:hidden">
+        <nav data-tabbar aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[calc(6px+env(safe-area-inset-bottom,0px))] pt-1.5 lg:hidden">
           {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} count={counts[tab.path]} /> : <span key="empty-l" />)}
           <div className="grid place-items-center">{newItems.length ? <NewMenu items={newItems} t={t} onGo={go} round /> : null}</div>
           {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
