@@ -11,17 +11,25 @@ export const PLAN_PRICES: Record<PlanKey, { monthly: number; annual: number }> =
 };
 
 /**
- * Plans shown on the landing page, in order. Basico and Pro are announced but not
- * sold yet: they are not in api/lib/plans.ts nor in Stripe, so their button says
- * "coming soon" instead of opening the sign-up.
+ * Plans shown on the landing page, in two groups: for you (personal) and for your
+ * business. Only "personal" (Basic for you) and "business" (Business) are sold today
+ * (api/lib/plans.ts and Stripe). The others are announced as "coming soon": their
+ * button doesn't open the sign-up for that plan.
  */
-export type LandingPlanKey = "personal" | "basic" | "business" | "pro";
-export const LANDING_PLANS: { key: LandingPlanKey; mode: PlanKey; monthly: number; annual: number; available: boolean; featured?: boolean }[] = [
-  { key: "personal", mode: "personal", ...PLAN_PRICES.personal, available: true },
-  { key: "basic", mode: "business", monthly: 40, annual: 400, available: false },
-  { key: "business", mode: "business", ...PLAN_PRICES.business, available: true, featured: true },
-  { key: "pro", mode: "business", monthly: 150, annual: 1500, available: false },
-];
+export type LandingPlanKey = "personal" | "personalPro" | "basic" | "business" | "pro";
+export type LandingGroup = "personal" | "business";
+type LandingPlan = { key: LandingPlanKey; mode: PlanKey; monthly: number; annual: number; available: boolean; featured?: boolean };
+export const LANDING_PLAN_GROUPS: Record<LandingGroup, LandingPlan[]> = {
+  personal: [
+    { key: "personal", mode: "personal", ...PLAN_PRICES.personal, available: true },
+    { key: "personalPro", mode: "personal", monthly: 70, annual: 700, available: false },
+  ],
+  business: [
+    { key: "basic", mode: "business", monthly: 40, annual: 400, available: false },
+    { key: "business", mode: "business", ...PLAN_PRICES.business, available: true, featured: true },
+    { key: "pro", mode: "business", monthly: 150, annual: 1500, available: false },
+  ],
+};
 
 /** Whole-dollar monthly equivalent of the annual price, e.g. 800 -> "$67". */
 export function annualPerMonth(annual: number): string {

@@ -3,14 +3,14 @@ import { Link } from "react-router";
 import {
   ArrowRight, Check, ShieldCheck, Lock, Languages, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
   ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User, Store,
-  LayoutDashboard,
+  Sparkles, LayoutDashboard,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { Reveal } from "@/components/marketing/Reveal";
 import { BusinessPhonePreview, ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, SignupStepPreview } from "@/components/marketing/Previews";
-import { LANDING_PLANS, TRIAL_DAYS, annualPerMonth } from "@/components/marketing/content";
+import { LANDING_PLAN_GROUPS, TRIAL_DAYS, annualPerMonth, type LandingGroup } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
 
@@ -278,13 +278,37 @@ function Security({ c }: { c: C["security"] }) {
 // ── Pricing ──
 function Pricing({ c }: { c: C["pricing"] }) {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
-  const planIcons = { personal: User, basic: Store, business: Building2, pro: Layers } as const;
+  const [group, setGroup] = useState<LandingGroup>("personal");
+  const planIcons = { personal: User, personalPro: Sparkles, basic: Store, business: Building2, pro: Layers } as const;
+  const plans = LANDING_PLAN_GROUPS[group];
   return (
     <section id="precios" className="scroll-mt-nav bg-slate-50 py-24 sm:py-28" aria-labelledby="pricing-title">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="pricing-title" eyebrow={c.eyebrow} title={c.title} text={c.text(TRIAL_DAYS)} />
 
-        <Reveal className="mt-10 flex flex-col items-center">
+        <Reveal className="mt-10 flex flex-col items-center gap-4">
+          <div role="radiogroup" aria-label={c.groupsLabel} className="relative grid grid-cols-2 rounded-2xl bg-slate-200/70 p-1">
+            <span
+              aria-hidden
+              className="absolute bottom-1 left-0 top-1 w-[calc(50%-4px)] rounded-xl bg-white shadow-sm transition-transform duration-300 ease-out"
+              style={{ transform: group === "personal" ? "translateX(4px)" : "translateX(calc(100% + 4px))" }}
+            />
+            {(["personal", "business"] as const).map((g) => {
+              const GIcon = g === "personal" ? User : Building2;
+              return (
+                <button
+                  key={g}
+                  role="radio"
+                  aria-checked={group === g}
+                  onClick={() => setGroup(g)}
+                  className={`relative z-10 inline-flex h-12 items-center justify-center gap-2 rounded-xl px-5 text-[15px] font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:px-8 ${group === g ? "text-slate-900" : "text-slate-500 hover:text-slate-800"}`}
+                >
+                  <GIcon className="h-4 w-4" />
+                  {c.groups[g]}
+                </button>
+              );
+            })}
+          </div>
           <div role="radiogroup" aria-label={c.billingLabel} className="relative grid grid-cols-2 rounded-xl bg-white p-1 shadow-sm ring-1 ring-slate-200">
             <span
               aria-hidden
@@ -309,14 +333,14 @@ function Pricing({ c }: { c: C["pricing"] }) {
           <p className="mt-3 text-xs font-medium text-emerald-700 sm:hidden">{c.annualNoteMobile}</p>
         </Reveal>
 
-        <div className="mx-auto mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4 xl:gap-5">
-          {LANDING_PLANS.map((plan, i) => {
+        <div key={group} className={`mx-auto mt-12 grid gap-6 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 ${plans.length === 2 ? "max-w-4xl md:grid-cols-2" : "max-w-6xl md:grid-cols-2 lg:grid-cols-3"}`}>
+          {plans.map((plan, i) => {
             const p = c.plans[plan.key];
             const featured = !!plan.featured;
             const price = billing === "monthly" ? plan.monthly : plan.annual;
             const Icon = planIcons[plan.key];
             return (
-              <Reveal key={plan.key} delay={i * 90}>
+              <Reveal key={plan.key} delay={i * 90} className={plans.length === 3 && i === 2 ? "md:col-span-2 md:mx-auto md:w-1/2 lg:col-span-1 lg:mx-0 lg:w-auto" : ""}>
                 <div
                   className={`relative flex h-full flex-col rounded-3xl p-7 transition-all duration-300 hover:-translate-y-1 ${
                     featured
@@ -358,7 +382,7 @@ function Pricing({ c }: { c: C["pricing"] }) {
                     <div className="mt-6 grid gap-2">
                       <span className="inline-flex h-12 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[15px] font-semibold text-slate-500">{c.soonCta}</span>
                       <Link to={`/register?mode=${plan.mode}`} className="rounded text-center text-sm font-medium text-blue-600 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                        {c.soonAlt}
+                        {group === "personal" ? c.soonAltPersonal : c.soonAlt}
                       </Link>
                     </div>
                   )}
@@ -381,6 +405,7 @@ function Pricing({ c }: { c: C["pricing"] }) {
                       </li>
                     ))}
                   </ul>
+                  {p.note && <p className={`mt-5 border-t pt-4 text-xs ${featured ? "border-white/10 text-slate-400" : "border-slate-100 text-slate-500"}`}>{p.note}</p>}
                 </div>
               </Reveal>
             );

@@ -138,10 +138,13 @@ const es = {
     soonTag: "Pronto",
     soonCta: "Disponible muy pronto",
     soonAlt: "Mientras, prueba Negocio gratis",
+    soonAltPersonal: "Mientras, prueba Básico gratis",
+    groups: { personal: "Para ti", business: "Para tu negocio" },
+    groupsLabel: "Tipo de plan",
     footnote: "Precios en dólares estadounidenses (USD). Al terminar la prueba eliges tu plan; no hay cobros automáticos.",
     plans: {
       personal: {
-        name: "Personal",
+        name: "Básico",
         tagline: "Para organizar tus finanzas y las de tu hogar.",
         features: [
           "Conexión segura con tu banco",
@@ -150,8 +153,23 @@ const es = {
           "Metas de ahorro con seguimiento",
           "Resumen mensual de ingresos y gastos",
         ],
-        soon: ["Presupuestos por categoría con alertas", "Asistente con IA: 20 preguntas al mes"],
+        soon: [] as string[],
         lead: "",
+        note: "",
+      },
+      personalPro: {
+        name: "Pro",
+        tagline: "Tus finanzas y tus impuestos, en un solo lugar.",
+        features: [
+          "Impuestos: sube tus documentos desde el teléfono",
+          "Tu preparador y el seguimiento de tu declaración, federal y estatal",
+          "Tus declaraciones de años pasados, siempre a la mano",
+          "Presupuestos por categoría con alertas",
+          "Asistente con IA",
+        ],
+        soon: [] as string[],
+        lead: "Todo lo de Básico, más:",
+        note: "La preparación de la declaración se cobra aparte.",
       },
       basic: {
         name: "Básico",
@@ -165,6 +183,7 @@ const es = {
         ],
         soon: [] as string[],
         lead: "",
+        note: "",
       },
       business: {
         name: "Negocio",
@@ -179,6 +198,7 @@ const es = {
         ],
         soon: ["Proveedores y facturas por pagar", "Cotizaciones y facturas recurrentes", "Vista para tu contador, Excel y PDF"],
         lead: "",
+        note: "",
       },
       pro: {
         name: "Pro",
@@ -192,6 +212,7 @@ const es = {
         ],
         soon: [] as string[],
         lead: "Todo lo de Negocio, más:",
+        note: "",
       },
     },
   },
@@ -474,10 +495,13 @@ const en: MarketingCopy = {
     soonTag: "Soon",
     soonCta: "Available soon",
     soonAlt: "Meanwhile, try Business free",
+    soonAltPersonal: "Meanwhile, try Basic free",
+    groups: { personal: "For you", business: "For your business" },
+    groupsLabel: "Plan type",
     footnote: "Prices in US dollars (USD). When your trial ends you choose your plan; there are no automatic charges.",
     plans: {
       personal: {
-        name: "Personal",
+        name: "Basic",
         tagline: "To organize your personal and household finances.",
         features: [
           "Secure connection to your bank",
@@ -486,8 +510,23 @@ const en: MarketingCopy = {
           "Savings goals with progress tracking",
           "Monthly income and spending summary",
         ],
-        soon: ["Category budgets with alerts", "AI assistant: 20 questions a month"],
+        soon: [] as string[],
         lead: "",
+        note: "",
+      },
+      personalPro: {
+        name: "Pro",
+        tagline: "Your finances and your taxes, in one place.",
+        features: [
+          "Taxes: upload your documents from your phone",
+          "Your tax preparer and your return's progress, federal and state",
+          "Your past years' returns, always at hand",
+          "Category budgets with alerts",
+          "AI assistant",
+        ],
+        soon: [] as string[],
+        lead: "Everything in Basic, plus:",
+        note: "Preparing your tax return is charged separately.",
       },
       basic: {
         name: "Basic",
@@ -501,6 +540,7 @@ const en: MarketingCopy = {
         ],
         soon: [] as string[],
         lead: "",
+        note: "",
       },
       business: {
         name: "Business",
@@ -515,6 +555,7 @@ const en: MarketingCopy = {
         ],
         soon: ["Vendors and bills to pay", "Quotes and recurring invoices", "Accountant view, Excel and PDF"],
         lead: "",
+        note: "",
       },
       pro: {
         name: "Pro",
@@ -528,6 +569,7 @@ const en: MarketingCopy = {
         ],
         soon: [] as string[],
         lead: "Everything in Business, plus:",
+        note: "",
       },
     },
   },
