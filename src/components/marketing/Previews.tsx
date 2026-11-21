@@ -2,8 +2,9 @@
 // All numbers are sample data and are labeled as such.
 import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, FileText, LayoutDashboard, Landmark,
-  Receipt, BarChart3, Users, ShoppingCart, Sparkles, Target, TrendingUp, Wallet, Lock, ChevronRight, RefreshCw,
+  Receipt, BarChart3, Users, ShoppingCart, Sparkles, Target, TrendingUp, Wallet, Lock, ChevronRight,
   Home, List, MoreHorizontal, Search, Bell, Plus, Inbox, CreditCard, Camera,
+  Link2, Tag, Check,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Logo } from "@/components/Logo";
@@ -587,49 +588,75 @@ function Radar() {
   );
 }
 
-const NUMBER_SETS = [
-  { amounts: [1625, 86.4, 42.1], bars: [[70, 44], [76, 52], [72, 41], [86, 47]] },
-  { amounts: [1710, 92.15, 38.6], bars: [[66, 48], [80, 50], [75, 45], [90, 44]] },
-  { amounts: [1580, 79.9, 45.3], bars: [[72, 40], [74, 55], [78, 43], [84, 50]] },
-];
+// Step 3, as in the Ai Aethel 2.0 "To review" inbox: each transaction arrives already
+// sorted or matched, you confirm it, and the month's report (In / Out / You kept) updates.
+const REVIEW_BASE = { inn: 23730, out: 8902.48 };
+const REVIEW_DELTAS = [{ inn: 850, out: 0 }, { inn: 0, out: 184.32 }, { inn: 0, out: 48.2 }];
+const dollars = (n: number) => "$" + Math.round(n).toLocaleString("en-US");
 
 export function NumbersStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
-  const n = v.numbers;
+  const r = v.review;
   const still = useReducedMotion();
   const [ref, inView] = useInView<HTMLDivElement>();
-  const tick = useTick(2600, inView && !still);
-  const set = NUMBER_SETS[still ? 0 : tick % NUMBER_SETS.length];
+  const tick = useTick(950, inView && !still);
+  const t = still ? 8 : tick % 9;
+  const item = Math.floor(t / 3);
+  const phase = t % 3; // 0 waiting, 1 pressing, 2 done
+  const doneCount = item + (phase === 2 ? 1 : 0);
+  const inn = REVIEW_BASE.inn + REVIEW_DELTAS.slice(0, doneCount).reduce((a, d) => a + d.inn, 0);
+  const out = REVIEW_BASE.out + REVIEW_DELTAS.slice(0, doneCount).reduce((a, d) => a + d.out, 0);
+  const row = r.rows[item];
+  const reviewed = 3 + doneCount;
   return (
     <StepFrame label={v.aria[2]} decor={<Radar />} frameRef={ref}>
       <div className={cardCls}>
         <div className="flex items-center justify-between">
-          <span className="text-[13px] font-semibold text-slate-900">{n.month}</span>
-          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700"><RefreshCw className="h-2.5 w-2.5 motion-safe:animate-[spin_5s_linear_infinite]" />{n.auto}</span>
+          <span className="flex items-center gap-1.5 text-[13px] font-bold text-slate-900"><Inbox className="h-4 w-4 text-blue-600" />{r.title}</span>
+          <span className="text-[9.5px] font-semibold tabular-nums text-slate-500">{r.progress(reviewed)}</span>
         </div>
-        <ul className="mt-2 divide-y divide-slate-100">
-          {n.rows.map((r, i) => (
-            <li key={r.name} className="flex items-center gap-2 py-1.5">
-              <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${r.income ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>
-                {r.income ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
+        <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+          <div className="h-full rounded-full bg-blue-600 transition-[width] duration-700 ease-out" style={{ width: `${(reviewed / 9) * 100}%` }} />
+        </div>
+
+        <div
+          key={item}
+          className={`mt-2.5 rounded-xl border p-2.5 transition-colors duration-500 motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-4 motion-safe:duration-500 ${phase === 2 ? "border-emerald-300 bg-emerald-50/60" : "border-slate-200 bg-white"}`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <span className="truncate text-[11px] font-semibold text-slate-900">{row.who}</span>
+            <span className={`shrink-0 text-[11px] font-bold tabular-nums ${row.income ? "text-emerald-600" : "text-slate-900"}`}>{row.amt}</span>
+          </div>
+          <span className={`mt-1.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[9.5px] font-semibold ${row.link ? "bg-blue-50 text-blue-700" : "bg-slate-100 text-slate-700"}`}>
+            {row.link ? <Link2 className="h-3 w-3" /> : <Tag className="h-3 w-3" />}
+            {!row.link && <span className="font-medium text-slate-500">{r.suggested}:</span>}
+            {row.chip}
+          </span>
+          <div className="mt-2 flex h-7 items-center gap-1.5">
+            {phase === 2 ? (
+              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold text-emerald-700 motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-300">
+                <CheckCircle2 className="h-3.5 w-3.5" />{row.done}
               </span>
-              <span className="min-w-0 flex-1 truncate text-[10.5px] text-slate-700">{r.name}</span>
-              <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[8.5px] font-medium text-blue-700">{r.cat}</span>
-              <span className={`w-[62px] text-right text-[10.5px] font-semibold tabular-nums ${r.income ? "text-emerald-700" : "text-slate-800"}`}>
-                {r.income ? "+" : "-"}<CountUp value={set.amounts[i]} format={money} still={still} />
-              </span>
-            </li>
-          ))}
-        </ul>
-        <p className="mt-2 text-[9.5px] font-medium text-slate-500">{n.chart}</p>
-        <div className="mt-1.5 flex h-14 items-end justify-between gap-2">
-          {set.bars.map(([inc, exp], i) => (
-            <div key={n.months[i]} className="flex flex-1 flex-col items-center gap-1">
-              <div className="flex h-11 w-full items-end justify-center gap-0.5">
-                <span className="w-2 rounded-t bg-emerald-500 transition-[height] duration-700 ease-out" style={{ height: `${inc}%` }} />
-                <span className="w-2 rounded-t bg-slate-300 transition-[height] duration-700 ease-out" style={{ height: `${exp}%` }} />
-              </div>
-              <span className="text-[8.5px] text-slate-400">{n.months[i]}</span>
+            ) : (
+              <>
+                <span className={`inline-flex h-7 items-center gap-1 rounded-lg px-2.5 text-[10.5px] font-semibold text-white transition-all duration-200 ${phase === 1 ? "scale-95 bg-blue-700" : "bg-blue-600"}`}>
+                  {row.link ? <Link2 className="h-3 w-3" /> : <Check className="h-3 w-3" />}{row.action}
+                </span>
+                <span className="inline-flex h-7 items-center rounded-lg border border-slate-200 px-2.5 text-[10.5px] font-semibold text-slate-700">{r.other}</span>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-3 gap-1.5">
+          {[
+            { k: r.report[0], val: inn, cls: "text-slate-900" },
+            { k: r.report[1], val: out, cls: "text-slate-900" },
+            { k: r.report[2], val: inn - out, cls: "text-emerald-600" },
+          ].map((x) => (
+            <div key={x.k} className="rounded-lg border border-slate-200 px-2 py-1.5">
+              <p className="text-[9px] text-slate-500">{x.k}</p>
+              <p className={`text-[12.5px] font-extrabold tabular-nums tracking-tight ${x.cls}`}><CountUp value={x.val} format={dollars} still={still} /></p>
             </div>
           ))}
         </div>
