@@ -96,8 +96,8 @@ export function TrustStrip({ c }: { c: C["trust"] }) {
                   <img src={m.logo} alt="" width={m.w} height={m.h} className="block" style={{ width: m.w, height: m.h }} />
                 ) : "banks" in m ? (
                   <span className="flex items-center gap-1">
-                    {TRUST_BANKS.map((src, k) => (
-                      <img key={src} src={src} alt="" width={22} height={22} className={`h-[22px] w-[22px] rounded-md bg-white object-contain ${k === 0 ? "p-[2px]" : k === 1 ? "p-[1px]" : ""}`} />
+                    {TRUST_BANKS.map((src) => (
+                      <img key={src} src={src} alt="" width={22} height={22} className="h-[22px] w-[22px] rounded-md bg-white object-contain" />
                     ))}
                   </span>
                 ) : (

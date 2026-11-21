@@ -51,12 +51,16 @@ describe("institution logo and color", () => {
 });
 
 describe("bundled originals and monogram", () => {
-  it("matches the three bundled banks by institution name", () => {
+  it("matches the saved current bank logos by institution name", () => {
     expect(bundledBankLogo("Chase")?.src).toBe("/brands/banks/chase.png");
     expect(bundledBankLogo("JPMorgan Chase Bank")?.src).toBe("/brands/banks/chase.png");
     expect(bundledBankLogo("Bank of America")?.src).toBe("/brands/banks/bank-of-america.png");
     expect(bundledBankLogo("Wells Fargo")?.src).toBe("/brands/banks/wells-fargo.png");
-    expect(bundledBankLogo("Regions Bank")).toBeNull();
+    expect(bundledBankLogo("Regions Bank")?.src).toBe("/brands/banks/regions.png");
+    expect(bundledBankLogo("Navy Federal Credit Union")?.src).toBe("/brands/banks/navy-federal.png");
+    expect(bundledBankLogo("U.S. Bank")?.src).toBe("/brands/banks/us-bank.png");
+    expect(bundledBankLogo("Truist")?.src).toBe("/brands/banks/truist.png");
+    expect(bundledBankLogo("Some Credit Union of Alabama")).toBeNull();
     expect(bundledBankLogo("Purchase")).toBeNull(); // "chase" inside another word
     expect(bundledBankLogo(null)).toBeNull();
   });
@@ -172,7 +176,7 @@ describe("payment apps' saved originals", () => {
   });
   it("nothing else does", () => {
     expect(bundledMerchantLogo("TACOS EL PASTOR LLC")).toBeNull();
-    expect(bundledMerchantLogo("TACO BELL #1234")).toBeNull();
+    expect(bundledMerchantLogo("PAYMENT TO JOE SMITH")).toBeNull();
     expect(bundledMerchantLogo("")).toBeNull();
   });
   it("only our saved originals pass as a local path", () => {
@@ -193,5 +197,23 @@ describe("movements as the user's bank writes them (Wells Fargo)", () => {
     expect(isBankOwnMovement("ONLINE TRANSFER TO MARTINEZ TOSTA J WAY2SAVE SAVINGS XXXXXX8492 REF #IB04549YQG ON 11/18/26")).toBe(true);
     expect(isBankOwnMovement("SHELL", JSON.stringify({ primary: "TRANSFER_OUT", detailed: "TRANSFER_OUT_ACCOUNT_TRANSFER" }))).toBe(true);
     expect(isBankOwnMovement("ZELLE TO PAPA YONEL ON 11/14 REF # WFCT22WKRRXM")).toBe(false);
+  });
+});
+
+describe("each brand's current logo saved with the app", () => {
+  it("is found from the way the bank writes the charge", () => {
+    const cases: Array<[string, string]> = [
+      ["WAL-MART #1234 BIRMINGHAM AL", "walmart"], ["CHICK-FIL-A #01234", "chick-fil-a"], ["THE HOME DEPOT #4821", "home-depot"],
+      ["TACO BELL #031455", "taco-bell"], ["MCDONALD'S F1234", "mcdonalds"], ["PURCHASE DD *DOORDASH +16506819470 CA CARD3537", "doordash"],
+      ["UBER   *EATS", "uber-eats"], ["UBER *TRIP HELP.UBER.COM", "uber"], ["AMAZON.COM*2K4LM0 AMZN.COM/BILL WA", "amazon"],
+      ["AT&T*BILL PAYMENT", "att"], ["VERIZON WRLS P1234", "verizon"], ["NETFLIX.COM", "netflix"], ["SHELL OIL 57444211", "shell"],
+      ["CVS/PHARMACY #01234", "cvs"], ["ZELLE TO PAPA YONEL ON 11/14", "zelle"], ["VENMO PAYMENT", "venmo"],
+    ];
+    for (const [text, icon] of cases) expect(bundledMerchantLogo(text), text).toBe(`/brands/merchants/${icon}.png`);
+  });
+  it("never guesses on other names", () => {
+    for (const text of ["SHELLY'S SALON", "TARGETED ADS LLC", "MAXWELL HARDWARE", "UBERTOS PIZZA", "CITIZENS BANK"]) {
+      expect(bundledMerchantLogo(text), text).toBeNull();
+    }
   });
 });

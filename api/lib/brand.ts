@@ -56,10 +56,28 @@ export function normalizeColor(color: string | null | undefined): string | null 
 }
 
 /** Bundled originals in public/brands/banks/ (official icons), with the inner padding each one needs. */
+/**
+ * Each bank's CURRENT logo: its official app icon from the App Store (saved in public/brands/banks/), shown
+ * before Plaid's, which can be an older version.
+ */
 const BUNDLED_BANKS: Array<{ match: RegExp; src: string; pad: number }> = [
-  { match: /\bchase\b/i, src: "/brands/banks/chase.png", pad: 0.14 },
-  { match: /\bbank\s*of\s*america\b|^bofa\b/i, src: "/brands/banks/bank-of-america.png", pad: 0.1 },
+  { match: /\bchase\b|jpmorgan/i, src: "/brands/banks/chase.png", pad: 0 },
+  { match: /\bbank\s*of\s*america\b|^bofa\b/i, src: "/brands/banks/bank-of-america.png", pad: 0 },
   { match: /\bwells\s*fargo\b/i, src: "/brands/banks/wells-fargo.png", pad: 0 },
+  { match: /\bregions\b/i, src: "/brands/banks/regions.png", pad: 0 },
+  { match: /\btruist\b|\bsuntrust\b|\bbb&t\b/i, src: "/brands/banks/truist.png", pad: 0 },
+  { match: /\bpnc\b/i, src: "/brands/banks/pnc.png", pad: 0 },
+  { match: /\bcapital\s*one\b/i, src: "/brands/banks/capital-one.png", pad: 0 },
+  { match: /\bciti\b|\bcitibank\b/i, src: "/brands/banks/citi.png", pad: 0 },
+  { match: /\bu\.?\s*s\.?\s*bank\b|\busbank\b/i, src: "/brands/banks/us-bank.png", pad: 0 },
+  { match: /\bnavy\s*federal\b/i, src: "/brands/banks/navy-federal.png", pad: 0 },
+  { match: /\bdiscover\b/i, src: "/brands/banks/discover.png", pad: 0 },
+  { match: /\bamerican\s*express\b|\bamex\b/i, src: "/brands/banks/american-express.png", pad: 0 },
+  { match: /\bservisfirst\b/i, src: "/brands/banks/servisfirst.png", pad: 0 },
+  { match: /\btd\s*bank\b/i, src: "/brands/banks/td.png", pad: 0 },
+  { match: /\bfifth\s*third\b/i, src: "/brands/banks/fifth-third.png", pad: 0 },
+  { match: /\bally\s*bank\b|^ally\b/i, src: "/brands/banks/ally.png", pad: 0 },
+  { match: /\bchime\b/i, src: "/brands/banks/chime.png", pad: 0 },
 ];
 
 /** The bundled original logo for an institution name ("JPMorgan Chase" → chase.png), or null. */
@@ -123,17 +141,37 @@ export function isBankOwnMovement(text: string | null | undefined, plaidCategory
 // ── Merchants ──
 
 /**
- * Payment apps Plaid often sends without a logo, with their ORIGINAL icon saved in public/brands/merchants/
- * (zelle.png: Zelle's own app icon from zellepay.com).
+ * Each brand's CURRENT logo, saved in public/brands/merchants/: its official app icon from the App Store
+ * (zelle.png: Zelle's own icon from zellepay.com). Found by the exact merchant keys a bank row gives
+ * (candidateKeys: "WAL-MART #1234" → "walmart"), and shown before Plaid's, which can be an older version.
  */
-const BUNDLED_MERCHANTS: ReadonlyArray<{ match: RegExp; src: string }> = [
-  { match: /\bzelle\b/i, src: "/brands/merchants/zelle.png" },
-];
+const MERCHANT_ICONS: Readonly<Record<string, string>> = {
+  zelle: "zelle", venmo: "venmo", paypal: "paypal", cashapp: "cash-app", sqcash: "cash-app",
+  doordash: "doordash", uber: "uber", ubertrip: "uber", ubereats: "uber-eats", lyft: "lyft", grubhub: "grubhub", instacart: "instacart",
+  starbucks: "starbucks", mcdonalds: "mcdonalds", mcdonald: "mcdonalds", tacobell: "taco-bell", chickfila: "chick-fil-a",
+  whataburger: "whataburger", dominos: "dominos", wendys: "wendys", burgerking: "burger-king", subway: "subway", dunkin: "dunkin",
+  amazon: "amazon", amzn: "amazon", amazoncom: "amazon", amazonmktpl: "amazon", amznmktp: "amazon", walmart: "walmart", wmsupercenter: "walmart",
+  costco: "costco", homedepot: "home-depot", lowes: "lowes", walgreens: "walgreens", cvs: "cvs", cvspharmacy: "cvs",
+  dollargeneral: "dollar-general", publix: "publix", kroger: "kroger", autozone: "autozone", bestbuy: "best-buy", samsclub: "sams-club",
+  ebay: "ebay", shell: "shell", shelloil: "shell", chevron: "chevron", circlek: "circle-k",
+  verizon: "verizon", verizonwrls: "verizon", att: "att", xfinity: "xfinity", comcast: "xfinity",
+  netflix: "netflix", spotify: "spotify", disneyplus: "disney-plus", hulu: "hulu", youtube: "youtube", youtubepremium: "youtube",
+  hbomax: "max", maxcom: "max", google: "google", intuit: "intuit-quickbooks", quickbooks: "intuit-quickbooks",
+  progressive: "progressive", statefarm: "state-farm", geico: "geico", allstate: "allstate",
+};
 
-/** The saved original logo for a movement's text ("ZELLE TO CLEANING SERVICE" → Zelle's), or null. */
+/** The saved current logo for a bank row (its merchant keys), or null. Zelle is recognized anywhere in the text. */
+export function bundledLogoFor(row: { merchantName?: string | null; description?: string | null }): string | null {
+  for (const k of candidateKeys(row)) {
+    const icon = MERCHANT_ICONS[k];
+    if (icon) return `/brands/merchants/${icon}.png`;
+  }
+  return /\bzelle\b/i.test(`${row.merchantName ?? ""} ${row.description ?? ""}`) ? "/brands/merchants/zelle.png" : null;
+}
+
+/** The same, from one text ("ZELLE TO CLEANING SERVICE" → Zelle's, "T-MOBILE" → none saved). */
 export function bundledMerchantLogo(text: string | null | undefined): string | null {
-  const t = text ?? "";
-  return BUNDLED_MERCHANTS.find((m) => m.match.test(t))?.src ?? null;
+  return bundledLogoFor({ description: text ?? "" });
 }
 
 /** Logo URLs the browser may load: https only (Plaid serves merchant logos from its CDN), an inline image, or one of our saved originals. */

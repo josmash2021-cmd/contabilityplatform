@@ -639,8 +639,8 @@ export function SignupStepPreview() {
 // Step 2: the selection moves through the three banks.
 // Bank icons for the "pick your bank" list (the same ones Plaid shows in its bank picker).
 const STEP_BANKS = [
-  { name: "Chase", src: "/brands/banks/chase.png", pad: "p-[3px]" },
-  { name: "Bank of America", src: "/brands/banks/bank-of-america.png", pad: "p-[2px]" },
+  { name: "Chase", src: "/brands/banks/chase.png", pad: "" },
+  { name: "Bank of America", src: "/brands/banks/bank-of-america.png", pad: "" },
   { name: "Wells Fargo", src: "/brands/banks/wells-fargo.png", pad: "" },
 ];
 

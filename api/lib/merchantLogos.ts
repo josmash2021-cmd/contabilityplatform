@@ -4,7 +4,7 @@
 // Plaid's merchant fields (never a raw bank description), so it is shared by all users.
 import { inArray, sql } from "drizzle-orm";
 import type { getDb } from "../queries/connection";
-import { bundledMerchantLogo, candidateKeys, merchantBrandOf, safeLogoUrl, type PlaidTxBrand } from "./brand";
+import { bundledLogoFor, candidateKeys, merchantBrandOf, safeLogoUrl, type PlaidTxBrand } from "./brand";
 import { merchantLogosTable } from "./brandSchema";
 import { ensureBrandTables } from "./brandTables";
 
@@ -75,8 +75,8 @@ async function logosFor(db: Db, keys: string[]): Promise<Map<string, string>> {
 
 /**
  * Adds `logoUrl: string | null` to bank rows: the logo the row already carries (straight from Plaid), else
- * the saved logo of its merchant, matched by merchant name and then by the first words of the description,
- * else a payment app's saved original (bundledMerchantLogo: Zelle).
+ * the saved logo of its merchant, matched by merchant name and then by the first words of the description.
+ * A brand whose current logo is saved with the app (bundledLogoFor) gets that one first.
  * Never throws: on any database problem the rows come back with `logoUrl: null`.
  */
 export async function withMerchantLogos<T extends LogoLookupRow>(db: Db, rows: T[]): Promise<Array<T & { logoUrl: string | null }>> {
@@ -89,8 +89,8 @@ export async function withMerchantLogos<T extends LogoLookupRow>(db: Db, rows: T
   }
   return rows.map((r, i) => {
     const own = safeLogoUrl(r.logoUrl);
-    // Last, the original saved for a payment app Plaid sent without a logo (Zelle).
-    const match = own ?? keysPerRow[i].map((k) => found.get(k)).find(Boolean) ?? bundledMerchantLogo(`${r.merchantName ?? ""} ${r.description ?? ""}`);
+    // The brand's current logo saved with the app first (Plaid's can be an older version), then Plaid's.
+    const match = bundledLogoFor(r) ?? own ?? keysPerRow[i].map((k) => found.get(k)).find(Boolean) ?? null;
     return { ...r, logoUrl: match };
   });
 }

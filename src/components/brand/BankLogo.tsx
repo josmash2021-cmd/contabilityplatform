@@ -23,8 +23,9 @@ export type BankLogoProps = {
 export function BankLogo({ name, logo, color, size = 36, className }: BankLogoProps) {
   const bundled = bundledBankLogo(name);
   const sources: Array<{ src: string; pad: number }> = [];
-  if (logo && /^data:image\/(png|jpeg|gif|webp);base64,/.test(logo)) sources.push({ src: logo, pad: 0.1 });
+  // The bank's current logo saved with the app first (Plaid's can be an older version), then Plaid's.
   if (bundled) sources.push(bundled);
+  if (logo && /^data:image\/(png|jpeg|gif|webp);base64,/.test(logo)) sources.push({ src: logo, pad: 0.1 });
   // Images that failed to load (kept per source, so a new logo prop gets its own chance).
   const [failed, setFailed] = useState<ReadonlySet<string>>(() => new Set());
   const pick = sources.find((s) => !failed.has(s.src));

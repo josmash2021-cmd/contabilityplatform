@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { monogram, safeLogoUrl } from "../../../api/lib/brand";
+import { bundledMerchantLogo, monogram, safeLogoUrl } from "../../../api/lib/brand";
 
 export type MerchantLogoProps = {
   /** The merchant's name ("Home Depot"); also the monogram's letter. */
@@ -23,7 +23,8 @@ export type MerchantLogoProps = {
  * brand mark of its own.
  */
 export function MerchantLogo({ name, logoUrl, size = 36, fallback, className }: MerchantLogoProps) {
-  const src = safeLogoUrl(logoUrl);
+  // No logo from the server (a vendor's or a rule's name): the brand's current logo saved with the app, if any.
+  const src = safeLogoUrl(logoUrl) ?? bundledMerchantLogo(name);
   // The URL that failed to load, if any (a new logoUrl gets its own chance).
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
   const radius = Math.max(4, Math.round(size * 0.24));
