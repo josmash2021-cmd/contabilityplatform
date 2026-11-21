@@ -184,8 +184,9 @@ export const dashboardRouter = createRouter({
       // Bank balance (wrapped in try-catch in case table doesn't exist)
       let bankBalance = { total: "0" };
       try {
+        // Money in the bank only: a credit card or a loan balance is money owed (same rule as Bancos and Inicio).
         const bankResult = await db.select({ total: sql<string>`COALESCE(SUM(${bankAccounts.currentBalance}), 0)` }).from(bankAccounts).where(
-          eq(bankAccounts.userId, userId)
+          and(eq(bankAccounts.userId, userId), sql`COALESCE(${bankAccounts.accountType}, '') NOT IN ('credit', 'loan')`)
         );
         bankBalance = bankResult[0] ?? { total: "0" };
       } catch {
