@@ -423,6 +423,10 @@ if (env.isProduction) {
   const { serveStaticFiles } = await import("./lib/vite");
   serveStaticFiles(app);
 
+  // Additive fixes to existing tables (each checks first; see api/lib/dbFixes.ts).
+  const { runStartupDbFixes } = await import("./lib/dbFixes");
+  void runStartupDbFixes(getDb());
+
   const port = parseInt(process.env.PORT || "3000");
   serve({ fetch: app.fetch, port }, () => {
     
