@@ -449,7 +449,9 @@ export function SignupStepPreview() {
           </div>
         ))}
         <p className={`mt-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[11.5px] font-semibold text-white transition-all duration-200 ${pressed ? "scale-[0.97] bg-blue-700" : done ? "bg-emerald-600" : "bg-blue-600"}`}>
-          {done ? <><CheckCircle2 className="h-3.5 w-3.5" />{s.done}</> : s.cta(TRIAL_DAYS_PREVIEW)}
+          <span key={done ? "done" : "cta"} className="inline-flex items-center gap-1.5 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-300">
+            {done ? <><CheckCircle2 className="h-3.5 w-3.5" />{s.done}</> : s.cta(TRIAL_DAYS_PREVIEW)}
+          </span>
         </p>
         <p className="mt-1.5 flex items-center justify-center gap-1 text-[9.5px] text-slate-500"><CheckCircle2 className="h-3 w-3 text-emerald-500" />{s.noCard}</p>
       </div>
@@ -489,7 +491,10 @@ export function ConnectStepPreview() {
               <li key={b.name} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] transition-all duration-500 ease-out ${on ? "scale-[1.02] border-blue-500 bg-blue-50/70 text-slate-900 shadow-sm" : "border-slate-200 text-slate-600"}`}>
                 <img src={b.src} alt="" width={22} height={22} loading="lazy" className={`h-[22px] w-[22px] shrink-0 rounded-md bg-white object-contain ring-1 ring-slate-200 ${b.pad}`} />
                 {b.name}
-                {on ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-blue-600" /> : <ChevronRight className="ml-auto h-3 w-3 text-slate-400" />}
+                <span className="relative ml-auto grid h-3.5 w-3.5 place-items-center">
+                  <ChevronRight className={`absolute h-3 w-3 text-slate-400 transition-opacity duration-500 ${on ? "opacity-0" : "opacity-100"}`} />
+                  <CheckCircle2 className={`absolute h-3.5 w-3.5 text-blue-600 transition-all duration-500 ${on ? "scale-100 opacity-100" : "scale-50 opacity-0"}`} />
+                </span>
               </li>
             );
           })}
