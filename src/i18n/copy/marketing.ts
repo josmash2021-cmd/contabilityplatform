@@ -29,10 +29,10 @@ const es = {
   trust: {
     label: "Seguridad y confianza",
     items: [
-      { title: "Conexión bancaria con Plaid", text: "La infraestructura que usan apps financieras líderes" },
-      { title: "Pagos procesados por Stripe", text: "Nunca guardamos los datos de tu tarjeta" },
-      { title: "Acceso de solo lectura", text: "Podemos ver tus movimientos, no mover tu dinero" },
-      { title: "Conexión cifrada", text: "Toda la información viaja protegida por HTTPS" },
+      { title: "Tu banco se conecta con Plaid", text: "Entras a tu banco dentro de Plaid. Ai Aethel nunca ve tu contraseña." },
+      { title: "Pagas tu plan con Stripe", text: "Stripe cobra con tu tarjeta. Nosotros nunca vemos ni guardamos su número." },
+      { title: "Nadie mueve tu dinero", text: "La app solo ve tus movimientos. No puede pagar, transferir ni sacar dinero." },
+      { title: "Tus datos viajan protegidos", text: "Todo lo que envías y recibes va cifrado, igual que en la página de tu banco." },
     ],
   },
   value: {
@@ -365,10 +365,10 @@ const en: MarketingCopy = {
   trust: {
     label: "Security and trust",
     items: [
-      { title: "Bank connection with Plaid", text: "The infrastructure trusted by leading finance apps" },
-      { title: "Payments processed by Stripe", text: "We never store your card details" },
-      { title: "Read-only access", text: "We can see your transactions, not move your money" },
-      { title: "Encrypted connection", text: "All information travels protected by HTTPS" },
+      { title: "Your bank connects through Plaid", text: "You log in to your bank inside Plaid. Ai Aethel never sees your password." },
+      { title: "You pay your plan with Stripe", text: "Stripe charges your card. We never see or store its number." },
+      { title: "No one can move your money", text: "The app only sees your transactions. It can't pay, transfer or withdraw money." },
+      { title: "Your data travels protected", text: "Everything you send and receive is encrypted, just like on your bank's website." },
     ],
   },
   value: {

@@ -77,16 +77,24 @@ function Hero({ c }: { c: C["hero"] }) {
 }
 
 // ── Trust strip ──
-const trustIcons = [Landmark, CreditCard, Eye, Lock];
+// Plaid and Stripe show their own logo; the other two use an icon.
+const trustMarks = [
+  { logo: "/brands/plaid-mark.svg", w: 22, h: 22 },
+  { logo: "/brands/stripe.svg", w: 34, h: 14 },
+  { Icon: ShieldCheck },
+  { Icon: Lock },
+] as const;
 function TrustStrip({ c }: { c: C["trust"] }) {
   return (
     <section className="border-b border-slate-200 bg-white" aria-label={c.label}>
       <div className="mx-auto grid max-w-7xl gap-6 px-4 py-10 sm:grid-cols-2 sm:px-6 lg:grid-cols-4 lg:px-8">
         {c.items.map((it, i) => {
-          const Icon = trustIcons[i];
+          const m = trustMarks[i];
           return (
             <Reveal key={it.title} delay={i * 70} className="flex items-start gap-3">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-700"><Icon className="h-5 w-5" /></span>
+              <span className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 px-2 text-slate-700">
+                {"logo" in m ? <img src={m.logo} alt="" width={m.w} height={m.h} className="block" style={{ width: m.w, height: m.h }} /> : <m.Icon className="h-5 w-5" />}
+              </span>
               <div>
                 <p className="text-sm font-semibold text-slate-900">{it.title}</p>
                 <p className="mt-0.5 text-sm text-slate-500">{it.text}</p>
