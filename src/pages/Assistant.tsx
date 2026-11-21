@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  AlertTriangle, Bell, CheckCircle2, Clock, FileText, Inbox, Link2, Loader2, Lock, PieChart, RefreshCw, Sparkles, Trash2, Users, type LucideIcon,
+  AlertTriangle, ArrowUp, Bell, CheckCircle2, Clock, FileText, Inbox, Link2, Loader2, Lock, PieChart, RefreshCw, Sparkles, Trash2, Users, type LucideIcon,
 } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../api/router";
@@ -58,7 +58,7 @@ function sourceLabel(s: Source, t: AssistantCopy, locale: string): string {
   }
 }
 
-/** The prototype's assistant: today's check, the chat with sources, suggested questions, and the side cards. */
+/** The assistant: a chat with sources, suggested questions, today's check and the week's summary, and the month's limit. */
 export default function Assistant() {
   const t = useCopy(assistantCopy);
   const { lang } = useLang();
@@ -83,10 +83,10 @@ export default function Assistant() {
 
   const messages = useMemo(() => data?.messages ?? [], [data]);
   const chatRef = useRef<HTMLDivElement>(null);
-  // Keep the newest message in view inside the chat box.
+  const endRef = useRef<HTMLDivElement>(null);
+  // Keep the newest message in view.
   useEffect(() => {
-    const box = chatRef.current;
-    if (box) box.scrollTop = box.scrollHeight;
+    endRef.current?.scrollIntoView({ block: "end", behavior: messages.length ? "smooth" : "auto" });
   }, [messages.length, pending]);
 
   const send = (text: string) => {
@@ -128,112 +128,109 @@ export default function Assistant() {
   const disabled = !ready || limit === 0 || outOfQuestions;
   const firstName = (user?.name || "").trim().split(/\s+/)[0] ?? "";
   const examples = t.suggestions[mode];
+  const chatting = messages.length > 0 || !!pending;
   const chip = (q: string) => (
     <button key={q} type="button" disabled={disabled || ask.isPending} onClick={() => send(q)}
-      className={`max-w-full whitespace-normal text-left ${BTN_SM}`}>{q}</button>
+      className={`max-w-full whitespace-normal rounded-full border border-slate-200 bg-white px-3.5 py-2 text-left text-[13px] font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 ${FOCUS}`}>{q}</button>
+  );
+  const planNote = (outOfQuestions || limit === 0) && (
+    <p className="flex flex-wrap items-center justify-center gap-x-2 text-sm text-amber-800">
+      {limit === 0 && <Lock className="h-3.5 w-3.5" aria-hidden />}
+      {limit === 0 ? t.noPlan : t.used}
+      <Link to="/settings?sec=plan" className="font-semibold text-blue-600 underline-offset-2 hover:underline">{t.changePlan}</Link>
+    </p>
+  );
+  const composer = (
+    <form className="flex items-center gap-2 rounded-[26px] border border-slate-200 bg-white p-1.5 pl-5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.25)] transition focus-within:border-blue-500 focus-within:ring-[3px] focus-within:ring-blue-50"
+      onSubmit={(e) => { e.preventDefault(); send(question); }}>
+      <input
+        value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={1000} disabled={disabled}
+        placeholder={t.placeholder} aria-label={t.label} autoComplete="off"
+        className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed sm:text-[15px]"
+      />
+      <button type="submit" disabled={disabled || !question.trim() || ask.isPending} aria-label={ask.isPending ? t.sending : t.send}
+        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-600 text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 ${FOCUS}`}>
+        {ask.isPending ? <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden /> : <ArrowUp className="h-[18px] w-[18px]" aria-hidden />}
+      </button>
+    </form>
   );
 
   return (
-    <AnimatedPage className="p-4 lg:p-8">
-      <div className="mx-auto max-w-6xl">
-        {/* Head: title, the month's questions, clear */}
-        <header className="mb-[18px] flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-[22px] font-[750] tracking-tight text-slate-900">{t.title}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <span className="text-[13px] tabular-nums text-slate-500">{limit > 0 ? t.quota(limit, remaining) : t.noQuota}</span>
+    <AnimatedPage className="flex min-h-full flex-col p-4 lg:p-8">
+      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+        {/* Head: title, the month's limit (one bar), clear */}
+        <header className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-[22px] font-[750] tracking-tight text-slate-900">{t.title}</h1>
+          <div className="flex items-center gap-3">
+            {limit > 0 && <LimitBar limit={limit} used={used} remaining={remaining} t={t} />}
             {messages.length > 0 && (
-              <button type="button" disabled={clear.isPending} onClick={() => { if (window.confirm(t.clearConfirm)) clear.mutate(); }} className={BTN_SM}>
+              <button type="button" disabled={clear.isPending} onClick={() => { if (window.confirm(t.clearConfirm)) clear.mutate(); }}
+                className={BTN_SM} aria-label={t.clear} title={t.clear}>
                 {clear.isPending ? <Loader2 className="h-[15px] w-[15px] animate-spin" /> : <Trash2 className="h-[15px] w-[15px]" />}
-                <span className="sm:hidden">{t.clearShort}</span><span className="hidden sm:inline">{t.clear}</span>
+                <span className="hidden sm:inline">{t.clearShort}</span>
               </button>
             )}
           </div>
         </header>
 
-        <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_330px]">
-          <div className="grid min-w-0 content-start gap-3.5">
-            <ReviewCard t={t} />
-
-            {/* The chat */}
-            <section ref={chatRef} aria-live="polite" aria-label={t.chatLabel}
-              className="flex max-h-[min(560px,70vh)] min-h-[280px] flex-col gap-2.5 overflow-y-auto rounded-[14px] border border-slate-200 bg-white p-3.5">
-              {!ready ? (
-                <div className="m-auto max-w-md px-2 py-6 text-center" role="status">
-                  <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-500"><Clock className="h-5 w-5" /></span>
-                  <p className="mt-3 font-semibold text-slate-900">{t.notReady.title}</p>
-                  <p className="mt-1 text-sm leading-relaxed text-slate-500">{t.notReady.text}</p>
-                </div>
-              ) : (
-                <>
-                  {messages.length === 0 && !pending && <Bubble mine={false} label={t.assistant}>{t.hello[mode](firstName)}</Bubble>}
-                  {messages.map((m) => (
-                    <Bubble key={m.id} mine={m.role === "user"} label={m.role === "user" ? t.you : t.assistant}>
-                      {m.content}
-                      {m.role === "assistant" && m.sources.length > 0 && <Sources sources={m.sources} t={t} locale={locale} />}
-                    </Bubble>
-                  ))}
-                  {pending && (
-                    <>
-                      <Bubble mine label={t.you}>{pending}</Bubble>
-                      <Bubble mine={false} label={t.assistant}>
-                        <span className="inline-flex items-center gap-2 text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" />{t.thinking}</span>
-                      </Bubble>
-                    </>
-                  )}
-                </>
-              )}
-            </section>
-
-            {/* Suggested questions */}
-            <div className="flex flex-wrap items-center gap-1.5">
+        {!ready ? (
+          <div className="m-auto max-w-md px-2 py-10 text-center" role="status">
+            <span className="mx-auto grid h-11 w-11 place-items-center rounded-xl bg-slate-100 text-slate-500"><Clock className="h-5 w-5" /></span>
+            <p className="mt-3 font-semibold text-slate-900">{t.notReady.title}</p>
+            <p className="mt-1 text-sm leading-relaxed text-slate-500">{t.notReady.text}</p>
+          </div>
+        ) : !chatting ? (
+          /* Nothing asked yet: the question box in the middle, examples under it, then today's check and the week. */
+          <div className="flex flex-1 flex-col justify-center gap-5 py-8">
+            <div className="text-center">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Sparkles className="h-6 w-6" aria-hidden /></span>
+              <h2 className="mt-3 text-[26px] font-[750] tracking-tight text-slate-900 sm:text-[30px]">{t.emptyTitle(firstName)}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t.subtitle}</p>
+            </div>
+            {planNote}
+            {composer}
+            <div className="flex flex-wrap justify-center gap-2">
               {examples.main.map(chip)}
               <button type="button" onClick={() => setMoreOpen((v) => !v)} aria-expanded={moreOpen} aria-controls="as-more"
-                className={`min-h-[34px] px-1 text-sm font-semibold text-blue-600 underline underline-offset-2 hover:text-blue-700 ${FOCUS}`}>
+                className={`rounded-full px-2 py-2 text-[13px] font-semibold text-blue-600 hover:text-blue-700 ${FOCUS}`}>
                 {moreOpen ? t.lessExamples : t.moreExamples}
               </button>
             </div>
-            <div id="as-more" className={cn("-mt-2 flex-wrap gap-1.5", moreOpen ? "flex" : "hidden")}>{examples.more.map(chip)}</div>
-
-            {/* Ask */}
-            {(outOfQuestions || limit === 0) && (
-              <p className="-mb-1.5 flex flex-wrap items-center gap-x-2 text-sm text-amber-800">
-                {limit === 0 && <Lock className="h-3.5 w-3.5" aria-hidden />}
-                {limit === 0 ? t.noPlan : t.used}
-                <Link to="/settings?sec=plan" className="font-semibold text-blue-600 underline-offset-2 hover:underline">{t.changePlan}</Link>
-              </p>
-            )}
-            <form className="flex gap-2" onSubmit={(e) => { e.preventDefault(); send(question); }}>
-              <input
-                value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={1000} disabled={disabled}
-                placeholder={t.placeholder} aria-label={t.label} autoComplete="off"
-                className="min-h-[46px] min-w-0 flex-1 rounded-[10px] border border-slate-200 bg-white px-3.5 text-base text-slate-900 outline-none transition placeholder:text-slate-400 focus:border-blue-600 focus:ring-[3px] focus:ring-blue-50 disabled:cursor-not-allowed disabled:bg-slate-50 sm:text-sm"
-              />
-              <button type="submit" disabled={disabled || !question.trim() || ask.isPending}
-                className={`inline-flex min-h-[46px] shrink-0 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-4 text-[15px] font-semibold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-300 ${FOCUS}`}>
-                {ask.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{ask.isPending ? t.sending : t.send}
-              </button>
-            </form>
-            <p className="-mt-1.5 text-[11px] text-slate-400">{t.disclaimer}</p>
+            <div id="as-more" className={cn("flex-wrap justify-center gap-2", moreOpen ? "flex" : "hidden")}>{examples.more.map(chip)}</div>
+            <div className="mt-2 grid gap-3 md:grid-cols-2">
+              <ReviewCard t={t} />
+              <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => send(t.week.askQuestion)} />
+            </div>
           </div>
-
-          <aside className="grid min-w-0 gap-3.5">
-            {limit > 0 && <UsageCard limit={limit} used={used} remaining={remaining} t={t} locale={locale} />}
-            <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => send(t.week.askQuestion)} />
-            <section className={CARD} aria-labelledby="as-can">
-              <h2 id="as-can" className="text-sm font-bold text-slate-900">{t.can.title}</h2>
-              <ul className="mt-1.5 list-disc space-y-1 pl-[18px] text-[13px] text-slate-700 marker:text-slate-400">
-                {t.can.items.map((x) => <li key={x}>{x}</li>)}
-              </ul>
-              <h2 className="mt-3 text-sm font-bold text-slate-900">{t.can.neverTitle}</h2>
-              <ul className="mt-1.5 list-disc space-y-1 pl-[18px] text-[13px] text-slate-700 marker:text-red-600">
-                {t.can.never.map((x) => <li key={x}>{x}</li>)}
-              </ul>
+        ) : (
+          /* The conversation, newest at the bottom, and the box fixed under it. */
+          <>
+            <section ref={chatRef} aria-live="polite" aria-label={t.chatLabel} className="flex flex-1 flex-col gap-5 py-6">
+              {messages.map((m) => (
+                <Bubble key={m.id} mine={m.role === "user"} label={m.role === "user" ? t.you : t.assistant}>
+                  {m.content}
+                  {m.role === "assistant" && m.sources.length > 0 && <Sources sources={m.sources} t={t} locale={locale} />}
+                </Bubble>
+              ))}
+              {pending && (
+                <>
+                  <Bubble mine label={t.you}>{pending}</Bubble>
+                  <Bubble mine={false} label={t.assistant}>
+                    <span className="inline-flex items-center gap-2 text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" />{t.thinking}</span>
+                  </Bubble>
+                </>
+              )}
+              <div ref={endRef} />
             </section>
-          </aside>
-        </div>
+            <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-10 -mx-1 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent px-1 pb-1 pt-4 lg:bottom-0">
+              <div className="grid gap-2">
+                {planNote}
+                {composer}
+                <p className="text-center text-[11px] text-slate-400">{t.disclaimer}</p>
+              </div>
+            </div>
+          </>
+        )}
       </div>
     </AnimatedPage>
   );
@@ -241,7 +238,7 @@ export default function Assistant() {
 
 function Bubble({ mine, label, children }: { mine: boolean; label: string; children: ReactNode }) {
   return (
-    <div className={cn("max-w-[600px] rounded-[14px] px-3.5 py-2.5 text-sm leading-relaxed", mine ? "self-end rounded-br-[4px] bg-blue-600 text-white" : "self-start rounded-bl-[4px] bg-slate-100 text-slate-900")}>
+    <div className={cn("text-[15px] leading-relaxed", mine ? "max-w-[85%] self-end rounded-[20px] rounded-br-[6px] bg-blue-600 px-4 py-2.5 text-white" : "w-full self-start text-slate-900")}>
       <span className="sr-only">{label}: </span>
       <div className="whitespace-pre-wrap break-words">{children}</div>
     </div>
@@ -322,25 +319,19 @@ function ReviewCard({ t }: { t: AssistantCopy }) {
   );
 }
 
-function UsageCard({ limit, used, remaining, t, locale }: { limit: number; used: number; remaining: number; t: AssistantCopy; locale: string }) {
-  // First day of next month, e.g. "1 de diciembre": when the monthly questions renew.
-  const renews = useMemo(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth() + 1, 1).toLocaleDateString(locale, { day: "numeric", month: "long" });
-  }, [locale]);
+/** The month's questions as one bar: "Límite", filling with the share used (red when it's all used). */
+function LimitBar({ limit, used, remaining, t }: { limit: number; used: number; remaining: number; t: AssistantCopy }) {
+  const pct = Math.min(100, Math.round((used / limit) * 100));
   const out = remaining <= 0;
   const low = remaining / limit < 0.1;
   return (
-    <section className={CARD} aria-labelledby="as-usage">
-      <div className="flex items-baseline justify-between gap-2">
-        <h2 id="as-usage" className="text-[15px] font-bold text-slate-900">{t.usage.title}</h2>
-        <span className={cn("text-[13px] font-semibold tabular-nums", out ? "text-red-600" : low ? "text-amber-700" : "text-slate-900")}>{t.usage.left(remaining)}</span>
+    <div className="flex items-center gap-2" title={t.limitTitle(used, limit)}>
+      <span className="text-xs font-semibold text-slate-500">{t.limit}</span>
+      <div className="h-2 w-24 overflow-hidden rounded-full bg-slate-200 sm:w-32" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={pct} aria-label={t.limitTitle(used, limit)}>
+        <div className={cn("h-full rounded-full transition-[width] duration-500", out ? "bg-red-600" : low ? "bg-amber-500" : "bg-blue-600")} style={{ width: `${Math.max(pct, used > 0 ? 2 : 0)}%` }} />
       </div>
-      <div className="mt-2.5 h-2 overflow-hidden rounded-full bg-slate-100" role="progressbar" aria-valuemin={0} aria-valuemax={limit} aria-valuenow={used} aria-label={t.usage.bar(remaining, limit)}>
-        <div className={cn("h-full rounded-full", out ? "bg-red-600" : low ? "bg-amber-500" : "bg-blue-600")} style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} />
-      </div>
-      <p className="mt-1.5 text-xs text-slate-500"><span className="tabular-nums">{t.usage.usedOf(used, limit)}</span> · {t.usage.renews(renews)}</p>
-    </section>
+      <span className={cn("w-9 text-right text-xs font-semibold tabular-nums", out ? "text-red-600" : low ? "text-amber-700" : "text-slate-700")}>{pct}%</span>
+    </div>
   );
 }
 

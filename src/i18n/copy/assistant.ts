@@ -6,6 +6,9 @@ type Mode = "business" | "personal";
 const es = {
   nav: "Asistente",
   title: "Asistente",
+  emptyTitle: (name: string) => (name ? `¿En qué te ayudo hoy, ${name}?` : "¿En qué te ayudo hoy?"),
+  limit: "Límite",
+  limitTitle: (used: number, limit: number) => `Límite del mes: llevas ${used} de ${limit} preguntas`,
   subtitle: "Respuestas con tus números, y de dónde sale cada uno.",
   // Header: the month's questions
   quota: (limit: number, left: number) => `${limit} preguntas al mes · te quedan ${left}`,
@@ -122,6 +125,9 @@ const en: AssistantCopy = {
   nav: "Assistant",
   title: "Assistant",
   subtitle: "Answers with your numbers, and where each one comes from.",
+  emptyTitle: (name: string) => (name ? `What can I help you with today, ${name}?` : "What can I help you with today?"),
+  limit: "Limit",
+  limitTitle: (used: number, limit: number) => `This month's limit: ${used} of ${limit} questions used`,
   quota: (limit: number, left: number) => `${limit} questions a month · ${left} left`,
   noQuota: "Your plan doesn't include questions",
   clear: "Clear conversation",
