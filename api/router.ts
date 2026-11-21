@@ -24,6 +24,8 @@ import { vendorsRouter } from "./vendors-router";
 import { quotesRouter } from "./quotes-router";
 import { accountantRouter } from "./accountant-router";
 import { reviewRouter } from "./review-router";
+import { searchRouter } from "./search-router";
+import { noticesRouter } from "./notices-router";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales } from "@db/schema";
@@ -57,6 +59,8 @@ export const appRouter = createRouter({
   quotes: quotesRouter,
   accountant: accountantRouter,
   review: reviewRouter,
+  search: searchRouter,
+  notices: noticesRouter,
   debug: createRouter({
     myData: authedQuery.query(async ({ ctx }) => {
       const db = getDb();

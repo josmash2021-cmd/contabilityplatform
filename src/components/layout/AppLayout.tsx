@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useState, Suspense } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
@@ -10,12 +10,13 @@ import { Logo } from "@/components/Logo";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import { useCopy } from "@/i18n/useI18n";
+import { GlobalSearch, NoticesBell } from "@/components/layout/TopBar";
 import { appCopy, type AppCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
 import type { Feature } from "@contracts/planFeatures";
 import {
   Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Camera, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
-  FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Search, Lock,
+  FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Lock,
   LogOut, Construction, Gift, Loader2, type LucideIcon,
 } from "lucide-react";
 
@@ -130,50 +131,6 @@ function SideNav({ groups, pathname, locked, label, t, onGo, counts }: NavProps)
 }
 
 /** Jump to any section by typing its name (or what it's for). */
-function SectionSearch({ items, label, t, onGo }: { items: Item[]; label: (p: string) => string; t: AppCopy; onGo: (p: string) => void }) {
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-  const listId = useId();
-  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const hits = q.trim()
-    ? items.filter((i) => norm(`${label(i.path)} ${t.shell.desc[i.path] ?? ""}`).includes(norm(q.trim()))).slice(0, 6)
-    : [];
-  const go = (p: string) => { setQ(""); setOpen(false); onGo(p); };
-  return (
-    <div className="relative min-w-0 flex-1 max-w-md">
-      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
-      <input
-        type="search" value={q} placeholder={t.shell.search} aria-label={t.shell.searchLabel}
-        role="combobox" aria-expanded={open && !!q.trim()} aria-controls={listId} aria-autocomplete="list"
-        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
-        onFocus={() => setOpen(true)}
-        onBlur={() => setTimeout(() => setOpen(false), 120)}
-        onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) go(hits[0].path); if (e.key === "Escape") { setQ(""); setOpen(false); } }}
-        className="h-10 w-full rounded-[10px] border border-slate-200 bg-slate-100 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
-      />
-      {open && q.trim() && (
-        <ul id={listId} role="listbox" className="absolute left-0 right-0 top-12 z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
-          {hits.length === 0 && <li className="px-3 py-2.5 text-sm text-slate-500">{t.shell.noResults}</li>}
-          {hits.map((h) => {
-            const Icon = h.icon;
-            return (
-              <li key={h.path} role="option" aria-selected={false}>
-                <button onMouseDown={(e) => e.preventDefault()} onClick={() => go(h.path)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50">
-                  <Icon className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
-                  <span className="min-w-0">
-                    <span className="block text-sm font-medium text-slate-900">{label(h.path)}</span>
-                    {t.shell.desc[h.path] && <span className="block truncate text-xs text-slate-500">{t.shell.desc[h.path]}</span>}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 /** "+ Nuevo": the things people create most, one tap away. */
 function NewMenu({ items, t, onGo, round }: { items: [string, string][]; t: AppCopy; onGo: (p: string) => void; round?: boolean }) {
   if (items.length === 0) return null;
@@ -312,16 +269,10 @@ export function AppLayout() {
       <div className="flex min-w-0 flex-1 flex-col">
         {/* ── Top bar: search, + Nuevo, account (phone: brand, + and account) ── */}
         <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-6">
-          <div className="flex min-w-0 flex-1 items-center gap-2.5 lg:hidden">
-            <Logo className="h-8 w-8 shrink-0" />
-            <div className="min-w-0">
-              <p className="truncate text-sm font-bold text-slate-900">{companyName}</p>
-              {planLabel && <p className="truncate text-[11px] text-slate-500">{planLabel}</p>}
-            </div>
+          <div className="flex min-w-0 flex-1">
+            <GlobalSearch sections={allItems} label={label} t={t} onGo={go} personal={userMode === "personal"} />
           </div>
-          <div className="hidden min-w-0 flex-1 lg:flex">
-            <SectionSearch items={allItems} label={label} t={t} onGo={go} />
-          </div>
+          {!memberRole && <NoticesBell t={t} onGo={go} />}
           <div className="hidden lg:block"><NewMenu items={newItems} t={t} onGo={go} /></div>
           <AccountMenu name={displayName} email={user?.email} initial={initial} t={t} onGo={go} logout={logout} />
         </header>

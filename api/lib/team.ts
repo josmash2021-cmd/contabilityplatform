@@ -26,7 +26,8 @@ const NEVER_PREFIXES = ["admin.", "team.", "tax.", "subscription.", "auth.", "se
 
 /** An employee: sells, looks after clients, photographs receipts. Reads only what that needs. */
 const STAFF_QUERY_PREFIXES = ["sales.", "customers.", "services.", "receipts."];
-const STAFF_QUERIES = new Set(["settings.get"]);
+/** Staff can search too; the search only returns clients, sales and services for them. */
+const STAFF_QUERIES = new Set(["settings.get", "search.global"]);
 const STAFF_MUTATIONS = new Set(["sales.create", "customers.create", "customers.update", "receipts.create"]);
 
 export function memberCan(role: TeamRole, path: string, type: ProcType): boolean {
