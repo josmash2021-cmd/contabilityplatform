@@ -1,10 +1,13 @@
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { z } from "zod";
+import { TRPCError } from "@trpc/server";
 import { getDb } from "./queries/connection";
 import { bankAccounts, bankTransactions, accounts, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules } from "@db/schema";
 import { eq, and, desc, sql, count } from "drizzle-orm";
 import { accountMode, bankLimit } from "./lib/plans";
 import { lastPaidTier } from "./lib/planAccess";
+import { applyStoredReviews } from "./lib/bankReview";
+import { storedReviewsFor, unreviewed } from "./review-router";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -143,7 +146,7 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
   return reversed;
 }
 
-function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[], description: string): { type: "income" | "expense"; category: string } {
+export function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[], description: string): { type: "income" | "expense"; category: string } {
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
 
@@ -237,7 +240,7 @@ function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[]
   if (detailed.includes("DEPOSIT") || desc.includes("deposit")) return { type: "income", category: "deposit" };
 
   // Transfer
-  if (detailed.includes("TRANSFER") || desc.includes("transfer") || desc.includes("zelle")) return { type: plaidAmount >= 0 ? "income" : "expense", category: "transfer" };
+  if (detailed.includes("TRANSFER") || desc.includes("transfer") || desc.includes("zelle")) return { type: plaidAmount >= 0 ? "expense" : "income", category: "transfer" };
 
   // Investment
   if (detailed.includes("INVESTMENT") || desc.includes("dividend")) return { type: "income", category: "investment" };
@@ -728,7 +731,7 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       for (const plaidAcc of accountsRes.data.accounts || []) {
         const dbAccount = accountMap.get(plaidAcc.account_id);
         if (dbAccount && plaidAcc.balances) {
-          const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
+          const bal = plaidBalance(plaidAcc);
           if (bal != null) await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
         }
       }
@@ -784,7 +787,7 @@ function parseCSV(text: string): string[][] {
 }
 
 /** Detect Wells Fargo CSV format and parse transactions */
-function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: number; description: string; balance?: number }> {
+export function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: number; plaidAmount: number; description: string; balance?: number }> {
   if (rows.length < 2) return [];
   const headers = rows[0].map((h) => h.toLowerCase().trim());
   // Wells Fargo format: Date,Amount,Star,CheckNumber,Description,Balance
@@ -794,7 +797,7 @@ function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: num
   const balanceIdx = headers.findIndex((h) => h.includes("balance"));
   if (dateIdx === -1 || amountIdx === -1) return [];
 
-  const txs: Array<{ date: string; amount: number; description: string; balance?: number }> = [];
+  const txs: Array<{ date: string; amount: number; plaidAmount: number; description: string; balance?: number }> = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (row.length < Math.max(dateIdx, amountIdx, descIdx) + 1) continue;
@@ -808,7 +811,8 @@ function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: num
     // Parse date MM/DD/YYYY → YYYY-MM-DD
     const parts = dateStr.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
     const isoDate = parts ? `${parts[3]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}` : dateStr;
-    txs.push({ date: isoDate, amount: Math.abs(amount), description: desc, balance: balStr ? parseFloat(balStr) : undefined });
+    // Statements show money out as negative; Plaid's convention (used by the categorizer) is the opposite.
+    txs.push({ date: isoDate, amount: Math.abs(amount), plaidAmount: -amount, description: desc, balance: balStr ? parseFloat(balStr) : undefined });
   }
   return txs;
 }
@@ -818,6 +822,18 @@ function parseWellsFargoCSV(rows: string[][]): Array<{ date: string; amount: num
 function toPublicAccount<T extends { plaidAccessToken?: unknown }>(acc: T): Omit<T, "plaidAccessToken"> {
   const { plaidAccessToken: _secret, ...rest } = acc;
   return rest;
+}
+
+/** The balance to keep for a Plaid account. For cards and loans Plaid's "available" is the credit
+ * left, not the debt: keep "current" (what's owed). For bank accounts keep "available". */
+/** Cards and loans: their balance is what's owed, so it never counts as money you have. */
+export const isDebtAccount = (type?: string | null) => type === "credit" || type === "loan";
+
+export function plaidBalance(acc: { type?: string | null; balances?: { available?: number | null; current?: number | null } | null }): string | null {
+  const b = acc.balances ?? {};
+  const debt = acc.type === "credit" || acc.type === "loan";
+  const v = debt ? (b.current ?? b.available) : (b.available ?? b.current);
+  return v != null && !Number.isNaN(Number(v)) ? String(v) : null;
 }
 
 export const bankRouter = createRouter({
@@ -896,7 +912,7 @@ export const bankRouter = createRouter({
           await db.update(bankAccounts).set({
             plaidAccessToken: accessToken, plaidItemId: itemId,
             bankName: plaidAcc.name, accountType: plaidAcc.type,
-            currentBalance: plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : String(plaidAcc.balances.current || 0),
+            currentBalance: plaidBalance(plaidAcc) ?? "0",
             lastSyncedAt: new Date(), updatedAt: new Date(), isActive: true,
           }).where(eq(bankAccounts.id, exists[0].id));
         } else {
@@ -905,7 +921,7 @@ export const bankRouter = createRouter({
             plaidAccessToken: accessToken, plaidItemId: itemId,
             bankName: plaidAcc.name, accountType: plaidAcc.type,
             accountNumber: plaidAcc.mask || "", currency: "USD",
-            currentBalance: plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : String(plaidAcc.balances.current || 0),
+            currentBalance: plaidBalance(plaidAcc) ?? "0",
             isActive: true, lastSyncedAt: new Date(),
           });
         }
@@ -1064,7 +1080,7 @@ export const bankRouter = createRouter({
         }
 
         // Map and save to DB (best effort)
-        const mapped: any[] = [];
+        let mapped: any[] = [];
         for (const pt of plaidTxs) {
           const plaidAmount = pt.amount;
           const absAmount = Math.abs(plaidAmount);
@@ -1103,6 +1119,9 @@ export const bankRouter = createRouter({
             });
           } catch { /* ignore */ }
         }
+        // The upsert above never touches isReconciled/category of a saved row. Movements the owner
+        // already reviewed show their category, not the one recomputed here (api/lib/bankReview.ts).
+        mapped = applyStoredReviews(mapped, await storedReviewsFor(db, ctx.user.id, mapped.map((t: { plaidTransactionId: string }) => t.plaidTransactionId)));
 
         // Income/expense from Plaid data
         let inc = 0, exp = 0;
@@ -1125,7 +1144,7 @@ export const bankRouter = createRouter({
           const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
           const freshBalances = new Map<string, string>();
           for (const plaidAcc of accountsRes.data.accounts || []) {
-            const bal = plaidAcc.balances.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances.current != null ? String(plaidAcc.balances.current) : null;
+            const bal = plaidBalance(plaidAcc);
             if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
           }
           // Update DB balances
@@ -1142,6 +1161,7 @@ export const bankRouter = createRouter({
           } else {
             let total = 0;
             for (const a of userAccounts) {
+              if (isDebtAccount(a.accountType)) continue;
               const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
               total += parseFloat(bal ?? "0");
             }
@@ -1395,6 +1415,10 @@ export const bankRouter = createRouter({
                 });
               }
             } catch { /* ignore */ }
+            // A movement the owner reviewed keeps their category (api/lib/bankReview.ts): if they moved it
+            // to another category, it no longer belongs in this list.
+            txs = applyStoredReviews(txs, await storedReviewsFor(db, ctx.user.id, txs.map((t: { plaidTransactionId: string }) => t.plaidTransactionId)))
+              .filter((t: { category: string }) => t.category === category);
           }
         }
       } catch { /* ignore Plaid errors */ }
@@ -1657,13 +1681,7 @@ export const bankRouter = createRouter({
       const freshBalances = new Map<string, string>();
 
       for (const plaidAcc of accountsRes.data.accounts || []) {
-        // Use available if present, otherwise current. Handle null/undefined correctly.
-        let bal: string | null = null;
-        if (plaidAcc.balances?.available != null && !isNaN(plaidAcc.balances.available)) {
-          bal = String(plaidAcc.balances.available);
-        } else if (plaidAcc.balances?.current != null && !isNaN(plaidAcc.balances.current)) {
-          bal = String(plaidAcc.balances.current);
-        }
+        const bal = plaidBalance(plaidAcc);
         if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
       }
 
@@ -1688,6 +1706,7 @@ export const bankRouter = createRouter({
       } else {
         let total = 0;
         for (const a of userAccounts) {
+          if (isDebtAccount(a.accountType)) continue;
           const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
           total += parseFloat(bal ?? "0");
         }
@@ -1735,7 +1754,7 @@ export const bankRouter = createRouter({
 
       for (const plaidAcc of plaidAccounts) {
         const dbAccount = accountMap.get(plaidAcc.account_id);
-        const bal = plaidAcc.balances?.available != null ? String(plaidAcc.balances.available) : plaidAcc.balances?.current != null ? String(plaidAcc.balances.current) : null;
+        const bal = plaidBalance(plaidAcc);
 
         if (dbAccount) {
           // Update existing account balance
@@ -1812,7 +1831,7 @@ export const bankRouter = createRouter({
           bankName: pa.name,
           accountType: pa.type || "",
           accountNumber: pa.mask || "",
-          currentBalance: pa.balances?.available != null ? String(pa.balances.available) : pa.balances?.current != null ? String(pa.balances.current) : "0",
+          currentBalance: plaidBalance(pa) ?? "0",
           currency: pa.balances?.iso_currency_code || "USD",
           isInDb: !!dbAcc,
         };
@@ -2043,6 +2062,8 @@ export const bankRouter = createRouter({
       const txs = await db.select().from(bankTransactions)
         .where(and(
           eq(bankTransactions.userId, ctx.user.id),
+          // Never a movement the owner reviewed: their category stays (api/review-router.ts).
+          unreviewed(),
           // Only fix known bad categories (PayPal, Cash App, Venmo marked as cash_deposit)
           // Or any transfer that was marked as cash_deposit/cash_withdrawal without ATM
         ));
@@ -2059,9 +2080,10 @@ export const bankRouter = createRouter({
           );
           // Only update if category actually changed
           if (tx.category !== category) {
+            // Re-checked here too, in case the owner reviewed it while this loop ran.
             await db.update(bankTransactions)
               .set({ type, category })
-              .where(eq(bankTransactions.id, tx.id));
+              .where(and(eq(bankTransactions.id, tx.id), unreviewed()));
             fixed++;
           }
         } catch { /* skip on error */ }
@@ -2142,7 +2164,7 @@ export const bankRouter = createRouter({
       const rows = parseCSV(input.csv);
       if (rows.length < 2) return { success: false, error: "CSV vacio o invalido", added: 0 };
 
-      let txs: Array<{ date: string; amount: number; description: string; balance?: number }> = [];
+      let txs: Array<{ date: string; amount: number; plaidAmount: number; description: string; balance?: number }> = [];
       if (format === "wells_fargo" || format === "auto") {
         txs = parseWellsFargoCSV(rows);
       }
@@ -2180,7 +2202,7 @@ export const bankRouter = createRouter({
         if (existingSet.has(key)) { skipped++; continue; }
 
         const { type, category } = determineTypeAndCategory(
-          tx.amount,
+          tx.plaidAmount,
           [],
           tx.description
         );
@@ -2194,10 +2216,10 @@ export const bankRouter = createRouter({
             transactionDate: new Date(tx.date),
             description: tx.description,
             amount: String(tx.amount.toFixed(2)),
-            plaidAmount: String(tx.amount.toFixed(2)),
+            plaidAmount: String(tx.plaidAmount.toFixed(2)),
             type,
             category: category as any,
-            syncStatus: "imported",
+            syncStatus: "synced",
             lastSyncedAt: new Date(),
             reference: `csv-${tx.date}-${added}`,
             isReconciled: false,
@@ -2221,6 +2243,28 @@ export const bankRouter = createRouter({
     }),
 
   // ─── DISCONNECT BANK ───
+  /** Deletes one of the caller's bank movements and its journal entry. The bank may send it again on a later sync. */
+  delete: authedQuery.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input, ctx }) => {
+    const db = getDb();
+    const userId = ctx.user.id;
+    const rows: Array<{ id: number; reference: string | null }> = await db.select({ id: bankTransactions.id, reference: bankTransactions.reference })
+      .from(bankTransactions).where(and(eq(bankTransactions.id, input.id), eq(bankTransactions.userId, userId))).limit(1);
+    const tx = rows[0];
+    if (!tx) throw new TRPCError({ code: "NOT_FOUND", message: ctx.lang === "en" ? "Transaction not found" : "Movimiento no encontrado" });
+    await db.transaction(async (t: typeof db) => {
+      const entries: Array<{ id: number }> = await t.select({ id: journalEntries.id }).from(journalEntries).where(and(
+        eq(journalEntries.createdBy, userId), eq(journalEntries.referenceType, "payment"), eq(journalEntries.referenceId, tx.id),
+        eq(journalEntries.reference, tx.reference || `bank_${tx.id}`),
+      ));
+      for (const e of entries) {
+        await t.delete(journalEntryLines).where(eq(journalEntryLines.journalEntryId, e.id));
+        await t.delete(journalEntries).where(eq(journalEntries.id, e.id));
+      }
+      await t.delete(bankTransactions).where(and(eq(bankTransactions.id, tx.id), eq(bankTransactions.userId, userId)));
+    });
+    return { success: true };
+  }),
+
   disconnect: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
     const db = getDb();

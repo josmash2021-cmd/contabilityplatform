@@ -299,7 +299,7 @@ export const salesRouter = createRouter({
         serviceName: saleServices.serviceName,
         quantity: saleServices.quantity,
         unitPrice: saleServices.unitPrice,
-      }).from(saleServices).where(sql`${saleServices.saleId} IN (${saleIds.join(",")})`);
+      }).from(saleServices).where(inArray(saleServices.saleId, saleIds));
 
       // Group items by sale
       const itemsBySale = new Map<number, typeof items>();

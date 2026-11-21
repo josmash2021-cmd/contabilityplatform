@@ -4,6 +4,7 @@ import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
+import { plaidBalance } from "./bank-router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { invoicePeriod, invoiceSubscriptionId, subscriptionPeriod } from "./lib/stripePeriod";
@@ -248,11 +249,7 @@ async function syncAllBalances() {
         const res = await client.accountsGet({ access_token: token });
         const freshBalances = new Map<string, string>();
         for (const plaidAcc of res.data.accounts || []) {
-          const bal = plaidAcc.balances.available != null
-            ? String(plaidAcc.balances.available)
-            : plaidAcc.balances.current != null
-              ? String(plaidAcc.balances.current)
-              : null;
+          const bal = plaidBalance(plaidAcc);
           if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
         }
 
