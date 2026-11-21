@@ -366,6 +366,13 @@ export function SignupStepPreview() {
   );
 }
 
+// Bank icons for the "pick your bank" list (the same ones Plaid shows in its bank picker).
+const STEP_BANKS = [
+  { name: "Chase", src: "/brands/banks/chase.png", pad: "p-[3px]" },
+  { name: "Bank of America", src: "/brands/banks/bank-of-america.png", pad: "p-[2px]" },
+  { name: "Wells Fargo", src: "/brands/banks/wells-fargo.png", pad: "" },
+];
+
 export function ConnectStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
   const c = v.connect;
@@ -380,10 +387,10 @@ export function ConnectStepPreview() {
         <p className="mt-2.5 text-center text-[11.5px] font-semibold leading-snug text-slate-900">{c.title}</p>
         <p className="mt-2.5 text-[9.5px] font-medium text-slate-500">{c.pick}</p>
         <ul className="mt-1 space-y-1">
-          {c.banks.map((b, i) => (
-            <li key={b} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] ${i === 0 ? "border-blue-500 bg-blue-50/60 text-slate-900" : "border-slate-200 text-slate-600"}`}>
-              <span className={`flex h-5 w-5 items-center justify-center rounded-full text-[9px] font-bold ${i === 0 ? "bg-blue-600 text-white" : "bg-slate-100 text-slate-500"}`}>{b[0]}</span>
-              {b}
+          {STEP_BANKS.map((b, i) => (
+            <li key={b.name} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] ${i === 0 ? "border-blue-500 bg-blue-50/60 text-slate-900" : "border-slate-200 text-slate-600"}`}>
+              <img src={b.src} alt="" width={22} height={22} loading="lazy" className={`h-[22px] w-[22px] shrink-0 rounded-md bg-white object-contain ring-1 ring-slate-200 ${b.pad}`} />
+              {b.name}
               <ChevronRight className="ml-auto h-3 w-3 text-slate-400" />
             </li>
           ))}

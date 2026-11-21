@@ -200,12 +200,15 @@ function HowItWorks({ c }: { c: C["how"] }) {
             return (
               <li key={s.title}>
                 <Reveal delay={i * 120}>
-                  <Visual />
-                  <div className="mx-auto mt-6 flex max-w-sm items-start gap-3.5 px-1">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white shadow-md shadow-slate-900/15">{i + 1}</span>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900">{s.title}</h3>
-                      <p className="mt-1.5 leading-relaxed text-slate-600">{s.text}</p>
+                  {/* On computers the steps zigzag: text above the picture for steps 1 and 3, below it for step 2. */}
+                  <div className={`flex flex-col gap-6 ${i % 2 === 0 ? "md:flex-col-reverse" : ""}`}>
+                    <Visual />
+                    <div className="mx-auto flex w-full max-w-sm items-start gap-3.5 px-1">
+                      <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white shadow-md shadow-slate-900/15">{i + 1}</span>
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900">{s.title}</h3>
+                        <p className="mt-1.5 leading-relaxed text-slate-600">{s.text}</p>
+                      </div>
                     </div>
                   </div>
                 </Reveal>

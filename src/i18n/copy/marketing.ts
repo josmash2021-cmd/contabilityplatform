@@ -94,7 +94,7 @@ const es = {
         "Tus movimientos ya clasificados y tu resumen del mes, actualizados solos.",
       ],
       signup: { title: "Crea tu cuenta", modes: ["Negocio", "Personal"], name: "Nombre", email: "Correo", cta: (d: number) => `Empezar ${d} días gratis`, noCard: "Sin tarjeta" },
-      connect: { title: "Ai Aethel usa Plaid para conectar tu banco", pick: "Elige tu banco", banks: ["Chase", "Bank of America", "Wells Fargo"], safe: "Solo lectura · tu contraseña no pasa por Ai Aethel" },
+      connect: { title: "Ai Aethel usa Plaid para conectar tu banco", pick: "Elige tu banco", safe: "Solo lectura · tu contraseña no pasa por Ai Aethel" },
       numbers: {
         month: "Noviembre",
         auto: "Se actualiza solo",
@@ -360,7 +360,7 @@ const en: MarketingCopy = {
         "Your transactions already categorized and your month at a glance, updated on their own.",
       ],
       signup: { title: "Create your account", modes: ["Business", "Personal"], name: "Name", email: "Email", cta: (d: number) => `Start ${d} days free`, noCard: "No card needed" },
-      connect: { title: "Ai Aethel uses Plaid to connect your bank", pick: "Select your bank", banks: ["Chase", "Bank of America", "Wells Fargo"], safe: "Read-only · your password never reaches Ai Aethel" },
+      connect: { title: "Ai Aethel uses Plaid to connect your bank", pick: "Select your bank", safe: "Read-only · your password never reaches Ai Aethel" },
       numbers: {
         month: "November",
         auto: "Updates itself",
