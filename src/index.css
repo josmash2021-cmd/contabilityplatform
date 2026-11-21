@@ -153,3 +153,6 @@ html { scroll-behavior: smooth; }
 .scrollbar-thin::-webkit-scrollbar-thumb { background: #d4d4d4; border-radius: 4px; }
 .scrollbar-thin::-webkit-scrollbar-thumb:hover { background: #a3a3a3; }
 .scrollbar-thin { scrollbar-width: thin; scrollbar-color: #d4d4d4 transparent; }
+
+/* Landing: sections off screen pause their CSS animations (see usePauseOffscreenSections). */
+section[data-offscreen] *, section[data-offscreen] *::before, section[data-offscreen] *::after { animation-play-state: paused !important; }

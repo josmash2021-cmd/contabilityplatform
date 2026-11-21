@@ -224,45 +224,56 @@ type Tab = { Icon: typeof Home; label: string; badge?: number };
  * Plays the screen like a video: it waits at the top, scrolls slowly to the end, blurs out,
  * and comes back in at the top from blurry to sharp. Only while on screen; still for reduced motion.
  */
-function usePhoneScroll(screenRef: RefObject<HTMLDivElement | null>, contentRef: RefObject<HTMLDivElement | null>, barRef: RefObject<HTMLDivElement | null>, active: boolean) {
+// Two layers so the phone stays light: the inner one only moves (cheap for the GPU) and the
+// outer one only blurs and fades, and only during the short change back to the top.
+function usePhoneScroll(screenRef: RefObject<HTMLDivElement | null>, fadeRef: RefObject<HTMLDivElement | null>, contentRef: RefObject<HTMLDivElement | null>, barRef: RefObject<HTMLDivElement | null>, active: boolean) {
   useEffect(() => {
-    const screen = screenRef.current, content = contentRef.current, bar = barRef.current;
-    if (!active || !screen || !content || typeof content.animate !== "function") return;
-    let anim: Animation | null = null;
+    const screen = screenRef.current, fade = fadeRef.current, content = contentRef.current, bar = barRef.current;
+    if (!active || !screen || !fade || !content || typeof content.animate !== "function") return;
+    let move: Animation | null = null, blur: Animation | null = null;
     const build = () => {
-      anim?.cancel();
+      move?.cancel();
+      blur?.cancel();
       const visible = screen.clientHeight - 46 - (bar ? bar.offsetHeight : 0);
       const d = Math.round(content.scrollHeight - visible);
       if (d <= 8) return;
       const tTop = 1800, tScroll = Math.max(3800, d * 11), tBottom = 1500, tOut = 700, tIn = 900;
       const T = tTop + tScroll + tBottom + tOut + tIn;
       const o1 = tTop / T, o2 = (tTop + tScroll) / T, o3 = (tTop + tScroll + tBottom) / T, o4 = (tTop + tScroll + tBottom + tOut) / T;
-      const up = `translateY(-${d}px)`;
-      anim = content.animate([
-        { offset: 0, transform: "translateY(0)", filter: "blur(0px)", opacity: 1 },
-        { offset: o1, transform: "translateY(0)", filter: "blur(0px)", opacity: 1, easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
-        { offset: o2, transform: up, filter: "blur(0px)", opacity: 1 },
-        { offset: o3, transform: up, filter: "blur(0px)", opacity: 1, easing: "ease-in" },
-        { offset: o4, transform: up, filter: "blur(12px)", opacity: 0 },
-        { offset: Math.min(o4 + 0.0005, 0.9999), transform: "translateY(0)", filter: "blur(12px)", opacity: 0, easing: "ease-out" },
-        { offset: 1, transform: "translateY(0)", filter: "blur(0px)", opacity: 1 },
-      ], { duration: T, iterations: Infinity });
+      const up = `translate3d(0, -${d}px, 0)`, top = "translate3d(0, 0, 0)", jump = Math.min(o4 + 0.0005, 0.9999);
+      const timing = { duration: T, iterations: Infinity };
+      move = content.animate([
+        { offset: 0, transform: top },
+        { offset: o1, transform: top, easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
+        { offset: o2, transform: up },
+        { offset: o4, transform: up },
+        { offset: jump, transform: top },
+        { offset: 1, transform: top },
+      ], timing);
+      blur = fade.animate([
+        { offset: 0, filter: "none", opacity: 1 },
+        { offset: o3, filter: "none", opacity: 1, easing: "ease-in" },
+        { offset: o4, filter: "blur(6px)", opacity: 0 },
+        { offset: jump, filter: "blur(6px)", opacity: 0, easing: "ease-out" },
+        { offset: 1, filter: "none", opacity: 1 },
+      ], timing);
     };
     build();
     const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(build) : null;
     ro?.observe(screen);
-    return () => { ro?.disconnect(); anim?.cancel(); };
-  }, [screenRef, contentRef, barRef, active]);
+    return () => { ro?.disconnect(); move?.cancel(); blur?.cancel(); };
+  }, [screenRef, fadeRef, contentRef, barRef, active]);
 }
 
 /** A real phone: titanium edge, side buttons, island, status bar, the app's bottom bar and the home indicator. */
 function PhoneFrame({ label, tabs, children }: { label: string; tabs: [Tab, Tab, Tab, Tab]; children: ReactNode }) {
   const screenRef = useRef<HTMLDivElement | null>(null);
+  const fadeRef = useRef<HTMLDivElement | null>(null);
   const contentRef = useRef<HTMLDivElement | null>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
   const still = useReducedMotion();
   const [viewRef, inView] = useInView<HTMLDivElement>();
-  usePhoneScroll(screenRef, contentRef, barRef, inView && !still);
+  usePhoneScroll(screenRef, fadeRef, contentRef, barRef, inView && !still);
   const tab = (t: Tab, active: boolean) => (
     <span className={`relative grid justify-items-center gap-0.5 pt-1 text-[10px] font-semibold ${active ? "text-blue-600" : "text-slate-500"}`}>
       <t.Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
@@ -278,10 +289,12 @@ function PhoneFrame({ label, tabs, children }: { label: string; tabs: [Tab, Tab,
       <span aria-hidden className={`${sideButton} -right-[3px] top-[178px] h-[76px] rounded-r-md`} />
       <div className="rounded-[3.3rem] bg-gradient-to-br from-slate-300 via-slate-600 to-slate-400 p-[2px] shadow-[0_45px_90px_-30px_rgba(15,23,42,0.65)]">
         <div className="rounded-[3.2rem] bg-[#0b0d12] p-[11px]">
-          <div ref={screenRef} aria-hidden className="relative h-[612px] overflow-hidden rounded-[2.6rem] bg-white sm:h-[650px]">
+          <div ref={screenRef} aria-hidden className="relative h-[612px] overflow-hidden rounded-[2.6rem] bg-white [contain:paint] sm:h-[650px]">
             <div className="absolute left-1/2 top-[11px] z-20 h-[28px] w-[98px] -translate-x-1/2 rounded-full bg-black" />
             <StatusBar />
-            <div ref={contentRef} className="pb-4 will-change-transform">{children}</div>
+            <div ref={fadeRef}>
+              <div ref={contentRef} className="pb-4 will-change-transform [backface-visibility:hidden]">{children}</div>
+            </div>
             <div ref={barRef} className="absolute inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white pb-5">
               <div className="grid grid-cols-5 items-start">
                 {tab(tabs[0], true)}

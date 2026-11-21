@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
   ArrowRight, Check, ShieldCheck, Lock, Languages, PiggyBank, Rocket, TrendingUp, type LucideIcon, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
@@ -488,8 +488,24 @@ function FinalCta({ c }: { c: C["finalCta"] }) {
   );
 }
 
+// Sections that are off screen pause their CSS animations (data-offscreen), so phones only
+// spend effort on what is visible and the moving parts stay smooth.
+function usePauseOffscreenSections() {
+  useEffect(() => {
+    if (typeof IntersectionObserver === "undefined") return;
+    const sections = Array.from(document.querySelectorAll<HTMLElement>("#contenido > section"));
+    const io = new IntersectionObserver(
+      (entries) => entries.forEach((e) => (e.target as HTMLElement).toggleAttribute("data-offscreen", !e.isIntersecting)),
+      { rootMargin: "120px 0px" },
+    );
+    sections.forEach((el) => io.observe(el));
+    return () => io.disconnect();
+  }, []);
+}
+
 export default function Landing() {
   const c = useCopy(marketingCopy);
+  usePauseOffscreenSections();
   return (
     <div className="font-brand min-h-screen bg-white text-slate-900">
       <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow">
