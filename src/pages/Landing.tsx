@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import {
-  ArrowRight, Check, ShieldCheck, Lock, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
+  ArrowRight, Check, ShieldCheck, Lock, Languages, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
   ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User, Store,
   LayoutDashboard,
 } from "lucide-react";
@@ -77,11 +77,12 @@ function Hero({ c }: { c: C["hero"] }) {
 }
 
 // ── Trust strip ──
-// Plaid and Stripe show their own logo; the other two use an icon.
+// 1: Plaid's symbol, 2: the logos of the biggest banks, 3 and 4: icons.
+const TRUST_BANKS = ["/brands/banks/chase.png", "/brands/banks/bank-of-america.png", "/brands/banks/wells-fargo.png"];
 const trustMarks = [
   { logo: "/brands/plaid-mark.svg", w: 22, h: 22 },
-  { logo: "/brands/stripe.svg", w: 34, h: 14 },
-  { Icon: ShieldCheck },
+  { banks: true },
+  { Icon: Languages },
   { Icon: Lock },
 ] as const;
 function TrustStrip({ c }: { c: C["trust"] }) {
@@ -93,7 +94,17 @@ function TrustStrip({ c }: { c: C["trust"] }) {
           return (
             <Reveal key={it.title} delay={i * 70} className="flex items-start gap-3">
               <span className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 px-2 text-slate-700">
-                {"logo" in m ? <img src={m.logo} alt="" width={m.w} height={m.h} className="block" style={{ width: m.w, height: m.h }} /> : <m.Icon className="h-5 w-5" />}
+                {"logo" in m ? (
+                  <img src={m.logo} alt="" width={m.w} height={m.h} className="block" style={{ width: m.w, height: m.h }} />
+                ) : "banks" in m ? (
+                  <span className="flex items-center gap-1">
+                    {TRUST_BANKS.map((src, k) => (
+                      <img key={src} src={src} alt="" width={22} height={22} className={`h-[22px] w-[22px] rounded-md bg-white object-contain ${k === 0 ? "p-[2px]" : k === 1 ? "p-[1px]" : ""}`} />
+                    ))}
+                  </span>
+                ) : (
+                  <m.Icon className="h-5 w-5" />
+                )}
               </span>
               <div>
                 <p className="text-sm font-semibold text-slate-900">{it.title}</p>

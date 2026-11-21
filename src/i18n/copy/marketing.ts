@@ -30,8 +30,8 @@ const es = {
     label: "Seguridad y confianza",
     items: [
       { title: "Tu banco se conecta con Plaid", text: "Entras a tu banco dentro de Plaid. Ai Aethel nunca ve tu contraseña." },
-      { title: "Pagas tu plan con Stripe", text: "Stripe cobra con tu tarjeta. Nosotros nunca vemos ni guardamos su número." },
-      { title: "Nadie mueve tu dinero", text: "La app solo ve tus movimientos. No puede pagar, transferir ni sacar dinero." },
+      { title: "Funciona con tu banco", text: "Chase, Bank of America, Wells Fargo y miles de bancos más." },
+      { title: "En tu idioma", text: "Todo en español y sin palabras de contador. También en inglés." },
       { title: "Tus datos viajan protegidos", text: "Todo lo que envías y recibes va cifrado, igual que en la página de tu banco." },
     ],
   },
@@ -366,8 +366,8 @@ const en: MarketingCopy = {
     label: "Security and trust",
     items: [
       { title: "Your bank connects through Plaid", text: "You log in to your bank inside Plaid. Ai Aethel never sees your password." },
-      { title: "You pay your plan with Stripe", text: "Stripe charges your card. We never see or store its number." },
-      { title: "No one can move your money", text: "The app only sees your transactions. It can't pay, transfer or withdraw money." },
+      { title: "Works with your bank", text: "Chase, Bank of America, Wells Fargo and thousands more." },
+      { title: "In your language", text: "Plain English, no accounting jargon. Also in Spanish." },
       { title: "Your data travels protected", text: "Everything you send and receive is encrypted, just like on your bank's website." },
     ],
   },
