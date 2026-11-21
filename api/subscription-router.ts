@@ -6,8 +6,9 @@ import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
 import { getTrialInfo, type TrialInfo } from "./lib/trial";
-import { accountMode, defaultTier, isPaidTier, planAmountCents, priceLookupKey, tierFromAmountCents, tierName, type AccountMode, type Plan, type Tier } from "./lib/plans";
+import { accountMode, defaultTier, isPaidTier, planAmountCents, priceLookupKey, tierName, type AccountMode, type Plan, type Tier } from "./lib/plans";
 import { subscriptionPeriod } from "./lib/stripePeriod";
+import { lastPaidTier } from "./lib/planAccess";
 
 let _stripe: Stripe | null = null;
 function getStripe() {
@@ -26,20 +27,9 @@ function getAppUrl() {
 // Prices live in ./lib/plans: business Básico $40, Pro $80, Negocio $150; personal Básico free, Pro $40.
 const tierInput = z.enum(["basic", "pro", "business"]).optional();
 
-/** Which plan (tier) the user's latest payment was for. Null when unknown. Tiers aren't stored: the amount tells them apart. */
-async function lastPaidTier(db: ReturnType<typeof getDb>, userId: number, mode: AccountMode): Promise<Tier | null> {
-  const last = await db.select().from(subscriptionPayments)
-    .where(eq(subscriptionPayments.userId, userId))
-    .orderBy(desc(subscriptionPayments.paidAt))
-    .limit(1);
-  const p = last[0];
-  if (!p || p.status !== "succeeded") return null;
-  return tierFromAmountCents(Math.round(Number(p.amount) * 100), p.plan as Plan, mode);
-}
-
 /** The plan the client asked for, checked against the account's mode. Throws for a plan that can't be bought. */
 function paidTier(mode: AccountMode, requested: Tier | undefined): Tier {
-  const tier = requested ?? defaultTier(mode);
+  const tier = requested ?? defaultTier();
   if (!isPaidTier(mode, tier)) throw new Error("Ese plan no está disponible para tu tipo de cuenta");
   return tier;
 }
@@ -133,7 +123,7 @@ async function recoverSubscription(db: any, stripe: Stripe, userId: number) {
 // Cache price IDs in memory to avoid repeated Stripe API calls (keyed by lookup key)
 const _priceIdCache = new Map<string, string>();
 
-async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "business", tier: Tier = defaultTier(mode)): Promise<string> {
+async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "business", tier: Tier = defaultTier()): Promise<string> {
   const lookupKey = priceLookupKey(plan, mode, tier);
   const cached = _priceIdCache.get(lookupKey);
   if (cached) return cached;
@@ -141,7 +131,7 @@ async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "bu
   const amount = planAmountCents(plan, mode, tier);
   const interval = plan === "monthly" ? "month" : "year";
   // The plans sold before tiers keep their product names; new tiers name the plan.
-  const isLegacy = tier === defaultTier(mode);
+  const isLegacy = tier === defaultTier();
   const modeLabel = (mode === "personal" ? "Personal " : "") + (isLegacy ? "" : `${tierName(mode, tier)} `);
   const productName = `Personal & Business Solutions - ${modeLabel}${plan === "monthly" ? "Mensual" : "Anual"}`;
   const productDesc = plan === "monthly"
@@ -818,7 +808,7 @@ export const subscriptionRouter = createRouter({
 
         // Get annual price and calculate difference: $800 - $1 already paid = $799
         const mode = accountMode(ctx.user.modePreference);
-        const tier = (await lastPaidTier(db, userId, mode)) ?? defaultTier(mode);
+        const tier = (await lastPaidTier(db, userId, mode)) ?? defaultTier();
         const annualPriceId = await getOrCreatePrice(stripe, "annual", mode, tier);
         const annualPrice = await stripe.prices.retrieve(annualPriceId);
         const annualAmount = (annualPrice.unit_amount || 80000); // $800 in cents

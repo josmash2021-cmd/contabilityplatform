@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { getTrialInfo, TRIAL_LAUNCH } from "./trial";
-import { accountMode, isPaidTier, planAmountCents, priceLookupKey, tierFromAmountCents, tierName } from "./plans";
+import { accountMode, bankLimit, isPaidTier, planAmountCents, priceLookupKey, tierFromAmountCents, tierName } from "./plans";
 
 const DAY = 24 * 60 * 60 * 1000;
 const at = (iso: string) => new Date(iso);
@@ -111,5 +111,22 @@ describe("plan tiers", () => {
     expect(tierName("business", "pro")).toBe("Pro");
     expect(tierName("business", "business")).toBe("Negocio");
     expect(tierName("personal", "pro")).toBe("Pro");
+  });
+});
+
+describe("banks per plan", () => {
+  it("business Básico, Pro and Negocio connect 1, 3 and 6 banks", () => {
+    expect(bankLimit("business", "basic")).toBe(1);
+    expect(bankLimit("business", "pro")).toBe(3);
+    expect(bankLimit("business", "business")).toBe(6);
+  });
+
+  it("without a known paid plan (trial), business gets the most a plan allows", () => {
+    expect(bankLimit("business", null)).toBe(6);
+  });
+
+  it("personal accounts have no bank limit", () => {
+    expect(bankLimit("personal", "pro")).toBeNull();
+    expect(bankLimit("personal", null)).toBeNull();
   });
 });

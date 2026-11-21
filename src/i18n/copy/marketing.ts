@@ -189,7 +189,7 @@ const es = {
           "Punto de venta: efectivo, Zelle y tarjeta",
           "Clientes y catálogo de servicios",
           "Registro de gastos por categoría",
-          "Banco conectado con movimientos automáticos",
+          "Hasta 3 bancos conectados, con movimientos automáticos",
           "Reporte de ingresos, gastos y utilidad",
           "Panel de ventas del día, la semana y el mes",
         ],
@@ -206,7 +206,7 @@ const es = {
       business: {
         name: "Negocio",
         tagline: "Para equipos y negocios con varias cuentas.",
-        features: ["Hasta 10 bancos conectados", "Soporte prioritario"],
+        features: ["Hasta 6 bancos conectados", "Soporte prioritario"],
         soon: [
           "Asistente de inteligencia artificial · límite x20",
           "Reportes por cliente y por servicio",
@@ -572,7 +572,7 @@ const en: MarketingCopy = {
           "Point of sale: cash, Zelle and card",
           "Clients and service catalog",
           "Expense tracking by category",
-          "Connected bank with automatic transactions",
+          "Up to 3 connected banks, with automatic transactions",
           "Income, expense and profit report",
           "Daily, weekly and monthly sales dashboard",
         ],
@@ -589,7 +589,7 @@ const en: MarketingCopy = {
       business: {
         name: "Business",
         tagline: "For teams and businesses with several accounts.",
-        features: ["Up to 10 connected banks", "Priority support"],
+        features: ["Up to 6 connected banks", "Priority support"],
         soon: [
           "Artificial intelligence assistant · limit x20",
           "Reports by client and by service",

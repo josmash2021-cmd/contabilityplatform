@@ -3,6 +3,8 @@ import { z } from "zod";
 import { getDb } from "./queries/connection";
 import { bankAccounts, bankTransactions, accounts, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules } from "@db/schema";
 import { eq, and, desc, sql, count } from "drizzle-orm";
+import { accountMode, bankLimit } from "./lib/plans";
+import { lastPaidTier } from "./lib/planAccess";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -850,6 +852,40 @@ export const bankRouter = createRouter({
       const res = await client.itemPublicTokenExchange({ public_token: input.publicToken });
       const accessToken = res.data.access_token;
       const itemId = res.data.item_id;
+
+      // Each business plan connects a set number of banks (Básico 1, Pro 3, Negocio 6).
+      const mode = accountMode(ctx.user.modePreference);
+      const limit = ctx.user.role === "admin" ? null : bankLimit(mode, await lastPaidTier(db, Number(ctx.user.id), mode));
+      if (limit !== null) {
+        const rows = await db.select({ itemId: bankAccounts.plaidItemId, token: bankAccounts.plaidAccessToken }).from(bankAccounts)
+          .where(and(eq(bankAccounts.userId, ctx.user.id), eq(bankAccounts.isActive, true)));
+        const others = new Map<string, string | null>();
+        for (const r of rows) if (r.itemId && r.itemId !== itemId && !others.has(r.itemId)) others.set(r.itemId, r.token);
+        if (others.size >= limit) {
+          // Linking a bank that is already connected again (e.g. to fix its login) doesn't add a bank.
+          const institutionOf = async (token: string | null) => {
+            if (!token) return null;
+            try { return (await client.itemGet({ access_token: token })).data.item.institution_id ?? null; } catch { return null; }
+          };
+          const newInstitution = await institutionOf(accessToken);
+          let sameBank = false;
+          if (newInstitution) {
+            for (const token of others.values()) {
+              if ((await institutionOf(token)) === newInstitution) { sameBank = true; break; }
+            }
+          }
+          if (!sameBank) {
+            try { await client.itemRemove({ access_token: accessToken }); } catch { /* the link just isn't kept */ }
+            return {
+              success: false,
+              code: "bank_limit" as const,
+              limit,
+              error: `Tu plan permite ${limit} ${limit === 1 ? "banco conectado" : "bancos conectados"}. Para conectar otro, cambia de plan en Ajustes.`,
+            };
+          }
+        }
+      }
+
       const accountsRes = await client.accountsGet({ access_token: accessToken });
       const plaidAccounts = accountsRes.data.accounts || [];
 

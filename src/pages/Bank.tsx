@@ -140,12 +140,12 @@ const CATEGORY_COLORS: Record<string, string> = {
 
 /* Plaid Link Button */
 function PlaidLinkButton({ onSuccess, onStart, onExchangeStart }: { onSuccess: () => void; onStart?: () => void; onExchangeStart?: () => void }) {
-  const { bank: t } = useCopy(bankCopy);
+  const { bank: t, plaid } = useCopy(bankCopy);
   const utils = trpc.useUtils();
   const exchangeMut = trpc.bank.exchangePublicToken.useMutation({
     onSuccess: (data) => {
       if (data.success) { onSuccess(); utils.invalidate(); }
-      else { toast.error(data.error || t.toast.connectError); }
+      else { toast.error("code" in data && data.code === "bank_limit" ? plaid.bankLimit(data.limit) : data.error || t.toast.connectError); }
     },
     onError: (err) => { toast.error(err.message); },
   });

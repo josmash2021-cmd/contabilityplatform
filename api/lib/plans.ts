@@ -29,7 +29,7 @@ export function accountMode(modePreference: string | null | undefined): AccountM
 }
 
 /** The plan sold before tiers existed ($80 business, $40 personal): Pro in both modes today. */
-export function defaultTier(_mode: AccountMode): Tier {
+export function defaultTier(): Tier {
   return "pro";
 }
 
@@ -38,7 +38,7 @@ export function isPaidTier(mode: AccountMode, tier: Tier): boolean {
   return PRICES[mode][tier] !== undefined;
 }
 
-export function planAmountCents(plan: Plan, mode: AccountMode, tier: Tier = defaultTier(mode)): number {
+export function planAmountCents(plan: Plan, mode: AccountMode, tier: Tier = defaultTier()): number {
   const prices = PRICES[mode][tier];
   if (!prices) throw new Error(`No price for ${mode}/${tier}`);
   return prices[plan];
@@ -52,6 +52,19 @@ export function tierFromAmountCents(cents: number, plan: Plan, mode: AccountMode
   return null;
 }
 
+// Banks (Plaid connections; one bank can bring checking and savings) each business plan may connect.
+const BANK_LIMITS: Record<Tier, number> = { basic: 1, pro: 3, business: 6 };
+
+/**
+ * How many banks this account may connect. Null means no limit (personal accounts).
+ * With no known paid plan (free trial, or an old payment we can't match) a business
+ * account gets the most any plan allows, so nobody loses a bank they already use.
+ */
+export function bankLimit(mode: AccountMode, tier: Tier | null): number | null {
+  if (mode === "personal") return null;
+  return tier ? BANK_LIMITS[tier] : BANK_LIMITS.business;
+}
+
 /** Plan names as the customer sees them, for Stripe products and receipts. */
 export function tierName(_mode: AccountMode, tier: Tier): string {
   if (tier === "basic") return "Básico";
@@ -63,7 +76,7 @@ export function tierName(_mode: AccountMode, tier: Tier): string {
  * Stable Stripe lookup key per recurring price. The plans that existed before tiers
  * ($80 business and $40 personal, both "Pro" now) keep their original keys.
  */
-export function priceLookupKey(plan: Plan, mode: AccountMode, tier: Tier = defaultTier(mode)): string {
+export function priceLookupKey(plan: Plan, mode: AccountMode, tier: Tier = defaultTier()): string {
   if (mode === "business" && tier === "pro") return plan === "monthly" ? "contability_monthly_80" : "contability_annual_800";
   if (mode === "personal" && tier === "pro") return plan === "monthly" ? "aethel_personal_monthly_40" : "aethel_personal_annual_400";
   const dollars = planAmountCents(plan, mode, tier) / 100;

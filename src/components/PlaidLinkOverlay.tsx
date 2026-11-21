@@ -43,7 +43,7 @@ export function PlaidLinkOverlay({ onSuccess, onClose, variant = "modal" }: Plai
         toast.success(t.connected(data.accountCount));
         utils.invalidate();
       } else {
-        toast.error(data.error || t.connectError);
+        toast.error("code" in data && data.code === "bank_limit" ? t.bankLimit(data.limit) : data.error || t.connectError);
         setStep("intro");
       }
     },

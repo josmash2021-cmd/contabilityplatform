@@ -137,6 +137,7 @@ const es = {
     connected: (n: number) =>
       `¡Banco conectado! ${n === 1 ? "1 cuenta vinculada" : `${n} cuentas vinculadas`}.`,
     connectError: "Error al conectar el banco",
+    bankLimit: (n: number) => `Tu plan permite ${n} ${n === 1 ? "banco conectado" : "bancos conectados"}. Para conectar otro, cambia de plan en Ajustes.`,
     title: "Conectar Banco",
     subtitle: "Sincroniza tus transacciones automáticamente",
     secureTitle: "Seguro y Encriptado",
@@ -349,6 +350,7 @@ const en: BankCopy = {
     plaidError: "Couldn't connect to Plaid",
     connected: (n: number) => `Bank connected! ${n === 1 ? "1 account" : `${n} accounts`} linked.`,
     connectError: "Couldn't connect the bank",
+    bankLimit: (n: number) => `Your plan allows ${n} connected ${n === 1 ? "bank" : "banks"}. To connect another one, change your plan in Settings.`,
     title: "Connect Bank",
     subtitle: "Sync your transactions automatically",
     secureTitle: "Secure and Encrypted",
