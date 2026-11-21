@@ -242,15 +242,19 @@ export const authRouter = createRouter({
   // ── Me (get current user) ──
   me: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
+    // A team member sees themselves (not the owner whose data they work on), plus their team role.
+    const meId = ctx.member ? ctx.member.userId : ctx.user.id;
+    const team = ctx.member ? { role: ctx.member.role, ownerName: ctx.user.name ?? null } : null;
     const rows = await db.select({
       id: users.id,
       email: users.email,
       name: users.name,
       role: users.role,
       avatar: users.avatar,
-    }).from(users).where(eq(users.id, ctx.user.id)).limit(1);
-    const user = rows[0] || null;
-    if (!user) return null;
+    }).from(users).where(eq(users.id, meId)).limit(1);
+    const found = rows[0] || null;
+    if (!found) return null;
+    const user = { ...found, role: ctx.member ? ("user" as const) : found.role, team };
     // Ensure owner always sees admin role
     const OWNER_EMAIL = "josmash2021@gmail.com";
     if (user.email?.toLowerCase() === OWNER_EMAIL.toLowerCase() && user.role !== "admin") {

@@ -12,11 +12,12 @@ import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOver
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import { useCopy } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
+import { teamCopy } from "@/i18n/copy/team";
 import {
   LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
   Target, ArrowLeftRight, User, Tv, Shield,
-  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen, PiggyBank,
+  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen, PiggyBank, UsersRound,
 } from "lucide-react";
 
 /** Shown at the top of the app while the user is on the free trial. */
@@ -55,6 +56,7 @@ const businessNav = [
   { path: "/taxes", label: "Impuestos", icon: FileText },
   { path: "/accountant", label: "Contador", icon: BookOpen },
   { path: "/assistant", label: "Asistente", icon: Sparkles },
+  { path: "/team", label: "Equipo", icon: UsersRound },
   { path: "/settings", label: "Ajustes", icon: Settings },
 ];
 
@@ -68,6 +70,26 @@ const personalNav = [
   { path: "/personal/assistant", label: "Asistente", icon: Sparkles },
   { path: "/settings", label: "Perfil", icon: User },
 ];
+
+/** An employee on a team: takes payments, serves clients, photographs receipts. */
+const STAFF_PATHS = new Set(["/pos", "/customers", "/receipts"]);
+/** The accountant reads the books; these are the owner's alone. */
+const ACCOUNTANT_HIDDEN = new Set(["/taxes", "/assistant", "/team", "/settings"]);
+
+/** Tells a team member whose team they're on, and lets them leave. */
+function TeamBanner() {
+  const t = useCopy(teamCopy);
+  const { data } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const leave = trpc.team.leave.useMutation({ onSuccess: () => { window.location.href = "/"; } });
+  if (!data) return null;
+  const role = t.roles[data.role].name;
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-blue-100 bg-blue-50 px-4 py-2 text-center text-sm text-blue-900">
+      <span>{t.banner(data.ownerName || "", role)}{data.role === "accountant" ? ` · ${t.readOnly}` : ""}</span>
+      <button className="font-semibold underline-offset-2 hover:underline" onClick={() => { if (window.confirm(t.leaveConfirm)) leave.mutate(); }}>{t.leave}</button>
+    </div>
+  );
+}
 
 export function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -97,7 +119,17 @@ export function AppLayout() {
     }
   }, [user, userMode, location.pathname, navigate]);
 
-  const navItems = userMode === "personal" ? personalNav : businessNav;
+  // Team members see only what their role allows (the server enforces it too: api/lib/team.ts).
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { enabled: !!user && userMode === "business", staleTime: 60_000 });
+  const memberRole = membership?.role ?? null;
+  const navItems = userMode === "personal" ? personalNav
+    : memberRole === "staff" ? businessNav.filter((i) => STAFF_PATHS.has(i.path))
+    : memberRole === "accountant" ? businessNav.filter((i) => !ACCOUNTANT_HIDDEN.has(i.path))
+    : businessNav;
+  useEffect(() => {
+    if (memberRole === "staff" && !STAFF_PATHS.has(location.pathname)) navigate("/pos", { replace: true });
+    if (memberRole === "accountant" && ACCOUNTANT_HIDDEN.has(location.pathname)) navigate("/", { replace: true });
+  }, [memberRole, location.pathname, navigate]);
   const companyName = userMode === "personal" ? (user?.name || t.myAccount) : (settings?.companyName || t.myCompany);
   const userInitial = useMemo(() => (user?.name || "C").charAt(0).toUpperCase(), [user?.name]);
   const displayName = user?.name || t.myAccount;
@@ -214,6 +246,7 @@ export function AppLayout() {
       </div>
 
       <main className="flex-1 overflow-y-auto pt-14 lg:pt-0 relative">
+        <TeamBanner />
         <TrialBanner />
         <SubscriptionPageGate>
           {/* Pages are lazy-loaded; keep the sidebar while one loads */}

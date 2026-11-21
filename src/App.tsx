@@ -64,6 +64,8 @@ const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
 const Taxes = lazyPage(() => import("@/pages/Taxes"));
 const Assistant = lazyPage(() => import("@/pages/Assistant"));
 const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"));
+const Team = lazyPage(() => import("@/pages/Team"));
+const JoinTeam = lazyPage(() => import("@/pages/JoinTeam"));
 const Receipts = lazyPage(() => import("@/pages/Receipts"));
 const Vendors = lazyPage(() => import("@/pages/Vendors"));
 const Quotes = lazyPage(() => import("@/pages/Quotes"));
@@ -105,6 +107,8 @@ export default function App() {
         <Route element={<AuthLayout />}>
           <Route path="/login" element={<PublicGuard><Login /></PublicGuard>} />
           <Route path="/register" element={<Register />} />
+          {/* Team invitations: works logged in or out */}
+          <Route path="/join" element={<JoinTeam />} />
           <Route path="/forgot-password" element={<PublicGuard><ForgotPassword /></PublicGuard>} />
         </Route>
 
@@ -138,6 +142,7 @@ export default function App() {
           <Route path="/vendors" element={<Vendors />} />
           <Route path="/quotes" element={<Quotes />} />
           <Route path="/accountant" element={<Accountant />} />
+          <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />

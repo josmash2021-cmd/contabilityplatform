@@ -18,6 +18,7 @@ import { setupRouter } from "./setup-router";
 import { adminRouter } from "./admin-router";
 import { taxRouter } from "./tax-router";
 import { assistantRouter } from "./assistant-router";
+import { teamRouter } from "./team-router";
 import { receiptsRouter } from "./receipts-router";
 import { vendorsRouter } from "./vendors-router";
 import { quotesRouter } from "./quotes-router";
@@ -49,6 +50,7 @@ export const appRouter = createRouter({
   admin: adminRouter,
   tax: taxRouter,
   assistant: assistantRouter,
+  team: teamRouter,
   receipts: receiptsRouter,
   vendors: vendorsRouter,
   quotes: quotesRouter,
