@@ -1,0 +1,288 @@
+// Copy for /como-funciona (src/pages/site/ComoFunciona.tsx and src/components/marketing/site/ComoFunciona*).
+// Only claim what the app does today. The people and numbers in the examples are made up.
+import type { Lang } from "../../lang";
+
+export type ComoFuncionaStep = { short: string; title: string; text: string; you: string; app: string; note?: string; plans?: string };
+export type ComoFuncionaMoment = { time: string; part: string; title: string; text: string; screens: string };
+
+const es = {
+  pageTitle: "Cómo funciona",
+  hero: {
+    eyebrow: "Cómo funciona",
+    titleA: "De crear tu cuenta a",
+    titleB: "tener tus números al día",
+    text: "Así es usar la app, paso a paso: lo que haces tú y lo que la app hace por ti.",
+    secondary: "Ver todo lo que hace",
+    jumpLabel: "Ir a un paso",
+  },
+  steps: {
+    eyebrow: "Paso a paso",
+    title: "Así empiezas, y así sigue tu día a día",
+    text: "Cinco pasos, del registro a tus reportes. Los primeros tres se hacen una sola vez.",
+    stepLabel: (n: number) => `Paso ${n}`,
+    you: "Tú",
+    app: "La app",
+    items: [
+      {
+        short: "Tu cuenta",
+        title: "Crea tu cuenta y elige Negocio o Personal",
+        text: "Escribe tu nombre y tu correo, y elige cómo la vas a usar. Toma un par de minutos y no te pedimos tarjeta.",
+        you: "Eliges Negocio, para cobrar y llevar las cuentas de tu negocio, o Personal, para tus gastos, tus metas y tus impuestos. Si es Negocio, agregas los datos de tu negocio.",
+        app: "Te abre la prueba gratis con todo incluido, en español o en inglés.",
+      },
+      {
+        short: "Tu banco",
+        title: "Conecta tu banco con Plaid",
+        text: "Eliges tu banco y entras con tu usuario de siempre, dentro de Plaid. Nosotros nunca vemos ni guardamos tu contraseña.",
+        you: "Buscas tu banco (Chase, Bank of America, Wells Fargo y miles más) y entras como lo haces en su app.",
+        app: "Trae tus movimientos y tus saldos con acceso de solo lectura: nadie puede mover tu dinero desde aquí. Lo desconectas cuando quieras.",
+      },
+      {
+        short: "Ordenar",
+        title: "La app ordena tus movimientos y tú confirmas",
+        text: "Cada movimiento llega con una categoría sugerida: materiales, gasolina, ventas, comida…",
+        you: "Revisas la lista y apruebas lo que está bien. Si algo no va ahí, lo cambias.",
+        app: "Pone cada movimiento en su lugar y tu reporte del mes se actualiza solo.",
+      },
+      {
+        short: "Cobrar",
+        title: "Cobra, guarda tus recibos y lleva a tus clientes",
+        text: "El día a día de tu negocio, desde el teléfono.",
+        you: "Cobras en efectivo, Zelle o tarjeta desde el punto de venta, y le tomas foto a cada recibo de compra.",
+        app: "Anota cada venta con su cliente y su servicio, y guarda cada recibo como gasto, con su foto.",
+        plans: "Con Pro y Negocio también haces cotizaciones, facturas recurrentes y llevas lo que les debes a tus proveedores.",
+        note: "¿Usas el modo Personal? En este paso pones tus presupuestos por categoría y tus metas de ahorro, y la app te avisa cuando llegas al 80%.",
+      },
+      {
+        short: "Reportes",
+        title: "Mira tus reportes, prepara tus impuestos y comparte con tu contador",
+        text: "Al final del mes, o cuando lo necesites, todo está listo.",
+        you: "Revisas cuánto entró, cuánto salió y cuánto te quedó. En temporada de impuestos, subes tus documentos desde el teléfono.",
+        app: "Tu preparador hace tu declaración federal y la de Alabama, y tú la sigues paso a paso. Para tu contador, descargas Excel o PDF.",
+        plans: "Impuestos: gratis en Personal Básico, y en Pro y Negocio para negocios. Excel y PDF para tu contador: Pro y Negocio. Con Negocio, además, tu contador entra con su propia cuenta, solo para ver.",
+      },
+    ] as ComoFuncionaStep[],
+    visuals: {
+      sample: "Datos de ejemplo",
+      charge: {
+        aria: "Ejemplo de un cobro de $630 por Zelle en el punto de venta y un recibo de Home Depot guardado como gasto.",
+        title: "Cobrar",
+        client: "Ana Torres",
+        service: "Pintura de interiores + drywall",
+        methods: ["Efectivo", "Zelle", "Tarjeta"],
+        done: "Venta registrada",
+        receipt: "Recibo · Home Depot",
+        receiptText: "$184.32 · Materiales",
+        saved: "Guardado como gasto",
+      },
+      reports: {
+        aria: "Ejemplo del resumen del mes, del seguimiento de la declaración de impuestos y de la descarga para el contador.",
+        title: "Noviembre",
+        kpis: [["Entró", "$24,580"], ["Salió", "$9,135"], ["Te quedó", "$15,445"]] as [string, string][],
+        tax: "Tu declaración",
+        taxStep: "Revisión de documentos",
+        taxSub: "Federal y Alabama",
+        accountant: "Para tu contador",
+        excel: "Excel",
+        pdf: "PDF",
+      },
+    },
+  },
+  day: {
+    eyebrow: "Un día con la app",
+    title: "Así se ve un día cualquiera",
+    text: "Dos ejemplos: uno de negocio y uno personal. Las personas y los números son inventados.",
+    example: "Ejemplo",
+    endLabel: "A fin de mes",
+    business: {
+      name: "María",
+      who: "Negocio de pintura y remodelación",
+      moments: [
+        { time: "7:30 a. m.", part: "Mañana", title: "Revisa su banco con el café", text: "En «Para hoy» ve los movimientos nuevos del banco. Ya vienen con categoría: aprueba los que están bien y corrige uno.", screens: "Inicio · Banco" },
+        { time: "1:00 p. m.", part: "Mediodía", title: "Cobra y guarda el recibo", text: "Termina un trabajo y cobra $630 por Zelle desde el punto de venta. De regreso pasa por material y le toma foto al recibo: queda como gasto de Materiales.", screens: "Cobrar · Recibos" },
+        { time: "8:00 p. m.", part: "Noche", title: "Mira cómo va el mes", text: "Un cliente aceptó su cotización y la convierte en venta. Luego le pregunta al asistente «¿Cuánto vendí este mes?» y revisa su ganancia.", screens: "Cotizaciones · Asistente · Reportes" },
+      ] as ComoFuncionaMoment[],
+      end: "Descarga el Excel del mes y se lo manda a su contador.",
+    },
+    personal: {
+      name: "Ana",
+      who: "Lleva las finanzas de su casa",
+      moments: [
+        { time: "8:00 a. m.", part: "Mañana", title: "Revisa sus gastos de ayer", text: "Sus compras de ayer ya aparecen, cada una con su categoría. La app le avisa que ya usó el 80% de su presupuesto de Comida.", screens: "Movimientos · Presupuestos" },
+        { time: "12:30 p. m.", part: "Mediodía", title: "Cancela lo que no usa", text: "En Suscripciones ve un gimnasio al que ya no va. Abre la guía, copia el correo ya escrito y lo manda para cancelarlo.", screens: "Suscripciones" },
+        { time: "9:00 p. m.", part: "Noche", title: "Aparta para su meta", text: "Suma $50 a su fondo de emergencia y ve cuánto le falta. En temporada de impuestos, le toma foto a su W-2 para su preparador.", screens: "Metas · Mi declaración" },
+      ] as ComoFuncionaMoment[],
+      end: "Su resumen le dice cuánto entró, cuánto salió y cuánto ahorró.",
+    },
+  },
+  afterTrial: {
+    eyebrow: "Después de la prueba",
+    title: (days: number) => `Qué pasa cuando terminan los ${days} días`,
+    text: "Sin sorpresas: tú decides si sigues y con qué plan.",
+    dayLabel: (n: number) => `Día ${n}`,
+    pick: "Eliges tu plan",
+    items: (days: number) => [
+      { title: `${days} días con todo incluido`, text: "Usas todas las funciones de tu modo, sin tarjeta." },
+      { title: "Al terminar, eliges tu plan", text: "Escoges el plan que va contigo y lo pagas de forma segura con Stripe." },
+      { title: "Nada se cobra solo", text: "Como no registraste una tarjeta, no hay cobros automáticos. Solo pagas si decides suscribirte." },
+      { title: "Para ti, Básico sigue gratis", text: "En modo Personal, el plan Básico es gratis: tus impuestos con un preparador y el asistente." },
+    ],
+    cta: "Ver planes y precios",
+  },
+  faq: {
+    eyebrow: "Preguntas",
+    title: "Dudas antes de empezar",
+    items: [
+      { q: "¿Cuánto tarda empezar?", a: "Crear tu cuenta toma un par de minutos. Para conectar tu banco eliges tu banco en Plaid y entras con tu usuario de siempre. Desde ahí, tus movimientos llegan solos a la app." },
+      { q: "¿Qué pasa si la app pone una categoría equivocada?", a: "La cambias tú. La app sugiere la categoría de cada movimiento, pero tú tienes la última palabra." },
+      { q: "¿Mi contador puede ver mis números?", a: "Sí. Con Pro y Negocio descargas en Excel o PDF el resumen, las ventas, los gastos y el banco del periodo para mandárselos. Con Negocio también lo invitas con su propia cuenta: ve tus números y reportes, pero no puede cambiar nada." },
+      { q: "¿Cuánto cuesta preparar mis impuestos?", a: "Nada extra. La preparación está incluida en Personal Básico, que es gratis, y en los planes Pro y Negocio para negocios. Tu preparador hace tu declaración federal y la de Alabama." },
+      { q: "¿Puedo cambiar de plan o cancelar?", a: "Sí. Puedes cambiar de plan cuando lo necesites y cancelar en cualquier momento desde Ajustes, sin llamadas ni trámites." },
+    ],
+    more: "¿Tienes otra pregunta?",
+    moreLink: "Ver todas las preguntas",
+  },
+};
+
+export type ComoFuncionaCopy = typeof es;
+
+const en: ComoFuncionaCopy = {
+  pageTitle: "How it works",
+  hero: {
+    eyebrow: "How it works",
+    titleA: "From creating your account to",
+    titleB: "having your numbers up to date",
+    text: "This is what using the app looks like, step by step: what you do and what the app does for you.",
+    secondary: "See everything it does",
+    jumpLabel: "Go to a step",
+  },
+  steps: {
+    eyebrow: "Step by step",
+    title: "How you get started, and how your days go after that",
+    text: "Five steps, from sign-up to your reports. The first three you only do once.",
+    stepLabel: (n: number) => `Step ${n}`,
+    you: "You",
+    app: "The app",
+    items: [
+      {
+        short: "Your account",
+        title: "Create your account and choose Business or Personal",
+        text: "Enter your name and email, and choose how you'll use it. It takes a couple of minutes and we don't ask for a card.",
+        you: "You choose Business, to take payments and keep your business's books, or Personal, for your spending, your goals and your taxes. For Business, you add your business details.",
+        app: "Starts your free trial with everything included, in English or Spanish.",
+      },
+      {
+        short: "Your bank",
+        title: "Connect your bank with Plaid",
+        text: "Pick your bank and log in with your usual username, inside Plaid. We never see or store your password.",
+        you: "You search for your bank (Chase, Bank of America, Wells Fargo and thousands more) and log in just like in its app.",
+        app: "Brings in your transactions and balances with read-only access: no one can move your money from here. Disconnect it whenever you want.",
+      },
+      {
+        short: "Sort",
+        title: "The app sorts your transactions and you confirm",
+        text: "Every transaction arrives with a suggested category: materials, gas, sales, food…",
+        you: "You go through the list and approve what's right. If something doesn't belong there, you change it.",
+        app: "Puts every transaction in its place and your monthly report updates on its own.",
+      },
+      {
+        short: "Get paid",
+        title: "Get paid, save your receipts and keep track of your clients",
+        text: "Your business's day to day, from your phone.",
+        you: "You take cash, Zelle or card from the point of sale, and snap a photo of every purchase receipt.",
+        app: "Records each sale with its client and service, and saves each receipt as an expense, with its photo.",
+        plans: "With Pro and Business you can also create quotes and recurring invoices and keep track of what you owe your vendors.",
+        note: "Using Personal mode? This is where you set your category budgets and savings goals, and the app lets you know when you reach 80%.",
+      },
+      {
+        short: "Reports",
+        title: "See your reports, get your taxes done and share with your accountant",
+        text: "At the end of the month, or whenever you need it, everything is ready.",
+        you: "You check what came in, what went out and what you kept. At tax time, you upload your documents from your phone.",
+        app: "Your preparer prepares your federal and Alabama returns, and you follow them step by step. For your accountant, you download Excel or PDF.",
+        plans: "Taxes: free in Personal Basic, and in Pro and Business for businesses. Excel and PDF for your accountant: Pro and Business. With Business, your accountant can also log in with their own view-only account.",
+      },
+    ],
+    visuals: {
+      sample: "Sample data",
+      charge: {
+        aria: "Example of a $630 Zelle payment at the point of sale and a Home Depot receipt saved as an expense.",
+        title: "Charge",
+        client: "Ana Torres",
+        service: "Interior painting + drywall",
+        methods: ["Cash", "Zelle", "Card"],
+        done: "Sale recorded",
+        receipt: "Receipt · Home Depot",
+        receiptText: "$184.32 · Materials",
+        saved: "Saved as an expense",
+      },
+      reports: {
+        aria: "Example of the month's summary, the tax return tracker and the download for your accountant.",
+        title: "November",
+        kpis: [["In", "$24,580"], ["Out", "$9,135"], ["You kept", "$15,445"]],
+        tax: "Your tax return",
+        taxStep: "Reviewing documents",
+        taxSub: "Federal and Alabama",
+        accountant: "For your accountant",
+        excel: "Excel",
+        pdf: "PDF",
+      },
+    },
+  },
+  day: {
+    eyebrow: "A day with the app",
+    title: "What an ordinary day looks like",
+    text: "Two examples: one for a business and one for personal use. The people and numbers are made up.",
+    example: "Example",
+    endLabel: "At month's end",
+    business: {
+      name: "María",
+      who: "Painting and remodeling business",
+      moments: [
+        { time: "7:30 a.m.", part: "Morning", title: "Checks her bank over coffee", text: "In “Today” she sees the new bank transactions. They already have categories: she approves the right ones and fixes one.", screens: "Home · Bank" },
+        { time: "1:00 p.m.", part: "Midday", title: "Gets paid and saves the receipt", text: "She finishes a job and takes $630 by Zelle from the point of sale. On the way back she buys supplies and snaps the receipt: it's saved as a Materials expense.", screens: "Point of sale · Receipts" },
+        { time: "8:00 p.m.", part: "Evening", title: "Sees how the month is going", text: "A client accepted her quote, so she turns it into a sale. Then she asks the assistant “How much did I sell this month?” and checks her profit.", screens: "Quotes · Assistant · Reports" },
+      ],
+      end: "She downloads the month's Excel file and sends it to her accountant.",
+    },
+    personal: {
+      name: "Ana",
+      who: "Runs her household finances",
+      moments: [
+        { time: "8:00 a.m.", part: "Morning", title: "Checks yesterday's spending", text: "Yesterday's purchases are already there, each with its category. The app lets her know she has used 80% of her Food budget.", screens: "Transactions · Budgets" },
+        { time: "12:30 p.m.", part: "Midday", title: "Cancels what she doesn't use", text: "In Subscriptions she spots a gym she no longer goes to. She opens the guide, copies the ready-made email and sends it to cancel.", screens: "Subscriptions" },
+        { time: "9:00 p.m.", part: "Evening", title: "Sets money aside for her goal", text: "She adds $50 to her emergency fund and sees how much is left. At tax time, she snaps a photo of her W-2 for her preparer.", screens: "Goals · Taxes" },
+      ],
+      end: "Her summary shows what came in, what went out and what she saved.",
+    },
+  },
+  afterTrial: {
+    eyebrow: "After the trial",
+    title: (days: number) => `What happens when the ${days} days are over`,
+    text: "No surprises: you decide whether to continue and with which plan.",
+    dayLabel: (n: number) => `Day ${n}`,
+    pick: "You pick your plan",
+    items: (days: number) => [
+      { title: `${days} days with everything included`, text: "You use every feature of your mode, with no card." },
+      { title: "When it ends, you pick your plan", text: "Choose the plan that fits you and pay securely with Stripe." },
+      { title: "Nothing is charged automatically", text: "Since you didn't add a card, there are no automatic charges. You only pay if you decide to subscribe." },
+      { title: "For you, Basic stays free", text: "In Personal mode, the Basic plan is free: your taxes with a preparer, plus the assistant." },
+    ],
+    cta: "See plans and pricing",
+  },
+  faq: {
+    eyebrow: "Questions",
+    title: "Questions before you start",
+    items: [
+      { q: "How long does it take to get started?", a: "Creating your account takes a couple of minutes. To connect your bank, you pick it in Plaid and log in with your usual username. From then on, your transactions arrive in the app on their own." },
+      { q: "What if the app picks the wrong category?", a: "You change it. The app suggests a category for each transaction, but you have the final say." },
+      { q: "Can my accountant see my numbers?", a: "Yes. With Pro and Business you download the period's summary, sales, expenses and bank activity in Excel or PDF to send them. With Business you can also invite them with their own account: they see your numbers and reports, but can't change anything." },
+      { q: "How much does tax preparation cost?", a: "Nothing extra. Preparation is included in Personal Basic, which is free, and in the Pro and Business plans for businesses. Your preparer prepares your federal and Alabama returns." },
+      { q: "Can I change plans or cancel?", a: "Yes. You can change plans whenever you need to and cancel anytime from Settings, no calls or paperwork." },
+    ],
+    more: "Have another question?",
+    moreLink: "See all questions",
+  },
+};
+
+export const comoFuncionaCopy: Record<Lang, ComoFuncionaCopy> = { es, en };
