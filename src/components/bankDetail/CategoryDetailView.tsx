@@ -15,6 +15,7 @@ import { trpc } from "@/providers/trpc";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { bankDetailCopy } from "@/i18n/copy/bankDetail";
+import { MerchantLogo } from "@/components/brand/MerchantLogo";
 
 type Dir = "income" | "expense";
 
@@ -49,6 +50,7 @@ const STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
 type Row = {
   id: number | string; description: string; amount: string | number; type: string;
   transactionDate?: string | Date | null; isReversed?: boolean | number | null; bankName?: string | null;
+  merchantName?: string | null; logoUrl?: string | null;
 };
 
 const money = (n: number) => `$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -177,9 +179,18 @@ export function CategoryDetailView({ mode, labels, accountKey, fallback }: Categ
                 const deletable = canEdit && Number.isInteger(Number(r.id)) && Number(r.id) > 0;
                 return (
                   <li key={`${r.id}-${i}`} className="flex items-center gap-3 py-3">
-                    <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${reversed ? "bg-slate-100 text-slate-400" : isIn ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-600"}`}>
-                      {reversed ? <RotateCcw className="h-4 w-4" /> : isIn ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
-                    </span>
+                    {/* The merchant's original logo from Plaid; without one, the direction icon as before. */}
+                    <MerchantLogo
+                      name={r.merchantName || r.description}
+                      logoUrl={r.logoUrl}
+                      size={36}
+                      className={reversed ? "opacity-50 grayscale" : undefined}
+                      fallback={
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${reversed ? "bg-slate-100 text-slate-400" : isIn ? "bg-emerald-50 text-emerald-600" : "bg-slate-100 text-slate-600"}`}>
+                          {reversed ? <RotateCcw className="h-4 w-4" /> : isIn ? <ArrowUpRight className="h-4 w-4" /> : <ArrowDownRight className="h-4 w-4" />}
+                        </span>
+                      }
+                    />
                     <span className="min-w-0 flex-1">
                       <span className={`block truncate text-sm font-medium ${reversed ? "text-slate-400 line-through" : "text-slate-900"}`}>{r.description}</span>
                       <span className="block truncate text-xs text-slate-500">

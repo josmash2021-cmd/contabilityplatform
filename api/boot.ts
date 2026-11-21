@@ -4,7 +4,7 @@ import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
-import { plaidBalance } from "./bank-router";
+import { syncAllBankBalances, syncAllBankTransactions } from "./bank-router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { invoicePeriod, invoiceSubscriptionId, subscriptionPeriod } from "./lib/stripePeriod";
@@ -195,189 +195,28 @@ app.post("/api/webhooks/stripe", async (c) => {
 });
 
 // ═══════════════════════════════════════════════════════════
-// BACKGROUND BALANCE SYNC — runs every 5 minutes
-// Updates all users' bank balances without requiring them to be online
+// BACKGROUND BANK SYNC — every user's banks, without anyone online
+// Balances every 5 minutes, new movements every 3 minutes. The jobs live next to the main sync
+// (api/bank-router.ts syncAllBankBalances / syncAllBankTransactions) so they use the same Plaid client
+// (initPlaid, honors PLAID_BASE_URL), one call per bank connection (a failing bank never stops the rest,
+// its status is recorded), the same balance rule (plaidBalance) and the same categorization and saved shape.
+// The movement job only adds what isn't saved yet (last 30 days, dedup by plaidTransactionId, a per-run cap),
+// never changes a saved row (except a movement saved while pending, which becomes the settled one: takeOverPending),
+// and two runs never overlap.
 // ═══════════════════════════════════════════════════════════
-const isProductionEnv = process.env.PLAID_ENV === "production"
-  || process.env.NODE_ENV === "production"
-  || !!process.env.RAILWAY_ENVIRONMENT
-  || !!process.env.RAILWAY_SERVICE_NAME;
-
-let plaidClient: any = null;
-
-async function initPlaid() {
-  if (plaidClient) return plaidClient;
-  try {
-    const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
-    const env = isProductionEnv ? "production" : "sandbox";
-    // Plaid environment initialized
-    const config = new Configuration({
-      basePath: PlaidEnvironments[env],
-      baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
-    });
-    plaidClient = new PlaidApi(config);
-    return plaidClient;
-  } catch { return null; }
-}
-
 async function syncAllBalances() {
   const started = Date.now();
-  try {
-    const client = await initPlaid();
-    if (!client) return;
-
-    const { bankAccounts } = await import("@db/schema");
-    const { getDb } = await import("./queries/connection");
-    const { eq } = await import("drizzle-orm");
-    const db = getDb();
-
-    // Get all unique access tokens (one per bank connection)
-    const allAccounts = await db.select().from(bankAccounts);
-    const accessTokenMap = new Map<string, number[]>();
-    for (const acc of allAccounts) {
-      if (!acc.plaidAccessToken) continue;
-      const ids = accessTokenMap.get(acc.plaidAccessToken) || [];
-      ids.push(acc.id);
-      accessTokenMap.set(acc.plaidAccessToken, ids);
-    }
-
-    let updatedCount = 0;
-    let userCount = 0;
-
-    for (const [token, accountIds] of accessTokenMap) {
-      try {
-        const res = await client.accountsGet({ access_token: token });
-        const freshBalances = new Map<string, string>();
-        for (const plaidAcc of res.data.accounts || []) {
-          const bal = plaidBalance(plaidAcc);
-          if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
-        }
-
-        for (const dbAcc of allAccounts) {
-          if (!accountIds.includes(dbAcc.id)) continue;
-          if (!dbAcc.plaidAccountId) continue;
-          const freshBal = freshBalances.get(dbAcc.plaidAccountId);
-          if (freshBal != null && freshBal !== dbAcc.currentBalance) {
-            await db.update(bankAccounts).set({
-              currentBalance: freshBal,
-              lastSyncedAt: new Date(),
-              updatedAt: new Date(),
-            }).where(eq(bankAccounts.id, dbAcc.id));
-            updatedCount++;
-            userCount = new Set([...Array.from(allAccounts).map(a => a.userId)]).size;
-          }
-        }
-      } catch (e: any) {
-        // Token sync error, continue with next
-      }
-    }
-
-    // Balance sync complete
-  } catch (e: any) {
-    console.error("[bg-sync] Fatal error:", e.message);
+  const r = await syncAllBankBalances();
+  if (r.failed > 0 || r.updated > 0) {
+    console.log(`[bg-sync] balances: ${r.updated} updated, ${r.failed} of ${r.banks} bank(s) unreachable (${Date.now() - started}ms)`);
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// BACKGROUND TRANSACTION SYNC — runs every 3 minutes
-// Fetches new transactions from Plaid for ALL users automatically
-// ═══════════════════════════════════════════════════════════
 async function syncAllTransactions() {
   const started = Date.now();
-  try {
-    const client = await initPlaid();
-    if (!client) return;
-
-    const { bankAccounts, bankTransactions } = await import("@db/schema");
-    const { getDb } = await import("./queries/connection");
-    const { eq, and, sql } = await import("drizzle-orm");
-    const db = getDb();
-
-    // Get all unique access tokens (one per bank connection)
-    const allAccounts = await db.select().from(bankAccounts);
-    const accessTokenMap = new Map<string, { userId: number; accountIds: string[]; dbAccountIds: number[] }>();
-    
-    for (const acc of allAccounts) {
-      if (!acc.plaidAccessToken) continue;
-      const existing = accessTokenMap.get(acc.plaidAccessToken);
-      if (existing) {
-        if (acc.plaidAccountId) existing.accountIds.push(acc.plaidAccountId);
-        existing.dbAccountIds.push(acc.id);
-      } else {
-        accessTokenMap.set(acc.plaidAccessToken, {
-          userId: acc.userId,
-          accountIds: acc.plaidAccountId ? [acc.plaidAccountId] : [],
-          dbAccountIds: [acc.id],
-        });
-      }
-    }
-
-    let totalAdded = 0;
-    let totalUsers = 0;
-
-    for (const [token, data] of accessTokenMap) {
-      try {
-        // Get current date range (last 30 days)
-        const now = new Date();
-        const startDate = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-        const endDate = now.toISOString().split("T")[0];
-
-        // Fetch transactions from Plaid
-        const res = await client.transactionsGet({
-          access_token: token,
-          start_date: startDate,
-          end_date: endDate,
-          options: { count: 500 },
-        });
-
-        const plaidTxs = res.data.transactions || [];
-        
-        // Get existing plaid transaction IDs for this user
-        const existingIds = new Set<string>();
-        const existingTxs = await db.select({ plaidTransactionId: bankTransactions.plaidTransactionId })
-          .from(bankTransactions)
-          .where(eq(bankTransactions.userId, data.userId));
-        for (const t of existingTxs) {
-          if (t.plaidTransactionId) existingIds.add(t.plaidTransactionId);
-        }
-
-        // Insert new transactions
-        let added = 0;
-        for (const tx of plaidTxs) {
-          if (existingIds.has(tx.transaction_id)) continue;
-          
-          // Find matching db account
-          const dbAccountId = data.accountIds.includes(tx.account_id) 
-            ? data.dbAccountIds[data.accountIds.indexOf(tx.account_id)]
-            : data.dbAccountIds[0];
-
-          await db.insert(bankTransactions).values({
-            userId: data.userId,
-            bankAccountId: dbAccountId,
-            plaidTransactionId: tx.transaction_id,
-            description: tx.name,
-            amount: String(tx.amount),
-            type: tx.amount >= 0 ? "debit" : "credit",
-            category: tx.personal_finance_category?.detailed?.replace("_", " ") || tx.category?.[0] || "uncategorized",
-            transactionDate: tx.date ? new Date(tx.date) : new Date(),
-            merchantName: tx.merchant_name || tx.name,
-          });
-          added++;
-        }
-
-        if (added > 0) {
-          totalAdded += added;
-          totalUsers++;
-          // Transactions added for user
-        }
-      } catch (e: any) {
-        // Token sync error, continue with next
-      }
-    }
-
-    // Transaction sync complete
-  } catch (e: any) {
-    console.error("[tx-sync] Fatal error:", e.message);
+  const r = await syncAllBankTransactions();
+  if (r.added > 0 || r.failed > 0) {
+    console.log(`[tx-sync] ${r.added} new movement(s)${r.capped ? " (capped, more next run)" : ""}, ${r.failed} of ${r.banks} bank(s) unreachable (${Date.now() - started}ms)`);
   }
 }
 

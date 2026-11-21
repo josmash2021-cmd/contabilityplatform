@@ -4,7 +4,9 @@ import { trpc } from "@/providers/trpc";
 type SyncResult = { success?: boolean; added?: number; error?: string };
 
 /**
- * Keeps the business bank fresh without toasts (it replaces the old useBankHealthMonitor on this page):
+ * Keeps the business bank fresh without toasts (it replaces the old useBankHealthMonitor on this page).
+ * These are the upkeep calls any team member may make (api/lib/team.ts); the owner's page also runs
+ * banks.refreshItems for every bank (src/pages/Bank.tsx):
  * - on arrival: recent transactions (syncRecent) and fresh balances (refreshAllBalances);
  * - the month being viewed (syncTransactions): shortly after it's chosen, then every 3 minutes;
  * - category clean-up (autoFixCategories): a few seconds in, then every 5 minutes.
@@ -23,6 +25,8 @@ export function useQuietBankSync({ enabled, year, month, accountId }: { enabled:
         void utils.bank.getMonthData.invalidate();
         void utils.bank.getYearData.invalidate();
         void utils.bank.listAccounts.invalidate();
+        void utils.banks.invalidate();
+        void utils.review.count.invalidate();
       }
     } else if (d.error === "TOKEN_INVALID") {
       setNeedsReconnect(true);
@@ -32,11 +36,11 @@ export function useQuietBankSync({ enabled, year, month, accountId }: { enabled:
   const { mutate: syncRecent, isPending: recentPending } = trpc.bank.syncRecent.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: syncMonth, isPending: monthPending } = trpc.bank.syncTransactions.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: refreshBalances } = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: (d) => { if (d.success) { void utils.bank.listAccounts.invalidate(); void utils.bank.getAllPlaidAccounts.invalidate(); } },
+    onSuccess: (d) => { if (d.success) { void utils.bank.listAccounts.invalidate(); void utils.bank.getAllPlaidAccounts.invalidate(); void utils.banks.overview.invalidate(); } },
     onError: () => {},
   });
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
-    onSuccess: (d) => { if (d.fixed && d.fixed > 0) void utils.bank.getMonthData.invalidate(); },
+    onSuccess: (d) => { if (d.fixed && d.fixed > 0) { void utils.bank.getMonthData.invalidate(); void utils.banks.accountMonth.invalidate(); } },
     onError: () => {},
   });
 

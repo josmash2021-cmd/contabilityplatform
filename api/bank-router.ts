@@ -2,12 +2,19 @@ import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { getDb } from "./queries/connection";
-import { bankAccounts, bankTransactions, accounts, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules } from "@db/schema";
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { bankAccounts, bankTransactions, journalEntries, journalEntryLines, userCancelledSubscriptions, syncLogs, smartCategoryRules, type BankAccount, type BankTransaction } from "@db/schema";
+import { eq, and, or, desc, sql, count, inArray } from "drizzle-orm";
 import { accountMode, bankLimit } from "./lib/plans";
 import { lastPaidTier } from "./lib/planAccess";
 import { applyStoredReviews } from "./lib/bankReview";
 import { storedReviewsFor, unreviewed } from "./review-router";
+import { assertNotReconciled, closedPeriodIds } from "./reconcile-router";
+import { forgetInstitutions, itemKeyOf, refreshInstitution, trackPlaid, type PlaidLike } from "./lib/bankInstitutions";
+import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
+import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName } from "./lib/brand";
+import { isDuplicateKey } from "./lib/dbErrors";
+import { bankInstitutionsTable } from "./lib/brandSchema";
+import type { AccountsGetRequest, AccountsGetResponse, Transaction, TransactionsGetRequest, TransactionsGetResponse } from "plaid";
 import { readFileSync } from "fs";
 import { join } from "path";
 
@@ -496,45 +503,300 @@ const EXCLUDED_PATTERNS = [
 ];
 
 // ═══════════════════════════════════════════════════════════
-// CREATE JOURNAL ENTRIES
-// ═══════════════════════════════════════════════════════════
-
-async function createJournalEntries(db: any, journalTxs: any[], userId: number) {
-  const errors: string[] = [];
-  for (const tx of journalTxs) {
-    try {
-      const jeRes = await db.insert(journalEntries).values({ userId, date: tx.date, memo: tx.description, source: "bank_sync" });
-      const jeId = jeRes?.[0]?.insertId;
-      if (!jeId) { errors.push(`No JE ID for ${tx.description}`); continue; }
-      if (tx.type === "expense") {
-        await db.insert(journalEntryLines).values([
-          { journalEntryId: jeId, accountId: 1, debit: String(tx.amount.toFixed(2)), credit: "0" },
-          { journalEntryId: jeId, accountId: 2, debit: "0", credit: String(tx.amount.toFixed(2)) },
-        ]);
-      } else {
-        await db.insert(journalEntryLines).values([
-          { journalEntryId: jeId, accountId: 2, debit: String(tx.amount.toFixed(2)), credit: "0" },
-          { journalEntryId: jeId, accountId: 1, debit: "0", credit: String(tx.amount.toFixed(2)) },
-        ]);
-      }
-    } catch (e: any) { errors.push(`${tx.description}: ${e.message}`); }
-  }
-  return { errors };
-}
-
-// ═══════════════════════════════════════════════════════════
 // SYNC TRANSACTIONS
 // ═══════════════════════════════════════════════════════════
 
 // Timeout wrapper for promises
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
   return Promise.race([
     promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms)),
-  ]);
+    new Promise<T>((_, reject) => { timer = setTimeout(() => reject(new Error(`${label} timeout after ${ms}ms`)), ms); }),
+  ]).finally(() => clearTimeout(timer));
 }
 
-async function doSyncTransactions(ctx: any, year?: number, month?: number, specificAccountId?: number, syncType: "manual" | "auto" | "webhook" | "retry" = "manual", days?: number) {
+// ═══════════════════════════════════════════════════════════
+// BANK CONNECTIONS (Plaid items): every connected bank, not only the first
+// ═══════════════════════════════════════════════════════════
+// Business plans connect several banks (Básico 1, Pro 3, Negocio 6). Each bank is a Plaid item with its own
+// access token, so every Plaid call below is made once per item and the answers are merged, each movement
+// and balance kept under its real account. A bank that fails (e.g. ITEM_LOGIN_REQUIRED) has its status
+// recorded (brand.institutions shows "reconnect") and never stops the others.
+
+type Db = ReturnType<typeof getDb>;
+
+/** The Plaid calls made here (the SDK client from initPlaid is untyped). */
+type PlaidCalls = {
+  transactionsGet(req: TransactionsGetRequest): Promise<{ data: TransactionsGetResponse }>;
+  accountsGet(req: AccountsGetRequest): Promise<{ data: AccountsGetResponse }>;
+};
+
+/** One bank connection: its key (the same one brand.institutions uses), its access token and its accounts. */
+export type PlaidItem = { key: string; itemId: string | null; token: string; accounts: BankAccount[] };
+
+/**
+ * The user's bank connections: accounts grouped by Plaid item (plaidItemId; older rows without one, by their
+ * shared access token), lowest account id first. Only accounts with a token that weren't switched off.
+ */
+export function plaidItemsOf(userAccounts: BankAccount[]): PlaidItem[] {
+  const connected = userAccounts.filter((a) => a.plaidAccessToken && a.isActive !== false).sort((a, b) => Number(a.id) - Number(b.id));
+  const items = new Map<string, PlaidItem>();
+  for (const a of connected) {
+    const key = itemKeyOf(connected, a);
+    if (!key || !a.plaidAccessToken) continue;
+    const item = items.get(key);
+    if (item) item.accounts.push(a);
+    else items.set(key, { key, itemId: a.plaidItemId ?? null, token: a.plaidAccessToken, accounts: [a] });
+  }
+  return [...items.values()];
+}
+
+/** The bank connections to read, and the accounts an older duplicate connection of the same bank holds. */
+export type Connections = {
+  items: PlaidItem[];
+  /** Account id of an older connection → its twin (same bank, last digits and type) in the newest connection. */
+  shadowed: Map<number, number>;
+};
+
+const normName = (s: string | null | undefined) => (s ?? "").normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+
+/**
+ * The user's bank connections to read: plaidItemsOf, minus older duplicates. Linking the same bank again (e.g.
+ * to fix its login) can leave two connections over the same accounts, and reading both would save every movement
+ * twice. Two connections are the same bank when their institution matches (bankInstitutions.institutionId, else
+ * its name, else the accounts' own names). An account of an older connection with the same last digits and type
+ * as an account of a newer one (newest connectedAt, then highest account id) is "shadowed": its movements and
+ * balance come from the newer connection only. A connection whose accounts are all shadowed isn't called at all.
+ * Nothing is deleted, changed or shown: the older rows stay as they are.
+ * Every per-bank path uses this: the sync, month data, balances, accounts list and the background jobs.
+ */
+export async function connectionsOf(db: Db, userId: number, userAccounts: BankAccount[]): Promise<Connections> {
+  const all = plaidItemsOf(userAccounts);
+  const shadowed = new Map<number, number>();
+  if (all.length < 2) return { items: all, shadowed };
+
+  const hints = new Map<string, { institutionId: string | null; name: string }>();
+  try {
+    const rows: Array<{ itemId: string; institutionId: string | null; name: string }> = await db
+      .select({ itemId: bankInstitutionsTable.itemId, institutionId: bankInstitutionsTable.institutionId, name: bankInstitutionsTable.name })
+      .from(bankInstitutionsTable).where(eq(bankInstitutionsTable.userId, userId));
+    for (const r of rows) hints.set(r.itemId, { institutionId: r.institutionId, name: r.name });
+  } catch { /* no institutions saved yet (the table is created on first use): compare the accounts' names */ }
+  // true / false when the institution tells; null when it's unknown (then the account names must match too).
+  const sameBank = (a: PlaidItem, b: PlaidItem): boolean | null => {
+    const ha = hints.get(a.key), hb = hints.get(b.key);
+    if (ha?.institutionId && hb?.institutionId) return ha.institutionId === hb.institutionId;
+    const na = normName(ha?.name), nb = normName(hb?.name);
+    if (na && nb) return na === nb;
+    return null;
+  };
+
+  const connected = (item: PlaidItem) => Math.max(...item.accounts.map((a) => new Date(a.connectedAt ?? 0).getTime() || 0));
+  const topId = (item: PlaidItem) => Math.max(...item.accounts.map((a) => Number(a.id)));
+  const newestFirst = [...all].sort((a, b) => connected(b) - connected(a) || topId(b) - topId(a));
+  const seen: PlaidItem[] = [];
+  for (const item of newestFirst) {
+    for (const acc of item.accounts) {
+      const mask = (acc.accountNumber ?? "").trim();
+      if (!mask) continue; // no last digits: can't tell it's the same account
+      for (const newer of seen) {
+        const bank = sameBank(item, newer);
+        if (bank === false) continue;
+        const twin = newer.accounts.find((n) => !shadowed.has(n.id) && (n.accountNumber ?? "").trim() === mask
+          && (n.accountType ?? "") === (acc.accountType ?? "") && (bank === true || normName(n.bankName) === normName(acc.bankName)));
+        if (twin) { shadowed.set(acc.id, twin.id); break; }
+      }
+    }
+    seen.push(item);
+  }
+  return { items: all.filter((item) => item.accounts.some((a) => !shadowed.has(a.id))), shadowed };
+}
+
+/** A Plaid day (YYYY-MM-DD) as saved: noon UTC, the same calendar day whatever the server's time zone. */
+const plaidDay = (day: string | null | undefined) => (/^\d{4}-\d{2}-\d{2}$/.test(day ?? "") ? new Date(`${day}T12:00:00Z`) : new Date());
+
+/**
+ * Movements that a newer connection of the same bank brings and its older (shadowed) twin account already saved:
+ * same day, amount (Plaid's sign) and description. They are the same real movements under another Plaid id, so
+ * they aren't saved twice. Repeated identical movements are matched one for one. Returns the Plaid ids to skip.
+ */
+async function savedByOlderTwin(db: Db, userId: number, shadowed: Map<number, number>, txs: Array<{ tx: Transaction; accountId: number }>): Promise<Set<string>> {
+  const skip = new Set<string>();
+  const twinsOf = new Map<number, number[]>();
+  for (const [older, newer] of shadowed) twinsOf.set(newer, [...(twinsOf.get(newer) ?? []), older]);
+  const relevant = txs.filter((t) => twinsOf.has(t.accountId) && /^\d{4}-\d{2}-\d{2}$/.test(t.tx.date ?? ""));
+  if (relevant.length === 0) return skip;
+  const days = relevant.map((t) => t.tx.date).sort();
+  const olderIds = [...new Set(relevant.flatMap((t) => twinsOf.get(t.accountId) ?? []))];
+  const rows: Array<{ accountId: number | null; day: string; plaidAmount: string | null; description: string }> = await db
+    .select({
+      accountId: bankTransactions.bankAccountId, day: sql<string>`DATE_FORMAT(${bankTransactions.transactionDate}, '%Y-%m-%d')`,
+      plaidAmount: bankTransactions.plaidAmount, description: bankTransactions.description,
+    })
+    .from(bankTransactions)
+    .where(and(eq(bankTransactions.userId, userId), inArray(bankTransactions.bankAccountId, olderIds),
+      sql`${bankTransactions.transactionDate} BETWEEN ${days[0]} AND ${days[days.length - 1]}`));
+  const key = (accountId: number, day: string, plaidAmount: number, description: string) => `${accountId}|${day}|${plaidAmount.toFixed(2)}|${description}`;
+  const saved = new Map<string, number>();
+  for (const r of rows) {
+    const newer = r.accountId != null ? shadowed.get(Number(r.accountId)) : undefined;
+    if (newer == null || r.plaidAmount == null) continue;
+    const k = key(newer, r.day, Number(r.plaidAmount), r.description);
+    saved.set(k, (saved.get(k) ?? 0) + 1);
+  }
+  for (const { tx, accountId } of relevant) {
+    const k = key(accountId, tx.date, tx.amount, (tx.name || "").slice(0, 255));
+    const n = saved.get(k) ?? 0;
+    if (n > 0) { saved.set(k, n - 1); skip.add(tx.transaction_id); }
+  }
+  return skip;
+}
+
+/**
+ * The cache upsert's update (bank.getMonthData / listByCategory): only ever this user's row. plaidTransactionId is
+ * unique across the table, so a row of another user with the same Plaid id is left exactly as it is.
+ */
+function ownRowUpdate(userId: number, account: Pick<BankAccount, "id" | "bankName">) {
+  const mine = sql`${bankTransactions.userId} = ${userId}`;
+  return {
+    bankAccountId: sql`IF(${mine}, ${account.id}, ${bankTransactions.bankAccountId})`,
+    bankName: sql`IF(${mine}, ${account.bankName}, ${bankTransactions.bankName})`,
+    lastSyncedAt: sql`IF(${mine}, CURRENT_TIMESTAMP, ${bankTransactions.lastSyncedAt})`,
+  };
+}
+
+/** Plaid's categories for a movement, as determineTypeAndCategory takes them. */
+function plaidCategoriesOf(tx: Pick<Transaction, "personal_finance_category" | "category">): string[] {
+  const pfc = tx.personal_finance_category;
+  return pfc?.detailed ? [pfc.primary, pfc.detailed] : tx.category || [];
+}
+
+/**
+ * A Plaid movement as the sync saves it: amount positive, plaidAmount with Plaid's sign (+ out, − in), the
+ * account's name and last digits, imported from "plaid". Shared by the sync and the background job (api/boot.ts).
+ */
+export function plaidTransactionRow(userId: number, account: Pick<BankAccount, "id" | "bankName" | "accountNumber">, tx: Transaction) {
+  const plaidAmount = tx.amount;
+  const { type, category } = determineTypeAndCategory(plaidAmount, plaidCategoriesOf(tx), tx.name || "");
+  return {
+    userId, bankAccountId: account.id,
+    bankName: account.bankName, accountNumber: account.accountNumber,
+    transactionDate: plaidDay(tx.date), description: (tx.name || "").slice(0, 255),
+    amount: Math.abs(plaidAmount).toFixed(2), plaidAmount: plaidAmount.toFixed(2),
+    type, category: category.slice(0, 40),
+    subcategory: tx.personal_finance_category?.detailed || tx.category?.[1] || null,
+    plaidTransactionId: tx.transaction_id,
+    plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
+    merchantName: normalizeMerchantName(tx.name || "").slice(0, 255),
+    syncStatus: "synced" as const, lastSyncedAt: new Date(),
+    reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
+  };
+}
+
+/**
+ * A settled movement that was saved while it was still pending (syncs before this rule kept pending ones):
+ * Plaid gives the settled one a new id and points back with pending_transaction_id. That saved row becomes
+ * the settled movement (its id, final amount, day and text) instead of a second row, so the money isn't
+ * counted twice and how it was reviewed stays. Returns true when it took one over.
+ */
+async function takeOverPending(db: Db, userId: number, tx: Transaction, row: ReturnType<typeof plaidTransactionRow>): Promise<boolean> {
+  const pendingId = tx.pending_transaction_id;
+  if (!pendingId) return false;
+  const res = await db.update(bankTransactions).set({
+    plaidTransactionId: row.plaidTransactionId, reference: row.reference, amount: row.amount, plaidAmount: row.plaidAmount,
+    transactionDate: row.transactionDate, description: row.description, merchantName: row.merchantName, lastSyncedAt: row.lastSyncedAt,
+  }).where(and(eq(bankTransactions.userId, userId), or(eq(bankTransactions.plaidTransactionId, pendingId), eq(bankTransactions.reference, pendingId))));
+  return Number((res as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) > 0;
+}
+
+/** One bank's movements between two days (YYYY-MM-DD), page by page (Plaid sends at most 500 at a time). */
+async function fetchItemTransactions(client: PlaidCalls, token: string, start: string, end: string, maxPages = 20): Promise<Transaction[]> {
+  const all: Transaction[] = [];
+  let offset = 0;
+  for (let page = 0; page < maxPages; page++) {
+    const res = await withTimeout(client.transactionsGet({
+      access_token: token, start_date: start, end_date: end,
+      options: { include_personal_finance_category: true, count: 500, offset },
+    }), 20000, `Plaid transactionsGet offset=${offset}`);
+    const txs = res.data.transactions || [];
+    all.push(...txs);
+    offset += txs.length;
+    if (txs.length < 500 || offset >= (res.data.total_transactions || 0)) break;
+  }
+  return all;
+}
+
+type ItemOutcome<T> = { item: PlaidItem; ok: true; value: T } | { item: PlaidItem; ok: false; error: unknown };
+const answered = <T>(r: ItemOutcome<T>): r is Extract<ItemOutcome<T>, { ok: true }> => r.ok;
+
+/** Plaid's message for a failed call (or the error's own), for logs and the sync's answer. */
+function plaidMessageOf(e: unknown): string {
+  const err = e as { response?: { data?: { error_message?: unknown } }; message?: unknown } | null;
+  const m = err?.response?.data?.error_message ?? err?.message;
+  return typeof m === "string" && m ? m : "Unknown Plaid error";
+}
+
+/**
+ * Runs one Plaid call per bank, all at once, and records how each went (trackPlaid → the bank's status in
+ * brand.institutions). A bank that fails comes back as `ok: false`; the others are unaffected.
+ */
+async function forEachItem<T>(db: Db, userId: number, items: PlaidItem[], call: (item: PlaidItem) => Promise<T>): Promise<Array<ItemOutcome<T>>> {
+  return Promise.all(items.map(async (item): Promise<ItemOutcome<T>> => {
+    try {
+      return { item, ok: true, value: await trackPlaid(db, userId, item.key, () => call(item)) };
+    } catch (error: unknown) {
+      console.error(`[bank] Plaid call failed (user ${userId}, bank ${item.key}): ${plaidErrorCode(error) ?? plaidMessageOf(error)}`);
+      return { item, ok: false, error };
+    }
+  }));
+}
+
+/** Balances by Plaid account id from the banks that answered accountsGet (plaidBalance: cards keep what's owed). */
+function freshBalancesOf(outcomes: Array<ItemOutcome<{ data: AccountsGetResponse }>>): Map<string, string> {
+  const fresh = new Map<string, string>();
+  for (const r of outcomes) {
+    if (!r.ok) continue;
+    for (const plaidAcc of r.value.data.accounts || []) {
+      const bal = plaidBalance(plaidAcc);
+      if (bal != null) fresh.set(plaidAcc.account_id, bal);
+    }
+  }
+  return fresh;
+}
+
+/**
+ * Money the user has: every account's balance except cards and loans (what's owed isn't money you have), and
+ * except an older duplicate of an account (connectionsOf), which would count the same money twice.
+ */
+function moneyTotal(accounts: BankAccount[], balanceOf: (a: BankAccount) => string | null | undefined, shadowed: Map<number, number>): string {
+  let total = 0;
+  for (const a of accounts) {
+    if (isDebtAccount(a.accountType) || shadowed.has(a.id)) continue;
+    total += parseFloat(balanceOf(a) ?? "0") || 0;
+  }
+  return String(total.toFixed(2));
+}
+
+/** What the sync answers (the screens read success, added, and error === "TOKEN_INVALID"). */
+type SyncAnswer = {
+  success: boolean; error?: string; detail?: string; message?: string;
+  added?: number; total?: number; duplicates?: number;
+  /** Banks that couldn't be read this time (their status is recorded); the other banks still synced. */
+  failedItems?: Array<{ itemId: string; error: string }>;
+};
+
+/** What the sync answers when a bank's movements couldn't be loaded (the same messages as always). */
+function syncFailure(e: unknown): { success: false; error: string; detail?: string } {
+  const errCode = plaidErrorCode(e) ?? "";
+  if (errCode === "INVALID_ACCESS_TOKEN" || errCode === "ACCESS_TOKEN_EXPIRED") {
+    return { success: false, error: "TOKEN_INVALID", detail: "Tu sesion con el banco expiro. Desconecta y vuelve a conectar." };
+  }
+  if (errCode === "PRODUCT_NOT_READY") return { success: false, error: "Plaid esta preparando los datos. Intenta de nuevo en 10 segundos." };
+  if (errCode === "NO_ACCOUNTS") return { success: false, error: "No hay cuentas activas en Plaid." };
+  return { success: false, error: `${errCode}: ${plaidMessageOf(e)}` };
+}
+
+async function doSyncTransactions(ctx: any, year?: number, month?: number, specificAccountId?: number, syncType: "manual" | "auto" | "webhook" | "retry" = "manual", days?: number): Promise<SyncAnswer> {
   if (!ctx.user) return { success: false, error: "No autenticado" };
   const userId = ctx.user.id;
   const db = getDb();
@@ -549,17 +811,17 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     console.log(`[SYNC] Plaid client ready`);
 
     // Step 2: Get user accounts (5s timeout)
-    const userAccounts = await withTimeout(
+    const userAccounts = await withTimeout<BankAccount[]>(
       db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId)),
       5000, "Get accounts"
     );
     if (userAccounts.length === 0) return { success: false, error: "No hay cuentas conectadas" };
-    console.log(`[SYNC] Found ${userAccounts.length} accounts`);
+    // Every bank once (an older duplicate connection of the same bank is skipped: connectionsOf)
+    const { items, shadowed } = await connectionsOf(db, userId, userAccounts);
+    if (items.length === 0) return { success: false, error: "No hay token de acceso" };
+    console.log(`[SYNC] Found ${userAccounts.length} accounts in ${items.length} bank(s)`);
 
-    const primaryAccount = userAccounts[0];
-    if (!primaryAccount?.plaidAccessToken) return { success: false, error: "No hay token de acceso" };
-
-    const accountMap = new Map<string, typeof userAccounts[0]>();
+    const accountMap = new Map<string, BankAccount>();
     for (const acc of userAccounts) {
       if (acc.plaidAccountId) accountMap.set(acc.plaidAccountId, acc);
     }
@@ -581,78 +843,49 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     }
     console.log(`[SYNC] Date range: ${startDate} to ${endDate}`);
 
-    // Step 3: Fetch ALL transactions from Plaid with pagination (20s timeout per page)
-    // NOTE: Do NOT pass account_ids - let Plaid return all transactions for the token
-    console.log(`[SYNC] Calling Plaid transactionsGet with pagination...`);
-    let allTxs: any[] = [];
-    try {
-      let offset = 0;
-      const count = 500; // Plaid max per page
-      let hasMore = true;
-      while (hasMore && offset < 10000) { // Safety limit: max 20 pages
-        const res = await withTimeout(
-          client.transactionsGet({
-            access_token: primaryAccount.plaidAccessToken,
-            start_date: startDate, end_date: endDate,
-            options: { include_personal_finance_category: true, count, offset },
-          }),
-          20000, `Plaid transactionsGet offset=${offset}`
-        );
-        const txs = res.data.transactions || [];
-        const total = res.data.total_transactions || 0;
-        allTxs = allTxs.concat(txs);
-        console.log(`[SYNC] Page offset=${offset}, got ${txs.length} txs, total=${total}, accumulated=${allTxs.length}`);
-        offset += txs.length;
-        hasMore = txs.length === count && offset < total;
+    // Step 3: Every bank's movements (all pages; no account_ids: Plaid returns every account of the item).
+    // Plaid sometimes needs a moment after connecting: retry once for "not yet ready".
+    const fetchForSync = async (item: PlaidItem): Promise<Transaction[]> => {
+      try {
+        return await fetchItemTransactions(client, item.token, startDate, endDate);
+      } catch (e: unknown) {
+        const code = plaidErrorCode(e) ?? "";
+        if (["INVALID_ACCESS_TOKEN", "ACCESS_TOKEN_EXPIRED", "PRODUCT_NOT_READY", "NO_ACCOUNTS"].includes(code) || !plaidMessageOf(e).includes("not yet ready")) throw e;
+        console.log(`[SYNC] Retrying bank ${item.key} in 3s...`);
+        await new Promise((r) => setTimeout(r, 3000));
+        return fetchItemTransactions(client, item.token, startDate, endDate, 1);
       }
-      console.log(`[SYNC] Plaid returned ${allTxs.length} total transactions`);
-    } catch (plaidErr: any) {
-      const errCode = plaidErr.response?.data?.error_code || "";
-      const errMsg = plaidErr.response?.data?.error_message || plaidErr.message || "Unknown Plaid error";
-      console.error(`[SYNC] Plaid error: ${errCode} - ${errMsg}`);
-
-      if (errCode === "INVALID_ACCESS_TOKEN" || errCode === "ACCESS_TOKEN_EXPIRED") {
-        return { success: false, error: "TOKEN_INVALID", detail: "Tu sesion con el banco expiro. Desconecta y vuelve a conectar." };
-      }
-      if (errCode === "PRODUCT_NOT_READY") {
-        return { success: false, error: "Plaid esta preparando los datos. Intenta de nuevo en 10 segundos." };
-      }
-      if (errCode === "NO_ACCOUNTS") {
-        return { success: false, error: "No hay cuentas activas en Plaid." };
-      }
-      // Retry once for "not yet ready"
-      if (errMsg.includes("not yet ready")) {
-        console.log(`[SYNC] Retrying in 3s...`);
-        await new Promise(r => setTimeout(r, 3000));
-        try {
-          const res = await withTimeout(
-            client.transactionsGet({
-              access_token: primaryAccount.plaidAccessToken,
-              start_date: startDate, end_date: endDate,
-              options: { include_personal_finance_category: true },
-            }),
-            20000, "Plaid transactionsGet retry"
-          );
-          allTxs = res.data.transactions || [];
-          console.log(`[SYNC] Retry successful: ${allTxs.length} transactions`);
-        } catch (retryErr: any) {
-          return { success: false, error: retryErr.message || "Error en reintento" };
-        }
-      } else {
-        return { success: false, error: `${errCode}: ${errMsg}` };
-      }
+    };
+    const fetched = await forEachItem(db, userId, items, fetchForSync);
+    const live = fetched.filter(answered);
+    // Banks that couldn't be read this time (their status is recorded; the rest still syncs).
+    const failedItems = fetched.flatMap((r) => (r.ok ? [] : [{ itemId: r.item.key, error: syncFailure(r.error).error }]));
+    if (live.length === 0) {
+      const first = fetched.find((r) => !r.ok);
+      return { ...syncFailure(first && !first.ok ? first.error : null), failedItems };
     }
+    // Each movement under its own account (else the first account of its own bank). An account an older
+    // duplicate connection still reports (shadowed) is read from the newest connection only.
+    const accountOf = (tx: Transaction, item: PlaidItem) => accountMap.get(tx.account_id) || item.accounts[0];
+    const fetchedTxs = live.flatMap((r) => r.value.map((tx) => ({ tx, item: r.item })));
+    // Settled movements only: a pending one gets a new id (and often another amount) once it posts, so saving
+    // it too would count it twice. It's saved when it posts.
+    const allTxs = fetchedTxs.filter(({ tx, item }) => !tx.pending && !shadowed.has(accountOf(tx, item).id));
+    console.log(`[SYNC] Plaid returned ${allTxs.length} total transactions from ${live.length} of ${items.length} bank(s)`);
+
+    // Original merchant logos (Plaid's logo_url / counterparties) for the bank screens.
+    await rememberMerchantLogos(db, fetchedTxs.map((p) => p.tx));
 
     if (allTxs.length === 0) {
       console.log(`[SYNC] No transactions found`);
-      return { success: true, added: 0, message: "Sin transacciones nuevas para este periodo." };
+      return { success: true, added: 0, message: "Sin transacciones nuevas para este periodo.", failedItems };
     }
 
     // Step 4: Deduplication (5s timeout)
     console.log(`[SYNC] Checking for duplicates...`);
-    let existingSet = new Set<string>();
+    const existingSet = new Set<string>();
     try {
-      const existingTxIds = await withTimeout(
+      const existingTxIds = await withTimeout<Array<{ plaidTransactionId: string | null; reference: string | null }>>(
         db.select({ plaidTransactionId: bankTransactions.plaidTransactionId, reference: bankTransactions.reference })
           .from(bankTransactions).where(eq(bankTransactions.userId, userId)),
         5000, "Get existing transactions"
@@ -663,89 +896,251 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
       }
     } catch { /* if table/column doesn't exist yet, proceed without dedup */ }
 
-    const newTxs = allTxs.filter((tx: any) => !existingSet.has(tx.transaction_id));
+    const unsaved = allTxs.filter(({ tx }) => !existingSet.has(tx.transaction_id));
+    // Already saved by an older connection of the same bank (another Plaid id for the same movement).
+    const twinSaved = await savedByOlderTwin(db, userId, shadowed, unsaved.map(({ tx, item }) => ({ tx, accountId: accountOf(tx, item).id })));
+    const newTxs = unsaved.filter(({ tx }) => !twinSaved.has(tx.transaction_id));
     const duplicates = allTxs.length - newTxs.length;
     console.log(`[SYNC] New: ${newTxs.length}, Duplicates: ${duplicates}`);
 
     if (newTxs.length === 0) {
-      return { success: true, added: 0, message: "Todas las transacciones ya estaban sincronizadas." };
+      return { success: true, added: 0, message: "Todas las transacciones ya estaban sincronizadas.", failedItems };
     }
 
-    // Step 5: Insert transactions
+    // Step 5: Insert transactions, each under its own account (else the first account of its own bank)
     console.log(`[SYNC] Inserting ${newTxs.length} transactions...`);
     let added = 0;
     let skipped = 0;
-    const journalTxs: any[] = [];
 
-    for (const tx of newTxs) {
+    for (const { tx, item } of newTxs) {
       try {
-        const plaidAmount = tx.amount;
-        const { type, category } = determineTypeAndCategory(plaidAmount, tx.personal_finance_category?.detailed ? [tx.personal_finance_category.primary, tx.personal_finance_category.detailed] : tx.category || [], tx.name);
-        const absAmount = Math.abs(plaidAmount);
-        if (absAmount === 0) { skipped++; continue; }
-
-        const targetAccount = accountMap.get(tx.account_id) || primaryAccount;
-        const txDate = tx.date ? new Date(tx.date) : new Date();
-        const normalizedMerchant = normalizeMerchantName(tx.name);
-
-        // Log each transaction being inserted
-        console.log(`[SYNC] Inserting: "${tx.name}" | amount=${absAmount} | category=${category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | plaid_account=${tx.account_id}`);
-
-        const txData = {
-          userId, bankAccountId: targetAccount.id,
-          bankName: targetAccount.bankName, accountNumber: targetAccount.accountNumber,
-          transactionDate: txDate, description: tx.name,
-          amount: String(absAmount.toFixed(2)), plaidAmount: String(plaidAmount.toFixed(2)),
-          type, category: category as any,
-          subcategory: tx.personal_finance_category?.detailed || tx.category?.[1] || null,
-          plaidTransactionId: tx.transaction_id,
-          plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
-          merchantName: normalizedMerchant,
-          syncStatus: "synced" as const, lastSyncedAt: new Date(),
-          reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
-        };
-        console.log(`[SYNC] Inserting tx:`, JSON.stringify(txData));
+        if (Math.abs(tx.amount) === 0 || existingSet.has(tx.transaction_id)) { skipped++; continue; }
+        const targetAccount = accountOf(tx, item);
+        const txData = plaidTransactionRow(userId, targetAccount, tx);
+        if (await takeOverPending(db, userId, tx, txData)) { existingSet.add(tx.transaction_id); added++; continue; }
+        console.log(`[SYNC] Inserting: "${tx.name}" | amount=${txData.amount} | category=${txData.category} | account=${targetAccount.bankName} (id=${targetAccount.id}) | bank=${item.key} | plaid_account=${tx.account_id}`);
         await db.insert(bankTransactions).values(txData);
+        existingSet.add(tx.transaction_id);
         added++;
-        journalTxs.push({ type, category, amount: absAmount, description: tx.name, date: txDate, bankAccountId: targetAccount.id });
-      } catch (e: any) {
-        console.error(`[SYNC] Insert error for ${tx.transaction_id}: ${e.message}`);
+      } catch (e: unknown) {
+        console.error(`[SYNC] Insert error for ${tx.transaction_id}: ${e instanceof Error ? e.message : e}`);
         skipped++;
       }
     }
 
     console.log(`[SYNC] Inserted: ${added}, Skipped: ${skipped}`);
 
-    // Step 6: Journal entries (best effort, 5s timeout)
-    if (journalTxs.length > 0) {
-      try {
-        await withTimeout(createJournalEntries(db, journalTxs, userId), 5000, "Journal entries");
-        console.log(`[SYNC] Journal entries created`);
-      } catch { console.log(`[SYNC] Journal entries skipped`); }
-    }
 
-    // Step 7: Update balances (best effort, 10s timeout)
-    try {
-      const accountsRes = await withTimeout(
-        client.accountsGet({ access_token: primaryAccount.plaidAccessToken }),
-        10000, "Update balances"
-      );
-      for (const plaidAcc of accountsRes.data.accounts || []) {
-        const dbAccount = accountMap.get(plaidAcc.account_id);
-        if (dbAccount && plaidAcc.balances) {
-          const bal = plaidBalance(plaidAcc);
-          if (bal != null) await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
+    // Step 6: Update balances of the banks that answered (best effort, 10s timeout each)
+    const balances = await forEachItem(db, userId, live.map((r) => r.item), (item) =>
+      withTimeout<{ data: AccountsGetResponse }>(client.accountsGet({ access_token: item.token }), 10000, "Update balances"));
+    for (const r of balances) {
+      if (!r.ok) { console.log(`[SYNC] Balance update skipped for bank ${r.item.key}`); continue; }
+      try {
+        for (const plaidAcc of r.value.data.accounts || []) {
+          const dbAccount = accountMap.get(plaidAcc.account_id);
+          if (dbAccount && plaidAcc.balances && !shadowed.has(dbAccount.id)) {
+            const bal = plaidBalance(plaidAcc);
+            if (bal != null) await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
+          }
         }
-      }
-      console.log(`[SYNC] Balances updated`);
-    } catch { console.log(`[SYNC] Balance update skipped`); }
+        await repairAccountNames(db, userId, userAccounts, r.value.data.accounts || []);
+      } catch { console.log(`[SYNC] Balance update skipped for bank ${r.item.key}`); }
+    }
+    console.log(`[SYNC] Balances updated`);
 
     const duration = Date.now() - (startTime || Date.now());
     console.log(`[SYNC] Complete in ${duration}ms. Added: ${added}`);
-    return { success: true, added, total: allTxs.length, duplicates, message: added > 0 ? `${added} transacciones sincronizadas` : "Sin transacciones nuevas" };
-  } catch (err: any) {
+    return { success: true, added, total: allTxs.length, duplicates, message: added > 0 ? `${added} transacciones sincronizadas` : "Sin transacciones nuevas", failedItems };
+  } catch (err: unknown) {
     console.error(`[SYNC] Fatal error:`, err);
-    return { success: false, error: err.message || "Error desconocido en sincronizacion" };
+    return { success: false, error: (err instanceof Error && err.message) || "Error desconocido en sincronizacion" };
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+// BACKGROUND JOBS (api/boot.ts): every user's banks, without anyone online
+// ═══════════════════════════════════════════════════════════
+// Production runs these every few minutes for ALL users, so they are careful by design:
+// - one Plaid call per bank connection, one bank failing never stops the rest (its status is recorded);
+// - the transaction job only ADDS settled movements of the last 30 days that aren't saved yet (dedup by
+//   plaidTransactionId, and the unique index as a second guard). It never updates or deletes a saved row, so
+//   reviewed movements and closed periods are untouched; running it again adds nothing;
+// - a per-run cap on inserts (the rest comes on the next run) and a guard so two runs never overlap.
+
+/** Days of movements the background job looks at. */
+export const BG_SYNC_DAYS = 30;
+/** Most movements the background job saves in one run (all users); the rest is saved on the next runs. */
+export const BG_MAX_INSERTS_PER_RUN = 2000;
+/** Pages (500 movements each) the background job reads per bank and run. */
+const BG_MAX_PAGES = 4;
+
+type BgOptions = { client?: PlaidCalls | null; maxInserts?: number; userIds?: number[] };
+
+/** The jobs only run with Plaid credentials (a server without them, e.g. a local one, has nothing to sync). */
+const bgPlaid = async (opts: BgOptions): Promise<PlaidCalls | null> =>
+  (opts.client !== undefined ? opts.client : process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET ? await initPlaid() : null);
+
+/** Every user's connected accounts, grouped by user and then by bank connection (older duplicates skipped: connectionsOf). */
+async function allUsersItems(db: Db, userIds?: number[]): Promise<Array<{ userId: number; accounts: BankAccount[] } & Connections>> {
+  const rows: BankAccount[] = userIds
+    ? (userIds.length ? await db.select().from(bankAccounts).where(inArray(bankAccounts.userId, userIds)) : [])
+    : await db.select().from(bankAccounts);
+  const byUser = new Map<number, BankAccount[]>();
+  for (const a of rows) {
+    const list = byUser.get(Number(a.userId));
+    if (list) list.push(a); else byUser.set(Number(a.userId), [a]);
+  }
+  const out: Array<{ userId: number; accounts: BankAccount[] } & Connections> = [];
+  for (const [userId, accounts] of byUser) {
+    const c = await connectionsOf(db, userId, accounts);
+    if (c.items.length > 0) out.push({ userId, accounts, ...c });
+  }
+  return out;
+}
+
+let balancesRunning = false;
+let transactionsRunning = false;
+
+/** Background: every connected bank's balances, for every user. Never throws. */
+export async function syncAllBankBalances(opts: BgOptions = {}): Promise<{ banks: number; failed: number; updated: number; skipped?: "running" | "no-plaid" }> {
+  if (balancesRunning) return { banks: 0, failed: 0, updated: 0, skipped: "running" };
+  balancesRunning = true;
+  let banks = 0, failed = 0, updated = 0;
+  try {
+    const client = await bgPlaid(opts);
+    if (!client) return { banks, failed, updated, skipped: "no-plaid" };
+    const db = getDb();
+    for (const { userId, items, shadowed } of await allUsersItems(db, opts.userIds)) {
+      for (const item of items) {
+        banks++;
+        try {
+          const res = await trackPlaid(db, userId, item.key, () => withTimeout(client.accountsGet({ access_token: item.token }), 15000, "Background balances"));
+          const fresh = new Map<string, string>();
+          for (const plaidAcc of res.data.accounts || []) {
+            const bal = plaidBalance(plaidAcc);
+            if (bal != null) fresh.set(plaidAcc.account_id, bal);
+          }
+          for (const acc of item.accounts) {
+            if (shadowed.has(acc.id)) continue; // an older duplicate of an account: the newest connection has it
+            const bal = acc.plaidAccountId ? fresh.get(acc.plaidAccountId) : undefined;
+            if (bal == null || Number(bal) === Number(acc.currentBalance)) continue;
+            await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() })
+              .where(and(eq(bankAccounts.id, acc.id), eq(bankAccounts.userId, userId)));
+            updated++;
+          }
+        } catch (e: unknown) {
+          failed++;
+          console.error(`[bg-sync] balances of bank ${item.key} (user ${userId}) skipped: ${plaidErrorCode(e) ?? plaidMessageOf(e)}`);
+        }
+      }
+    }
+    return { banks, failed, updated };
+  } catch (e: unknown) {
+    console.error("[bg-sync] Fatal error:", e instanceof Error ? e.message : e);
+    return { banks, failed, updated };
+  } finally {
+    balancesRunning = false;
+  }
+}
+
+/**
+ * Background: every connected bank's new movements of the last 30 days, for every user, saved the same way as
+ * the sync (plaidTransactionRow). Only adds rows (a row saved while pending becomes the settled movement:
+ * takeOverPending); settled movements only (a pending one gets a new id once it posts, so it would come back twice); movements of accounts that aren't saved yet wait until the account is.
+ * Never throws.
+ */
+export async function syncAllBankTransactions(opts: BgOptions = {}): Promise<{ banks: number; failed: number; added: number; capped: boolean; skipped?: "running" | "no-plaid" }> {
+  if (transactionsRunning) return { banks: 0, failed: 0, added: 0, capped: false, skipped: "running" };
+  transactionsRunning = true;
+  let banks = 0, failed = 0, added = 0, capped = false;
+  const maxInserts = Math.max(0, opts.maxInserts ?? BG_MAX_INSERTS_PER_RUN);
+  try {
+    const client = await bgPlaid(opts);
+    if (!client) return { banks, failed, added, capped, skipped: "no-plaid" };
+    const db = getDb();
+    const now = new Date();
+    const endDate = now.toISOString().split("T")[0];
+    const startDate = new Date(now.getTime() - BG_SYNC_DAYS * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+    users: for (const { userId, accounts, items, shadowed } of await allUsersItems(db, opts.userIds)) {
+      // Accounts movements are saved under (an older duplicate of an account is left out: connectionsOf).
+      const accountMap = new Map<string, BankAccount>();
+      for (const acc of accounts) if (acc.plaidAccountId && !shadowed.has(acc.id)) accountMap.set(acc.plaidAccountId, acc);
+      for (const item of items) {
+        if (added >= maxInserts) { capped = true; break users; }
+        banks++;
+        let txs: Transaction[];
+        try {
+          txs = await trackPlaid(db, userId, item.key, () => fetchItemTransactions(client, item.token, startDate, endDate, BG_MAX_PAGES));
+        } catch (e: unknown) {
+          failed++;
+          console.error(`[tx-sync] bank ${item.key} (user ${userId}) skipped: ${plaidErrorCode(e) ?? plaidMessageOf(e)}`);
+          continue;
+        }
+        try {
+          await rememberMerchantLogos(db, txs);
+
+          const candidates = txs.filter((tx) => tx.transaction_id && !tx.pending && Math.abs(tx.amount) > 0 && accountMap.has(tx.account_id));
+          if (candidates.length === 0) continue;
+          // Already saved: by plaidTransactionId (unique across the table), or as this user's reference.
+          const ids = [...new Set(candidates.map((tx) => tx.transaction_id))];
+          const saved = new Set<string>();
+          for (let i = 0; i < ids.length; i += 500) {
+            const chunk = ids.slice(i, i + 500);
+            const byId: Array<{ id: string | null }> = await db.select({ id: bankTransactions.plaidTransactionId }).from(bankTransactions)
+              .where(inArray(bankTransactions.plaidTransactionId, chunk));
+            const byRef: Array<{ id: string | null }> = await db.select({ id: bankTransactions.reference }).from(bankTransactions)
+              .where(and(eq(bankTransactions.userId, userId), inArray(bankTransactions.reference, chunk)));
+            for (const r of [...byId, ...byRef]) if (r.id) saved.add(r.id);
+          }
+          // Already saved by an older connection of the same bank, under another Plaid id.
+          const twinSaved = await savedByOlderTwin(db, userId, shadowed, candidates.flatMap((tx) => {
+            const account = accountMap.get(tx.account_id);
+            return account && !saved.has(tx.transaction_id) ? [{ tx, accountId: account.id }] : [];
+          }));
+          const values: Array<ReturnType<typeof plaidTransactionRow>> = [];
+          for (const tx of candidates) {
+            const account = accountMap.get(tx.account_id);
+            if (!account || saved.has(tx.transaction_id) || twinSaved.has(tx.transaction_id)) continue;
+            saved.add(tx.transaction_id);
+            const row = plaidTransactionRow(userId, account, tx);
+            if (await takeOverPending(db, userId, tx, row)) continue;
+            values.push(row);
+          }
+          if (values.length === 0) continue;
+
+          const room = maxInserts - added;
+          if (values.length > room) { capped = true; values.length = room; }
+          let addedHere = 0;
+          for (let i = 0; i < values.length; i += 100) {
+            const chunk = values.slice(i, i + 100);
+            try {
+              await db.insert(bankTransactions).values(chunk);
+              addedHere += chunk.length;
+            } catch {
+              // One of them was saved meanwhile (the owner's own sync): save the rest one by one.
+              for (const v of chunk) {
+                try { await db.insert(bankTransactions).values(v); addedHere++; }
+                catch (e: unknown) { if (!isDuplicateKey(e)) console.error(`[tx-sync] insert failed (user ${userId}):`, e instanceof Error ? e.message : e); }
+              }
+            }
+          }
+          added += addedHere;
+          if (addedHere > 0) console.log(`[tx-sync] user ${userId}, bank ${item.key}: ${addedHere} new movement(s)`);
+        } catch (e: unknown) {
+          // A database problem with one bank never stops the others (nothing half-saved: each insert stands alone).
+          console.error(`[tx-sync] bank ${item.key} (user ${userId}) not saved:`, e instanceof Error ? e.message : e);
+        }
+      }
+    }
+    if (capped) console.log(`[tx-sync] reached ${maxInserts} new movements this run; the rest comes on the next run`);
+    return { banks, failed, added, capped };
+  } catch (e: unknown) {
+    console.error("[tx-sync] Fatal error:", e instanceof Error ? e.message : e);
+    return { banks, failed, added, capped };
+  } finally {
+    transactionsRunning = false;
   }
 }
 
@@ -838,6 +1233,33 @@ export function plaidBalance(acc: { type?: string | null; balances?: { available
   return v != null && !Number.isNaN(Number(v)) ? String(v) : null;
 }
 
+/**
+ * On every balance refresh: keep each account's name as Plaid sends it now. Repairs names saved broken
+ * ("Way2Save�� Savings") on the account and on its saved movements. Best effort: never throws.
+ */
+async function repairAccountNames(
+  db: ReturnType<typeof getDb>, userId: number,
+  dbAccounts: Array<{ id: number; plaidAccountId?: string | null; bankName?: string | null }>,
+  plaidAccounts: Array<{ account_id: string; name?: string | null; official_name?: string | null }>,
+) {
+  try {
+    const byPlaidId = new Map(plaidAccounts.map((p) => [p.account_id, p]));
+    for (const acc of dbAccounts) {
+      const p = acc.plaidAccountId ? byPlaidId.get(acc.plaidAccountId) : undefined;
+      const fixed = p ? repairedName(acc.bankName, p) : null;
+      if (!fixed) continue;
+      await db.update(bankAccounts).set({ bankName: fixed }).where(and(eq(bankAccounts.id, acc.id), eq(bankAccounts.userId, userId)));
+      if (acc.bankName) {
+        await db.update(bankTransactions).set({ bankName: fixed })
+          .where(and(eq(bankTransactions.userId, userId), eq(bankTransactions.bankAccountId, acc.id), eq(bankTransactions.bankName, acc.bankName)));
+      }
+      acc.bankName = fixed;
+    }
+  } catch (e: unknown) {
+    console.error("[bank] account name repair skipped:", e instanceof Error ? e.message : e);
+  }
+}
+
 export const bankRouter = createRouter({
   createLinkToken: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { linkToken: null, error: "No autenticado" };
@@ -913,7 +1335,7 @@ export const bankRouter = createRouter({
         if (exists.length > 0) {
           await db.update(bankAccounts).set({
             plaidAccessToken: accessToken, plaidItemId: itemId,
-            bankName: plaidAcc.name, accountType: plaidAcc.type,
+            bankName: cleanAccountName(plaidAcc.name, plaidAcc.official_name), accountType: plaidAcc.type,
             currentBalance: plaidBalance(plaidAcc) ?? "0",
             lastSyncedAt: new Date(), updatedAt: new Date(), isActive: true,
           }).where(eq(bankAccounts.id, exists[0].id));
@@ -921,13 +1343,16 @@ export const bankRouter = createRouter({
           await db.insert(bankAccounts).values({
             userId: ctx.user.id, plaidAccountId: plaidAcc.account_id,
             plaidAccessToken: accessToken, plaidItemId: itemId,
-            bankName: plaidAcc.name, accountType: plaidAcc.type,
+            bankName: cleanAccountName(plaidAcc.name, plaidAcc.official_name), accountType: plaidAcc.type,
             accountNumber: plaidAcc.mask || "", currency: "USD",
             currentBalance: plaidBalance(plaidAcc) ?? "0",
             isActive: true, lastSyncedAt: new Date(),
           });
         }
       }
+      // The bank's original logo, name and color from Plaid, and a fresh "ok" (best effort: never blocks the connection).
+      try { await refreshInstitution(db, client as PlaidLike, Number(ctx.user.id), itemId, accessToken); }
+      catch (e: unknown) { console.error("[exchangePublicToken] institution not saved:", e instanceof Error ? e.message : e); }
       return { success: true, accountCount: plaidAccounts.length };
     } catch (err: any) {
       return { success: false, error: err.response?.data?.error_message || err.message || "Error" };
@@ -997,7 +1422,7 @@ export const bankRouter = createRouter({
   autoSync: authedQuery.mutation(async ({ ctx }) => doSyncTransactions(ctx, undefined, undefined, undefined, "auto")),
 
   // Sync recent transactions (last N days) — used on page load to catch new transactions
-  syncRecent: authedQuery.mutation(async ({ ctx }) => {
+  syncRecent: authedQuery.mutation(async ({ ctx }): Promise<SyncAnswer> => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
     if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay banco conectado" };
 
@@ -1046,172 +1471,175 @@ export const bankRouter = createRouter({
     if (!ctx.user) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     if (!await hasActiveBank(ctx.user.id)) return { transactions: [], income: "0", expense: "0", topExpense: "0", liveBalance: "0", monthName: "" };
     const db = getDb();
+    const userId = ctx.user.id;
     const { year, month, accountId } = input;
     const startStr = `${year}-${String(month).padStart(2, "0")}-01`;
     const endDay = new Date(year, month, 0).getDate();
     const endStr = `${year}-${String(month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
+    const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
-    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    const primaryAccount = userAccounts[0];
-    const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
-    const targetPlaidAccountId = selectedAccount?.plaidAccountId;
-
-    // ─── PLAID FIRST: Fetch from Plaid (bank is confirmed active above) ───
-    try {
-      const client = await initPlaid();
-      if (client && primaryAccount?.plaidAccessToken) {
-        const plaidRes = await client.transactionsGet({
-          access_token: primaryAccount.plaidAccessToken,
-          start_date: startStr, end_date: endStr,
-          options: { include_personal_finance_category: true, count: 500 },
-        });
-        let plaidTxs = plaidRes.data.transactions || [];
-
-        // NO FILTER by Plaid account_id - show ALL transactions from ALL accounts
-        console.log(`[getMonthData] Plaid returned ${plaidTxs.length} raw transactions:`);
-        for (const pt of plaidTxs.slice(0, 20)) {
-          console.log(`  - ${pt.name} | $${pt.amount} | cat=${pt.category?.join(',')} | date=${pt.date}`);
-        }
-
-        // Build account map
-
-        // Build account map
-        const plaidToDbAccount = new Map<string, typeof userAccounts[0]>();
-        for (const ua of userAccounts) {
-          if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
-        }
-
-        // Map and save to DB (best effort)
-        let mapped: any[] = [];
-        for (const pt of plaidTxs) {
-          const plaidAmount = pt.amount;
-          const absAmount = Math.abs(plaidAmount);
-          const { type, category } = determineTypeAndCategory(
-            plaidAmount,
-            pt.personal_finance_category?.detailed
-              ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
-              : pt.category || [],
-            pt.name
-          );
-          const targetAcc = plaidToDbAccount.get(pt.account_id) || primaryAccount;
-          const txRow = {
-            userId: ctx.user!.id,
-            bankAccountId: targetAcc.id,
-            bankName: targetAcc.bankName,
-            accountNumber: targetAcc.accountNumber,
-            transactionDate: pt.date ? new Date(pt.date) : new Date(),
-            description: pt.name,
-            amount: String(absAmount.toFixed(2)),
-            type: type as any,
-            category: category as any,
-            subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
-            plaidTransactionId: pt.transaction_id,
-            plaidAmount: String(plaidAmount.toFixed(2)),
-            plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
-            merchantName: pt.merchant_name || pt.name,
-            reference: pt.transaction_id,
-            lastSyncedAt: new Date(),
-            isReconciled: false,
-          };
-          mapped.push(txRow);
-          // Save to DB (cache) - ignore errors
-          try {
-            await db.insert(bankTransactions).values(txRow).onDuplicateKeyUpdate({
-              set: { bankAccountId: targetAcc.id, bankName: targetAcc.bankName, lastSyncedAt: new Date() },
-            });
-          } catch { /* ignore */ }
-        }
-        // The upsert above never touches isReconciled/category of a saved row. Movements the owner
-        // already reviewed show their category, not the one recomputed here (api/lib/bankReview.ts).
-        mapped = applyStoredReviews(mapped, await storedReviewsFor(db, ctx.user.id, mapped.map((t: { plaidTransactionId: string }) => t.plaidTransactionId)));
-
-        // Income/expense from Plaid data
-        let inc = 0, exp = 0;
-        for (const t of mapped) {
-          const amt = parseFloat(t.amount ?? "0");
-          if (amt <= 0) continue;
-          const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
-          if (plaidAmt !== null) {
-            if (plaidAmt < 0) inc += amt;
-            else exp += amt;
-          } else {
-            if (t.type === "income") inc += amt;
-            else exp += amt;
-          }
-        }
-
-        // Live balance from Plaid
-        let liveBalance = "0";
-        try {
-          const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
-          const freshBalances = new Map<string, string>();
-          for (const plaidAcc of accountsRes.data.accounts || []) {
-            const bal = plaidBalance(plaidAcc);
-            if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
-          }
-          // Update DB balances
-          for (const dbAccount of userAccounts) {
-            if (!dbAccount.plaidAccountId) continue;
-            const freshBal = freshBalances.get(dbAccount.plaidAccountId);
-            if (freshBal != null) {
-              await db.update(bankAccounts).set({ currentBalance: freshBal, lastSyncedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
-            }
-          }
-          if (targetPlaidAccountId) {
-            // For a specific account, show that account's balance
-            liveBalance = freshBalances.get(targetPlaidAccountId) ?? selectedAccount?.currentBalance ?? "0";
-          } else {
-            let total = 0;
-            for (const a of userAccounts) {
-              if (isDebtAccount(a.accountType)) continue;
-              const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
-              total += parseFloat(bal ?? "0");
-            }
-            liveBalance = String(total.toFixed(2));
-          }
-        } catch { liveBalance = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0"; }
-
-        // Filter by accountId if a specific account is selected
-        let filteredMapped = mapped;
-        if (accountId) {
-          filteredMapped = mapped.filter((t: any) => String(t.bankAccountId) === String(accountId));
-          console.log(`[getMonthData] Filtered to ${filteredMapped.length} transactions for accountId=${accountId}`);
-        }
-
-        // Recalculate income/expense from filtered data
-        let filteredInc = 0, filteredExp = 0;
-        for (const t of filteredMapped) {
-          const amt = parseFloat(t.amount ?? "0");
-          if (amt <= 0) continue;
-          const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
-          if (plaidAmt !== null) {
-            if (plaidAmt < 0) filteredInc += amt;
-            else filteredExp += amt;
-          } else {
-            if (t.type === "income") filteredInc += amt;
-            else filteredExp += amt;
-          }
-        }
-
-        // Plaid worked — return mapped transactions directly (no DB round-trip)
-        console.log(`[getMonthData] Returning ${filteredMapped.length} Plaid transactions directly`);
-        const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
-        return {
-          transactions: filteredMapped, income: String(filteredInc.toFixed(2)), expense: String(filteredExp.toFixed(2)),
-          topExpense: filteredMapped.length > 0 ? String(Math.max(...filteredMapped.map((t: any) => parseFloat(t.amount)))) : "0",
-          liveBalance, lastSyncedAt: new Date().toISOString(), fromPlaid: true,
-          monthName: `${monthNames[month]} ${year}`,
-        };
+    const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+    const selectedAccount = accountId ? userAccounts.find((a) => String(a.id) === String(accountId)) ?? null : null;
+    // The banks to ask: the selected account's bank, or every connected bank (each bank once: connectionsOf).
+    // An older duplicate of an account (shadowed) shows what was saved for it.
+    const { items: connections, shadowed } = await connectionsOf(db, userId, userAccounts);
+    const items = selectedAccount && shadowed.has(selectedAccount.id) ? []
+      : connections.filter((i) => !accountId || i.accounts.some((a) => String(a.id) === String(accountId)));
+    // What the screen shows as the balance: the selected account's, or the money in every account (not cards/loans).
+    const balanceWith = (fresh: Map<string, string>) => {
+      const pick = (a: BankAccount) => (a.plaidAccountId ? fresh.get(a.plaidAccountId) : undefined) ?? a.currentBalance ?? "0";
+      return accountId ? (selectedAccount ? pick(selectedAccount) : "0") : moneyTotal(userAccounts, pick, shadowed);
+    };
+    // Money in and out: Plaid's sign when there is one (− in, + out), else the saved type.
+    const totals = (rows: Array<{ amount?: string | null; plaidAmount?: string | null; type?: string | null }>) => {
+      let inc = 0, exp = 0;
+      for (const t of rows) {
+        const amt = parseFloat(t.amount ?? "0");
+        if (!(amt > 0)) continue;
+        const plaidAmt = t.plaidAmount != null ? parseFloat(t.plaidAmount) : null;
+        if (plaidAmt !== null ? plaidAmt < 0 : t.type === "income") inc += amt;
+        else exp += amt;
       }
-    } catch (plaidErr: any) {
-      console.error(`[getMonthData] Plaid error: ${plaidErr.message}`);
+      return { income: String(inc.toFixed(2)), expense: String(exp.toFixed(2)) };
+    };
+    const topOf = (rows: Array<{ amount?: string | null }>) => (rows.length > 0 ? String(Math.max(...rows.map((t) => parseFloat(t.amount ?? "0")))) : "0");
+    const dayOf = (d: unknown) => (d instanceof Date ? d.getTime() : new Date(String(d ?? "")).getTime() || 0);
+
+    // ─── PLAID FIRST: every connected bank at once; a bank Plaid can't read shows its saved movements ───
+    try {
+      const client = items.length > 0 ? await initPlaid() : null;
+      if (client) {
+        const fetched = await forEachItem(db, userId, items, (item) => fetchItemTransactions(client, item.token, startStr, endStr));
+        const live = fetched.filter(answered);
+        const failed = fetched.filter((r) => !r.ok).map((r) => r.item);
+        if (live.length > 0) {
+          const fetchedTxs = live.flatMap((r) => r.value.map((pt) => ({ pt, item: r.item })));
+          await rememberMerchantLogos(db, fetchedTxs.map((p) => p.pt));
+          // The logo Plaid sent with each movement (added to the rows returned below).
+          const directLogos = new Map<string, string>();
+          for (const { pt } of fetchedTxs) { const logo = directLogoOf(pt); if (logo) directLogos.set(pt.transaction_id, logo); }
+
+          // NO FILTER by Plaid account_id - show ALL transactions from ALL accounts of every bank
+          console.log(`[getMonthData] Plaid returned ${fetchedTxs.length} raw transactions from ${live.length} of ${items.length} bank(s)`);
+
+          // Build account map (Plaid account ids are unique across banks)
+          const plaidToDbAccount = new Map<string, BankAccount>();
+          for (const ua of userAccounts) {
+            if (ua.plaidAccountId) plaidToDbAccount.set(ua.plaidAccountId, ua);
+          }
+          // An older duplicate of an account (shadowed) is read from the newest connection only.
+          const accountOf = (pt: Transaction, item: PlaidItem) => plaidToDbAccount.get(pt.account_id) || item.accounts[0];
+          const plaidTxs = fetchedTxs.filter(({ pt, item }) => !shadowed.has(accountOf(pt, item).id));
+          // Movements an older connection of the same bank already saved (another Plaid id): shown, not saved again.
+          const twinSaved = await savedByOlderTwin(db, userId, shadowed, plaidTxs.map(({ pt, item }) => ({ tx: pt, accountId: accountOf(pt, item).id })));
+
+          // Map and save to DB (best effort)
+          let mapped: any[] = [];
+          for (const { pt, item } of plaidTxs) {
+            const plaidAmount = pt.amount;
+            const absAmount = Math.abs(plaidAmount);
+            const { type, category } = determineTypeAndCategory(plaidAmount, plaidCategoriesOf(pt), pt.name);
+            const targetAcc = accountOf(pt, item);
+            const txRow = {
+              userId,
+              bankAccountId: targetAcc.id,
+              bankName: targetAcc.bankName,
+              accountNumber: targetAcc.accountNumber,
+              transactionDate: pt.date ? new Date(pt.date) : new Date(),
+              description: pt.name,
+              amount: String(absAmount.toFixed(2)),
+              type,
+              category,
+              subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
+              plaidTransactionId: pt.transaction_id,
+              plaidAmount: String(plaidAmount.toFixed(2)),
+              plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
+              merchantName: pt.merchant_name || pt.name,
+              reference: pt.transaction_id,
+              lastSyncedAt: new Date(),
+              isReconciled: false,
+              importedFrom: "plaid",
+            };
+            mapped.push(txRow);
+            // Save to DB (cache) - ignore errors. The day as noon UTC; an existing row is updated only if it's this user's.
+            if (twinSaved.has(pt.transaction_id)) continue;
+            try {
+              await db.insert(bankTransactions).values({ ...txRow, transactionDate: plaidDay(pt.date) }).onDuplicateKeyUpdate({ set: ownRowUpdate(userId, targetAcc) });
+            } catch { /* ignore */ }
+          }
+          // The upsert above never touches isReconciled/category of a saved row. Movements the owner
+          // already reviewed show their category, not the one recomputed here (api/lib/bankReview.ts).
+          mapped = applyStoredReviews(mapped, await storedReviewsFor(db, userId, mapped.map((t: { plaidTransactionId: string }) => t.plaidTransactionId)));
+
+          // A bank Plaid couldn't read this time: its saved movements of the month, so no bank goes missing.
+          const failedIds = failed.flatMap((item) => item.accounts.filter((a) => !shadowed.has(a.id)).map((a) => a.id));
+          if (failedIds.length > 0) {
+            try {
+              const saved: BankTransaction[] = await db.select().from(bankTransactions).where(and(
+                eq(bankTransactions.userId, userId),
+                inArray(bankTransactions.bankAccountId, failedIds),
+                sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
+              ));
+              mapped = [...mapped, ...saved];
+            } catch (dbErr: unknown) {
+              console.error(`[getMonthData] saved movements of unreachable banks not loaded: ${dbErr instanceof Error ? dbErr.message : dbErr}`);
+            }
+          }
+
+          // Live balances of the banks that answered (the others keep their saved balance)
+          let liveBalance = "0";
+          try {
+            const balances = await forEachItem(db, userId, live.map((r) => r.item), (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
+            const freshBalances = freshBalancesOf(balances);
+            // Update DB balances
+            for (const dbAccount of userAccounts) {
+              if (!dbAccount.plaidAccountId || shadowed.has(dbAccount.id)) continue;
+              const freshBal = freshBalances.get(dbAccount.plaidAccountId);
+              if (freshBal != null) {
+                await db.update(bankAccounts).set({ currentBalance: freshBal, lastSyncedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
+              }
+            }
+            for (const r of balances) if (r.ok) await repairAccountNames(db, userId, userAccounts, r.value.data.accounts || []);
+            const nameOf = new Map<number, string>(userAccounts.map((a) => [a.id, a.bankName]));
+            for (const t of mapped) t.bankName = nameOf.get(t.bankAccountId) ?? t.bankName;
+            liveBalance = balanceWith(freshBalances);
+          } catch { liveBalance = balanceWith(new Map()); }
+
+          // Filter by accountId if a specific account is selected
+          let filteredMapped = mapped;
+          if (accountId) {
+            filteredMapped = mapped.filter((t: { bankAccountId: number | null }) => String(t.bankAccountId) === String(accountId));
+            console.log(`[getMonthData] Filtered to ${filteredMapped.length} transactions for accountId=${accountId}`);
+          }
+          // Newest first across banks (each bank's list already is).
+          if (live.length + failed.length > 1) filteredMapped = [...filteredMapped].sort((a, b) => dayOf(b.transactionDate) - dayOf(a.transactionDate));
+
+          // Income/expense from the filtered data
+          const { income, expense } = totals(filteredMapped);
+
+          // Each movement's original merchant logo: the one Plaid sent with it, else the merchant's saved one.
+          filteredMapped = await withMerchantLogos(db, filteredMapped.map((t: { plaidTransactionId: string | null; logoUrl?: string | null }) => ({ ...t, logoUrl: (t.plaidTransactionId ? directLogos.get(t.plaidTransactionId) : undefined) ?? t.logoUrl ?? null })));
+
+          // Plaid worked — return mapped transactions directly (no DB round-trip). fromPlaid: every bank answered.
+          console.log(`[getMonthData] Returning ${filteredMapped.length} transactions (${failed.length} bank(s) from saved data)`);
+          return {
+            transactions: filteredMapped, income, expense,
+            topExpense: topOf(filteredMapped),
+            liveBalance, lastSyncedAt: new Date().toISOString(), fromPlaid: failed.length === 0,
+            failedItems: failed.map((i) => i.key),
+            monthName: `${monthNames[month]} ${year}`,
+          };
+        }
+      }
+    } catch (plaidErr: unknown) {
+      console.error(`[getMonthData] Plaid error: ${plaidErr instanceof Error ? plaidErr.message : plaidErr}`);
     }
 
     // ─── FALLBACK: Query DB when Plaid fails ───
     let fallbackTxs: any[] = [];
     try {
       const conditions = [
-        eq(bankTransactions.userId, ctx.user.id),
+        eq(bankTransactions.userId, userId),
         sql`${bankTransactions.transactionDate} BETWEEN ${startStr} AND ${endStr}`,
       ];
       // Filter by accountId when a specific account is selected
@@ -1221,19 +1649,22 @@ export const bankRouter = createRouter({
       fallbackTxs = await db.select().from(bankTransactions)
         .where(and(...conditions))
         .orderBy(desc(bankTransactions.transactionDate));
-    } catch (dbErr: any) {
-      console.error(`[getMonthData] DB fallback error: ${dbErr.message}`);
+    } catch (dbErr: unknown) {
+      console.error(`[getMonthData] DB fallback error: ${dbErr instanceof Error ? dbErr.message : dbErr}`);
     }
 
-    const fbInc = fallbackTxs.filter((t: any) => t.type === "income").reduce((s: number, t: any) => s + parseFloat(t.amount ?? "0"), 0);
-    const fbExp = fallbackTxs.filter((t: any) => t.type === "expense").reduce((s: number, t: any) => s + parseFloat(t.amount ?? "0"), 0);
-    const fbBal = selectedAccount?.currentBalance ?? primaryAccount?.currentBalance ?? "0";
-    const monthNames = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+    fallbackTxs = await withMerchantLogos(db, fallbackTxs);
+
+    const fbInc = fallbackTxs.filter((t: BankTransaction) => t.type === "income").reduce((s: number, t: BankTransaction) => s + parseFloat(t.amount ?? "0"), 0);
+    const fbExp = fallbackTxs.filter((t: BankTransaction) => t.type === "expense").reduce((s: number, t: BankTransaction) => s + parseFloat(t.amount ?? "0"), 0);
+    // The saved balance: the selected account's, or the money in every account (the same rule as above).
+    const fbBal = balanceWith(new Map());
 
     return {
       transactions: fallbackTxs, income: String(fbInc.toFixed(2)), expense: String(fbExp.toFixed(2)),
-      topExpense: fallbackTxs.length > 0 ? String(Math.max(...fallbackTxs.map((t: any) => parseFloat(t.amount)))) : "0",
+      topExpense: topOf(fallbackTxs),
       liveBalance: fbBal, lastSyncedAt: null, fromPlaid: false,
+      failedItems: items.map((i) => i.key),
       monthName: `${monthNames[month]} ${year}`,
     };
   }),
@@ -1330,66 +1761,54 @@ export const bankRouter = createRouter({
       .where(and(...conditions))
       .orderBy(desc(bankTransactions.transactionDate));
 
-    // If no DB results, fetch from Plaid
-    if (txs.length === 0) {
+    // If no DB results, fetch from Plaid: every connected bank (or the selected account's bank)
+    if (txs.length === 0 && startStr && endStr) {
       try {
-        const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-        const primaryAccount = userAccounts[0];
-        const selectedAccount = accountId ? userAccounts.find((a: any) => String(a.id) === String(accountId)) : null;
-        const targetPlaidAccountId = selectedAccount?.plaidAccountId;
+        const userId = ctx.user.id;
+        const from = startStr, to = endStr;
+        const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
+        // Each bank once (connectionsOf); an older duplicate of an account has only what was saved for it.
+        const { items: connections, shadowed } = await connectionsOf(db, userId, userAccounts);
+        const items = accountId && shadowed.has(accountId) ? []
+          : connections.filter((i) => !accountId || i.accounts.some((a) => String(a.id) === String(accountId)));
 
         // Build account map for correct bankAccountId
-        const plaidToDbAccount2 = new Map<string, typeof userAccounts[0]>();
+        const plaidToDbAccount2 = new Map<string, BankAccount>();
         for (const ua of userAccounts) { if (ua.plaidAccountId) plaidToDbAccount2.set(ua.plaidAccountId, ua); }
 
-        const client = await initPlaid();
-        if (client && primaryAccount?.plaidAccessToken && startStr && endStr) {
-          const plaidRes = await client.transactionsGet({
-            access_token: primaryAccount.plaidAccessToken,
-            start_date: startStr,
-            end_date: endStr,
-            options: { include_personal_finance_category: true, count: 500 },
-          });
-          let plaidTxs = plaidRes.data.transactions || [];
+        const client = items.length > 0 ? await initPlaid() : null;
+        if (client) {
+          const fetched = await forEachItem(db, userId, items, (item) => fetchItemTransactions(client, item.token, from, to, 4));
+          const fetchedTxs = fetched.filter(answered).flatMap((r) => r.value.map((pt) => ({ pt, item: r.item })));
+          await rememberMerchantLogos(db, fetchedTxs.map((p) => p.pt));
+          const accountOf = (pt: Transaction, item: PlaidItem) => plaidToDbAccount2.get(pt.account_id) || item.accounts[0];
+          const plaidTxs = fetchedTxs.filter(({ pt, item }) => !shadowed.has(accountOf(pt, item).id));
+          // Already saved by an older connection of the same bank (another Plaid id): that saved row is the one that counts.
+          const twinSaved = await savedByOlderTwin(db, userId, shadowed, plaidTxs.map(({ pt, item }) => ({ tx: pt, accountId: accountOf(pt, item).id })));
 
-          // Filter by category
-          const { category: determinedCat } = determineTypeAndCategory(0, [category], "");
-          plaidTxs = plaidTxs.filter((pt: any) => {
-            const { category: ptCat } = determineTypeAndCategory(
-              pt.amount,
-              pt.personal_finance_category?.detailed
-                ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
-                : pt.category || [],
-              pt.name
-            );
-            return ptCat === category;
-          });
-
-          // Deduplicate by transaction_id and assign correct bankAccountId
+          // This category only (and the selected account), deduplicated by transaction_id, each under its own account
           const seenIds2 = new Set<string>();
-          txs = plaidTxs.map((pt: any) => {
+          const found = [];
+          for (const { pt, item } of plaidTxs) {
+            if (seenIds2.has(pt.transaction_id) || twinSaved.has(pt.transaction_id)) continue;
             const plaidAmount = pt.amount;
-            const absAmount = Math.abs(plaidAmount);
-            const determined = determineTypeAndCategory(
-              plaidAmount,
-              pt.personal_finance_category?.detailed
-                ? [pt.personal_finance_category.primary, pt.personal_finance_category.detailed]
-                : pt.category || [],
-              pt.name
-            );
-            const targetAcc = plaidToDbAccount2.get(pt.account_id) || primaryAccount;
-            return {
-              id: pt.transaction_id,
-              userId: ctx.user!.id,
+            const determined = determineTypeAndCategory(plaidAmount, plaidCategoriesOf(pt), pt.name);
+            if (determined.category !== category) continue;
+            const targetAcc = accountOf(pt, item);
+            if (accountId && String(targetAcc.id) !== String(accountId)) continue;
+            seenIds2.add(pt.transaction_id);
+            // What's saved (the id column is the database's own: never the Plaid id).
+            const row = {
+              userId,
               bankAccountId: targetAcc.id,  // ← CORRECT bankAccountId
               bankName: targetAcc.bankName,
               accountNumber: targetAcc.accountNumber,
               transactionDate: pt.date ? new Date(pt.date) : new Date(),
               transactionTime: null,
               description: pt.name,
-              amount: String(absAmount.toFixed(2)),
-              type: determined.type as any,
-              category: determined.category as any,
+              amount: String(Math.abs(plaidAmount).toFixed(2)),
+              type: determined.type,
+              category: determined.category,
               subcategory: pt.personal_finance_category?.detailed || pt.category?.[1] || null,
               reference: pt.transaction_id,
               plaidAmount: String(plaidAmount.toFixed(2)),
@@ -1399,27 +1818,21 @@ export const bankRouter = createRouter({
               isDuplicate: false,
               lastSyncedAt: new Date(),
               isReconciled: false,
-              importedFrom: "plaid" as any,
-              createdAt: new Date(),
+              importedFrom: "plaid",
             };
-          }).filter((tx: any) => {
-            if (seenIds2.has(tx.id)) return false;
-            seenIds2.add(tx.id);
-            return true;
-          });
-
-          // Save to DB with correct bankAccountId
-          if (txs.length > 0) {
+            // Save to DB with correct bankAccountId (best effort; a saved row keeps its review and category, and
+            // only this user's row is ever updated). The day is saved as noon UTC.
             try {
-              for (const tx of txs) {
-                await db.insert(bankTransactions).values(tx).onDuplicateKeyUpdate({
-                  set: { bankAccountId: tx.bankAccountId, bankName: tx.bankName, lastSyncedAt: new Date() },
-                });
-              }
+              await db.insert(bankTransactions).values({ ...row, transactionDate: plaidDay(pt.date) }).onDuplicateKeyUpdate({ set: ownRowUpdate(userId, targetAcc) });
             } catch { /* ignore */ }
-            // A movement the owner reviewed keeps their category (api/lib/bankReview.ts): if they moved it
-            // to another category, it no longer belongs in this list.
-            txs = applyStoredReviews(txs, await storedReviewsFor(db, ctx.user.id, txs.map((t: { plaidTransactionId: string }) => t.plaidTransactionId)))
+            // Until it's matched with its saved row below, the Plaid id stands in as the row's id.
+            found.push({ ...row, id: pt.transaction_id as string | number, logoUrl: directLogoOf(pt), createdAt: new Date() });
+          }
+
+          if (found.length > 0) {
+            // Saved rows get their real (numeric) id here. A movement the owner reviewed keeps their category
+            // (api/lib/bankReview.ts): if they moved it to another category, it no longer belongs in this list.
+            txs = applyStoredReviews(found, await storedReviewsFor(db, userId, found.map((t) => t.plaidTransactionId)))
               .filter((t: { category: string }) => t.category === category);
           }
         }
@@ -1434,7 +1847,8 @@ export const bankRouter = createRouter({
       }
     }
 
-    return txs;
+    // Each movement's original merchant logo (`logoUrl`, null when there's none).
+    return withMerchantLogos(db, txs);
   }),
 
   // ─── GET YEAR DATA (annual summary for selected account) ───
@@ -1659,133 +2073,140 @@ export const bankRouter = createRouter({
   }),
 
   // ─── LIVE BALANCE ───
-  getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }) => {
+  getLiveBalance: authedQuery.input(z.object({ accountId: z.number().optional() }).optional()).query(async ({ input, ctx }): Promise<{ balance: string; liveBalance: string; bookBalance: string; bankName?: string; accountCount: number }> => {
     if (!ctx.user) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
     const db = getDb();
+    const userId = ctx.user.id;
 
     // Get user accounts
-    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
     if (userAccounts.length === 0) return { balance: "0", liveBalance: "0", bookBalance: "0", accountCount: 0 };
 
-    const primaryAccount = userAccounts[0];
-    if (!primaryAccount?.plaidAccessToken) {
-      // No Plaid token — return DB balance
-      const totalBal = userAccounts.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
-      return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: userAccounts[0]?.bankName ?? "Banco", accountCount: userAccounts.length };
-    }
+    const accountId = input?.accountId;
+    const targetAcc = accountId ? userAccounts.find((a) => Number(a.id) === Number(accountId)) : undefined;
+    // Each bank once (connectionsOf): an older duplicate of an account isn't asked for, nor counted twice.
+    const { items: connections, shadowed } = await connectionsOf(db, userId, userAccounts);
+    // The selected account's balance, or the money in every account (cards and loans are what's owed, not money).
+    const resultWith = (fresh: Map<string, string>) => {
+      const pick = (a: BankAccount) => (a.plaidAccountId ? fresh.get(a.plaidAccountId) : undefined) ?? a.currentBalance ?? "0";
+      return accountId ? (targetAcc ? pick(targetAcc) : "0") : moneyTotal(userAccounts, pick, shadowed);
+    };
+    const answer = (bal: string) => ({ balance: bal, liveBalance: bal, bookBalance: bal, bankName: userAccounts[0]?.bankName ?? "Banco", accountCount: userAccounts.length });
 
-    // Fetch REAL balance from Plaid
+    // The banks to ask: the selected account's bank, or every connected bank. An older duplicate: its saved balance.
+    const items = targetAcc && shadowed.has(targetAcc.id) ? []
+      : connections.filter((i) => !accountId || i.accounts.some((a) => Number(a.id) === Number(accountId)));
+    // No Plaid token — return DB balance
+    if (items.length === 0) return answer(resultWith(new Map()));
+
+    // Fetch REAL balances from Plaid, bank by bank (a bank that fails keeps its saved balance)
     try {
       const client = await initPlaid();
       if (!client) throw new Error("Plaid not initialized");
 
-      const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
-      const freshBalances = new Map<string, string>();
+      const outcomes = await forEachItem(db, userId, items, (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
+      if (!outcomes.some((r) => r.ok)) throw new Error("No bank answered");
+      const freshBalances = freshBalancesOf(outcomes);
 
-      for (const plaidAcc of accountsRes.data.accounts || []) {
-        const bal = plaidBalance(plaidAcc);
-        if (bal != null) freshBalances.set(plaidAcc.account_id, bal);
-      }
-
-      console.log(`[getLiveBalance] Plaid returned ${freshBalances.size} balances:`, Array.from(freshBalances.entries()));
+      console.log(`[getLiveBalance] Plaid returned ${freshBalances.size} balances from ${outcomes.filter((r) => r.ok).length} of ${items.length} bank(s)`);
 
       // Update DB with fresh balances
       for (const dbAccount of userAccounts) {
-        if (!dbAccount.plaidAccountId) continue;
+        if (!dbAccount.plaidAccountId || shadowed.has(dbAccount.id)) continue;
         const freshBal = freshBalances.get(dbAccount.plaidAccountId);
         if (freshBal != null) {
           await db.update(bankAccounts).set({ currentBalance: freshBal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
         }
       }
+      for (const r of outcomes) if (r.ok) await repairAccountNames(db, userId, userAccounts, r.value.data.accounts || []);
 
       // Calculate result
-      let resultBalance = "0";
-      if (input?.accountId) {
-        const targetAcc = userAccounts.find((a: any) => a.id == input.accountId);
-        const plaidId = targetAcc?.plaidAccountId;
-        const freshBal = plaidId ? freshBalances.get(plaidId) : null;
-        resultBalance = freshBal ?? targetAcc?.currentBalance ?? "0";
-      } else {
-        let total = 0;
-        for (const a of userAccounts) {
-          if (isDebtAccount(a.accountType)) continue;
-          const bal = a.plaidAccountId ? (freshBalances.get(a.plaidAccountId) ?? a.currentBalance) : a.currentBalance;
-          total += parseFloat(bal ?? "0");
-        }
-        resultBalance = String(total.toFixed(2));
-      }
-
+      const resultBalance = resultWith(freshBalances);
       console.log(`[getLiveBalance] Returning balance: ${resultBalance}`);
-      return { balance: resultBalance, liveBalance: resultBalance, bookBalance: resultBalance, bankName: primaryAccount.bankName ?? "Banco", accountCount: userAccounts.length };
-
-    } catch (plaidErr: any) {
-      console.error("[getLiveBalance] Plaid error:", plaidErr?.message || plaidErr);
+      return answer(resultBalance);
+    } catch (plaidErr: unknown) {
+      console.error("[getLiveBalance] Plaid error:", plaidErr instanceof Error ? plaidErr.message : plaidErr);
       // Return DB balance as fallback
-      const totalBal = userAccounts.reduce((s: number, a: any) => s + parseFloat(a.currentBalance ?? "0"), 0);
-      return { balance: String(totalBal.toFixed(2)), liveBalance: String(totalBal.toFixed(2)), bookBalance: String(totalBal.toFixed(2)), bankName: userAccounts[0]?.bankName ?? "Banco", accountCount: userAccounts.length };
+      return answer(resultWith(new Map()));
     }
   }),
 
-  // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS ───
+  // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS (every connected bank) ───
   refreshAllBalances: authedQuery.mutation(async ({ ctx }) => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
     if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay cuenta bancaria conectada" };
     const db = getDb();
+    const userId = ctx.user.id;
     try {
-      const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+      const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
       if (userAccounts.length === 0) return { success: true, updated: 0, added: 0, message: "No hay cuentas" };
 
-      const primaryAccount = userAccounts[0];
-      if (!primaryAccount?.plaidAccessToken) return { success: true, updated: 0, added: 0, message: "Sin token de Plaid" };
+      // Each bank once (connectionsOf): an older duplicate connection of the same bank isn't asked.
+      const { items, shadowed } = await connectionsOf(db, userId, userAccounts);
+      if (items.length === 0) return { success: true, updated: 0, added: 0, message: "Sin token de Plaid" };
 
       const client = await initPlaid();
       if (!client) return { success: false, error: "Plaid no disponible" };
 
       // Map existing accounts by plaidAccountId
-      const accountMap = new Map<string, typeof userAccounts[0]>();
+      const accountMap = new Map<string, BankAccount>();
       for (const acc of userAccounts) {
         if (acc.plaidAccountId) accountMap.set(acc.plaidAccountId, acc);
       }
 
-      // Get ALL accounts from Plaid (including new ones)
-      const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
-      const plaidAccounts = accountsRes.data.accounts || [];
+      // Get ALL accounts from Plaid (including new ones), from every bank
+      const outcomes = await forEachItem(db, userId, items, (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
+      const failedItems = outcomes.filter((r) => !r.ok).map((r) => r.item.key);
+      const firstFailure = outcomes.find((r) => !r.ok);
+      if (failedItems.length === items.length && firstFailure && !firstFailure.ok) {
+        return { success: false, error: (firstFailure.error instanceof Error && firstFailure.error.message) || "Error actualizando balances", failedItems };
+      }
 
       let updated = 0;
       let added = 0;
+      let total = 0;
 
-      for (const plaidAcc of plaidAccounts) {
-        const dbAccount = accountMap.get(plaidAcc.account_id);
-        const bal = plaidBalance(plaidAcc);
+      for (const r of outcomes) {
+        if (!r.ok) continue;
+        const plaidAccounts = r.value.data.accounts || [];
+        total += plaidAccounts.length;
+        // Names saved broken earlier ("Way2Save�� Savings") are fixed here too, on the account and its movements.
+        await repairAccountNames(db, userId, userAccounts, plaidAccounts);
 
-        if (dbAccount) {
-          // Update existing account balance
-          if (bal != null) {
-            await db.update(bankAccounts).set({
-              currentBalance: bal,
-              bankName: plaidAcc.name, // Also update name in case it changed
-              accountType: plaidAcc.type || dbAccount.accountType,
+        for (const plaidAcc of plaidAccounts) {
+          const dbAccount = accountMap.get(plaidAcc.account_id);
+          const bal = plaidBalance(plaidAcc);
+          if (dbAccount && shadowed.has(dbAccount.id)) continue; // the newest connection has this account
+
+          if (dbAccount) {
+            // Update existing account balance
+            if (bal != null) {
+              await db.update(bankAccounts).set({
+                currentBalance: bal,
+                bankName: cleanAccountName(plaidAcc.name, plaidAcc.official_name), // Also update name in case it changed
+                accountType: plaidAcc.type || dbAccount.accountType,
+                lastSyncedAt: new Date(),
+                updatedAt: new Date(),
+              }).where(eq(bankAccounts.id, dbAccount.id));
+              updated++;
+            }
+          } else {
+            // NEW ACCOUNT — insert it, under the bank (item) it came from
+            await db.insert(bankAccounts).values({
+              userId,
+              plaidAccountId: plaidAcc.account_id,
+              plaidAccessToken: r.item.token,
+              plaidItemId: r.item.itemId,
+              bankName: cleanAccountName(plaidAcc.name, plaidAcc.official_name),
+              accountType: plaidAcc.type || "",
+              accountNumber: plaidAcc.mask || "",
+              currency: plaidAcc.balances?.iso_currency_code || "USD",
+              currentBalance: bal ?? "0",
+              isActive: true,
               lastSyncedAt: new Date(),
-              updatedAt: new Date(),
-            }).where(eq(bankAccounts.id, dbAccount.id));
-            updated++;
+            });
+            added++;
           }
-        } else {
-          // NEW ACCOUNT — insert it
-          await db.insert(bankAccounts).values({
-            userId: ctx.user.id,
-            plaidAccountId: plaidAcc.account_id,
-            plaidAccessToken: primaryAccount.plaidAccessToken,
-            plaidItemId: primaryAccount.plaidItemId,
-            bankName: plaidAcc.name,
-            accountType: plaidAcc.type || "",
-            accountNumber: plaidAcc.mask || "",
-            currency: plaidAcc.balances?.iso_currency_code || "USD",
-            currentBalance: bal ?? "0",
-            isActive: true,
-            lastSyncedAt: new Date(),
-          });
-          added++;
         }
       }
 
@@ -1793,55 +2214,74 @@ export const bankRouter = createRouter({
         success: true,
         updated,
         added,
-        total: plaidAccounts.length,
+        total,
         message: added > 0 ? `${updated} actualizadas, ${added} nuevas cuentas` : `${updated} balances actualizados`,
+        failedItems,
       };
-    } catch (err: any) {
-      return { success: false, error: err.message || "Error actualizando balances" };
+    } catch (err: unknown) {
+      return { success: false, error: (err instanceof Error && err.message) || "Error actualizando balances" };
     }
   }),
 
-  // ─── GET ALL ACCOUNTS DIRECTLY FROM PLAID ───
+  // ─── GET ALL ACCOUNTS DIRECTLY FROM PLAID (every connected bank) ───
   getAllPlaidAccounts: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { accounts: [], count: 0 };
     if (!await hasActiveBank(ctx.user.id)) return { accounts: [], count: 0 };
     const db = getDb();
+    const userId = ctx.user.id;
     try {
-      const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+      const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, userId));
       if (userAccounts.length === 0) return { accounts: [], count: 0 };
 
-      const primaryAccount = userAccounts[0];
-      if (!primaryAccount?.plaidAccessToken) return { accounts: [], count: 0 };
+      // Each bank once (connectionsOf): an older duplicate of an account isn't listed twice.
+      const { items, shadowed } = await connectionsOf(db, userId, userAccounts);
+      if (items.length === 0) return { accounts: [], count: 0 };
 
       const client = await initPlaid();
       if (!client) return { accounts: [], count: 0 };
 
-      const accountsRes = await client.accountsGet({ access_token: primaryAccount.plaidAccessToken });
-      const plaidAccounts = accountsRes.data.accounts || [];
+      const outcomes = await forEachItem(db, userId, items, (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
+      const firstFailure = outcomes.find((r) => !r.ok);
+      if (!outcomes.some((r) => r.ok)) {
+        return { accounts: [], count: 0, error: (firstFailure && !firstFailure.ok && firstFailure.error instanceof Error && firstFailure.error.message) || "Plaid error" };
+      }
 
       // Map DB accounts by plaidAccountId for balance lookup
-      const dbMap = new Map<string, typeof userAccounts[0]>();
+      const dbMap = new Map<string, BankAccount>();
       for (const acc of userAccounts) {
         if (acc.plaidAccountId) dbMap.set(acc.plaidAccountId, acc);
       }
 
-      const accounts = plaidAccounts.map((pa: any) => {
-        const dbAcc = dbMap.get(pa.account_id);
-        return {
-          id: dbAcc?.id || 0,
-          plaidAccountId: pa.account_id,
-          bankName: pa.name,
-          accountType: pa.type || "",
-          accountNumber: pa.mask || "",
-          currentBalance: plaidBalance(pa) ?? "0",
-          currency: pa.balances?.iso_currency_code || "USD",
-          isInDb: !!dbAcc,
-        };
-      });
+      type PlaidAccountRow = { id: number; plaidAccountId: string; bankName: string; accountType: string; accountNumber: string; currentBalance: string; currency: string; isInDb: boolean };
+      const accounts = outcomes.flatMap((r): PlaidAccountRow[] => (r.ok
+        ? (r.value.data.accounts || []).filter((pa) => { const d = dbMap.get(pa.account_id); return !d || !shadowed.has(d.id); }).map((pa) => {
+          const dbAcc = dbMap.get(pa.account_id);
+          return {
+            id: dbAcc?.id || 0,
+            plaidAccountId: pa.account_id,
+            bankName: cleanAccountName(pa.name, pa.official_name),
+            accountType: pa.type || "",
+            accountNumber: pa.mask || "",
+            currentBalance: plaidBalance(pa) ?? "0",
+            currency: pa.balances?.iso_currency_code || "USD",
+            isInDb: !!dbAcc,
+          };
+        })
+        // A bank Plaid can't read right now: its saved accounts, so the bank doesn't vanish from the list.
+        : r.item.accounts.filter((a) => !shadowed.has(a.id)).map((a) => ({
+          id: a.id,
+          plaidAccountId: a.plaidAccountId ?? "",
+          bankName: a.bankName,
+          accountType: a.accountType || "",
+          accountNumber: a.accountNumber || "",
+          currentBalance: a.currentBalance ?? "0",
+          currency: "USD",
+          isInDb: true,
+        }))));
 
       return { accounts, count: accounts.length };
-    } catch (err: any) {
-      return { accounts: [], count: 0, error: err.message };
+    } catch (err: unknown) {
+      return { accounts: [], count: 0, error: err instanceof Error ? err.message : String(err) };
     }
   }),
 
@@ -1978,21 +2418,6 @@ export const bankRouter = createRouter({
     } catch { return { subscriptions: [] }; }
   }),
 
-  fixOrphanedTransactions: authedQuery.mutation(async ({ ctx }) => {
-    if (!ctx.user) return { success: false, error: "No autenticado" };
-    const db = getDb();
-    const accounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
-    if (accounts.length === 0) return { success: false, error: "No accounts" };
-    const primary = accounts[0];
-    const orphaned = await db.select().from(bankTransactions).where(and(eq(bankTransactions.userId, ctx.user.id), sql`${bankTransactions.bankAccountId} IS NULL`));
-    let updated = 0, skipped = 0;
-    for (const tx of orphaned) {
-      if (tx.bankAccountId == null) { await db.update(bankTransactions).set({ bankAccountId: primary.id }).where(eq(bankTransactions.id, tx.id)); updated++; }
-      else skipped++;
-    }
-    return { success: true, updated, skipped, total: orphaned.length };
-  }),
-
   // ─── Migration ───
   checkMigrationStatus: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { applied: false, tables: [], details: "No autenticado" };
@@ -2070,8 +2495,11 @@ export const bankRouter = createRouter({
           // Or any transfer that was marked as cash_deposit/cash_withdrawal without ATM
         ));
 
+      // Movements inside a closed (reconciled) period keep their category (api/reconcile-router.ts).
+      const locked = new Set(await closedPeriodIds(db, Number(ctx.user.id), txs.map((t: { id: number }) => Number(t.id))));
       let fixed = 0;
       for (const tx of txs) {
+        if (locked.has(Number(tx.id))) continue;
         try {
           const desc = (tx.description || "").toLowerCase();
           const plaidAmt = tx.plaidAmount != null ? parseFloat(tx.plaidAmount) : null;
@@ -2094,22 +2522,47 @@ export const bankRouter = createRouter({
     } catch { return { fixed: 0 }; }
   }),
 
-  // ─── DEBUG: Raw Plaid data ───
+  // ─── DEBUG: Raw Plaid data (every connected bank) ───
   debug: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { error: "No autenticado" };
     const db = getDb();
-    const userAccounts = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
+    const userAccounts: BankAccount[] = await db.select().from(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
     if (userAccounts.length === 0) return { error: "No hay cuentas" };
-    const primary = userAccounts[0];
-    if (!primary?.plaidAccessToken) return { error: "Sin token" };
+    const { items, shadowed } = await connectionsOf(db, ctx.user.id, userAccounts);
+    if (items.length === 0) return { error: "Sin token" };
 
     try {
       const client = await initPlaid();
       if (!client) return { error: "Plaid no inicializado" };
 
-      // Raw accounts from Plaid
-      const accountsRes = await client.accountsGet({ access_token: primary.plaidAccessToken });
-      const plaidAccounts = (accountsRes.data.accounts || []).map((a: any) => ({
+      // Raw recent transactions from Plaid: since the 1st of last month
+      const now = new Date();
+      const from = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const startDate = `${from.getFullYear()}-${String(from.getMonth() + 1).padStart(2, "0")}-01`;
+      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+      // Raw accounts and movements, bank by bank (one failing bank is reported, the rest still shows)
+      const banks = await Promise.all(items.map(async (item) => {
+        try {
+          const accountsRes = (await client.accountsGet({ access_token: item.token })) as { data: AccountsGetResponse };
+          const txRes = (await client.transactionsGet({
+            access_token: item.token,
+            start_date: startDate,
+            end_date: endDate,
+            options: { count: 100, include_personal_finance_category: true },
+          })) as { data: TransactionsGetResponse };
+          return { item, ok: true as const, accounts: accountsRes.data.accounts || [], txs: txRes.data.transactions || [] };
+        } catch (e: unknown) {
+          return { item, ok: false as const, error: e };
+        }
+      }));
+      const firstFailure = banks.find((b) => !b.ok);
+      if (!banks.some((b) => b.ok) && firstFailure && !firstFailure.ok) {
+        return { error: plaidMessageOf(firstFailure.error), code: plaidErrorCode(firstFailure.error) ?? undefined };
+      }
+
+      const plaidAccounts = banks.flatMap((b) => (b.ok ? b.accounts.map((a) => ({
+        bank: b.item.key,
         account_id: a.account_id,
         name: a.name,
         mask: a.mask,
@@ -2120,36 +2573,29 @@ export const bankRouter = createRouter({
           current: a.balances?.current,
           iso_currency_code: a.balances?.iso_currency_code,
         },
-      }));
-
-      // Raw recent transactions from Plaid
-      const now = new Date();
-      const startDate = `${now.getFullYear()}-${String(now.getMonth()).padStart(2, "0")}-01`;
-      const endDate = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
-      const txRes = await client.transactionsGet({
-        access_token: primary.plaidAccessToken,
-        start_date: startDate,
-        end_date: endDate,
-        options: { count: 100, include_personal_finance_category: true },
-      });
-      const plaidTxs = (txRes.data.transactions || []).map((t: any) => ({
+      })) : []));
+      const plaidTxs = banks.flatMap((b) => (b.ok ? b.txs.map((t) => ({
+        bank: b.item.key,
         transaction_id: t.transaction_id,
         account_id: t.account_id,
         name: t.name,
         amount: t.amount,
         date: t.date,
         category: t.personal_finance_category?.primary || t.category?.[0],
-      }));
+      })) : []));
 
       return {
-        dbAccounts: userAccounts.map((a: any) => ({ id: a.id, plaidAccountId: a.plaidAccountId, bankName: a.bankName, accountType: a.accountType, currentBalance: a.currentBalance })),
+        dbAccounts: userAccounts.map((a) => ({ id: a.id, plaidAccountId: a.plaidAccountId, bankName: a.bankName, accountType: a.accountType, currentBalance: a.currentBalance })),
+        banks: banks.map((b) => ({ bank: b.item.key, ok: b.ok, code: b.ok ? null : plaidErrorCode(b.error) })),
+        // Accounts of an older duplicate connection of the same bank, and the newer account read instead.
+        duplicateAccounts: [...shadowed.entries()].map(([older, newer]) => ({ older, newer })),
         plaidAccounts,
         plaidTxCount: plaidTxs.length,
         plaidTxs: plaidTxs.slice(0, 20),
         dateRange: { startDate, endDate },
       };
-    } catch (err: any) {
-      return { error: err.message || "Unknown error", code: err.response?.data?.error_code };
+    } catch (err: unknown) {
+      return { error: err instanceof Error ? err.message : "Unknown error", code: plaidErrorCode(err) ?? undefined };
     }
   }),
 
@@ -2249,6 +2695,8 @@ export const bankRouter = createRouter({
   delete: authedQuery.input(z.object({ id: z.number().int().positive() })).mutation(async ({ input, ctx }) => {
     const db = getDb();
     const userId = ctx.user.id;
+    // A movement inside a closed (reconciled) period can't be deleted until the owner reopens it.
+    await assertNotReconciled(db, Number(userId), input.id, ctx.lang);
     const rows: Array<{ id: number; reference: string | null }> = await db.select({ id: bankTransactions.id, reference: bankTransactions.reference })
       .from(bankTransactions).where(and(eq(bankTransactions.id, input.id), eq(bankTransactions.userId, userId))).limit(1);
     const tx = rows[0];
@@ -2273,6 +2721,7 @@ export const bankRouter = createRouter({
     try {
       await db.delete(bankAccounts).where(eq(bankAccounts.userId, ctx.user.id));
       await db.delete(bankTransactions).where(eq(bankTransactions.userId, ctx.user.id));
+      await forgetInstitutions(db, ctx.user.id);
       return { success: true, message: "Banco desconectado" };
     } catch (err: any) {
       return { success: false, error: err.message || "Error al desconectar" };
@@ -2310,7 +2759,7 @@ export const bankRouter = createRouter({
       .limit(20);
 
     return {
-      accounts: userAccounts.map(a => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,12) })),
+      accounts: userAccounts.map((a: BankAccount) => ({ id: a.id, name: a.bankName, plaidId: a.plaidAccountId?.slice(0,12) })),
       transactionCounts: txCounts,
       totalTransactions: txCounts.reduce((s: number, t: any) => s + (t.count || 0), 0),
       recentTransactions: allTxs,
