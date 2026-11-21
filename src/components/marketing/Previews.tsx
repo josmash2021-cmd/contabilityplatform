@@ -5,7 +5,7 @@ import {
   Receipt, BarChart3, Users, ShoppingCart, Sparkles,
   Menu, Star, CircleDollarSign, TrendingUp, TrendingDown, Wallet, Zap, Gift, Lock, ChevronRight, RefreshCw,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
 import { Logo } from "@/components/Logo";
 import { TRIAL_DAYS as TRIAL_DAYS_PREVIEW } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
@@ -327,10 +327,71 @@ export function PhonePreview() {
   );
 }
 
-// ── How it works: one small picture per step ──
-function StepFrame({ label, children, decor }: { label: string; children: ReactNode; decor?: ReactNode }) {
+// ── How it works: one small moving picture per step ──
+// Each picture plays only while it is on screen, and stays still (showing the
+// finished state) for people who turn motion off.
+function useReducedMotion() {
+  const [reduced, setReduced] = useState(() => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches);
+  useEffect(() => {
+    const m = window.matchMedia?.("(prefers-reduced-motion: reduce)");
+    if (!m) return;
+    const onChange = () => setReduced(m.matches);
+    m.addEventListener("change", onChange);
+    return () => m.removeEventListener("change", onChange);
+  }, []);
+  return reduced;
+}
+
+function useInView<T extends Element>() {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(() => typeof IntersectionObserver === "undefined");
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [ref, inView] as const;
+}
+
+/** Counts 0, 1, 2… every `ms` while `active`. */
+function useTick(ms: number, active: boolean) {
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    const id = window.setInterval(() => setTick((t) => t + 1), ms);
+    return () => window.clearInterval(id);
+  }, [ms, active]);
+  return tick;
+}
+
+/** A number that glides to its new value instead of jumping. */
+function CountUp({ value, format, still }: { value: number; format: (n: number) => string; still: boolean }) {
+  const [shown, setShown] = useState(value);
+  const current = useRef(value);
+  useEffect(() => {
+    if (still) return;
+    const from = current.current;
+    if (from === value) return;
+    let raf = 0;
+    const start = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - start) / 750);
+      const eased = 1 - Math.pow(1 - p, 3);
+      current.current = from + (value - from) * eased;
+      setShown(current.current);
+      if (p < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [value, still]);
+  return <>{format(still ? value : shown)}</>;
+}
+
+function StepFrame({ label, children, decor, frameRef }: { label: string; children: ReactNode; decor?: ReactNode; frameRef?: Ref<HTMLDivElement> }) {
   return (
-    <div role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/70 p-5">
+    <div ref={frameRef} role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/70 p-5">
       <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.08),transparent_60%)]" />
       {decor}
       <div aria-hidden className="relative w-full max-w-[260px]">{children}</div>
@@ -340,33 +401,63 @@ function StepFrame({ label, children, decor }: { label: string; children: ReactN
 
 const cardCls = "rounded-2xl bg-white p-4 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70";
 
+function Caret() {
+  return <span className="ml-px inline-block h-3 w-px translate-y-0.5 bg-slate-900 motion-safe:animate-pulse" />;
+}
+
+// Step 1: picks Personal, types the name and the email, then presses the button.
+const SIGNUP_NAME = "Ana Rivera";
+const SIGNUP_EMAIL = "ana@correo.com";
+const SIGNUP_LOOP = 80; // ticks of 90 ms
+
 export function SignupStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
   const s = v.signup;
+  const still = useReducedMotion();
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const tick = useTick(90, inView && !still);
+  const t = still ? SIGNUP_LOOP - 1 : tick % SIGNUP_LOOP;
+  const personal = t >= 6;
+  const nameLen = Math.max(0, Math.min(SIGNUP_NAME.length, t - 10));
+  const emailLen = Math.max(0, Math.min(SIGNUP_EMAIL.length, t - 25));
+  const typingName = !still && t >= 10 && t < 25;
+  const typingEmail = !still && t >= 25 && t < 44;
+  const pressed = !still && t >= 44 && t < 48;
+  const done = !still && t >= 48;
+  const fields: [string, string, boolean][] = [
+    [s.name, SIGNUP_NAME.slice(0, nameLen), typingName],
+    [s.email, SIGNUP_EMAIL.slice(0, emailLen), typingEmail],
+  ];
   return (
-    <StepFrame label={v.aria[0]}>
+    <StepFrame label={v.aria[0]} frameRef={ref}>
       <div className={cardCls}>
         <div className="flex items-center gap-2">
           <Logo className="h-6 w-6" />
           <span className="text-[13px] font-semibold text-slate-900">{s.title}</span>
         </div>
-        <div className="mt-3 grid grid-cols-2 rounded-lg bg-slate-100 p-0.5 text-[10.5px] font-semibold">
-          <span className="rounded-md py-1.5 text-center text-slate-500">{s.modes[0]}</span>
-          <span className="rounded-md bg-white py-1.5 text-center text-slate-900 shadow-sm">{s.modes[1]}</span>
+        <div className="relative mt-3 grid grid-cols-2 rounded-lg bg-slate-100 p-0.5 text-[10.5px] font-semibold">
+          <span className={`absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-md bg-white shadow-sm transition-transform duration-300 ease-out ${personal ? "translate-x-full" : ""}`} />
+          <span className={`relative rounded-md py-1.5 text-center transition-colors duration-300 ${personal ? "text-slate-500" : "text-slate-900"}`}>{s.modes[0]}</span>
+          <span className={`relative rounded-md py-1.5 text-center transition-colors duration-300 ${personal ? "text-slate-900" : "text-slate-500"}`}>{s.modes[1]}</span>
         </div>
-        {[[s.name, "Ana Rivera"], [s.email, "ana@correo.com"]].map(([label, value]) => (
+        {fields.map(([label, value, typing]) => (
           <div key={label} className="mt-2.5">
             <p className="text-[9.5px] font-medium text-slate-500">{label}</p>
-            <p className="mt-0.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11px] text-slate-700">{value}</p>
+            <p className={`mt-0.5 h-[30px] rounded-lg border px-2.5 py-1.5 text-[11px] text-slate-700 transition-colors duration-200 ${typing ? "border-blue-500 ring-2 ring-blue-500/15" : "border-slate-200"}`}>
+              {value}{typing && <Caret />}
+            </p>
           </div>
         ))}
-        <p className="mt-3 rounded-lg bg-blue-600 py-2 text-center text-[11.5px] font-semibold text-white">{s.cta(TRIAL_DAYS_PREVIEW)}</p>
+        <p className={`mt-3 flex items-center justify-center gap-1.5 rounded-lg py-2 text-center text-[11.5px] font-semibold text-white transition-all duration-200 ${pressed ? "scale-[0.97] bg-blue-700" : done ? "bg-emerald-600" : "bg-blue-600"}`}>
+          {done ? <><CheckCircle2 className="h-3.5 w-3.5" />{s.done}</> : s.cta(TRIAL_DAYS_PREVIEW)}
+        </p>
         <p className="mt-1.5 flex items-center justify-center gap-1 text-[9.5px] text-slate-500"><CheckCircle2 className="h-3 w-3 text-emerald-500" />{s.noCard}</p>
       </div>
     </StepFrame>
   );
 }
 
+// Step 2: the selection moves through the three banks.
 // Bank icons for the "pick your bank" list (the same ones Plaid shows in its bank picker).
 const STEP_BANKS = [
   { name: "Chase", src: "/brands/banks/chase.png", pad: "p-[3px]" },
@@ -377,8 +468,12 @@ const STEP_BANKS = [
 export function ConnectStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
   const c = v.connect;
+  const still = useReducedMotion();
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const tick = useTick(1500, inView && !still);
+  const active = still ? 0 : tick % STEP_BANKS.length;
   return (
-    <StepFrame label={v.aria[1]}>
+    <StepFrame label={v.aria[1]} frameRef={ref}>
       <div className={cardCls}>
         <div className="flex items-center justify-center gap-3">
           <Logo className="h-7 w-7" />
@@ -388,13 +483,16 @@ export function ConnectStepPreview() {
         <p className="mt-2.5 text-center text-[11.5px] font-semibold leading-snug text-slate-900">{c.title}</p>
         <p className="mt-2.5 text-[9.5px] font-medium text-slate-500">{c.pick}</p>
         <ul className="mt-1 space-y-1">
-          {STEP_BANKS.map((b, i) => (
-            <li key={b.name} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] ${i === 0 ? "border-blue-500 bg-blue-50/60 text-slate-900" : "border-slate-200 text-slate-600"}`}>
-              <img src={b.src} alt="" width={22} height={22} loading="lazy" className={`h-[22px] w-[22px] shrink-0 rounded-md bg-white object-contain ring-1 ring-slate-200 ${b.pad}`} />
-              {b.name}
-              <ChevronRight className="ml-auto h-3 w-3 text-slate-400" />
-            </li>
-          ))}
+          {STEP_BANKS.map((b, i) => {
+            const on = i === active;
+            return (
+              <li key={b.name} className={`flex items-center gap-2 rounded-lg border px-2 py-1.5 text-[11px] transition-all duration-500 ease-out ${on ? "scale-[1.02] border-blue-500 bg-blue-50/70 text-slate-900 shadow-sm" : "border-slate-200 text-slate-600"}`}>
+                <img src={b.src} alt="" width={22} height={22} loading="lazy" className={`h-[22px] w-[22px] shrink-0 rounded-md bg-white object-contain ring-1 ring-slate-200 ${b.pad}`} />
+                {b.name}
+                {on ? <CheckCircle2 className="ml-auto h-3.5 w-3.5 text-blue-600" /> : <ChevronRight className="ml-auto h-3 w-3 text-slate-400" />}
+              </li>
+            );
+          })}
         </ul>
         <p className="mt-2.5 flex items-center justify-center gap-1 text-center text-[9px] leading-snug text-emerald-700"><Lock className="h-3 w-3 shrink-0" />{c.safe}</p>
       </div>
@@ -402,8 +500,7 @@ export function ConnectStepPreview() {
   );
 }
 
-// A soft radar behind the numbers: the beam sweeps slowly and a few points light up,
-// as if the app were finding and sorting your transactions. Still for reduced motion.
+// Step 3: a soft radar behind the card, and the numbers and bars glide to new values.
 const RADAR_BLIPS = [
   { top: "22%", left: "18%", delay: "0s" },
   { top: "70%", left: "80%", delay: "1.3s" },
@@ -432,36 +529,47 @@ function Radar() {
   );
 }
 
+const NUMBER_SETS = [
+  { amounts: [1625, 86.4, 42.1], bars: [[70, 44], [76, 52], [72, 41], [86, 47]] },
+  { amounts: [1710, 92.15, 38.6], bars: [[66, 48], [80, 50], [75, 45], [90, 44]] },
+  { amounts: [1580, 79.9, 45.3], bars: [[72, 40], [74, 55], [78, 43], [84, 50]] },
+];
+
 export function NumbersStepPreview() {
   const v = useCopy(marketingCopy).how.visuals;
   const n = v.numbers;
-  const bars = [{ inc: 70, exp: 44 }, { inc: 76, exp: 52 }, { inc: 72, exp: 41 }, { inc: 86, exp: 47 }];
+  const still = useReducedMotion();
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const tick = useTick(2600, inView && !still);
+  const set = NUMBER_SETS[still ? 0 : tick % NUMBER_SETS.length];
   return (
-    <StepFrame label={v.aria[2]} decor={<Radar />}>
+    <StepFrame label={v.aria[2]} decor={<Radar />} frameRef={ref}>
       <div className={cardCls}>
         <div className="flex items-center justify-between">
           <span className="text-[13px] font-semibold text-slate-900">{n.month}</span>
           <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[9px] font-medium text-emerald-700"><RefreshCw className="h-2.5 w-2.5 motion-safe:animate-[spin_5s_linear_infinite]" />{n.auto}</span>
         </div>
         <ul className="mt-2 divide-y divide-slate-100">
-          {n.rows.map((r) => (
+          {n.rows.map((r, i) => (
             <li key={r.name} className="flex items-center gap-2 py-1.5">
               <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${r.income ? "bg-emerald-100 text-emerald-600" : "bg-rose-100 text-rose-600"}`}>
                 {r.income ? <ArrowUpRight className="h-3 w-3" /> : <ArrowDownRight className="h-3 w-3" />}
               </span>
               <span className="min-w-0 flex-1 truncate text-[10.5px] text-slate-700">{r.name}</span>
               <span className="rounded-full bg-blue-50 px-1.5 py-0.5 text-[8.5px] font-medium text-blue-700">{r.cat}</span>
-              <span className={`w-14 text-right text-[10.5px] font-semibold tabular-nums ${r.income ? "text-emerald-700" : "text-slate-800"}`}>{r.income ? "+" : "-"}{money(r.amount).replace(".00", "")}</span>
+              <span className={`w-[62px] text-right text-[10.5px] font-semibold tabular-nums ${r.income ? "text-emerald-700" : "text-slate-800"}`}>
+                {r.income ? "+" : "-"}<CountUp value={set.amounts[i]} format={money} still={still} />
+              </span>
             </li>
           ))}
         </ul>
         <p className="mt-2 text-[9.5px] font-medium text-slate-500">{n.chart}</p>
         <div className="mt-1.5 flex h-14 items-end justify-between gap-2">
-          {bars.map((b, i) => (
+          {set.bars.map(([inc, exp], i) => (
             <div key={n.months[i]} className="flex flex-1 flex-col items-center gap-1">
               <div className="flex h-11 w-full items-end justify-center gap-0.5">
-                <span className="w-2 rounded-t bg-emerald-500" style={{ height: `${b.inc}%` }} />
-                <span className="w-2 rounded-t bg-slate-300" style={{ height: `${b.exp}%` }} />
+                <span className="w-2 rounded-t bg-emerald-500 transition-[height] duration-700 ease-out" style={{ height: `${inc}%` }} />
+                <span className="w-2 rounded-t bg-slate-300 transition-[height] duration-700 ease-out" style={{ height: `${exp}%` }} />
               </div>
               <span className="text-[8.5px] text-slate-400">{n.months[i]}</span>
             </div>
