@@ -229,7 +229,16 @@ export function AppLayout() {
   const allItems = groups.flatMap((g) => g.items);
   const label = (path: string) => (path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : t.shell.labels[path] ?? path);
   const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);
-  const go = (path: string) => { setMoreOpen(false); navigate(path); };
+  // Changing page from the menu: the page goes soft for a moment, then the next one comes into focus (index.css .page-out / .page-in).
+  const [leaving, setLeaving] = useState(false);
+  const go = (path: string) => {
+    setMoreOpen(false);
+    const same = path === pathname;
+    const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (same || still) { navigate(path); return; }
+    setLeaving(true);
+    window.setTimeout(() => { navigate(path); setLeaving(false); }, 140);
+  };
 
   const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/expenses"] : TABS[userMode])
     .map((p) => allItems.find((i) => i.path === p)).filter((i): i is Item => !!i);
@@ -291,7 +300,9 @@ export function AppLayout() {
           <SubscriptionPageGate>
             {/* Pages are lazy-loaded; keep the menu while one loads */}
             <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
-              <Outlet />
+              <div key={pathname} className={cn("page-in", leaving && "page-out")}>
+                <Outlet />
+              </div>
             </Suspense>
           </SubscriptionPageGate>
         </main>
