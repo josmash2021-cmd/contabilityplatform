@@ -2,15 +2,15 @@ import { useState } from "react";
 import { Link } from "react-router";
 import {
   ArrowRight, Check, ShieldCheck, Lock, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
-  ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User,
-  Sparkles, LayoutDashboard,
+  ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User, Store,
+  LayoutDashboard,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { Reveal } from "@/components/marketing/Reveal";
 import { ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, ReportPreview, SignupStepPreview } from "@/components/marketing/Previews";
-import { PLAN_PRICES, TRIAL_DAYS, annualPerMonth, type PlanKey } from "@/components/marketing/content";
+import { LANDING_PLANS, TRIAL_DAYS, annualPerMonth } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
 
@@ -33,15 +33,18 @@ function SectionHeading({ eyebrow, title, text, id }: { eyebrow: string; title: 
 function Hero({ c }: { c: C["hero"] }) {
   return (
     <section className="relative overflow-hidden bg-[#060B18] pb-20 pt-32 sm:pb-28 sm:pt-36 lg:pt-40" aria-labelledby="hero-title">
-      <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_30%,transparent_75%)]" />
-      <div className="pointer-events-none absolute -top-40 left-1/2 h-[560px] w-[900px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
+      {/* Background: deep navy with soft lights that drift slowly (still when motion is off). */}
+      <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
+        <div className="absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_-10%,#152a57_0%,#0a1633_40%,#060B18_75%)]" />
+        <div className="absolute -top-56 left-[6%] h-[560px] w-[680px] rounded-full bg-blue-600/25 blur-[130px] motion-safe:animate-aurora" />
+        <div className="absolute right-[-8%] top-[14%] h-[480px] w-[600px] rounded-full bg-indigo-500/20 blur-[130px] motion-safe:animate-aurora motion-safe:[animation-delay:-8s]" />
+        <div className="absolute bottom-[-24%] left-[28%] h-[440px] w-[680px] rounded-full bg-cyan-400/10 blur-[140px] motion-safe:animate-aurora motion-safe:[animation-delay:-15s]" />
+        <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent" />
+      </div>
 
       <div className="relative mx-auto grid max-w-7xl items-center gap-16 px-4 sm:px-6 lg:grid-cols-[1.05fr_1fr] lg:gap-12 lg:px-8">
         <div className="text-center lg:text-left">
-          <p className="animate-hero-in inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3.5 py-1.5 text-xs font-medium text-blue-200">
-            <Sparkles className="h-3.5 w-3.5" /> {c.badge}
-          </p>
-          <h1 id="hero-title" className="animate-hero-in mt-6 text-4xl font-bold leading-[1.08] tracking-tight text-white [animation-delay:80ms] sm:text-5xl lg:text-[3.6rem]">
+          <h1 id="hero-title" className="animate-hero-in text-4xl font-bold leading-[1.08] tracking-tight text-white [animation-delay:80ms] sm:text-5xl lg:text-[3.6rem]">
             {c.titleA}{" "}
             <span className="bg-gradient-to-r from-blue-300 to-blue-500 bg-clip-text text-transparent">{c.titleB}</span>
           </h1>
@@ -256,7 +259,7 @@ function Security({ c }: { c: C["security"] }) {
 // ── Pricing ──
 function Pricing({ c }: { c: C["pricing"] }) {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
-  const order: PlanKey[] = ["personal", "business"];
+  const planIcons = { personal: User, basic: Store, business: Building2, pro: Layers } as const;
   return (
     <section id="precios" className="scroll-mt-nav bg-slate-50 py-24 sm:py-28" aria-labelledby="pricing-title">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
@@ -287,53 +290,75 @@ function Pricing({ c }: { c: C["pricing"] }) {
           <p className="mt-3 text-xs font-medium text-emerald-700 sm:hidden">{c.annualNoteMobile}</p>
         </Reveal>
 
-        <div className="mx-auto mt-12 grid max-w-5xl gap-6 lg:grid-cols-2">
-          {order.map((key, i) => {
-            const p = c.plans[key];
-            const prices = PLAN_PRICES[key];
-            const featured = key === "business";
-            const price = billing === "monthly" ? prices.monthly : prices.annual;
+        <div className="mx-auto mt-12 grid gap-6 md:grid-cols-2 xl:grid-cols-4 xl:gap-5">
+          {LANDING_PLANS.map((plan, i) => {
+            const p = c.plans[plan.key];
+            const featured = !!plan.featured;
+            const price = billing === "monthly" ? plan.monthly : plan.annual;
+            const Icon = planIcons[plan.key];
             return (
-              <Reveal key={key} delay={i * 100}>
+              <Reveal key={plan.key} delay={i * 90}>
                 <div
-                  className={`relative flex h-full flex-col rounded-3xl p-8 transition-all duration-300 hover:-translate-y-1 ${
+                  className={`relative flex h-full flex-col rounded-3xl p-7 transition-all duration-300 hover:-translate-y-1 ${
                     featured
                       ? "bg-[#0B1224] text-white shadow-[0_30px_70px_-25px_rgba(2,6,23,0.7)] ring-1 ring-white/10"
                       : "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 hover:shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)]"
                   }`}
                 >
                   {featured && (
-                    <span className="absolute -top-3 right-8 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-md">{c.featured}</span>
+                    <span className="absolute -top-3 right-7 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-md">{c.featured}</span>
+                  )}
+                  {!plan.available && (
+                    <span className="absolute -top-3 right-7 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">{c.soonBadge}</span>
                   )}
                   <div className="flex items-center gap-2.5">
-                    {featured ? <Building2 className="h-5 w-5 text-blue-400" /> : <User className="h-5 w-5 text-blue-600" />}
+                    <Icon className={`h-5 w-5 ${featured ? "text-blue-400" : "text-blue-600"}`} />
                     <h3 className="text-lg font-semibold">{p.name}</h3>
                   </div>
-                  <p className={`mt-2 text-sm ${featured ? "text-slate-400" : "text-slate-600"}`}>{p.tagline}</p>
+                  <p className={`mt-2 min-h-10 text-sm ${featured ? "text-slate-400" : "text-slate-600"}`}>{p.tagline}</p>
 
-                  <div className="mt-7 flex items-baseline gap-1.5">
-                    <span className="text-5xl font-bold tracking-tight tabular-nums">${price}</span>
+                  <div className="mt-6 flex items-baseline gap-1.5">
+                    <span className="text-5xl font-bold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
                     <span className={featured ? "text-slate-400" : "text-slate-500"}>{billing === "monthly" ? c.perMonth : c.perYear}</span>
                   </div>
                   <p className={`mt-2 min-h-5 text-sm ${featured ? "text-emerald-300" : "text-emerald-700"}`}>
-                    {billing === "annual" ? c.equivalent(annualPerMonth(prices.annual)) : c.orAnnual(prices.annual)}
+                    {billing === "annual" ? c.equivalent(annualPerMonth(plan.annual)) : c.orAnnual(plan.annual)}
                   </p>
 
-                  <Link
-                    to={`/register?mode=${key}`}
-                    className={`group mt-7 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
-                      featured ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-900 text-white hover:bg-slate-800"
-                    }`}
-                  >
-                    {c.cta(TRIAL_DAYS)}
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                  </Link>
+                  {plan.available ? (
+                    <Link
+                      to={`/register?mode=${plan.mode}`}
+                      className={`group mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
+                        featured ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-900 text-white hover:bg-slate-800"
+                      }`}
+                    >
+                      {c.cta(TRIAL_DAYS)}
+                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                    </Link>
+                  ) : (
+                    <div className="mt-6 grid gap-2">
+                      <span className="inline-flex h-12 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[15px] font-semibold text-slate-500">{c.soonCta}</span>
+                      <Link to={`/register?mode=${plan.mode}`} className="rounded text-center text-sm font-medium text-blue-600 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        {c.soonAlt}
+                      </Link>
+                    </div>
+                  )}
 
-                  <ul className="mt-8 space-y-3.5 text-sm">
+                  {p.lead && <p className={`mt-7 text-sm font-semibold ${featured ? "text-white" : "text-slate-900"}`}>{p.lead}</p>}
+                  <ul className={`${p.lead ? "mt-3" : "mt-7"} space-y-3 text-sm`}>
                     {p.features.map((f) => (
                       <li key={f} className="flex gap-3">
                         <Check className={`mt-0.5 h-4 w-4 shrink-0 ${featured ? "text-emerald-400" : "text-emerald-600"}`} />
                         <span className={featured ? "text-slate-300" : "text-slate-700"}>{f}</span>
+                      </li>
+                    ))}
+                    {p.soon.map((f) => (
+                      <li key={f} className="flex gap-3">
+                        <Check className={`mt-0.5 h-4 w-4 shrink-0 ${featured ? "text-slate-600" : "text-slate-300"}`} />
+                        <span className={featured ? "text-slate-400" : "text-slate-500"}>
+                          {f}{" "}
+                          <span className={`ml-1 inline-block rounded-full px-1.5 py-px align-middle text-[10px] font-semibold ${featured ? "bg-white/10 text-slate-300" : "bg-slate-100 text-slate-500"}`}>{c.soonTag}</span>
+                        </span>
                       </li>
                     ))}
                   </ul>

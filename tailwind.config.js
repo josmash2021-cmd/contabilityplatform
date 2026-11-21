@@ -62,6 +62,11 @@ module.exports = {
         card: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
       },
       keyframes: {
+        aurora: {
+          "0%": { transform: "translate3d(0, 0, 0) scale(1)" },
+          "50%": { transform: "translate3d(6%, -4%, 0) scale(1.08)" },
+          "100%": { transform: "translate3d(-4%, 3%, 0) scale(0.96)" },
+        },
         "accordion-down": {
           from: { height: "0" },
           to: { height: "var(--radix-accordion-content-height)" },
@@ -113,6 +118,7 @@ module.exports = {
         "slide-right": "slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "soft-float": "soft-float 6s ease-in-out infinite",
         "hero-in": "hero-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both",
+        aurora: "aurora 22s ease-in-out infinite alternate",
       },
       transitionTimingFunction: {
         "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",
