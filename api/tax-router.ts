@@ -25,6 +25,8 @@ type CtxUser = { id: number | string; role?: string | null; modePreference?: str
 
 /** Steps from which the return is with the IRS: documents can't change anymore. */
 const FILED_STEP = 4;
+/** "Revísala y fírmala": the preparer sent the finished return for the client to check. */
+const SIGN_STEP = 3;
 
 // ── Tables (created on first use; additive, never touches other tables) ──
 let tablesReady: Promise<void> | null = null;
@@ -45,6 +47,7 @@ export function ensureTaxTables(db: Db): Promise<void> {
         stateResult JSON,
         consentAt TIMESTAMP NULL,
         submittedAt TIMESTAMP NULL,
+        approvedAt TIMESTAMP NULL,
         createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
         updatedAt TIMESTAMP DEFAULT NOW() NOT NULL,
         UNIQUE INDEX taxReturns_user_year_mode (userId, taxYear, mode)
@@ -79,6 +82,10 @@ export function ensureTaxTables(db: Db): Promise<void> {
         INDEX taxMessages_returnId_idx (returnId)
       )
     `);
+    // Added later: when the client said the finished return is correct ("Revisa y firma").
+    await db.execute(sql`ALTER TABLE taxReturns ADD COLUMN approvedAt TIMESTAMP NULL`).catch((e: unknown) => {
+      if (!/Duplicate column|ER_DUP_FIELDNAME|1060/i.test(e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : String(e))) throw e;
+    });
   })().catch((e) => {
     tablesReady = null;
     throw e;
@@ -155,6 +162,8 @@ const retMeta = {
   id: taxReturns.id, userId: taxReturns.userId, taxYear: taxReturns.taxYear, mode: taxReturns.mode, state: taxReturns.state, step: taxReturns.step,
   stepDates: taxReturns.stepDates, answers: taxReturns.answers, filingStatus: taxReturns.filingStatus, fedResult: taxReturns.fedResult,
   stateResult: taxReturns.stateResult, submittedAt: taxReturns.submittedAt, updatedAt: taxReturns.updatedAt,
+  // Not in db/schema.ts (added by ensureTaxTables).
+  approvedAt: sql<Date | string | null>`approvedAt`,
 };
 
 function modeOf(user: CtxUser): TaxMode {
@@ -310,6 +319,27 @@ export const taxRouter = createRouter({
       return { ok: true };
     }),
 
+  /**
+   * "Revisé mi declaración y los datos son correctos": the client approves the finished return at the
+   * "Revisa y firma" step. The preparer gets it as a message and then files it (and handles the 8879).
+   */
+  approve: authedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    await requireAccess(db, ctx.user, ctx.lang);
+    await ensureTaxTables(db);
+    const ret = await findReturn(db, Number(ctx.user.id), modeOf(ctx.user), currentTaxYear());
+    if (!ret || ret.step !== SIGN_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNotReady") });
+    if (!ret.approvedAt) {
+      await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id}`);
+      const body = ctx.lang === "en"
+        ? "I reviewed my return and the information is correct. I authorize you to file it."
+        : "Revisé mi declaración y los datos son correctos. Autorizo el envío.";
+      await db.insert(taxMessages).values({ returnId: ret.id, fromRole: "client", authorName: ctx.user.name ?? null, body });
+      await touch(db, ret.id);
+    }
+    return { ok: true };
+  }),
+
   sendMessage: authedQuery.input(z.object({ body: z.string().trim().min(1).max(2000) })).mutation(async ({ ctx, input }) => {
     const db = getDb();
     await requireAccess(db, ctx.user, ctx.lang);
@@ -388,6 +418,8 @@ export const taxRouter = createRouter({
       const ret = (await db.select({ stepDates: taxReturns.stepDates }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
       if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(taxReturns).set({ step: input.step, stepDates: stepDatesWith(ret.stepDates, input.step) }).where(eq(taxReturns.id, input.returnId));
+      // Back before "Revisa y firma": the client approves again when it comes back.
+      if (input.step < SIGN_STEP) await db.execute(sql`UPDATE taxReturns SET approvedAt = NULL WHERE id = ${input.returnId}`);
       return { ok: true };
     }),
 

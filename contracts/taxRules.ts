@@ -97,6 +97,21 @@ export function canSend(m: Missing): boolean {
   return m.questions.length === 0 && m.docs.length === 0 && !m.income;
 }
 
+/** The return's steps: 0 received … 3 the client reviews and signs … 4 filed … 7 refund deposited. */
+export const TAX_STEP = { received: 0, reviewing: 1, preparing: 2, sign: 3, filed: 4, accepted: 5, refundSent: 6, deposited: 7 } as const;
+
+/** April 15 of the year after the tax year (moved to the next weekday when it falls on a weekend). */
+export function filingDeadline(taxYear: number): string {
+  const d = new Date(Date.UTC(taxYear + 1, 3, 15));
+  const dow = d.getUTCDay();
+  if (dow === 6) d.setUTCDate(17);
+  else if (dow === 0) d.setUTCDate(16);
+  return d.toISOString().slice(0, 10);
+}
+
+/** Documents that arrive by January 31 (W-2, 1099s, 1098): shown as "Llega a más tardar el 31 de enero". */
+export const ARRIVES_BY_JAN31: ReadonlySet<string> = new Set(["w2", "int", "home", "k1099", "payroll"]);
+
 // ── What the tax endpoints return (shared with the client) ──
 export type TaxResult = { kind: "refund" | "owe"; amount: number } | null;
 
@@ -114,6 +129,8 @@ export type TaxReturnMeta = {
   stateResult: TaxResult;
   submittedAt: Date | null;
   updatedAt: Date;
+  /** When the client approved the finished return ("Revisa y firma"); null until then. */
+  approvedAt: Date | string | null;
 };
 
 export type TaxDocMeta = {
