@@ -189,7 +189,7 @@ export function ReviewInbox({ data, listKey, canReview, account, tzOffsetMinutes
     if (!i || !canReview) return;
     if (i.kind === "match") return link(i);
     if (isTransfer(i)) return excludeTransfer(i);
-    if (needsAnswer(i) && i.ask === "bizpersonal") { toast(r.tChooseBp(who(i))); return; }
+    if (needsAnswer(i) && i.ask === "bizpersonal") { toast.message(r.tChooseBp(who(i))); return; }
     if (needsAnswer(i) && i.ask === "split") { setSplitId(i.id); setOptsId(null); setFocusId(i.id); return; }
     if (needsAnswer(i) && i.ask === "duplicate") return excludeDuplicate(i);
     approve(i);
@@ -220,7 +220,7 @@ export function ReviewInbox({ data, listKey, canReview, account, tzOffsetMinutes
   // ── Bulk ──
   const bulkApprove = () => {
     const ok = selected.filter((i) => !needsAnswer(i) || i.ask === "duplicate");
-    if (ok.length === 0) { toast(r.tNeedAnswer); return; }
+    if (ok.length === 0) { toast.message(r.tNeedAnswer); return; }
     const transfers = ok.filter(isTransfer);
     const plain = ok.filter((i) => !isTransfer(i));
     const msg = r.tApprovedMany(ok.length) + (ok.length < selected.length ? r.tSomeNeedAnswer : "");

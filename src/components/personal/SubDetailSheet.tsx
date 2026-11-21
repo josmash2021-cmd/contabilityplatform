@@ -107,7 +107,7 @@ export function SubDetailSheet({ item, today, institutions, onClose, onChanged }
           <div className="mt-1.5 flex flex-wrap gap-2">
             <button type="button" onClick={markCancelled} disabled={setStatus.isPending} className={pbtnSmPrimary}>{d.yes}</button>
             <button type="button" onClick={() => setStep("help")} className={pbtnSm}>{d.no}</button>
-            <button type="button" onClick={() => { setStep(null); onClose(); toast(d.laterToast); }} className={pbtnSm}>{d.later}</button>
+            <button type="button" onClick={() => { setStep(null); onClose(); toast.message(d.laterToast); }} className={pbtnSm}>{d.later}</button>
           </div>
         </>
       );
