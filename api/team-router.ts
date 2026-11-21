@@ -12,6 +12,7 @@ import { users } from "@db/schema";
 import { teamInvites, teamMembers } from "@db/teamSchema";
 import { requireFeature } from "./lib/planAccess";
 import { TEAM_STAFF_SEATS, type TeamRole } from "./lib/team";
+import { teamTablesExist } from "./lib/teamContext";
 import type { Lang } from "./lib/i18n";
 
 type Db = ReturnType<typeof getDb>;
@@ -70,6 +71,7 @@ export function ensureTeamTables(db: Db): Promise<void> {
         INDEX teamInvites_owner (ownerId)
       )
     `);
+    teamTablesExist();
   })().catch((e) => {
     tablesReady = null;
     throw e;

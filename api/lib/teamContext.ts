@@ -14,6 +14,12 @@ export type TeamMemberCtx = { userId: number; name: string | null; email: string
 /** Until the team tables exist (nobody used Equipo yet), skip the lookup for a minute at a time. */
 let missingUntil = 0;
 
+/** Called once the team tables are created: look memberships up again right away. Otherwise someone who
+ * joins a team in the same minute the tables appear would keep working in their own account for that minute. */
+export function teamTablesExist(): void {
+  missingUntil = 0;
+}
+
 export async function resolveMembership(user: User): Promise<{ owner: User; member: TeamMemberCtx } | null> {
   if (Date.now() < missingUntil) return null;
   try {
