@@ -143,3 +143,104 @@ export function budgetTotals(rows: readonly BudgetRow[]): BudgetTotals {
   }
   return { count, limit: fromCents(limitCents), spent: fromCents(spentCents), near, over };
 }
+
+// ── 2.0 Presupuestos: pace, fixed categories, month history, rollover and suggestions ──
+
+/** Categories that charge by themselves (subscriptions, rent, bills): shown as "Fijos", no daily pace. */
+export const FIXED_CATEGORIES: ReadonlySet<string> = new Set(["subscription", "rent", "renta", "insurance", "seguro", "utilities", "phone", "internet"]);
+export const isFixedCategory = (category: string) => FIXED_CATEGORIES.has(category);
+
+/** The prototype's states: no budget, over, fixed, careful (20% ahead of today's pace) or fine. */
+export type PaceStatus = "none" | "over" | "fixed" | "warn" | "ok";
+
+/** Where spending should be today if it went evenly through the month. */
+export function paceTarget(limit: number, day: number, days: number): number {
+  if (!(days > 0)) return limit;
+  return (limit * Math.min(Math.max(day, 0), days)) / days;
+}
+
+/** "Te pasaste" over the limit; "Fijo" for fixed ones; "Cuidado" when 20% ahead of the pace; else "Bien". */
+export function paceStatus(spent: number, limit: number | null, day: number, days: number, fixed: boolean): PaceStatus {
+  if (limit === null || !(limit > 0)) return "none";
+  if (toCents(spent) > toCents(limit)) return "over";
+  if (fixed) return "fixed";
+  if (spent > paceTarget(limit, day, days) * 1.2) return "warn";
+  return "ok";
+}
+
+/** What the month would end at if spending kept going like this. */
+export function projectMonth(spent: number, day: number, days: number): number {
+  if (!(day > 0)) return spent;
+  return Math.round(((spent / day) * days) * 100) / 100;
+}
+
+/** The prototype's suggestion: the average, rounded up to the next $10. */
+export function roundUp10(n: number): number {
+  if (!(n > 0)) return 0;
+  return Math.min(Math.ceil(toCents(n) / 1000) * 10, MAX_BUDGET_LIMIT);
+}
+
+/** Months as one number: 2026-11 → 202611. */
+export const ymOf = (year: number, month: number) => year * 100 + month;
+export function prevYm(ym: number): number {
+  const y = Math.floor(ym / 100), m = ym % 100;
+  return m === 1 ? ymOf(y - 1, 12) : ymOf(y, m - 1);
+}
+export function ymFromDate(d: Date | string | null | undefined): number | null {
+  if (!d) return null;
+  const date = d instanceof Date ? d : new Date(d);
+  if (Number.isNaN(date.getTime())) return null;
+  return ymOf(date.getUTCFullYear(), date.getUTCMonth() + 1);
+}
+
+/** One saved change: from month `ym` on, the category's limit is `limit` (null = no budget). */
+export type BudgetHistoryRow = { category: string; ym: number; limit: number | null; rollover: boolean };
+/** The category's current limit and the month its row was created (for budgets set before history existed). */
+export type CurrentBudget = { limit: number; createdYm: number | null };
+
+/**
+ * The limits that applied in month `ym`: for each category, the latest change at or before that month.
+ * Budgets set before the history existed count from the month their category row was created.
+ * So a past month keeps the limits it had, even when they change later.
+ */
+export function limitsForMonth(history: readonly BudgetHistoryRow[], current: ReadonlyMap<string, CurrentBudget>, ym: number): Map<string, number> {
+  const latest = new Map<string, BudgetHistoryRow>();
+  const hasHistory = new Set<string>();
+  for (const h of history) {
+    hasHistory.add(h.category);
+    if (h.ym > ym) continue;
+    const prev = latest.get(h.category);
+    if (!prev || h.ym > prev.ym) latest.set(h.category, h);
+  }
+  const out = new Map<string, number>();
+  for (const [category, h] of latest) if (h.limit !== null && h.limit > 0) out.set(category, h.limit);
+  for (const [category, c] of current) {
+    if (hasHistory.has(category) || !(c.limit > 0)) continue;
+    if (c.createdYm === null || c.createdYm <= ym) out.set(category, c.limit);
+  }
+  return out;
+}
+
+/** Categories whose leftover of month `ym` passes to the next month. */
+export function rolloverFor(history: readonly BudgetHistoryRow[], ym: number): Set<string> {
+  return new Set(history.filter((h) => h.ym === ym && h.rollover).map((h) => h.category));
+}
+
+/** What passes to the next month: what was left, never a negative. */
+export function carryOver(limit: number, spent: number): number {
+  return Math.max(0, (toCents(limit) - toCents(spent)) / 100);
+}
+
+/**
+ * Average monthly spending per category over the months that have bank data (a month before the bank
+ * was connected doesn't pull the average down).
+ */
+export function averageSpending(months: ReadonlyArray<{ hasData: boolean; spending: ReadonlyMap<string, number> }>): { avg: Map<string, number>; used: number } {
+  const used = months.filter((m) => m.hasData);
+  const sums = new Map<string, number>();
+  for (const m of used) for (const [k, v] of m.spending) sums.set(k, (sums.get(k) ?? 0) + toCents(v));
+  const avg = new Map<string, number>();
+  if (used.length === 0) return { avg, used: 0 };
+  for (const [k, c] of sums) avg.set(k, Math.round(c / used.length) / 100);
+  return { avg, used: used.length };
+}
