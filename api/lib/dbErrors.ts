@@ -12,3 +12,14 @@ export function isMissingTable(e: unknown): boolean {
   }
   return false;
 }
+
+/** True when a database error (or the one it wraps) is a duplicate key, e.g. a number already taken. */
+export function isDuplicateKey(e: unknown): boolean {
+  for (let cur: unknown = e, depth = 0; cur && depth < 5; depth++) {
+    const err = cur as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
+    if (err.code === "ER_DUP_ENTRY" || err.errno === 1062) return true;
+    if (typeof err.message === "string" && /Duplicate entry|ER_DUP_ENTRY/i.test(err.message)) return true;
+    cur = err.cause;
+  }
+  return false;
+}

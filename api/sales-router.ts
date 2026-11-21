@@ -1,10 +1,20 @@
 import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { isDuplicateKey } from "./lib/dbErrors";
 import { sales, saleServices, paymentRecords, services, customers, accounts, journalEntries, journalEntryLines } from "@db/schema";
-import { eq, desc, sql, gte, and, inArray } from "drizzle-orm";
+import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
 import { isoDate, tzOffsetHours } from "./lib/security";
+
+/** One past the highest number already used with this prefix (e.g. "FAC-20261121-" → 7 when -0006 exists). */
+async function nextDailyNumber(db: ReturnType<typeof getDb>, table: "sales" | "journalEntries", column: "invoiceNumber" | "entryNumber", prefix: string): Promise<number> {
+  const rows = (await db.execute(sql`
+    SELECT COALESCE(MAX(CAST(SUBSTRING(${sql.identifier(column)}, ${prefix.length + 1}) AS UNSIGNED)), 0) AS n
+    FROM ${sql.identifier(table)} WHERE ${sql.identifier(column)} LIKE ${prefix + "%"}
+  `)) as unknown as [{ n: number | string }[]];
+  return Number(rows[0]?.[0]?.n ?? 0) + 1;
+}
 
 export const salesRouter = createRouter({
   list: authedQuery
@@ -115,25 +125,30 @@ export const salesRouter = createRouter({
       const date = new Date();
       const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
 
-      // Count today's sales for invoice number
-      const todayStart = new Date(date.getFullYear(), date.getMonth(), date.getDate());
-      const countResult = await db.select({ count: sql<number>`count(*)` }).from(sales)
-        .where(gte(sales.createdAt, todayStart));
-      const count = (countResult[0]?.count ?? 0) + 1;
-      const invoiceNumber = `FAC-${dateStr}-${String(count).padStart(4, "0")}`;
-
-      const saleResult = await db.insert(sales).values({
-        invoiceNumber,
-        customerId: input.customerId,
-        customerName: input.customerName,
-        subtotal: String(input.subtotal),
-        discount: String(input.discount ?? 0),
-        total: String(input.total),
-        paymentMethod: input.paymentMethod,
-        notes: input.notes,
-        createdBy: ctx.user.id,
-      });
-      const saleId = Number(saleResult[0].insertId);
+      // Invoice number: one past the highest already used today (counting broke after a deleted
+      // sale or two sales at once — the number is unique, so every later sale of the day failed).
+      let invoiceNumber = "";
+      let saleId = 0;
+      for (let n = await nextDailyNumber(db, "sales", "invoiceNumber", `FAC-${dateStr}-`), tries = 0; ; n++, tries++) {
+        invoiceNumber = `FAC-${dateStr}-${String(n).padStart(4, "0")}`;
+        try {
+          const saleResult = await db.insert(sales).values({
+            invoiceNumber,
+            customerId: input.customerId,
+            customerName: input.customerName,
+            subtotal: String(input.subtotal),
+            discount: String(input.discount ?? 0),
+            total: String(input.total),
+            paymentMethod: input.paymentMethod,
+            notes: input.notes,
+            createdBy: ctx.user.id,
+          });
+          saleId = Number(saleResult[0].insertId);
+          break;
+        } catch (e: unknown) {
+          if (!isDuplicateKey(e) || tries >= 50) throw e;
+        }
+      }
 
       let genericCustomServiceId: number | undefined;
 
@@ -196,9 +211,7 @@ export const salesRouter = createRouter({
 
       // Auto journal entry
       const dateStrJE = date.toISOString().split("T")[0];
-      const jeCount = await db.select({ count: sql<number>`count(*)` }).from(journalEntries)
-        .where(gte(journalEntries.createdAt, todayStart));
-      const entryNumber = `ASI-${dateStr}-${String((jeCount[0]?.count ?? 0) + 1).padStart(4, "0")}`;
+      const firstEntryNumber = await nextDailyNumber(db, "journalEntries", "entryNumber", `ASI-${dateStr}-`);
 
       const cashAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1110"), eq(accounts.userId, ctx.user.id))).limit(1);
       const zelleAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1130"), eq(accounts.userId, ctx.user.id))).limit(1);
@@ -217,27 +230,34 @@ export const salesRouter = createRouter({
         if (accId) lines.push({ accountId: accId, debit: String(input.total), credit: "0", description: `Pago ${input.paymentMethod}` });
       }
 
-      for (const item of input.items) {
-        if (revAcc[0]?.id) {
-          lines.push({ accountId: revAcc[0].id, debit: "0", credit: String(Number(item.unitPrice) * item.quantity), description: `Venta servicio` });
-        }
+      // Revenue is what was charged (the total, after any discount), so the entry balances.
+      if (revAcc[0]?.id) {
+        lines.push({ accountId: revAcc[0].id, debit: "0", credit: String(input.total), description: `Venta servicio` });
       }
 
       const totalDebits = lines.reduce((s, l) => s + Number(l.debit), 0);
       const totalCredits = lines.reduce((s, l) => s + Number(l.credit), 0);
 
-      const jeResult = await db.insert(journalEntries).values({
-        entryNumber,
-        date: new Date(dateStrJE),
-        description: `Venta ${invoiceNumber}`,
-        reference: invoiceNumber,
-        referenceId: saleId,
-        referenceType: "sale",
-        debitTotal: String(totalDebits),
-        creditTotal: String(totalCredits),
-        createdBy: ctx.user.id,
-      });
-      const jeId = Number(jeResult[0].insertId);
+      let jeId = 0;
+      for (let n = firstEntryNumber, tries = 0; ; n++, tries++) {
+        try {
+          const jeResult = await db.insert(journalEntries).values({
+            entryNumber: `ASI-${dateStr}-${String(n).padStart(4, "0")}`,
+            date: new Date(dateStrJE),
+            description: `Venta ${invoiceNumber}`,
+            reference: invoiceNumber,
+            referenceId: saleId,
+            referenceType: "sale",
+            debitTotal: String(totalDebits),
+            creditTotal: String(totalCredits),
+            createdBy: ctx.user.id,
+          });
+          jeId = Number(jeResult[0].insertId);
+          break;
+        } catch (e: unknown) {
+          if (!isDuplicateKey(e) || tries >= 50) throw e;
+        }
+      }
 
       for (const line of lines) {
         await db.insert(journalEntryLines).values({ journalEntryId: jeId, ...line });
