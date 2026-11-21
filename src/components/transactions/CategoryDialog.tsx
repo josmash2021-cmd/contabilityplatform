@@ -14,11 +14,16 @@ type Props = {
   movement: Movement;
   onClose: () => void;
   /** Called with what was saved, so the page can update the lists it shows. */
-  onSaved: (saved: { id: number; category: string; type: MoneyType }) => void;
+  onSaved?: (saved: { id: number; category: string; type: MoneyType }) => void;
+  /**
+   * Por revisar's "Más categorías…": only pick, nothing is saved here. The row keeps the choice until the
+   * owner approves it (and may offer a rule).
+   */
+  onPick?: (picked: { category: string; type: MoneyType }) => void;
 };
 
 /** "Cambiar": which way the money went, and its category. Saving also marks the movement reviewed. */
-export function CategoryDialog({ movement, onClose, onSaved }: Props) {
+export function CategoryDialog({ movement, onClose, onSaved, onPick }: Props) {
   const t = useCopy(movimientosCopy);
   const p = t.picker;
   const locale = intlLocale(useLang().lang);
@@ -30,7 +35,7 @@ export function CategoryDialog({ movement, onClose, onSaved }: Props) {
   const save = trpc.review.setCategory.useMutation({
     onSuccess: (saved) => {
       toast.success(p.saved);
-      onSaved(saved);
+      onSaved?.(saved);
       onClose();
     },
     onError: (e) => toast.error(errorText(e, t.error)),
@@ -51,6 +56,7 @@ export function CategoryDialog({ movement, onClose, onSaved }: Props) {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!category) { setMissing(true); return; }
+    if (onPick) { onPick({ category, type }); onClose(); return; }
     save.mutate({ id: movement.id, category, type });
   };
 

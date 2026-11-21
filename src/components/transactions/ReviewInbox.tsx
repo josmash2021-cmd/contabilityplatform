@@ -1,212 +1,428 @@
-import { useState } from "react";
-import { keepPreviousData } from "@tanstack/react-query";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { toast } from "sonner";
-import { Check, CheckCheck, CheckCircle2, ListChecks, Loader2, Pencil, Tag } from "lucide-react";
+import { Check, Loader2 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { Skeleton } from "@/components/ui/skeleton";
-import {
-  AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { movimientosCopy } from "@/i18n/copy/movimientos";
-import { REVIEW_LIST_MAX, REVIEW_PAGE } from "../../../api/lib/bankReview";
+import { categoriesFor } from "../../../api/lib/bankReview";
+import { PERSONAL_CATEGORY, businessCategoryFor } from "../../../api/lib/reviewEngine";
 import { CategoryDialog } from "./CategoryDialog";
-import { accountLabel, categoryLabel, dayLabel, errorText, signedMoney, type MoneyType, type Movement } from "./shared";
+import { ReviewRow, type RowHandlers } from "./ReviewRow";
+import { categoryLabel, errorText, type MoneyType, type Movement } from "./shared";
+import { whoOf, whyText, type AccountNames, type ReviewItemView } from "./reviewText";
 
-type Props = {
-  /** The owner (not a team member): may confirm and change. */
-  canReview: boolean;
-  onSeeAll: () => void;
-  /** Something was confirmed or changed: the page updates its other lists. */
-  onReviewed: (ids: number[], patch?: { category: string; type: MoneyType }) => void;
-  onReopened: (ids: number[]) => void;
+/** What the owner picked for a row before approving it ("Cambiar"), and whether a rule came out of it. */
+type Override = { category: string; type?: MoneyType; rule?: string };
+
+export type ReviewListData = {
+  total: number;
+  items: ReviewItemView[];
+  topCategories: { income: string[]; expense: string[] };
+  accountNames: AccountNames;
 };
 
-/** "Por revisar": the bank movements whose category the owner hasn't confirmed yet, newest first. */
-export function ReviewInbox({ canReview, onSeeAll, onReviewed, onReopened }: Props) {
+type Props = {
+  data: ReviewListData;
+  /** The input review.list was called with (for updating its cache). */
+  listKey: { limit: number; since: string; tzOffsetMinutes: number };
+  canReview: boolean;
+  /** "all" or one bank account id. */
+  account: number | "all";
+  tzOffsetMinutes: number;
+  /** Something changed: the page refreshes its counts and the other tabs. */
+  onChanged: () => void;
+  onSeeDone: () => void;
+  onSeeAll: () => void;
+  onLoadMore: (() => void) | null;
+  loadingMore: boolean;
+};
+
+const btnSm = "inline-flex min-h-11 items-center justify-center gap-1.5 whitespace-nowrap rounded-[10px] border px-[11px] py-1.5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-45 sm:min-h-[34px]";
+
+/**
+ * "Pendientes": the prototype's review list. Three groups (matches, ready, needs an answer), the bulk bar,
+ * J/K/A/C/X shortcuts on desktop, swipe on phone, and undo on every change.
+ */
+export function ReviewInbox({ data, listKey, canReview, account, tzOffsetMinutes, onChanged, onSeeDone, onSeeAll, onLoadMore, loadingMore }: Props) {
   const t = useCopy(movimientosCopy);
-  const r = t.review;
+  const r = t.rv;
   const locale = intlLocale(useLang().lang);
   const utils = trpc.useUtils();
-  const [limit, setLimit] = useState(REVIEW_PAGE);
-  const [editing, setEditing] = useState<Movement | null>(null);
-  const [askAll, setAskAll] = useState(false);
+  const names = data.accountNames;
 
-  const key = { limit };
-  const list = trpc.review.list.useQuery(key, { placeholderData: keepPreviousData });
-  const items = list.data?.items ?? [];
-  const total = list.data?.total ?? 0;
+  const [focusId, setFocusId] = useState<number | null>(null);
+  const [optsId, setOptsId] = useState<number | null>(null);
+  const [pickingId, setPickingId] = useState<number | null>(null);
+  const [splitId, setSplitId] = useState<number | null>(null);
+  const [ruleId, setRuleId] = useState<number | null>(null);
+  const [sel, setSel] = useState<ReadonlySet<number>>(() => new Set());
+  const [bulkCat, setBulkCat] = useState(false);
+  const [overrides, setOverrides] = useState<ReadonlyMap<number, Override>>(() => new Map());
+  const [editing, setEditing] = useState<ReviewItemView | null>(null);
+  const [busyIds, setBusyIds] = useState<ReadonlySet<number>>(() => new Set());
+  const [newRules, setNewRules] = useState(0);
 
-  /** Take movements off the list right away; the server answer settles it. */
-  const drop = (ids: number[]) => {
-    utils.review.list.setData(key, (d) => d && { total: Math.max(0, d.total - ids.length), items: d.items.filter((i) => !ids.includes(i.id)) });
-    utils.review.count.setData(undefined, (c) => c && { count: Math.max(0, c.count - ids.length) });
+  const visible = useMemo(() => data.items.filter((i) => account === "all" || i.bankAccountId === account), [data.items, account]);
+  const isChanged = (i: ReviewItemView) => overrides.has(i.id);
+  const catOf = (i: ReviewItemView) => overrides.get(i.id)?.category ?? i.category;
+  const isTransfer = (i: ReviewItemView) => i.why.code === "transfer" && !isChanged(i);
+  const needsAnswer = (i: ReviewItemView) => i.ask !== null && !isChanged(i);
+  const groups = useMemo(() => {
+    const changed = (i: ReviewItemView) => overrides.has(i.id);
+    return {
+      match: visible.filter((i) => i.kind === "match"),
+      ready: visible.filter((i) => i.kind !== "match" && (i.kind === "ready" || changed(i))),
+      ask: visible.filter((i) => i.kind === "ask" && !changed(i)),
+    };
+  }, [visible, overrides]);
+  // The order the keyboard walks: the groups as shown.
+  const ordered = useMemo(() => [...groups.match, ...groups.ready, ...groups.ask], [groups]);
+  const selected = ordered.filter((i) => sel.has(i.id) && i.kind !== "match");
+
+  // ── Mutations ──
+  const approveM = trpc.review.approve.useMutation();
+  const excludeM = trpc.review.exclude.useMutation();
+  const linkM = trpc.review.link.useMutation();
+  const dismissM = trpc.review.dismissMatch.useMutation();
+  const splitM = trpc.review.split.useMutation();
+  const reopenM = trpc.review.reopen.useMutation();
+  const ruleM = trpc.review.rules.create.useMutation();
+
+  const refresh = () => {
+    void utils.review.list.invalidate();
+    void utils.review.count.invalidate();
+    void utils.review.done.invalidate();
+    void utils.review.excluded.invalidate();
+    onChanged();
   };
-  const refresh = () => Promise.all([utils.review.list.invalidate(), utils.review.count.invalidate()]);
 
-  const reopen = trpc.review.reopen.useMutation({
-    onSuccess: (_d, { ids }) => onReopened(ids),
-    onError: (e) => toast.error(errorText(e, t.error)),
-    onSettled: () => { void refresh(); },
-  });
-
-  const confirm = trpc.review.confirm.useMutation({
-    onMutate: async ({ ids }) => {
-      await utils.review.list.cancel();
-      const before = utils.review.list.getData(key);
-      drop(ids);
-      return { before };
-    },
-    onSuccess: (_d, { ids }) => {
-      onReviewed(ids);
-      toast.success(ids.length === 1 ? r.confirmedOne : r.confirmedMany(ids.length), {
-        action: { label: r.undo, onClick: () => reopen.mutate({ ids }) },
-      });
-    },
-    onError: (e, _v, ctx) => {
-      if (ctx?.before) utils.review.list.setData(key, ctx.before);
+  /** Takes rows off the list right away, runs the change, and offers undo (which reopens them). */
+  const resolve = async (ids: number[], run: () => Promise<unknown>, msg: string, undoable = true) => {
+    const unique = [...new Set(ids)];
+    if (unique.length === 0) return;
+    const before = utils.review.list.getData(listKey);
+    // Keep keyboard focus in place: the next row takes the focused one's spot.
+    if (focusId !== null && unique.includes(focusId)) {
+      const pos = ordered.findIndex((i) => i.id === focusId);
+      const rest = ordered.filter((i) => !unique.includes(i.id));
+      setFocusId(rest.length ? rest[Math.min(pos, rest.length - 1)].id : null);
+    }
+    setBusyIds((s) => new Set([...s, ...unique]));
+    try {
+      await run();
+      utils.review.list.setData(listKey, (d) => d && { ...d, total: Math.max(0, d.total - unique.length), items: d.items.filter((i) => !unique.includes(i.id)) });
+      utils.review.count.setData(undefined, (c) => c && { count: Math.max(0, c.count - unique.length) });
+      setSel((s) => new Set([...s].filter((x) => !unique.includes(x))));
+      setOverrides((m) => { const n = new Map(m); unique.forEach((x) => n.delete(x)); return n; });
+      if (optsId !== null && unique.includes(optsId)) setOptsId(null);
+      if (pickingId !== null && unique.includes(pickingId)) setPickingId(null);
+      if (splitId !== null && unique.includes(splitId)) setSplitId(null);
+      if (ruleId !== null && unique.includes(ruleId)) setRuleId(null);
+      setBulkCat(false);
+      toast.success(msg, undoable ? {
+        duration: 6000,
+        action: {
+          label: r.undo,
+          onClick: () => {
+            reopenM.mutate({ ids: unique }, {
+              onSuccess: () => { toast.success(r.tUndone); refresh(); },
+              onError: (e) => toast.error(errorText(e, t.error)),
+            });
+          },
+        },
+      } : undefined);
+      refresh();
+    } catch (e: unknown) {
+      if (before) utils.review.list.setData(listKey, before);
       toast.error(errorText(e, t.error));
-    },
-    onSettled: () => { void refresh(); },
-  });
-
-  const confirmAll = () => {
-    const ids = items.map((i) => i.id);
-    setAskAll(false);
-    if (ids.length) confirm.mutate({ ids });
+    } finally {
+      setBusyIds((s) => new Set([...s].filter((x) => !unique.includes(x))));
+    }
   };
 
-  if (list.isLoading) {
+  const who = (i: ReviewItemView) => whoOf(i, names, t);
+
+  const approve = (i: ReviewItemView) => {
+    const o = overrides.get(i.id);
+    const cat = catOf(i);
+    void resolve([i.id], () => approveM.mutateAsync({ items: [{ id: i.id, category: cat, type: o?.type }], how: o ? "changed" : "approved" }), r.tApproved(who(i), categoryLabel(cat, t)));
+  };
+  const excludeTransfer = (i: ReviewItemView) => {
+    const ids = i.transferPair && data.items.some((x) => x.id === i.transferPair) ? [i.id, i.transferPair] : [i.id];
+    const pairIds = i.transferPair ? [i.id, i.transferPair] : [i.id];
+    void resolve(ids, () => excludeM.mutateAsync({ ids: pairIds, reason: "transfer" }), r.tTransfer);
+  };
+  const excludeDuplicate = (i: ReviewItemView) =>
+    void resolve([i.id], () => excludeM.mutateAsync({ ids: [i.id], reason: "duplicate", relatedId: i.duplicateOf ?? undefined }), r.tDuplicate);
+  const exclude = (i: ReviewItemView) => void resolve([i.id], () => excludeM.mutateAsync({ ids: [i.id], reason: "other" }), r.tExcluded(who(i)));
+  const link = (i: ReviewItemView) => {
+    const m = i.match;
+    if (!m) return;
+    const target = m.type === "sale" ? { type: "sale" as const, saleId: m.saleId } : m.type === "bill" ? { type: "bill" as const, billId: m.billId } : { type: "cash" as const, saleIds: m.saleIds };
+    const msg = m.type === "sale" ? r.tLinkedSale(m.invoiceNumber) : m.type === "bill" ? r.tLinkedBill(m.vendorName) : r.tLinkedCash;
+    // A paid invoice is undone in Facturas (refund or void), not here: no undo for that one.
+    void resolve([i.id], () => linkM.mutateAsync({ id: i.id, target, tzOffsetMinutes }), msg, m.type !== "sale");
+  };
+  const notThis = (i: ReviewItemView) => {
+    const m = i.match;
+    if (!m) return;
+    const target = m.type === "sale" ? { type: "sale" as const, saleId: m.saleId } : m.type === "bill" ? { type: "bill" as const, billId: m.billId } : { type: "cash" as const, saleIds: m.saleIds };
+    dismissM.mutate({ id: i.id, target }, {
+      onSuccess: () => { toast.success(r.tNotThis); void utils.review.list.invalidate(); },
+      onError: (e) => toast.error(errorText(e, t.error)),
+    });
+  };
+  const answer = (i: ReviewItemView, choice: "business" | "personal") => {
+    const cat = choice === "personal" ? PERSONAL_CATEGORY : businessCategoryFor(catOf(i));
+    const fits = categoriesFor(i.type).includes(cat) ? cat : i.type === "expense" && choice === "business" ? "business_expense" : cat;
+    void resolve([i.id], () => approveM.mutateAsync({ items: [{ id: i.id, category: fits }], how: "answered" }), choice === "personal" ? r.tPersonal(who(i)) : r.tBusiness(who(i)));
+  };
+  const saveSplit = (i: ReviewItemView, parts: Array<{ category: string; amount: number }>) => {
+    const used = parts.filter((p) => p.amount > 0);
+    void resolve([i.id], () => splitM.mutateAsync({ id: i.id, parts: used }), r.tSplit(who(i), used.length));
+  };
+
+  /** The row's main action: A, swipe right. */
+  const primary = (i: ReviewItemView | undefined) => {
+    if (!i || !canReview) return;
+    if (i.kind === "match") return link(i);
+    if (isTransfer(i)) return excludeTransfer(i);
+    if (needsAnswer(i) && i.ask === "bizpersonal") { toast(r.tChooseBp(who(i))); return; }
+    if (needsAnswer(i) && i.ask === "split") { setSplitId(i.id); setOptsId(null); setFocusId(i.id); return; }
+    if (needsAnswer(i) && i.ask === "duplicate") return excludeDuplicate(i);
+    approve(i);
+  };
+
+  const pickCategory = (i: ReviewItemView, category: string, type?: MoneyType) => {
+    setOverrides((m) => new Map(m).set(i.id, { category, type }));
+    setPickingId(null);
+    setRuleId(i.hasRule ? null : i.id);
+  };
+
+  const createRule = (i: ReviewItemView) => {
+    const cat = catOf(i);
+    const pattern = i.rulePattern;
+    ruleM.mutate({ pattern, category: cat }, {
+      onSuccess: (res) => {
+        setOverrides((m) => new Map(m).set(i.id, { ...(m.get(i.id) ?? { category: cat }), rule: res.pattern }));
+        setNewRules((n) => n + 1);
+        setRuleId(null);
+        toast.success(r.tRule(res.pattern, categoryLabel(cat, t), res.applied));
+        void utils.review.list.invalidate();
+        void utils.review.rules.list.invalidate();
+      },
+      onError: (e) => toast.error(errorText(e, t.error)),
+    });
+  };
+
+  // ── Bulk ──
+  const bulkApprove = () => {
+    const ok = selected.filter((i) => !needsAnswer(i) || i.ask === "duplicate");
+    if (ok.length === 0) { toast(r.tNeedAnswer); return; }
+    const transfers = ok.filter(isTransfer);
+    const plain = ok.filter((i) => !isTransfer(i));
+    const msg = r.tApprovedMany(ok.length) + (ok.length < selected.length ? r.tSomeNeedAnswer : "");
+    void resolve([...ok.map((i) => i.id), ...transfers.map((i) => i.transferPair ?? i.id)], async () => {
+      if (plain.length) await approveM.mutateAsync({ items: plain.map((i) => ({ id: i.id, category: catOf(i), type: overrides.get(i.id)?.type })), how: "approved" });
+      for (const tr of transfers) await excludeM.mutateAsync({ ids: tr.transferPair ? [tr.id, tr.transferPair] : [tr.id], reason: "transfer" });
+    }, msg);
+  };
+  const bulkSetCategory = (category: string) =>
+    void resolve(selected.map((i) => i.id), () => approveM.mutateAsync({ items: selected.map((i) => ({ id: i.id, category })), how: "bulk" }), r.tBulkCat(selected.length, categoryLabel(category, t)));
+  const bulkExclude = () => void resolve(selected.map((i) => i.id), () => excludeM.mutateAsync({ ids: selected.map((i) => i.id), reason: "other" }), r.tExcludedMany(selected.length));
+  const approveReady = () => {
+    const ready = groups.ready;
+    const transfers = ready.filter(isTransfer);
+    const plain = ready.filter((i) => !isTransfer(i));
+    void resolve([...ready.map((i) => i.id), ...transfers.map((i) => i.transferPair ?? i.id)], async () => {
+      if (plain.length) await approveM.mutateAsync({ items: plain.map((i) => ({ id: i.id, category: catOf(i), type: overrides.get(i.id)?.type })), how: "approved" });
+      const seen = new Set<number>();
+      for (const tr of transfers) {
+        if (seen.has(tr.id)) continue;
+        const ids = tr.transferPair ? [tr.id, tr.transferPair] : [tr.id];
+        ids.forEach((x) => seen.add(x));
+        await excludeM.mutateAsync({ ids, reason: "transfer" });
+      }
+    }, r.tApprovedMany(ready.length));
+  };
+  const selType: MoneyType | "mixed" | null = selected.length === 0 ? null : selected.every((i) => i.type === selected[0].type) ? selected[0].type : "mixed";
+  const bulkCats = selType && selType !== "mixed" ? (data.topCategories[selType].length ? data.topCategories[selType] : categoriesFor(selType).slice(0, 8)) : [];
+
+  // ── Keyboard (desktop): J/↓ next, K/↑ previous, A approve, C change, X exclude ──
+  useEffect(() => {
+    if (!canReview) return;
+    const onKey = (e: KeyboardEvent) => {
+      const el = e.target as HTMLElement | null;
+      const tag = (el?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "select" || tag === "textarea" || el?.isContentEditable || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (document.querySelector('[role="dialog"]')) return;
+      if (ordered.length === 0) return;
+      const k = e.key.toLowerCase();
+      const idx = ordered.findIndex((i) => i.id === focusId);
+      const go = (n: number) => {
+        e.preventDefault();
+        const next = ordered[Math.max(0, Math.min(ordered.length - 1, n))];
+        setFocusId(next.id);
+        document.getElementById(`mv-${next.id}`)?.scrollIntoView({ block: "nearest", behavior: window.matchMedia("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth" });
+      };
+      // Arrows only once reviewing started (a row is focused), so the page still scrolls with them.
+      if (k === "j" || (k === "arrowdown" && focusId !== null)) return go(idx + 1);
+      if (k === "k" || (k === "arrowup" && focusId !== null)) return go(idx < 0 ? 0 : idx - 1);
+      if (idx < 0) return;
+      const cur = ordered[idx];
+      if (k === "a") { e.preventDefault(); primary(cur); }
+      else if (k === "c" && cur.kind !== "match") { e.preventDefault(); setPickingId((p) => (p === cur.id ? null : cur.id)); setOptsId(null); }
+      else if (k === "x") { e.preventDefault(); exclude(cur); }
+      else if (k === "escape") { setFocusId(null); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
+  const handlersFor = (i: ReviewItemView): RowHandlers => ({
+    onFocus: () => setFocusId(i.id),
+    onSelect: (checked) => setSel((s) => { const n = new Set(s); if (checked) n.add(i.id); else n.delete(i.id); return n; }),
+    onApprove: () => (isTransfer(i) ? excludeTransfer(i) : approve(i)),
+    onChange: () => { setPickingId((p) => (p === i.id ? null : i.id)); setOptsId(null); setFocusId(i.id); },
+    onPickCategory: (c) => pickCategory(i, c),
+    onMoreCategories: () => setEditing(i),
+    onLink: () => link(i),
+    onNotThis: () => notThis(i),
+    onAnswer: (choice) => answer(i, choice),
+    onSplit: () => { setSplitId((s) => (s === i.id ? null : i.id)); setOptsId(null); setFocusId(i.id); },
+    onSaveSplit: (parts) => saveSplit(i, parts),
+    onExclude: () => exclude(i),
+    onExcludeDuplicate: () => excludeDuplicate(i),
+    onOptions: () => { setOptsId((o) => (o === i.id ? null : i.id)); setPickingId(null); setFocusId(i.id); },
+    onRuleYes: () => createRule(i),
+    onRuleNo: () => setRuleId(null),
+    onPrimary: () => primary(i),
+    onSwipeLeft: () => { setOptsId(i.id); setFocusId(i.id); },
+  });
+
+  const rowFor = (i: ReviewItemView) => {
+    const o = overrides.get(i.id);
+    const cat = catOf(i);
+    const why = o ? (o.rule ? r.why.ruleNew(o.rule, categoryLabel(cat, t)) : r.why.changed) : whyText(i, t, locale, names);
+    const top = data.topCategories[o?.type ?? i.type];
     return (
-      <div className="space-y-3" aria-busy="true">
-        <Skeleton className="h-14 rounded-xl" />
-        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-32 rounded-2xl sm:h-24" />)}
+      <ReviewRow
+        key={i.id}
+        item={i}
+        who={who(i)}
+        category={cat}
+        why={why}
+        changed={!!o}
+        focused={focusId === i.id}
+        selected={sel.has(i.id)}
+        canReview={canReview}
+        optionsOpen={optsId === i.id}
+        picking={pickingId === i.id}
+        splitOpen={splitId === i.id}
+        rulePrompt={ruleId === i.id && !!o}
+        topCategories={top.length ? top : categoriesFor(o?.type ?? i.type).slice(0, 6)}
+        busy={busyIds.has(i.id)}
+        splitSaving={splitM.isPending && splitM.variables?.id === i.id}
+        handlers={handlersFor(i)}
+      />
+    );
+  };
+
+  const groupTitle = (title: string, n: number, right?: ReactNode) => (
+    <div className="mb-2.5 mt-[18px] flex items-center justify-between gap-2.5">
+      <h3 className="text-[15px] font-bold text-slate-900">{title} ({n})</h3>
+      {right}
+    </div>
+  );
+
+  if (data.items.length === 0) {
+    return (
+      <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-9 text-center text-slate-500">
+        <b className="mb-1 block text-base text-slate-900">{r.emptyTitle}</b>
+        {newRules > 0 ? r.emptyRules(newRules) : ""}{r.emptyText}
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
+          <button type="button" onClick={onSeeDone} className={cn(btnSm, "border-slate-200 bg-white text-slate-900 hover:bg-slate-100")}>{r.seeDone}</button>
+          <button type="button" onClick={onSeeAll} className={cn(btnSm, "border-slate-200 bg-white text-slate-900 hover:bg-slate-100")}>{r.seeAll}</button>
+        </div>
       </div>
     );
   }
-
-  if (list.isError) {
-    return (
-      <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
-        <p className="text-sm text-slate-700">{r.loadError}</p>
-        <button onClick={() => void list.refetch()}
-          className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-10">
-          {t.retry}
-        </button>
-      </section>
-    );
-  }
-
-  if (items.length === 0) {
-    return (
-      <section className="rounded-2xl border border-slate-200 bg-white px-6 py-10 text-center">
-        <span className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-emerald-50 text-emerald-600"><CheckCircle2 className="h-7 w-7" aria-hidden /></span>
-        <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{r.doneTitle}</h2>
-        <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{r.doneText}</p>
-        <button onClick={onSeeAll}
-          className="mt-5 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-10">
-          {r.seeAll}
-        </button>
-      </section>
-    );
-  }
-
-  const canLoadMore = items.length < total && limit < REVIEW_LIST_MAX;
 
   return (
-    <div className="space-y-3">
-      <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
-        <ListChecks className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden />
-        <span>{canReview ? r.intro : r.readOnly}</span>
-      </p>
+    <div>
+      {!canReview && <p className="mt-3.5 rounded-[10px] bg-blue-50 px-3 py-2.5 text-[13px] text-slate-700">{r.readOnly}</p>}
 
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm text-slate-500" aria-live="polite">{r.showing(items.length, total)}</p>
-        {canReview && items.length > 1 && (
-          <button onClick={() => setAskAll(true)} disabled={confirm.isPending}
-            className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60 sm:h-10 sm:w-auto">
-            <CheckCheck className="h-4 w-4" aria-hidden />{r.confirmAll(items.length)}
-          </button>
-        )}
+      {canReview && selected.length > 0 && (
+        <div className="sticky top-2 z-10 mt-3.5">
+          <div className="flex flex-wrap items-center gap-1.5 rounded-xl bg-slate-900 px-2.5 py-2 text-white shadow-lg">
+            <b className="mr-auto pl-1 text-[13px]" aria-live="polite">{r.bulkSelected(selected.length)}</b>
+            {([["approve", r.bulkApprove, bulkApprove], ["cat", r.bulkCat, () => setBulkCat((b) => !b)], ["exclude", r.bulkExclude, bulkExclude], ["clear", r.bulkCancel, () => { setSel(new Set()); setBulkCat(false); }]] as const).map(([key, label, fn]) => (
+              <button key={key} type="button" onClick={fn} aria-expanded={key === "cat" ? bulkCat : undefined}
+                className={cn(btnSm, "border-white/25 bg-transparent text-white hover:bg-white/10")}>{label}</button>
+            ))}
+          </div>
+          {bulkCat && (
+            <div className="mt-2 flex flex-wrap gap-1.5 rounded-xl bg-white/95 py-1 backdrop-blur">
+              {selType === "mixed" ? <p className="text-[13px] text-slate-600">{r.bulkMixed}</p> : bulkCats.map((c) => (
+                <button key={c} type="button" onClick={() => bulkSetCategory(c)} className={cn(btnSm, "border-slate-200 bg-white text-slate-900 hover:bg-slate-100")}>{categoryLabel(c, t)}</button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="animate-fade-up motion-reduce:animate-none" key={String(account)}>
+        {groups.match.length > 0 && (<>
+          {groupTitle(r.groupMatch, groups.match.length, <span className="whitespace-nowrap rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] font-semibold text-slate-500">{r.groupMatchTag}</span>)}
+          <div className="grid gap-3">{groups.match.map(rowFor)}</div>
+        </>)}
+        {groups.ready.length > 0 && (<>
+          {groupTitle(r.groupReady, groups.ready.length, canReview ? (
+            <button type="button" onClick={approveReady} disabled={approveM.isPending || excludeM.isPending}
+              className={cn(btnSm, "border-blue-600 bg-blue-600 text-white hover:brightness-110")}>
+              {approveM.isPending ? <Loader2 className="h-[15px] w-[15px] animate-spin" aria-hidden /> : <Check className="h-[15px] w-[15px]" aria-hidden />}{r.approveAll(groups.ready.length)}
+            </button>
+          ) : undefined)}
+          <div className="grid gap-3">{groups.ready.map(rowFor)}</div>
+        </>)}
+        {groups.ask.length > 0 && (<>
+          {groupTitle(r.groupAsk, groups.ask.length)}
+          <div className="grid gap-3">{groups.ask.map(rowFor)}</div>
+        </>)}
+        {visible.length === 0 && <div className="mt-4 rounded-[14px] border border-dashed border-slate-200 px-4 py-9 text-center text-slate-500">{r.emptyAcct}</div>}
       </div>
 
-      <ul className="space-y-3">
-        {items.map((item) => {
-          const label = categoryLabel(item.category, t);
-          const amount = signedMoney(item.amount, item.type);
-          const income = item.type === "income";
-          const busy = confirm.isPending && confirm.variables?.ids.includes(item.id);
-          return (
-            <li key={item.id} className="rounded-2xl border border-slate-200 bg-white p-4 sm:flex sm:items-center sm:gap-5 sm:px-5">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="line-clamp-2 min-w-0 break-words font-semibold text-slate-900">{item.description}</p>
-                  <p className={cn("shrink-0 font-semibold tabular-nums sm:hidden", income ? "text-emerald-700" : "text-slate-900")}>{amount}</p>
-                </div>
-                <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-slate-500">
-                  <span className="min-w-0 truncate">{[dayLabel(item.date, locale), accountLabel(item.bankName, item.accountNumber, t)].filter(Boolean).join(" · ")}</span>
-                  <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
-                    <span>{r.suggested}:</span>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 font-medium text-blue-800">
-                      <Tag className="h-3 w-3" aria-hidden />{label}
-                    </span>
-                  </span>
-                </div>
-              </div>
-              <p className={cn("hidden w-28 shrink-0 text-right font-semibold tabular-nums sm:block", income ? "text-emerald-700" : "text-slate-900")}>{amount}</p>
-              {canReview && (
-                <div className="mt-3 grid grid-cols-2 gap-2 sm:mt-0 sm:flex sm:shrink-0">
-                  <button onClick={() => confirm.mutate({ ids: [item.id] })} disabled={busy} aria-label={r.okAria(item.description)}
-                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 sm:h-10">
-                    {busy ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : <Check className="h-4 w-4" aria-hidden />}{r.ok}
-                  </button>
-                  <button
-                    onClick={() => setEditing({ id: item.id, description: item.description, amount: item.amount, type: item.type, category: item.category, date: item.date, plaidAmount: item.plaidAmount, importedFrom: item.importedFrom })}
-                    aria-label={r.changeAria(item.description)}
-                    className="inline-flex h-12 items-center justify-center gap-1.5 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-10">
-                    <Pencil className="h-4 w-4" aria-hidden />{r.change}
-                  </button>
-                </div>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-
-      {canLoadMore && (
-        <button onClick={() => setLimit((n) => Math.min(REVIEW_LIST_MAX, n + REVIEW_PAGE))} disabled={list.isFetching}
-          className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60">
-          {list.isFetching && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}{r.more}
+      {onLoadMore && (
+        <button type="button" onClick={onLoadMore} disabled={loadingMore}
+          className="mt-4 inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white text-sm font-semibold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 disabled:opacity-60">
+          {loadingMore && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}{r.loadMore(data.items.length, data.total)}
         </button>
       )}
+
+      {visible.length > 0 && canReview && (<>
+        <p className="mt-4 hidden text-center text-xs text-slate-500 sm:block">
+          {r.kbd.lead} <Kbd>J</Kbd> {r.kbd.or} <Kbd>↓</Kbd> {r.kbd.next} · <Kbd>A</Kbd> {r.kbd.approve} · <Kbd>C</Kbd> {r.kbd.change} · <Kbd>X</Kbd> {r.kbd.exclude}
+        </p>
+        <p className="mt-4 text-center text-xs text-slate-500 sm:hidden">{r.swipeHint}</p>
+      </>)}
 
       {editing && (
         <CategoryDialog
-          movement={editing}
+          movement={toMovement(editing, catOf(editing), overrides.get(editing.id)?.type)}
           onClose={() => setEditing(null)}
-          onSaved={(saved) => { drop([saved.id]); void refresh(); onReviewed([saved.id], { category: saved.category, type: saved.type }); }}
+          onPick={(picked) => pickCategory(editing, picked.category, picked.type)}
         />
-      )}
-
-      {askAll && (
-        <AlertDialog open onOpenChange={(open) => { if (!open) setAskAll(false); }}>
-          <AlertDialogContent className="bg-white sm:max-w-md">
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-base font-semibold text-slate-900">{r.confirmAllTitle(items.length)}</AlertDialogTitle>
-              <AlertDialogDescription className="text-sm text-slate-600">{r.confirmAllText}</AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter className="gap-2">
-              <AlertDialogCancel className="h-11 border-slate-200 sm:h-10">{r.cancel}</AlertDialogCancel>
-              <button onClick={confirmAll}
-                className="inline-flex h-11 items-center justify-center rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:h-10">
-                {r.confirmAllYes}
-              </button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       )}
     </div>
   );
+}
+
+function toMovement(i: ReviewItemView, category: string, type?: MoneyType): Movement {
+  return { id: i.id, description: i.description, amount: i.amount, type: type ?? i.type, category, date: i.date, plaidAmount: i.plaidAmount, importedFrom: i.importedFrom };
+}
+
+function Kbd({ children }: { children: ReactNode }) {
+  return <kbd className="rounded-[5px] border border-b-2 border-slate-200 bg-white px-1.5 py-0.5 text-[11px] font-semibold leading-none text-slate-900">{children}</kbd>;
 }

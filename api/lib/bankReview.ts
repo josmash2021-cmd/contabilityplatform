@@ -1,5 +1,6 @@
 // ── Revisar movimientos (business /transactions, "Por revisar") ──
-// The owner confirms or fixes the category of each bank movement. A movement counts as reviewed when
+// The owner confirms or fixes the category of each bank movement (grouping, matching, splits and rules:
+// api/lib/reviewEngine.ts). A movement counts as reviewed when
 // bankTransactions.isReconciled is true; from then on the automatic categorizer and the bank sync leave
 // its category and type alone (api/bank-router.ts). Pure rules here; the API is api/review-router.ts.
 // The client (src/components/transactions/) imports this file too, so keep it free of server code.
@@ -113,12 +114,14 @@ export type StoredReview = {
   type: MoneyType;
   category: string;
   isReconciled: boolean | number | null;
+  /** Not reviewed, but one of the owner's rules set its category (api/rules-router.ts): keep that one too. */
+  ruleApplied?: boolean;
 };
 
 /**
  * Movements read live from the bank get their category recomputed on every load. This puts back what
  * the database holds: the row id always (so the screen can act on it), and for movements the owner
- * reviewed, their category and type, which win over the recomputed ones.
+ * reviewed (or a rule of theirs categorized), their category and type, which win over the recomputed ones.
  */
 export function applyStoredReviews<T extends { plaidTransactionId?: string | null; type: string; category: string }>(
   rows: T[],
@@ -129,7 +132,11 @@ export function applyStoredReviews<T extends { plaidTransactionId?: string | nul
   return rows.map((row) => {
     const s = row.plaidTransactionId ? byPlaidId.get(row.plaidTransactionId) : undefined;
     if (!s) return { ...row, isReconciled: false };
-    if (!isReviewed(s.isReconciled)) return { ...row, id: Number(s.id), isReconciled: false };
+    if (!isReviewed(s.isReconciled)) {
+      return s.ruleApplied
+        ? { ...row, id: Number(s.id), isReconciled: false, type: s.type, category: s.category }
+        : { ...row, id: Number(s.id), isReconciled: false };
+    }
     return { ...row, id: Number(s.id), isReconciled: true, type: s.type, category: s.category };
   });
 }

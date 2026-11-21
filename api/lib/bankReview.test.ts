@@ -119,4 +119,9 @@ describe("applyStoredReviews", () => {
       [{ id: 9, plaidTransactionId: "p9", type: "expense", category: "transfer", isReconciled: true }]);
     expect(r.type).toBe("expense");
   });
+  it("a category one of the owner's rules set wins too, and the movement stays unreviewed", () => {
+    const [r] = applyStoredReviews([{ plaidTransactionId: "p8", type: "expense", category: "food" }],
+      [{ id: 8, plaidTransactionId: "p8", type: "expense", category: "gasolina", isReconciled: 0, ruleApplied: true }]);
+    expect(r).toMatchObject({ id: 8, isReconciled: false, category: "gasolina" });
+  });
 });
