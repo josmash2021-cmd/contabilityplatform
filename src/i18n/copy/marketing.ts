@@ -264,7 +264,7 @@ const es = {
         ],
       },
     ] as Array<{ title: string; links: Array<{ label: string; href: string; internal?: boolean }> }>,
-    rights: (year: number) => `© ${year} Ai Aethel Accountant. Todos los derechos reservados.`,
+    rights: (year: number) => `© ${year} Ai Aethel Personal & Business Solutions. Todos los derechos reservados.`,
     disclaimer: "Ai Aethel no sustituye la asesoría de un contador o asesor fiscal certificado.",
   },
   previews: {
@@ -643,7 +643,7 @@ const en: MarketingCopy = {
         ],
       },
     ],
-    rights: (year: number) => `© ${year} Ai Aethel Accountant. All rights reserved.`,
+    rights: (year: number) => `© ${year} Ai Aethel Personal & Business Solutions. All rights reserved.`,
     disclaimer: "Ai Aethel is not a substitute for advice from a certified accountant or tax advisor.",
   },
   previews: {

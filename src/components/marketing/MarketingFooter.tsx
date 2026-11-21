@@ -20,7 +20,7 @@ export function MarketingFooter() {
               <Logo className="h-9 w-9" />
               <span className="leading-tight">
                 <span className="block text-base font-semibold text-white">Ai Aethel</span>
-                <span className="block text-xs text-slate-500">Accountant</span>
+                <span className="block text-xs text-slate-500">Personal &amp; Business Solutions</span>
               </span>
             </Link>
             <p className="mt-5 text-sm leading-relaxed">{footer.tagline}</p>

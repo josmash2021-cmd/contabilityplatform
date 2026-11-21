@@ -22,12 +22,12 @@ type LandingPlan = { key: LandingPlanKey; mode: PlanKey; monthly: number; annual
 export const LANDING_PLAN_GROUPS: Record<LandingGroup, LandingPlan[]> = {
   personal: [
     { key: "personal", mode: "personal", ...PLAN_PRICES.personal, available: true },
-    { key: "personalPro", mode: "personal", monthly: 70, annual: 700, available: true },
+    { key: "personalPro", mode: "personal", monthly: 70, annual: 700, available: false },
   ],
   business: [
-    { key: "basic", mode: "business", monthly: 40, annual: 400, available: true },
+    { key: "basic", mode: "business", monthly: 40, annual: 400, available: false },
     { key: "business", mode: "business", ...PLAN_PRICES.business, available: true, featured: true },
-    { key: "pro", mode: "business", monthly: 150, annual: 1500, available: true },
+    { key: "pro", mode: "business", monthly: 150, annual: 1500, available: false },
   ],
 };
 

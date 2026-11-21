@@ -24,7 +24,7 @@ export default function AuthLayout() {
           <Logo className="h-9 w-9" />
           <span className="leading-tight">
             <span className="block text-base font-semibold text-white">Ai Aethel</span>
-            <span className="block text-xs text-slate-400">Accountant</span>
+            <span className="block text-xs text-slate-400">Personal &amp; Business Solutions</span>
           </span>
         </Link>
 
@@ -44,7 +44,7 @@ export default function AuthLayout() {
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} Ai Aethel Accountant</p>
+        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} Ai Aethel Personal & Business Solutions</p>
       </aside>
 
       {/* Form side */}

@@ -804,7 +804,7 @@ export const subscriptionRouter = createRouter({
               currency: "usd",
               unit_amount: amountDue,
               product_data: {
-                name: "Upgrade a Plan Anual - AI Aethel Accountant",
+                name: "Upgrade a Plan Anual - Ai Aethel Personal & Business Solutions",
                 description: `Pago de diferencia para upgrade a plan anual. Incluye todo lo del plan mensual + beneficios anuales.`,
               },
             },

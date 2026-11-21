@@ -301,7 +301,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
             {/* Footer */}
             <p className="text-[10px] text-neutral-400 text-center pb-4">
-              {t.gate.termsPre}<span className="text-white">AI Aethel Accountant</span>{t.gate.termsPost}
+              {t.gate.termsPre}<span className="text-white">Ai Aethel Personal & Business Solutions</span>{t.gate.termsPost}
             </p>
           </div>
         </div>

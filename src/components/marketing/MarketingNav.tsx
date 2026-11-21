@@ -46,11 +46,11 @@ export function MarketingNav() {
           <Logo className="h-8 w-8" />
           <span className="leading-tight">
             <span className={`block text-[15px] font-semibold tracking-tight transition-colors ${solid ? "text-slate-900" : "text-white"}`}>Ai Aethel</span>
-            <span className={`block text-[11px] transition-colors ${solid ? "text-slate-500" : "text-slate-400"}`}>Accountant</span>
+            <span className={`block whitespace-nowrap text-[11px] transition-colors ${solid ? "text-slate-500" : "text-slate-400"}`}>Personal &amp; Business Solutions</span>
           </span>
         </Link>
 
-        <ul className="hidden items-center gap-1 lg:flex">
+        <ul className="hidden items-center gap-1 xl:flex">
           {nav.links.map((l) => (
             <li key={l.href}>
               <a
@@ -65,7 +65,7 @@ export function MarketingNav() {
           ))}
         </ul>
 
-        <div className="hidden items-center gap-2 lg:flex">
+        <div className="hidden items-center gap-2 xl:flex">
           <LanguageSwitcher tone={solid ? "light" : "dark"} />
           <Link
             to="/login"
@@ -86,7 +86,7 @@ export function MarketingNav() {
 
         <button
           type="button"
-          className={`inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors lg:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+          className={`inline-flex h-11 w-11 items-center justify-center rounded-lg transition-colors xl:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
             solid ? "text-slate-900 hover:bg-slate-100" : "text-white hover:bg-white/10"
           }`}
           aria-label={open ? nav.closeMenu : nav.openMenu}
@@ -101,7 +101,7 @@ export function MarketingNav() {
       {/* Mobile menu */}
       <div
         id="mobile-menu"
-        className={`overflow-hidden border-t border-slate-200 bg-white transition-[max-height,opacity] duration-300 ease-out lg:hidden ${
+        className={`overflow-hidden border-t border-slate-200 bg-white transition-[max-height,opacity] duration-300 ease-out xl:hidden ${
           open ? "max-h-[calc(100vh-4rem)] opacity-100" : "max-h-0 opacity-0 border-transparent"
         }`}
       >
