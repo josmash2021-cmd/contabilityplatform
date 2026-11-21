@@ -1,280 +1,305 @@
-import { useState, useMemo, useRef } from "react";
-import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDeferredValue, useId, useMemo, useState } from "react";
+import { AlertCircle, ChevronRight, FileSpreadsheet, Loader2, Pencil, Search, Trash2, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
-import { Search, Plus, Pencil, Trash2, Mail, Phone, MapPin, ShoppingBag, Calendar, Wallet, X, ChevronDown, ChevronUp } from "lucide-react";
-import * as XLSX from "xlsx";
-import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
-import { formatCurrency } from "@/lib/utils";
+import { AnimatedPage } from "@/components/AnimatedPage";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CustomerDialog } from "@/components/customers/CustomerDialog";
+import { ImportCustomersDialog } from "@/components/customers/ImportCustomersDialog";
+import { fullName, initials, matchesSearch, money, type Customer } from "@/components/customers/customerUtils";
+import { trpc } from "@/providers/trpc";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
-import { businessCopy } from "@/i18n/copy/business";
+import { clientesCopy } from "@/i18n/copy/clientes";
 
-const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const pad = (n: number) => String(n).padStart(2, "0");
+/** The server returns at most 200 per page (customers.list). */
+const PAGE = 200;
 
+type Bought = { total: number; salesCount: number };
+
+/** 2.0 Clientes: search, list (cards on phone, table on desktop), create/edit dialog, delete with confirm, Excel import. */
 export default function Customers() {
-  const { customers: t, common } = useCopy(businessCopy);
-  const [letter, setLetter] = useState<string | undefined>();
+  const t = useCopy(clientesCopy);
+  const locale = intlLocale(useLang().lang);
+  const searchId = useId();
   const [search, setSearch] = useState("");
-  const [showAdd, setShowAdd] = useState(false);
-  const [editing, setEditing] = useState<number | null>(null);
-  const [form, setForm] = useState({ name: "", lastName: "", email: "", phone: "", address: "" });
+  const query = useDeferredValue(search.trim());
+  const [dialog, setDialog] = useState<{ open: boolean; customer: Customer | null }>({ open: false, customer: null });
+  const [toDelete, setToDelete] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
-  const [previewData, setPreviewData] = useState<Array<Record<string, string>>>([]);
-  const fileRef = useRef<HTMLInputElement>(null);
+
+  // ── Who can do what (api/lib/team.ts): staff create and edit, only the owner deletes and imports, the accountant only reads ──
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const roleKnown = membership !== undefined;
+  const role = membership?.role ?? null;
+  const canEdit = role !== "accountant";
+  const canDelete = roleKnown && role === null;
+  const canImport = roleKnown && role === null;
 
   const utils = trpc.useUtils();
-  const { data: customers } = trpc.customers.list.useQuery({ type: "all" });
+  const list = trpc.customers.list.useQuery({ type: "all", limit: PAGE });
   const { data: stats } = trpc.customers.stats.useQuery();
+  const loaded = useMemo(() => (list.data ?? []) as Customer[], [list.data]);
+  const total = Math.max(Number(stats?.total ?? 0), loaded.length);
 
-  const create = trpc.customers.create.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setShowAdd(false); reset(); toast.success(t.created); },
-    onError: (err) => toast.error(err.message),
-  });
-  const update = trpc.customers.update.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); setEditing(null); reset(); toast.success(common.updated); },
-    onError: (err) => toast.error(err.message),
-  });
+  // Over 200 clients: the name search also asks the server, so nobody is out of reach.
+  const searchServer = query.length > 0 && total > loaded.length;
+  const remote = trpc.customers.list.useQuery({ type: "all", search: query, limit: PAGE }, { enabled: searchServer });
+
+  // What each client has bought: only where the plan includes reports by client (Negocio) and the role can read reports.
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
+  const showBought = roleKnown && role !== "staff" && !!plan?.features.includes("clientReports");
+  const today = useMemo(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }, []);
+  const { data: report } = trpc.reports.byClient.useQuery({ startDate: "2000-01-01", endDate: today }, { enabled: showBought, staleTime: 60_000, retry: false });
+  const bought = useMemo(() => {
+    const m = new Map<number, Bought>();
+    for (const r of report?.rows ?? []) if (r.customerId != null) m.set(r.customerId, { total: r.total, salesCount: r.salesCount });
+    return m;
+  }, [report]);
+
+  const shown = useMemo(() => {
+    if (!query) return loaded;
+    const local = loaded.filter((c) => matchesSearch(c, query));
+    const seen = new Set(local.map((c) => c.id));
+    const extra = ((remote.data ?? []) as Customer[]).filter((c) => !seen.has(c.id));
+    return [...local, ...extra];
+  }, [loaded, query, remote.data]);
+
   const del = trpc.customers.delete.useMutation({
-    onSuccess: () => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success(common.deleted); },
+    onSuccess: () => {
+      void utils.customers.list.invalidate();
+      void utils.customers.stats.invalidate();
+      toast.success(t.toast.deleted);
+      setToDelete(null);
+      setDialog({ open: false, customer: null });
+    },
     onError: (err) => toast.error(err.message),
   });
-  const importExcel = trpc.customers.importExcel.useMutation({
-    onSuccess: (res) => { utils.customers.list.invalidate(); utils.customers.stats.invalidate(); toast.success(t.imported(res.created, res.errors)); setImportOpen(false); setPreviewData([]); },
-    onError: (err) => toast.error(err.message),
-  });
 
-  const reset = () => setForm({ name: "", lastName: "", email: "", phone: "", address: "" });
+  const openNew = () => setDialog({ open: true, customer: null });
+  const openClient = (c: Customer) => setDialog({ open: true, customer: c });
+  const since = (c: Customer) => t.since(new Date(c.createdAt).toLocaleDateString(locale, { month: "short", year: "numeric" }));
 
-  const startEdit = (c: NonNullable<typeof customers>[0]) => {
-    setEditing(c.id);
-    setForm({ name: c.name, lastName: c.lastName || "", email: c.email || "", phone: c.phone || "", address: c.address || "" });
-    setShowAdd(true);
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editing) update.mutate({ id: editing, ...form });
-    else create.mutate(form);
-  };
-
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json<Array<string | number>>(ws, { header: 1 });
-        if (data.length < 2) { toast.error(t.emptyFile); return; }
-        const headers = (data[0] as Array<string | number>).map((h) => String(h).toLowerCase().trim());
-        const rows = data.slice(1).map((row) => {
-          const obj: Record<string, string> = {};
-          headers.forEach((h, i) => { obj[h] = String(row[i] ?? "").trim(); });
-          return obj;
-        }).filter((r) => r[headers[0]]);
-        const mapped = rows.map((row) => {
-          const get = (...keys: string[]) => { for (const k of keys) { if (row[k] !== undefined && row[k] !== "") return row[k]; } return ""; };
-          return {
-            name: get("nombre", "name", "nombres"), lastName: get("apellido", "lastname", "apellidos"),
-            email: get("email", "correo", "e-mail"), phone: get("telefono", "phone", "telf", "celular"),
-            address: get("direccion", "address", "dir"), notes: get("notas", "notes"),
-          };
-        }).filter((m) => m.name);
-        setPreviewData(mapped);
-      } catch { toast.error(t.readError); }
-    };
-    reader.readAsBinaryString(file);
-  };
-
-  const filtered = useMemo(() => {
-    if (!search.trim()) return customers ?? [];
-    const q = search.toLowerCase();
-    return (customers ?? []).filter((c: NonNullable<typeof customers>[0]) => c.name.toLowerCase().includes(q) || (c.lastName || "").toLowerCase().includes(q) || (c.phone || "").toLowerCase().includes(q));
-  }, [customers, search]);
-
-  const groups = useMemo(() => {
-    const g = new Map<string, typeof filtered>();
-    ALPHABET.forEach((l) => g.set(l, []));
-    filtered.forEach((c: typeof filtered[0]) => { const f = c.name.charAt(0).toUpperCase(); if (g.has(f)) g.get(f)!.push(c); });
-    return g;
-  }, [filtered]);
+  const isEmpty = list.isSuccess && total === 0 && loaded.length === 0;
 
   return (
-    <div className="p-8 lg:p-10 space-y-6 bg-white min-h-screen">
-      <AnimatedPage>
-        <div className="flex items-center justify-between">
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-medium text-black">{t.title}</h1>
-            <p className="text-neutral-400 text-sm mt-1">{t.count(stats?.total ?? 0)}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{list.isLoading ? " " : t.count(total)}</p>
           </div>
-          <div className="flex gap-2">
-            <Dialog open={importOpen} onOpenChange={setImportOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className="border-neutral-200 text-neutral-600 text-sm">{t.importExcel}</Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white border-neutral-200 max-w-2xl">
-                <DialogHeader><DialogTitle className="text-black font-medium text-base">{t.importTitle}</DialogTitle></DialogHeader>
-                <div className="space-y-4">
-                  <div className="border-2 border-dashed border-neutral-200 rounded-lg p-6 text-center">
-                    <p className="text-xs text-neutral-400 mb-3">{t.columnsHint}</p>
-                    <input ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFileUpload} className="hidden" />
-                    <Button variant="outline" className="border-neutral-200 text-sm" onClick={() => fileRef.current?.click()}>{t.selectFile}</Button>
-                  </div>
-                  {previewData.length > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
-                        <p className="text-sm text-black font-medium">{common.records(previewData.length)}</p>
-                        <button onClick={() => setPreviewData([])} className="text-neutral-400 hover:text-black transition-colors duration-150"><X className="w-4 h-4" /></button>
-                      </div>
-                      <ScrollArea className="max-h-64 border border-neutral-200 rounded-lg">
-                        <table className="w-full text-xs"><thead className="bg-neutral-50 sticky top-0"><tr>{t.previewHeaders.map((h) => (<th key={h} className="text-left px-3 py-2 text-neutral-500 font-normal">{h}</th>))}</tr></thead><tbody>{previewData.slice(0, 50).map((row, idx) => (<tr key={idx} className="border-b border-neutral-100 hover:bg-neutral-50 transition-colors duration-150">{["name", "lastName", "phone", "email"].map((k) => (<td key={k} className="px-3 py-1.5 text-neutral-600">{row[k]}</td>))}</tr>))}</tbody></table>
-                      </ScrollArea>
-                      <Button className="w-full bg-black hover:bg-neutral-800 text-white" onClick={() => importExcel.mutate(previewData as any)} disabled={importExcel.isPending}>{importExcel.isPending ? t.importing : t.importN(previewData.length)}</Button>
-                    </>
-                  )}
-                </div>
-              </DialogContent>
-            </Dialog>
-            <Dialog open={showAdd} onOpenChange={setShowAdd}>
-              <DialogTrigger asChild>
-                <Button className="bg-black hover:bg-neutral-800 text-white text-sm" onClick={() => { setEditing(null); reset(); }}><Plus className="w-3.5 h-3.5 mr-1" /> {common.new}</Button>
-              </DialogTrigger>
-              <DialogContent className="bg-white border-neutral-200 max-w-md">
-                <DialogHeader><DialogTitle className="text-black font-medium">{t.dialogTitle(!!editing)}</DialogTitle></DialogHeader>
-                <form onSubmit={handleSubmit} className="space-y-4">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.firstName} *</label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="border-neutral-200 text-sm" required /></div>
-                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.lastName}</label><Input value={form.lastName} onChange={(e) => setForm({ ...form, lastName: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.phone}</label><Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                    <div><label className="text-xs text-neutral-400 mb-1 block">{t.email}</label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                  </div>
-                  <div><label className="text-xs text-neutral-400 mb-1 block">{t.address}</label><Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} className="border-neutral-200 text-sm" /></div>
-                  <Button type="submit" className="w-full bg-black hover:bg-neutral-800 text-white">{editing ? common.update : common.create}</Button>
-                </form>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
-      </AnimatedPage>
+          {(canImport || canEdit) && !isEmpty && (
+            <div className="flex w-full gap-2 sm:w-auto">
+              {canImport && (
+                <button onClick={() => setImportOpen(true)}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10 sm:flex-none">
+                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />{t.importExcel}
+                </button>
+              )}
+              {canEdit && (
+                <button onClick={openNew}
+                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:h-10 sm:flex-none">
+                  <UserPlus className="h-4 w-4" />{t.newClient}
+                </button>
+              )}
+            </div>
+          )}
+        </header>
 
-      <AnimatedPage delay={80}>
-        <div className="relative max-w-xs">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-          <Input placeholder={common.search} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 h-8 text-sm border-neutral-200" />
-        </div>
-      </AnimatedPage>
-
-      {!search.trim() && (
-        <div className="flex flex-wrap gap-1">
-          <button onClick={() => setLetter(undefined)} className={`text-[11px] w-7 h-7 rounded flex items-center justify-center transition-colors duration-150 ${!letter ? "bg-black text-white" : "text-neutral-400 hover:bg-neutral-100"}`}>#</button>
-          {ALPHABET.map((l) => {
-            const hasClients = (stats?.alphabet ?? []).some((a) => a.letter === l);
-            return (
-              <button key={l} onClick={() => setLetter(letter === l ? undefined : l)} className={`text-[11px] w-7 h-7 rounded flex items-center justify-center transition-colors duration-150 ${letter === l ? "bg-black text-white" : hasClients ? "text-neutral-600 hover:bg-neutral-100" : "text-neutral-200 cursor-default"}`}>{l}</button>
-            );
-          })}
-        </div>
-      )}
-
-      {search.trim() ? (
-        <AnimatedPage delay={160}>
-          <div className="space-y-2">
-            {filtered.map((c: typeof filtered[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm(common.confirmDelete)) del.mutate({ id }); }} />)}
+        {!isEmpty && (
+          <div className="max-w-md">
+            <label htmlFor={searchId} className="mb-1.5 block text-sm font-medium text-slate-700">{t.searchLabel}</label>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input id={searchId} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPh} autoComplete="off"
+                className="h-11 w-full rounded-[10px] border border-slate-200 bg-white pl-9 pr-11 text-base text-slate-900 outline-none placeholder:text-slate-400 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:text-sm [&::-webkit-search-cancel-button]:hidden" />
+              {search && (
+                <button type="button" onClick={() => setSearch("")} aria-label={t.clearSearch}
+                  className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-r-[10px] text-slate-400 hover:text-slate-700">
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
           </div>
-        </AnimatedPage>
-      ) : (
-        <AnimatedPage delay={160}>
-          <div className="space-y-6">
-            {Array.from(groups.entries()).map(([l, group]) => {
-              if (group.length === 0) return null;
-              return (
-                <div key={l}>
-                  <div className="flex items-center gap-3 mb-3">
-                    <span className="text-lg font-medium text-black w-8">{l}</span>
-                    <div className="flex-1 h-px bg-neutral-100" />
-                    <span className="text-xs text-neutral-400">{group.length}</span>
-                  </div>
-                  <div className="space-y-2 pl-8">{group.map((c: typeof group[0]) => <CustomerCard key={c.id} c={c} onEdit={startEdit} onDelete={(id) => { if (confirm(common.confirmDelete)) del.mutate({ id }); }} />)}</div>
-                </div>
-              );
-            })}
+        )}
+
+        {list.isLoading ? (
+          <div className="space-y-2" aria-busy="true">
+            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
           </div>
-        </AnimatedPage>
-      )}
-    </div>
+        ) : list.isError ? (
+          <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+            <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
+            <p className="mt-2 text-sm font-medium text-slate-900">{t.loadError}</p>
+            <button onClick={() => void list.refetch()} className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">{t.retry}</button>
+          </section>
+        ) : isEmpty ? (
+          <EmptyState canEdit={canEdit} canImport={canImport} onNew={openNew} onImport={() => setImportOpen(true)} />
+        ) : shown.length === 0 ? (
+          <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
+            {searchServer && remote.isFetching ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /> : (
+              <>
+                <p className="text-sm text-slate-600">{t.noResults(query)}</p>
+                <button onClick={() => setSearch("")} className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">{t.clearSearch}</button>
+              </>
+            )}
+          </section>
+        ) : (
+          <>
+            {/* Phone: cards */}
+            <ul className="space-y-2 md:hidden">
+              {shown.map((c) => {
+                const b = bought.get(c.id);
+                const contact = [c.phone, c.email].filter(Boolean).join(" · ");
+                return (
+                  <li key={c.id}>
+                    <button onClick={() => openClient(c)}
+                      className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                      <Avatar c={c} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-semibold text-slate-900">{fullName(c)}</span>
+                        <span className="block truncate text-xs text-slate-500">{contact || t.noPhone}</span>
+                        {showBought && <span className="mt-0.5 block truncate text-xs font-medium tabular-nums text-slate-700">{b ? t.bought(money(b.total), b.salesCount) : t.noBuys}</span>}
+                      </span>
+                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {/* Desktop: table */}
+            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
+              <table className="w-full table-fixed text-sm">
+                <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
+                  <tr>
+                    <th scope="col" className="w-[32%] px-4 py-3 font-medium">{t.table.name}</th>
+                    <th scope="col" className="w-[18%] px-4 py-3 font-medium">{t.table.phone}</th>
+                    <th scope="col" className="px-4 py-3 font-medium">{t.table.email}</th>
+                    {showBought && <th scope="col" className="w-[18%] px-4 py-3 text-right font-medium">{t.table.bought}</th>}
+                    <th scope="col" className="w-[104px] px-4 py-3"><span className="sr-only">{t.table.actions}</span></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {shown.map((c) => {
+                    const name = fullName(c);
+                    const b = bought.get(c.id);
+                    return (
+                      <tr key={c.id} className="hover:bg-slate-50/70">
+                        <td className="px-4 py-3">
+                          <button onClick={() => openClient(c)} className="flex w-full min-w-0 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                            <Avatar c={c} />
+                            <span className="min-w-0">
+                              <span className="block truncate font-semibold text-slate-900 hover:text-blue-700">{name}</span>
+                              <span className="block truncate text-xs text-slate-500">{since(c)}</span>
+                            </span>
+                          </button>
+                        </td>
+                        <td className="truncate px-4 py-3 tabular-nums text-slate-700">{c.phone || <Missing label={t.noPhone} />}</td>
+                        <td className="truncate px-4 py-3 text-slate-700">{c.email || <Missing label={t.noEmail} />}</td>
+                        {showBought && (
+                          <td className="px-4 py-3 text-right tabular-nums">
+                            {b ? (
+                              <>
+                                <span className="block font-semibold text-slate-900">{money(b.total)}</span>
+                                <span className="block text-xs text-slate-500">{t.purchases(b.salesCount)}</span>
+                              </>
+                            ) : <span className="text-slate-400">{t.noBuys}</span>}
+                          </td>
+                        )}
+                        <td className="px-2 py-3">
+                          <div className="flex justify-end gap-1">
+                            <button onClick={() => openClient(c)} aria-label={canEdit ? t.edit(name) : t.view(name)} title={canEdit ? t.edit(name) : t.view(name)}
+                              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                              {canEdit ? <Pencil className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                            </button>
+                            {canDelete && (
+                              <button onClick={() => setToDelete(c)} aria-label={t.remove(name)} title={t.remove(name)}
+                                className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
+                                <Trash2 className="h-4 w-4" />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {!query && total > loaded.length && <p className="text-xs text-slate-500">{t.showing(loaded.length, total)}</p>}
+          </>
+        )}
+      </div>
+
+      <CustomerDialog
+        open={dialog.open}
+        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
+        customer={dialog.customer}
+        canEdit={canEdit}
+        canDelete={canDelete}
+        onDelete={setToDelete}
+      />
+
+      {canImport && <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} />}
+
+      <AlertDialog open={!!toDelete} onOpenChange={(open) => { if (!open && !del.isPending) setToDelete(null); }}>
+        <AlertDialogContent className="bg-white sm:rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-slate-900">{toDelete ? t.del.title(fullName(toDelete)) : ""}</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600">{t.del.text}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel className="h-11 sm:h-10" disabled={del.isPending}>{t.del.cancel}</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={(e) => { e.preventDefault(); if (toDelete) del.mutate({ id: toDelete.id }); }}
+              disabled={del.isPending}
+              className="h-11 bg-red-600 text-white hover:bg-red-700 sm:h-10">
+              {del.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              {del.isPending ? t.del.deleting : t.del.confirm}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </AnimatedPage>
   );
 }
 
-function CustomerCard({ c, onEdit, onDelete }: { c: any; onEdit: (c: any) => void; onDelete: (id: number) => void }) {
-  const { customers: t, common, paymentMethods } = useCopy(businessCopy);
-  const locale = intlLocale(useLang().lang);
-  const fullName = `${c.name}${c.lastName ? ` ${c.lastName}` : ""}`;
-  const [expanded, setExpanded] = useState(false);
-  const { data: purchaseHistory } = trpc.sales.byCustomer.useQuery({ customerId: c.id }, { enabled: expanded });
+function Avatar({ c }: { c: Customer }) {
+  return <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700">{initials(c)}</span>;
+}
 
+function Missing({ label }: { label: string }) {
+  return <span className="text-slate-400"><span aria-hidden>—</span><span className="sr-only">{label}</span></span>;
+}
+
+function EmptyState({ canEdit, canImport, onNew, onImport }: { canEdit: boolean; canImport: boolean; onNew: () => void; onImport: () => void }) {
+  const t = useCopy(clientesCopy);
   return (
-    <div className="border border-neutral-200 rounded-lg p-4 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-      <div className="flex items-start justify-between">
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <p className="text-sm text-black font-medium">{fullName}</p>
-          </div>
-          <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-xs text-neutral-400">
-            {c.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{c.phone}</span>}
-            {c.email && <span className="flex items-center gap-1"><Mail className="w-3 h-3" />{c.email}</span>}
-            {c.address && <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{c.address}</span>}
-          </div>
-          <div className="flex items-center gap-3 mt-2 text-xs text-neutral-400">
-            <span className="flex items-center gap-1"><Calendar className="w-3 h-3" />{t.since(new Date(c.createdAt).toLocaleDateString(locale))}</span>
-          </div>
-        </div>
-        <div className="flex gap-1 ml-3">
-          <button className="p-1.5 text-neutral-300 hover:text-black transition-colors duration-150" onClick={() => onEdit(c)}><Pencil className="w-3.5 h-3.5" /></button>
-          <button className="p-1.5 text-neutral-300 hover:text-red-500 transition-colors duration-150" onClick={() => onDelete(c.id)}><Trash2 className="w-3.5 h-3.5" /></button>
-        </div>
-      </div>
-
-      <button onClick={() => setExpanded(!expanded)} className="mt-3 flex items-center gap-1.5 text-xs text-neutral-500 hover:text-black transition-colors duration-150">
-        <ShoppingBag className="w-3.5 h-3.5" />
-        {expanded ? t.hideHistory : t.showHistory}
-        {expanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-      </button>
-
-      {expanded && (
-        <div className="mt-3 pt-3 border-t border-neutral-100">
-          {purchaseHistory === undefined ? (<p className="text-xs text-neutral-400">{common.loading}</p>) :
-            purchaseHistory.length === 0 ? (<p className="text-xs text-neutral-400">{t.noPurchases}</p>) : (
-              <div>
-                {purchaseHistory.map((sale: any) => {
-                  const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || common.noProducts;
-                  const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
-                  const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-                  const paymentLabel = paymentMethods[sale.paymentMethod] || sale.paymentMethod;
-                  return (
-                    <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-xs font-medium text-black truncate">{productNames}</p>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-neutral-500">{dateStr} &middot; {timeStr}</span>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500">{paymentLabel}</span>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold text-black ml-3 shrink-0">{formatCurrency(sale.total)}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+    <section className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center sm:py-14">
+      <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Users className="h-7 w-7" /></span>
+      <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{canEdit ? t.empty.title : t.empty.readOnlyTitle}</h2>
+      <p className="mx-auto mt-1.5 max-w-md text-sm text-slate-500">{canEdit ? t.empty.text : t.empty.readOnlyText}</p>
+      {canEdit && (
+        <div className="mx-auto mt-6 flex max-w-sm flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
+          <button onClick={onNew} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
+            <UserPlus className="h-4 w-4" />{t.empty.add}
+          </button>
+          {canImport && (
+            <button onClick={onImport} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />{t.importExcel}
+            </button>
+          )}
         </div>
       )}
-    </div>
+      {canImport && <p className="mt-3 text-xs text-slate-500">{t.empty.importHint}</p>}
+    </section>
   );
 }

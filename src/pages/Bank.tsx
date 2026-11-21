@@ -1,1011 +1,230 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
-import { useNavigate, useSearchParams } from "react-router";
-import { trpc } from "@/providers/trpc";
-import { formatCurrency } from "@/lib/utils";
-import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
-import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
-import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
-import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
-import { Skeleton } from "@/components/ui/skeleton";
+import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
+import { AlertCircle, Info, Loader2, RefreshCw, TriangleAlert, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { AnimatedPage } from "@/components/AnimatedPage";
+import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import { Skeleton } from "@/components/ui/skeleton";
+import { BankAccountsCard } from "@/components/bank/BankAccountsCard";
+import { BankConnectHero } from "@/components/bank/BankConnectHero";
+import { BankDangerZone } from "@/components/bank/BankDangerZone";
+import { BankMonthCard } from "@/components/bank/BankMonthCard";
+import { BankStatementCard } from "@/components/bank/BankStatementCard";
+import { countBanks, isDebt, mergeAccounts, money, type DbAccount, type LiveAccount, type MonthTx } from "@/components/bank/bankUtils";
+import { useQuietBankSync } from "@/components/bank/useQuietBankSync";
+import { trpc } from "@/providers/trpc";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
-import { bankCopy, type BankCopy } from "@/i18n/copy/bank";
-import {
-  RefreshCw, Trash2, Link2, Landmark, ChevronRight, LogOut,
-  ArrowUpRight, ArrowDownRight, Wallet, TrendingUp, TrendingDown,
-  Calendar, CreditCard, Smartphone, Banknote, Receipt, AlertCircle,
-  CheckCircle2, PiggyBank, Loader2, X, Check, Clock, RotateCcw,
-  ShoppingBag, Fuel, Utensils, HeartPulse,
-} from "lucide-react";
+import { bankCopy } from "@/i18n/copy/bank";
+import { bancoNegocioCopy } from "@/i18n/copy/bancoNegocio";
+import { BUSINESS_BANK_LIMITS } from "@contracts/planFeatures";
 
-/** Account dropdown — pushes content down when open (part of document flow) */
-function AccountDropdown({
-  accounts,
-  selectedId,
-  onChange,
-  isLoading,
-}: {
-  accounts: any[];
-  selectedId: string | null;
-  onChange: (id: string) => void;
-  isLoading?: boolean;
-}) {
-  const { bank: t } = useCopy(bankCopy);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+/** Also read by /bank/category/:category, so the drill-down shows the same account. */
+const ACCOUNT_KEY = "bank_selected_account_id";
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  const selected = accounts.find((a) => String(a.id) === selectedId);
-
-  // Loading state — show skeleton instead of disappearing
-  if (isLoading && accounts.length === 0) {
-    return (
-      <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 animate-pulse">
-        <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-        <span className="text-neutral-400">{t.loadingAccounts}</span>
-      </div>
-    );
-  }
-
-  // Empty state — still show the dropdown but disabled
-  if (accounts.length === 0) {
-    return (
-      <div className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-neutral-50 text-xs w-52 opacity-60">
-        <Landmark className="w-3.5 h-3.5 text-neutral-300 shrink-0" />
-        <span className="text-neutral-400">{t.noAccounts}</span>
-      </div>
-    );
-  }
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-lg bg-white text-xs hover:border-neutral-300 transition-colors w-52"
-      >
-        <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate flex-1 text-left">
-          {selected ? `${selected.bankName || selected.accountType} ${selected.accountNumber ? `(${selected.accountNumber})` : ""}` : t.selectAccount}
-        </span>
-        <ChevronRight className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-90" : ""}`} />
-      </button>
-      {open && (
-        <div className="mt-1 w-full min-w-[260px] bg-white border border-neutral-200 rounded-lg shadow-xl py-1">
-          {accounts.map((acc: any) => (
-            <button
-              key={acc.id}
-              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-xs flex items-center justify-between transition-colors ${
-                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate">{acc.bankName || acc.accountType} {acc.accountNumber ? `(${acc.accountNumber})` : ""}</span>
-              </div>
-              <span className={`text-[10px] font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* helpers */
-function getMonthRangeLabel(month: number, year: number, copy: BankCopy): string {
-  const now = new Date();
-  const isCurrentMonth = now.getMonth() + 1 === month && now.getFullYear() === year;
-  const monthName = copy.monthsShort[month - 1];
-  const { dayMonth } = copy.bank;
-  if (isCurrentMonth) {
-    const today = now.getDate();
-    return `${dayMonth(1, monthName)} - ${dayMonth(today, monthName)}`;
-  }
-  const lastDay = new Date(year, month, 0).getDate();
-  return `${dayMonth(1, monthName)} - ${dayMonth(lastDay, monthName)}`;
-}
-
-const CATEGORY_ICONS: Record<string, typeof Banknote> = {
-  zelle_income: Smartphone, deposit: Landmark, cash_deposit: Banknote,
-  cash_withdrawal: Banknote, zelle_sent: Smartphone, subscription: CreditCard, transfer: ArrowDownRight,
-  shopping: ShoppingBag, gasolina: Fuel, medical: HeartPulse, food: Utensils,
-  business_expense: Receipt, home_expense: Utensils,
-};
-
-const CATEGORY_COLORS: Record<string, string> = {
-  zelle_income: "bg-blue-50 text-blue-600", deposit: "bg-emerald-50 text-emerald-600",
-  cash_deposit: "bg-emerald-50 text-emerald-600", cash_withdrawal: "bg-red-50 text-red-600",
-  zelle_sent: "bg-red-50 text-red-600", subscription: "bg-amber-50 text-amber-600", transfer: "bg-neutral-100 text-neutral-600",
-  shopping: "bg-violet-50 text-violet-600", gasolina: "bg-orange-50 text-orange-600",
-  medical: "bg-red-50 text-red-600", food: "bg-orange-50 text-orange-600",
-  business_expense: "bg-slate-50 text-slate-600", home_expense: "bg-orange-50 text-orange-600",
-};
-
-// Category labels come from bankCopy.categories (keys are stored in the database).
-
-/* Plaid Link Button */
-function PlaidLinkButton({ onSuccess, onStart, onExchangeStart }: { onSuccess: () => void; onStart?: () => void; onExchangeStart?: () => void }) {
-  const { bank: t, plaid } = useCopy(bankCopy);
-  const utils = trpc.useUtils();
-  const exchangeMut = trpc.bank.exchangePublicToken.useMutation({
-    onSuccess: (data) => {
-      if (data.success) { onSuccess(); utils.invalidate(); }
-      else { toast.error("code" in data && data.code === "bank_limit" ? plaid.bankLimit(data.limit) : data.error || t.toast.connectError); }
-    },
-    onError: (err) => { toast.error(err.message); },
-  });
-
-  const createLinkMut = trpc.bank.createLinkToken.useMutation({
-    onSuccess: (data) => {
-      if (!data.success || !data.linkToken) { toast.error(data.error || t.toast.linkError); return; }
-      const scriptId = "plaid-link-script";
-      let script = document.getElementById(scriptId) as HTMLScriptElement | null;
-      const openPlaid = () => {
-        const handler = (window as any).Plaid.create({
-          token: data.linkToken,
-          onSuccess: (publicToken: string) => { onExchangeStart?.(); exchangeMut.mutate({ publicToken }); },
-          onExit: () => {},
-        });
-        handler.open();
-      };
-      if (!script) {
-        script = document.createElement("script");
-        script.id = scriptId;
-        script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-        script.onload = openPlaid;
-        document.body.appendChild(script);
-      } else if ((window as any).Plaid) { openPlaid(); }
-      else { script.onload = openPlaid; }
-    },
-    onError: (err) => toast.error(err.message),
-  });
-
-  return (
-    <Button onClick={() => { onStart?.(); createLinkMut.mutate(); }} disabled={createLinkMut.isPending} className="bg-black text-white hover:bg-neutral-800 rounded-lg">
-      {createLinkMut.isPending ? t.loading : <><Link2 className="w-4 h-4 mr-2" /> {t.connectBank}</>}
-    </Button>
-  );
-}
-
-/* Selectors */
-function MonthSelector({ value, onChange, selectedYear }: { value: string; onChange: (m: string) => void; selectedYear: string }) {
-  const copy = useCopy(bankCopy);
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const currentYear = now.getFullYear();
-  const allMonths = copy.months.map((label, i) => ({ value: String(i + 1), label }));
-  // Only filter future months when selected year is current year
-  const maxMonth = parseInt(selectedYear) === currentYear ? currentMonth : 12;
-  const months = allMonths.filter((m) => parseInt(m.value) <= maxMonth);
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[90px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black">
-        <SelectValue placeholder={copy.bank.monthPh} />
-      </SelectTrigger>
-      <SelectContent className="bg-white border-neutral-200">
-        {months.map((m) => <SelectItem key={m.value} value={m.value} className="text-xs focus:bg-neutral-50">{m.label}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function YearSelector({ value, onChange }: { value: string; onChange: (y: string) => void }) {
-  const currentYear = new Date().getFullYear();
-  const years = Array.from({ length: 2 }, (_, i) => currentYear - i);
-  return (
-    <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="h-8 w-[80px] border-neutral-200 rounded-lg text-xs focus:ring-1 focus:ring-black px-2">
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent className="bg-white border-neutral-200">
-        {years.map((y) => <SelectItem key={y} value={y.toString()} className="text-xs focus:bg-neutral-50">{y}</SelectItem>)}
-      </SelectContent>
-    </Select>
-  );
-}
-
-/* MAIN COMPONENT */
+/** 2.0 business bank: total available, accounts, plan bank usage, the month's movements, statement upload, disconnect. */
 export default function Bank() {
-  const copy = useCopy(bankCopy);
-  const t = copy.bank;
-  const { lang } = useLang();
+  const t = useCopy(bancoNegocioCopy);
+  const legacy = useCopy(bankCopy);
+  const locale = intlLocale(useLang().lang);
   const utils = trpc.useUtils();
-  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const urlMonth = searchParams.get("month");
-  const urlYear = searchParams.get("year");
 
-  const [syncing, setSyncing] = useState(false);
-  const [autoSyncDone, setAutoSyncDone] = useState(false);
-  const [justSynced, setJustSynced] = useState(false);
-  const [selectedMonth, setSelectedMonth] = useState(urlMonth ?? String(new Date().getMonth() + 1));
-  const [selectedYear, setSelectedYear] = useState(urlYear ?? String(new Date().getFullYear()));
-  const [isConnecting, setIsConnecting] = useState(false);
-  const [selectedAccountId, setSelectedAccountIdRaw] = useState<string | null>(() => {
-    try { return localStorage.getItem("bank_selected_account_id"); } catch { return null; }
+  const now = useMemo(() => { const d = new Date(); return { month: d.getMonth() + 1, year: d.getFullYear() }; }, []);
+  const [pickedMonth, setPickedMonth] = useState<number | null>(() => Number(searchParams.get("month")) || null);
+  const [pickedYear, setPickedYear] = useState<number | null>(() => Number(searchParams.get("year")) || null);
+  const year = pickedYear ?? now.year;
+  const month = Math.min(pickedMonth ?? now.month, year === now.year ? now.month : 12);
+  const [pickedAccount, setPickedAccount] = useState<number | null>(() => {
+    try { return Number(localStorage.getItem(ACCOUNT_KEY)) || null; } catch { return null; }
   });
-  const setSelectedAccountId = (id: string | null) => {
-    setSelectedAccountIdRaw(id);
-    try { if (id) localStorage.setItem("bank_selected_account_id", id); else localStorage.removeItem("bank_selected_account_id"); } catch { /* ignore */ }
-  };
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [confirmDeleteTx, setConfirmDeleteTx] = useState<number | null>(null);
-  const [showDiagnosis, setShowDiagnosis] = useState(false);
-  const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
-  const wasConnectedRef = useRef(false);
+  const [connecting, setConnecting] = useState(false);
 
-  // Refs to prevent duplicate operations
-  const autoSyncFiredRef = useRef(false);
-  const lastToastRef = useRef<{ type: string; time: number } | null>(null);
+  // ── Team: the accountant only reads; staff never reach this page (AppLayout). The server enforces both (api/lib/team.ts). ──
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const isAccountant = membership?.role === "accountant";
+  const canManage = !membership;
 
-  // Use checkConnection as PRIMARY source for bank detection (same as Transactions.tsx)
-  const { data: connection, isLoading: loadingConnection } = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
-  const hasBankConnected = connection?.hasBank === true;
-
-  // getAllPlaidAccounts - fetches from Plaid live (may fail due to rate limits)
-  const { data: plaidAccountsData, isLoading: loadingPlaidAccounts } = trpc.bank.getAllPlaidAccounts.useQuery(
-    undefined,
-    { retry: false, staleTime: 2 * 60 * 1000 } // 2min cache to reduce Plaid calls
+  // ── Connection and accounts ──
+  const connection = trpc.bank.checkConnection.useQuery(undefined, { retry: false });
+  const hasBank = connection.data?.hasBank === true;
+  const dbQ = trpc.bank.listAccounts.useQuery(undefined, { enabled: hasBank, retry: false, staleTime: 2 * 60_000 });
+  const liveQ = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { enabled: hasBank, retry: false, staleTime: 2 * 60_000 });
+  const dbAccounts = useMemo(() => (dbQ.data ?? []) as DbAccount[], [dbQ.data]);
+  const accounts = useMemo(
+    () => mergeAccounts(dbAccounts, (liveQ.data?.accounts ?? []) as LiveAccount[], legacy.bank.accountFallback),
+    [dbAccounts, liveQ.data, legacy.bank.accountFallback],
   );
-  const plaidAccounts = plaidAccountsData?.accounts ?? [];
-
-  // DB accounts — always the reliable source of truth
-  const { data: dbAccounts, isLoading: loadingDbAccounts } = trpc.bank.listAccounts.useQuery(
-    undefined,
-    { retry: false, staleTime: 2 * 60 * 1000 }
-  );
-  const dbAccountsList = dbAccounts ?? [];
-
-  // Merge Plaid + DB accounts using useMemo for stable references
-  // Priority: Plaid accounts (live) merged with DB accounts (reliable)
-  const accountFallback = t.accountFallback;
-  const allAccounts = useMemo(() => {
-    // If we have Plaid accounts, use them as primary (they have fresh balances)
-    if (plaidAccounts.length > 0) {
-      return plaidAccounts.map((pa: any) => {
-        // Find matching DB account to get the numeric DB id
-        const dbMatch = dbAccountsList.find((db: any) => db.plaidAccountId === pa.plaidAccountId);
-        return {
-          ...pa,
-          // Prefer DB id if available (needed for monthData queries)
-          id: dbMatch?.id ?? pa.id,
-          isInDb: !!dbMatch,
-        };
-      });
-    }
-    // Fallback: use DB accounts directly
-    if (dbAccountsList.length > 0) {
-      return dbAccountsList.map((db: any) => ({
-        id: db.id,
-        plaidAccountId: db.plaidAccountId,
-        bankName: db.bankName || db.name || accountFallback,
-        accountType: db.type || db.accountType || "",
-        accountNumber: db.accountNumber || "",
-        currentBalance: db.currentBalance || "0",
-        currency: "USD",
-        isInDb: true,
-      }));
-    }
-    return [];
-  }, [plaidAccounts, dbAccountsList, accountFallback]);
-
-  // Stable account selection using useMemo
-  const account = useMemo(() => {
-    if (allAccounts.length === 0) return null;
-    const found = allAccounts.find((a: any) => String(a.id) === selectedAccountId);
-    return found ?? allAccounts[0];
-  }, [allAccounts, selectedAccountId]);
-
-  // DB account ID for monthData queries (needs numeric DB id)
-  const accountIdNum = useMemo(() => {
-    if (!account) return undefined;
-    const dbMatch = dbAccountsList.find((db: any) =>
-      db.plaidAccountId && account.plaidAccountId
-        ? db.plaidAccountId === account.plaidAccountId
-        : String(db.id) === String(account.id)
-    );
-    return dbMatch?.id ? Number(dbMatch.id) : (account.id ? Number(account.id) : undefined);
-  }, [account, dbAccountsList]);
-
-  const loadingAccounts = loadingPlaidAccounts && loadingDbAccounts;
-
-  // Single query for month data (includes transactions, income, expense, liveBalance)
-  // refetchInterval: 5 min to avoid Plaid rate limits. Data is always served from DB;
-  // Plaid is only used in the background server job.
-  // accountIdNum is included so data refetches when user switches accounts.
-  const monthDataQuery = trpc.bank.getMonthData.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum },
-    { enabled: hasBankConnected && !!account && !!accountIdNum, retry: 1, refetchInterval: 5 * 60 * 1000 }
-  );
-  const { data: monthData, isLoading: loadingMonth } = monthDataQuery;
-  // Balance comes from monthData (which queries DB, not Plaid directly)
-  const liveBalanceData = { balance: monthData?.liveBalance ?? account?.currentBalance ?? "0" };
-  // Annual summary - filtered by selected account
-  const { data: yearData } = trpc.bank.getYearData.useQuery(
-    { year: parseInt(selectedYear), accountId: accountIdNum },
-    { enabled: hasBankConnected && !!account && !!accountIdNum }
-  );
-  // Elite Health Monitor — autonomous agent that acts without user intervention
-  const bankHealth = useBankHealthMonitor(accountIdNum, selectedYear, selectedMonth);
-
-  const { data: diagnosis, isLoading: loadingDiagnosis, refetch: refetchDiagnosis } = trpc.bank.diagnoseMonth.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
-    { enabled: false } // manual only
-  );
-
-  // Helper: deduplicate toasts — only show one per 30 seconds per type
-  const showToastOnce = useCallback((type: string, fn: () => void) => {
-    const now = Date.now();
-    if (lastToastRef.current?.type === type && now - lastToastRef.current.time < 30000) return;
-    lastToastRef.current = { type, time: now };
-    fn();
-  }, []);
-
-  const handleSuccess = useCallback(() => { utils.invalidate(); }, [utils]);
-
-  // ─── ALL MUTATIONS MUST BE DECLARED BEFORE ANY useEffect THAT USES THEM ───
-  const syncMutation = trpc.bank.syncTransactions.useMutation({
-    onSuccess: (data) => {
-      setSyncing(false);
-      if (data.success) {
-        setJustSynced(true);
-        setTimeout(() => setJustSynced(false), 3000);
-        handleSuccess();
-        if (data.added === 0) {
-          showToastOnce("sync-no-new", () => {
-            toast.info(data.message || t.toast.noNew);
-          });
-        } else {
-          showToastOnce("sync-success", () => {
-            toast.success(t.toast.synced(data.added ?? 0));
-          });
-        }
-      } else if (data.error === "TOKEN_INVALID") {
-        showToastOnce("sync-token-invalid", () => {
-          toast.error(t.toast.tokenInvalid);
-        });
-        handleSuccess();
-      } else {
-        showToastOnce("sync-error", () => {
-          toast.error(data.error || t.toast.syncError);
-        });
-      }
-    },
-    onError: (err: { message: string }) => {
-      setSyncing(false);
-      showToastOnce("sync-error", () => toast.error(err.message));
-    },
-  });
-
-  const syncHistoricalMutation = trpc.bank.syncHistorical.useMutation({
-    onSuccess: (data) => {
-      setSyncing(false);
-      if (data.success) { setJustSynced(true); setTimeout(() => setJustSynced(false), 3000); handleSuccess(); showToastOnce("sync-hist-success", () => toast.success(t.toast.syncedHistorical(data.totalAdded, data.monthsSynced))); }
-      else { showToastOnce("sync-hist-error", () => toast.error(data.error || t.toast.syncHistoricalError)); }
-    },
-    onError: (err: { message: string }) => { setSyncing(false); showToastOnce("sync-hist-error", () => toast.error(err.message)); },
-  });
-
-  const disconnectMut = trpc.bank.disconnect.useMutation({
-    onSuccess: () => {
-      setAutoSyncDone(false);
-      setConfirmDisconnect(false);
-      autoSyncFiredRef.current = false; // ← RESET: allow auto-sync on next connect
-      handleSuccess();
-    },
-    onError: (err: { message: string }) => toast.error(err.message),
-  });
-
-  const deleteMut = trpc.bank.delete.useMutation({
-    onSuccess: () => { handleSuccess(); },
-    onError: (err) => toast.error(err.message),
-  });
-
-  const importMutation = trpc.bank.importBankStatement.useMutation();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-
-  // Auto-sync handled by useBankHealthMonitor autonomous agent
-
-  // ─── useEffect hooks AFTER all useMutation declarations ───
-
-  // Auto-sync ONCE when bank is connected and account is ready.
-  // Fires when hasBankConnected becomes true OR accountIdNum becomes ready.
-  // autoSyncFiredRef prevents re-running on subsequent renders.
+  const pickable = accounts.filter((a) => a.dbId !== null);
+  const account = pickable.find((a) => a.dbId === pickedAccount) ?? pickable[0] ?? null;
+  const accountId = account?.dbId ?? undefined;
   useEffect(() => {
-    if (!hasBankConnected || !account || autoSyncFiredRef.current) return;
-    if (!accountIdNum) return; // Wait for accountIdNum to be ready
+    if (!accountId) return;
+    try { localStorage.setItem(ACCOUNT_KEY, String(accountId)); } catch { /* storage blocked */ }
+  }, [accountId]);
 
-    autoSyncFiredRef.current = true;
-    const timer = setTimeout(() => {
-      syncMutation.mutate({
-        year: parseInt(selectedYear),
-        month: parseInt(selectedMonth),
-        accountId: accountIdNum,
-      });
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [hasBankConnected, account, accountIdNum, selectedYear, selectedMonth, syncMutation]);
+  // ── Plan bank limit, the same numbers the server enforces (bankLimit in api/lib/plans.ts: admins none, last paid plan, else Negocio) ──
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
+  const limitApplies = !!plan && plan.mode === "business" && !plan.admin;
+  const { data: paid } = trpc.subscription.currentTier.useQuery(undefined, { enabled: limitApplies, staleTime: 60_000 });
+  const limit: number | null | undefined = !plan ? undefined : !limitApplies ? null : !paid ? undefined : BUSINESS_BANK_LIMITS[paid.tier ?? "business"];
+  const used = countBanks(dbAccounts);
 
-  // ─── AUTONOMOUS AGENT: All auto-sync, auto-fix, auto-reconnect handled by useBankHealthMonitor ───
-  // The elite agent manages: sync every 3min, fix every 5min, reconnect every 2min
+  // ── The month ──
+  const monthQ = trpc.bank.getMonthData.useQuery(
+    { year, month, accountId },
+    { enabled: hasBank && !!accountId, retry: 1, refetchInterval: 5 * 60_000 },
+  );
+  const yearQ = trpc.bank.getYearData.useQuery({ year, accountId }, { enabled: hasBank && !!accountId });
 
-  // Auto-invalidate month/year data when selectors change
-  useEffect(() => {
-    if (hasBankConnected && accountIdNum) {
-      utils.bank.getMonthData.invalidate();
-      utils.bank.getYearData.invalidate();
-    }
-  }, [selectedMonth, selectedYear, accountIdNum, hasBankConnected, utils]);
+  // ── Background syncing, quietly ──
+  const { syncing, needsReconnect, handleSyncResult } = useQuietBankSync({ enabled: hasBank, year, month, accountId });
 
-  useEffect(() => { if (account) setIsConnecting(false); }, [account]);
-  useEffect(() => { if (!isConnecting) return; const timer = setTimeout(() => setIsConnecting(false), 45000); return () => clearTimeout(timer); }, [isConnecting]);
-
-  // Select first account only when: no selection exists, or selected account no longer in list
-  // Uses refs to avoid re-triggering when accounts haven't meaningfully changed
-  const prevAccountCountRef = useRef(0);
-  const prevAccountIdRef = useRef<string | null>(null);
-  useEffect(() => {
-    if (!allAccounts || allAccounts.length === 0) {
-      prevAccountCountRef.current = 0;
-      return;
-    }
-
-    // If we already have a valid selection, keep it
-    if (selectedAccountId) {
-      const stillExists = allAccounts.some((a: any) => String(a.id) === selectedAccountId);
-      if (stillExists) {
-        prevAccountCountRef.current = allAccounts.length;
-        // Account changed — invalidate queries to load new account data
-        if (prevAccountIdRef.current !== selectedAccountId) {
-          prevAccountIdRef.current = selectedAccountId;
-          utils.bank.getMonthData.invalidate();
-          utils.bank.getYearData.invalidate();
-        }
-        return; // Account still valid, do nothing else
-      }
-      // Account no longer exists — fall through to select first
-    }
-
-    // Only auto-select if: no account selected, selected no longer exists,
-    // or this is the first time we have accounts loaded
-    const shouldAutoSelect = !selectedAccountId || allAccounts.length !== prevAccountCountRef.current;
-
-    if (shouldAutoSelect) {
-      const firstId = String(allAccounts[0].id);
-      setSelectedAccountIdRaw(firstId);
-      try { localStorage.setItem("bank_selected_account_id", firstId); } catch { /* ignore */ }
-      prevAccountIdRef.current = firstId;
-    }
-
-    prevAccountCountRef.current = allAccounts.length;
-  }, [allAccounts, selectedAccountId, utils]);
-
-  const isPlaidConnected = hasBankConnected && !loadingConnection;
-  const needsReconnect = !loadingConnection && hasBankConnected && !!account && !connection?.hasBank;
-  const hasAccount = !!account;
-  const balance = liveBalanceData?.balance ?? account?.currentBalance ?? "0";
-  const isFallbackMode = monthData?.fallbackMode ?? false;
-
-  const handleSync = () => {
-    if (accountIdNum) {
-      setSyncing(true);
-      syncMutation.mutate({ year: parseInt(selectedYear), month: parseInt(selectedMonth), accountId: accountIdNum });
-    }
+  // ── Refresh (asked for, so it answers with a toast) ──
+  const refreshBalances = trpc.bank.refreshAllBalances.useMutation();
+  const syncNow = trpc.bank.syncTransactions.useMutation();
+  const refreshing = refreshBalances.isPending || syncNow.isPending;
+  const refresh = async () => {
+    const [bal, sync] = await Promise.allSettled([
+      refreshBalances.mutateAsync(),
+      accountId ? syncNow.mutateAsync({ year, month, accountId }) : Promise.resolve(undefined),
+    ]);
+    const s = sync.status === "fulfilled" ? sync.value : undefined;
+    handleSyncResult(s);
+    const balOk = bal.status === "fulfilled" && bal.value.success;
+    if (s && !s.success && s.error === "TOKEN_INVALID") toast.error(t.reconnect.title);
+    else if (balOk || s?.success) toast.success((s?.added ?? 0) > 0 ? t.refreshedNew(s?.added ?? 0) : t.refreshed);
+    else toast.error(t.refreshError);
+    void Promise.all([
+      utils.bank.listAccounts.invalidate(), utils.bank.getAllPlaidAccounts.invalidate(),
+      utils.bank.getMonthData.invalidate(), utils.bank.getYearData.invalidate(), utils.bank.checkConnection.invalidate(),
+    ]);
   };
 
-  const handleSyncHistorical = () => {
-    setSyncing(true);
-    syncHistoricalMutation.mutate();
-  };
-
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = await file.text();
+  // ── Disconnect (every bank: bank.disconnect deletes all accounts and their transactions) ──
+  const disconnect = trpc.bank.disconnect.useMutation();
+  const doDisconnect = async () => {
     try {
-      const result = await importMutation.mutateAsync({ csv: text, accountId: accountIdNum, format: "auto" });
-      if (result.success) {
-        toast.success(t.toast.imported(result.added, result.latestBalance));
-        utils.bank.getLiveBalance.invalidate();
-        utils.bank.getMonthData.invalidate();
-      } else {
-        toast.error(result.error || t.toast.importError);
-      }
-    } catch (err: any) {
-      toast.error(err.message || t.toast.importCsvError);
+      const d = await disconnect.mutateAsync();
+      if (!d.success) { toast.error(("error" in d && d.error) || t.danger.error); return false; }
+      toast.success(t.danger.done);
+      try { localStorage.removeItem(ACCOUNT_KEY); } catch { /* storage blocked */ }
+      void utils.invalidate();
+      return true;
+    } catch (err) {
+      toast.error(err instanceof Error && err.message ? err.message : t.danger.error);
+      return false;
     }
-    if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
-  const goToCategory = (category: string) => {
-    navigate(`/bank/category/${category}?month=${selectedMonth}&year=${selectedYear}`);
-  };
-
-  if (isConnecting) {
-    return (
-      <div className="max-w-5xl mx-auto p-6 lg:p-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
-          <p className="text-sm text-neutral-400 mt-1">{t.connectSubtitle}</p>
-        </div>
-        <Card className="border-neutral-200 rounded-xl shadow-none">
-          <CardContent className="p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5 animate-pulse">
-              <Loader2 className="w-8 h-8 text-neutral-900 animate-spin" />
-            </div>
-            <h3 className="text-lg font-semibold text-black mb-2">{t.connectingTitle}</h3>
-            <p className="text-sm text-neutral-400 max-w-sm mb-6">{t.connectingText}</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
-
-  // Loading state while checking connection
-  if (loadingConnection) {
-    return (
-      <div className="max-w-5xl mx-auto p-6 lg:p-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
-          <p className="text-sm text-neutral-400 mt-1">{t.checkingConnection}</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-        </div>
-      </div>
-    );
-  }
-
-  // No bank connected — show empty state
-  if (!hasBankConnected) {
-    return (
-      <div className="max-w-5xl mx-auto p-6 lg:p-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
-          <p className="text-sm text-neutral-400 mt-1">{t.connectSubtitle}</p>
-        </div>
-        {showPlaidOverlay && (
-          <PlaidLinkOverlay
-            onSuccess={() => { setShowPlaidOverlay(false); handleSuccess(); }}
-            onClose={() => setShowPlaidOverlay(false)}
-          />
-        )}
-        {!showPlaidOverlay && (
-          <Card className="border-neutral-200 rounded-xl shadow-none">
-            <CardContent className="p-16 flex flex-col items-center justify-center text-center">
-              <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
-                <Landmark className="w-8 h-8 text-neutral-400" />
-              </div>
-              <h3 className="text-lg font-semibold text-black mb-2">{t.noBankTitle}</h3>
-              <p className="text-sm text-neutral-400 max-w-sm mb-6">{t.noBankText}</p>
-              <Button
-                onClick={() => setShowPlaidOverlay(true)}
-                className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6"
-              >
-                <Landmark className="w-4 h-4 mr-2" /> {t.connectBank}
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    );
-  }
-
-  // Build category map from actual transactions (backend doesn't return byCategory)
-  const byCategoryMap = new Map<string, { total: number; count: number; type: string }>();
-  (monthData?.transactions ?? []).forEach((tx: any) => {
-    const key = tx.category || "other";
-    const existing = byCategoryMap.get(key);
-    if (existing) {
-      existing.total += Number(tx.amount ?? 0);
-      existing.count += 1;
-    } else {
-      byCategoryMap.set(key, { total: Number(tx.amount ?? 0), count: 1, type: tx.type || "expense" });
-    }
-  });
-
-  const incomeCats = Array.from(byCategoryMap.entries()).filter(([, v]) => v.type === "income");
-  const expenseCats = Array.from(byCategoryMap.entries()).filter(([, v]) => v.type === "expense");
-
-  const monthIncome = Number(monthData?.income ?? 0);
-  const monthExpense = Number(monthData?.expense ?? 0);
-  const isCurrentMonth = parseInt(selectedMonth) === new Date().getMonth() + 1 && parseInt(selectedYear) === new Date().getFullYear();
+  const available = accounts.filter((a) => !isDebt(a.type)).reduce((s, a) => s + a.balance, 0);
+  const owed = accounts.filter((a) => isDebt(a.type)).reduce((s, a) => s + a.balance, 0);
+  const latest = accounts.reduce((m, a) => Math.max(m, a.lastSyncedAt), 0);
+  const updatedText = latest ? t.updated(new Date(latest).toLocaleString(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : t.neverUpdated;
 
   return (
-    <div className="max-w-7xl mx-auto p-6 lg:p-10 space-y-6">
-      {/* HEADER */}
-      <AnimatedPage>
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-semibold text-black">{t.title}</h1>
-              {isPlaidConnected && (
-                justSynced ? (
-                  <Badge className="bg-blue-100 text-blue-700 text-xs animate-pulse"><RefreshCw className="w-3 h-3 mr-1" /> {t.synced}</Badge>
-                ) : (
-                  <Badge className="bg-emerald-100 text-emerald-700 text-xs"><CheckCircle2 className="w-3 h-3 mr-1" /> {t.connected}</Badge>
-                )
-              )}
-              {needsReconnect && <Badge className="bg-amber-100 text-amber-700 text-xs"><AlertCircle className="w-3 h-3 mr-1" /> {t.reconnectNeeded}</Badge>}
-              {/* Autonomous Agent Status Indicator */}
-              {isPlaidConnected && (
-                <div className="flex items-center gap-1.5">
-                  <div
-                    title={bankHealth.message}
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      bankHealth.status === "healthy" ? "bg-emerald-400" :
-                      bankHealth.status === "warning" ? "bg-amber-400 animate-pulse" :
-                      "bg-neutral-300"
-                    }`}
-                  />
-                  {bankHealth.pendingSync && (
-                    <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />
-                  )}
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
+        </header>
+
+        {connection.isLoading ? (
+          <div className="space-y-4" aria-busy="true">
+            <Skeleton className="h-32 rounded-2xl" />
+            <div className="grid gap-4 lg:grid-cols-2"><Skeleton className="h-64 rounded-2xl" /><Skeleton className="h-64 rounded-2xl" /></div>
+          </div>
+        ) : connection.isError ? (
+          <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+            <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
+            <p className="mt-2 text-sm font-medium text-slate-900">{t.loadError}</p>
+            <button onClick={() => void connection.refetch()} className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">{t.retry}</button>
+          </section>
+        ) : !hasBank ? (
+          <BankConnectHero canConnect={canManage} limit={limit} onConnect={() => setConnecting(true)} />
+        ) : (
+          <>
+            {needsReconnect && canManage && (
+              <section className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-amber-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-3">
+                  <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-600" />
+                  <div>
+                    <p className="text-sm font-semibold text-amber-900">{t.reconnect.title}</p>
+                    <p className="text-sm text-amber-800">{t.reconnect.text}</p>
+                  </div>
                 </div>
-              )}
-            </div>
-            {account && (
-              <p className="text-sm text-neutral-400 mt-1">
-                {account.bankName} <span className="text-neutral-300">|</span> {account.accountNumber}
+                <button onClick={() => setConnecting(true)} className="inline-flex h-11 shrink-0 items-center justify-center rounded-[10px] bg-amber-600 px-4 text-sm font-semibold text-white hover:bg-amber-700 sm:h-10">
+                  {t.reconnect.button}
+                </button>
+              </section>
+            )}
+
+            {isAccountant && (
+              <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />{t.readOnly}
               </p>
             )}
-          </div>
-          {/* Single row: Account + Month + Year + Sync + Disconnect */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            {hasBankConnected && (
-              <AccountDropdown
-                accounts={allAccounts}
-                selectedId={selectedAccountId || String(account?.id) || ""}
-                onChange={(id) => setSelectedAccountId(id)}
-                isLoading={loadingAccounts}
-              />
-            )}
-            <MonthSelector value={selectedMonth} onChange={setSelectedMonth} selectedYear={selectedYear} />
-            <YearSelector value={selectedYear} onChange={setSelectedYear} />
-            {/* Auto-sync handled by autonomous agent — manual button removed */}
-            <input type="file" accept=".csv" ref={fileInputRef} onChange={handleFileSelect} className="hidden" />
-            <Button onClick={() => fileInputRef.current?.click()} variant="outline" className="h-8 px-2 rounded-lg text-xs shrink-0 border-neutral-200" title={t.importCsvTitle}>
-              <Landmark className="w-3 h-3 mr-1" /> {t.importCsv}
-            </Button>
-            {account && (
-              confirmDisconnect ? (
-                <div className="flex items-center gap-1 shrink-0">
-                  <span className="text-xs text-red-600 mr-1">{t.confirmDisconnect}</span>
-                  <Button onClick={() => setConfirmDisconnect(false)} variant="outline" className="h-7 px-2 text-xs border-neutral-200">{t.no}</Button>
-                  <Button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-2 text-xs bg-red-600 hover:bg-red-700 text-white">{t.yes}</Button>
-                </div>
-              ) : (
-                <Button onClick={() => setConfirmDisconnect(true)} variant="outline" className="text-red-600 hover:text-red-700 hover:bg-red-50 border-red-200 h-8 px-2 rounded-lg text-xs shrink-0">
-                  <LogOut className="w-3 h-3 mr-1" /> {t.disconnect}
-                </Button>
-              )
-            )}
-          </div>
-        </div>
-      </AnimatedPage>
 
-      {/* RECONNECT BANNER */}
-      {needsReconnect && (
-        <AnimatedCard delay={100}>
-          <Card className="border-amber-200 bg-amber-50/50 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <CardContent className="p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-amber-800">{t.sessionExpiredTitle}</p>
-                <p className="text-xs text-amber-600">{t.sessionExpiredText}</p>
+            <section className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="bank-total">
+              <div className="min-w-0">
+                <p id="bank-total" className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Wallet className="h-3.5 w-3.5" />{t.total}</p>
+                {dbQ.isLoading ? <Skeleton className="mt-2 h-9 w-48" /> : (
+                  <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${available < 0 ? "text-red-700" : "text-slate-900"}`}>{money(available)}</p>
+                )}
+                {owed > 0 && <p className="mt-1 text-sm font-medium text-amber-700">{t.owedCards(money(owed))}</p>}
+                <p className="mt-1 text-xs text-slate-500">{t.totalHint}</p>
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-slate-500" aria-live="polite">
+                  {updatedText}
+                  {syncing && <><span aria-hidden>·</span><Loader2 className="h-3 w-3 animate-spin" />{t.syncing}</>}
+                </p>
               </div>
-              <PlaidLinkButton onSuccess={() => { setAutoSyncDone(false); handleSuccess(); }} onStart={() => setIsConnecting(true)} onExchangeStart={() => setIsConnecting(true)} />
-            </CardContent>
-          </Card>
-        </AnimatedCard>
-      )}
+              <button onClick={() => void refresh()} disabled={refreshing}
+                className="inline-flex h-11 w-full items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60 sm:h-10 sm:w-auto">
+                {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{refreshing ? t.refreshing : t.refresh}
+              </button>
+            </section>
 
-      {/* 4 KPI CARDS */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t.currentBalance, value: formatCurrency(balance), sub: isPlaidConnected ? t.liveFromBank : t.syncToUpdate, icon: Wallet, color: "bg-blue-50 text-blue-600", valColor: Number(balance) >= 0 ? "text-blue-600" : "text-red-600" },
-          { label: t.income, value: formatCurrency(monthData?.income ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear), copy), icon: TrendingUp, color: "bg-emerald-50 text-emerald-600", valColor: "text-emerald-600" },
-          { label: t.expenses, value: formatCurrency(monthData?.expense ?? 0), sub: getMonthRangeLabel(parseInt(selectedMonth), parseInt(selectedYear), copy), icon: TrendingDown, color: "bg-red-50 text-red-600", valColor: "text-red-600" },
-          { label: t.transactions, value: `${(monthData?.transactions ?? []).length}`, sub: t.incomeExpenseCount((monthData?.transactions ?? []).filter((tx: any) => tx.type === "income").length, (monthData?.transactions ?? []).filter((tx: any) => tx.type === "expense").length), icon: Receipt, color: "bg-neutral-100 text-neutral-600", valColor: "text-black" },
-        ].map((s, i) => (
-          <AnimatedCard key={s.label} delay={100 + i * 80}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <div className={`p-1.5 rounded-md ${s.color}`}><s.icon className="w-3.5 h-3.5" /></div>
-                  <p className="text-[11px] text-neutral-400 uppercase tracking-wide">{s.label}</p>
-                </div>
-                {loadingAccounts || loadingMonth ? (
-                  <Skeleton className="h-8 w-24" />
-                ) : (
-                  <p className={`text-2xl font-bold tabular-nums ${s.valColor}`}>{s.value}</p>
-                )}
-                <p className="text-[10px] text-neutral-400 mt-1">{s.sub}</p>
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-        ))}
+            {/* Phone: accounts, month, statement. Desktop: accounts and statement on the left, the month on the right. */}
+            <div className="grid grid-cols-1 items-start gap-5 lg:grid-cols-[1fr_1.2fr] lg:grid-rows-[auto_1fr]">
+              <BankAccountsCard
+                accounts={accounts}
+                loading={dbQ.isLoading}
+                used={used}
+                limit={limit}
+                canConnect={canManage}
+                onConnect={() => setConnecting(true)}
+              />
+              <BankMonthCard
+                accounts={accounts}
+                accountId={accountId}
+                onAccount={setPickedAccount}
+                month={month}
+                year={year}
+                onMonth={setPickedMonth}
+                onYear={setPickedYear}
+                now={now}
+                data={monthQ.data as { income: string; expense: string; transactions: MonthTx[] } | undefined}
+                loading={dbQ.isLoading || monthQ.isLoading}
+                error={monthQ.isError && !monthQ.data}
+                onRetry={() => void monthQ.refetch()}
+                yearData={yearQ.data}
+                className="lg:col-start-2 lg:row-span-2 lg:row-start-1"
+              />
+              {canManage && (
+                <BankStatementCard
+                  accountId={accountId}
+                  accountName={account ? `${account.name}${account.mask ? ` ··${account.mask}` : ""}` : null}
+                  className="lg:col-start-1 lg:row-start-2"
+                />
+              )}
+            </div>
+
+            {canManage && <BankDangerZone pending={disconnect.isPending} onConfirm={doDisconnect} />}
+          </>
+        )}
       </div>
-
-      {/* Fallback mode indicator */}
-      {isFallbackMode && (
-        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2">
-          <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
-          <p className="text-xs text-amber-700">
-            {t.fallbackNotice(monthData?.monthName ? `${copy.months[parseInt(selectedMonth) - 1]} ${selectedYear}` : t.thisPeriod)}
-          </p>
-        </div>
-      )}
-
-      {/* MAIN CONTENT GRID */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
-        {/* LEFT COLUMN */}
-        <div className="lg:col-span-2 space-y-5">
-          {/* Income Categories */}
-          <AnimatedCard delay={100}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <ArrowUpRight className="w-4 h-4 text-emerald-500" /> {t.incomeByCategory}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {incomeCats.length > 0 ? (
-                  <div className="space-y-2">
-                    {incomeCats.map(([key, data]) => {
-                      const Icon = CATEGORY_ICONS[key] || Landmark;
-                      const colorClass = CATEGORY_COLORS[key] || "bg-neutral-100 text-neutral-600";
-                      return (
-                        <button key={key} onClick={() => goToCategory(key)} className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-neutral-50 text-left transition-colors duration-150">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${colorClass}`}><Icon className="w-4 h-4" /></div>
-                            <div>
-                              <p className="text-sm text-neutral-700 font-medium">{copy.categories[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-                              <p className="text-[10px] text-neutral-400">{t.txCount(data.count)}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-emerald-600">{formatCurrency(data.total)}</span>
-                            <ChevronRight className="w-4 h-4 text-neutral-300" />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-400 text-center py-6">{t.noIncome}</p>
-                )}
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-
-          {/* Expense Categories */}
-          <AnimatedCard delay={180}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <ArrowDownRight className="w-4 h-4 text-red-500" /> {t.expensesByCategory}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {expenseCats.length > 0 ? (
-                  <div className="space-y-2">
-                    {expenseCats.map(([key, data]) => {
-                      const Icon = CATEGORY_ICONS[key] || Landmark;
-                      const colorClass = CATEGORY_COLORS[key] || "bg-neutral-100 text-neutral-600";
-                      return (
-                        <button key={key} onClick={() => goToCategory(key)} className="w-full flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-neutral-50 text-left transition-colors duration-150">
-                          <div className="flex items-center gap-3">
-                            <div className={`p-2 rounded-lg ${colorClass}`}><Icon className="w-4 h-4" /></div>
-                            <div>
-                              <p className="text-sm text-neutral-700 font-medium">{copy.categories[key] || key.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</p>
-                              <p className="text-[10px] text-neutral-400">{t.txCount(data.count)}</p>
-                            </div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-semibold text-red-600">{formatCurrency(data.total)}</span>
-                            <ChevronRight className="w-4 h-4 text-neutral-300" />
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-400 text-center py-6">{t.noExpenses}</p>
-                )}
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-
-          {/* Transactions List */}
-          <AnimatedCard delay={260}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardHeader className="pb-3 flex flex-row items-center justify-between">
-                <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <Receipt className="w-4 h-4 text-neutral-500" /> {t.monthTransactions}
-                </CardTitle>
-                <span className="text-xs text-neutral-400">{t.totalCount((monthData?.transactions ?? []).length)}</span>
-              </CardHeader>
-              <CardContent className="pt-0">
-                {loadingMonth && !monthData ? (
-                  <div className="space-y-2"><Skeleton className="h-12" /><Skeleton className="h-12" /><Skeleton className="h-12" /></div>
-                ) : (monthData?.transactions ?? []).length === 0 ? (
-                  <div className="py-8 text-center space-y-3">
-                    <p className="text-sm text-neutral-400">{t.noSyncedTx(`${copy.months[parseInt(selectedMonth) - 1]} ${selectedYear}`)}</p>
-                    {isPlaidConnected && (
-                      <div className="flex flex-col items-center gap-2">
-                        {/* Auto-sync handled by autonomous agent */}
-                        <Button
-                          onClick={() => { setShowDiagnosis(true); refetchDiagnosis(); }}
-                          variant="ghost"
-                          className="text-xs text-neutral-500 hover:text-neutral-700 h-7"
-                        >
-                          {t.checkConnection}
-                        </Button>
-                      </div>
-                    )}
-                    {showDiagnosis && (
-                      <div className="mt-3 text-left bg-neutral-50 border border-neutral-200 rounded-lg p-3 mx-auto max-w-md">
-                        {loadingDiagnosis ? (
-                          <p className="text-xs text-neutral-500">{t.checking}</p>
-                        ) : diagnosis ? (
-                          <div className="space-y-1">
-                            <p className="text-xs font-medium text-neutral-700">{t.diagnosisTitle}</p>
-                            <p className="text-xs text-neutral-600">{t.range} {diagnosis.dateRange}</p>
-                            <p className="text-xs text-neutral-600">{t.plaidTx} <span className={diagnosis.plaidTxCount > 0 ? "text-emerald-600 font-medium" : "text-red-500"}>{diagnosis.plaidTxCount}</span></p>
-                            <p className="text-xs text-neutral-600">{t.dbTx} {diagnosis.dbTxCount}</p>
-                            {diagnosis.error && <p className="text-xs text-red-500">Error: {diagnosis.error}</p>}
-                            {diagnosis.tokenValid && diagnosis.plaidTxCount === 0 && (
-                              <p className="text-xs text-amber-600">{t.noPlaidTx}</p>
-                            )}
-                            {diagnosis.details && diagnosis.details.length > 0 && (
-                              <details className="mt-1">
-                                <summary className="text-[10px] text-neutral-500 cursor-pointer">{t.sampleTx}</summary>
-                                <ul className="mt-1 space-y-0.5">
-                                  {diagnosis.details.map((tx: any, i: number) => (
-                                    <li key={i} className="text-[10px] text-neutral-500">{tx.date} - {tx.name} (${tx.amount})</li>
-                                  ))}
-                                </ul>
-                              </details>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-neutral-500">{t.clickToCheck}</p>
-                        )}
-                      </div>
-                    )}
-                    {isPlaidConnected && (
-                      <p className="text-[11px] text-neutral-400">
-                        {t.syncHint}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <div className="space-y-1">
-                    {(monthData?.transactions ?? []).slice(0, 3).map((tx: any) => (
-                      <div key={tx.id} className={`flex items-center justify-between py-3 px-2 rounded-lg hover:bg-neutral-50 group transition-colors duration-150 ${tx.isReversed ? "opacity-50 bg-neutral-50" : ""}`}>
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${tx.isReversed ? "bg-neutral-100" : tx.type === "income" ? "bg-emerald-50" : "bg-red-50"}`}>
-                            {tx.isReversed ? <RotateCcw className="w-4 h-4 text-neutral-400" /> : tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-500" /> : <ArrowDownRight className="w-4 h-4 text-red-500" />}
-                          </div>
-                          <div>
-                            <p className={`text-sm font-medium ${tx.isReversed ? "text-neutral-400 line-through" : "text-neutral-800"}`}>{tx.description}</p>
-                            <p className="text-[10px] text-neutral-400">{tx.category?.replace(/_/g, " ")} . {(() => {
-                              const d = tx.transactionDate;
-                              if (!d) return "";
-                              try {
-                                const dateObj = d instanceof Date ? d : new Date(d);
-                                if (isNaN(dateObj.getTime())) return "";
-                                return dateObj.toLocaleDateString(intlLocale(lang), { day: "2-digit", month: "short" });
-                              } catch { return ""; }
-                            })()}{tx.isReversed ? ` · ${t.reversed}` : ""}</p>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className={`text-sm font-semibold tabular-nums ${tx.isReversed ? "text-neutral-400 line-through" : tx.type === "income" ? "text-emerald-600" : "text-red-600"}`}>
-                            {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
-                          </span>
-                          {confirmDeleteTx === tx.id ? (
-                            <div className="flex items-center gap-1">
-                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-neutral-400 hover:text-neutral-600" onClick={() => setConfirmDeleteTx(null)} title={t.cancel}><X className="w-3.5 h-3.5" /></Button>
-                              <Button variant="ghost" size="icon" className="h-7 w-7 p-0 text-red-500 hover:text-red-600" onClick={() => { deleteMut.mutate({ id: tx.id }); setConfirmDeleteTx(null); }} title={t.confirm}><Check className="w-3.5 h-3.5" /></Button>
-                            </div>
-                          ) : (
-                            <Button variant="ghost" size="sm" className="opacity-0 group-hover:opacity-100 h-7 w-7 p-0 text-neutral-300 hover:text-red-500 transition-opacity duration-150" onClick={() => setConfirmDeleteTx(tx.id)}>
-                              <Trash2 className="w-3 h-3" />
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                    {(monthData?.transactions ?? []).length > 3 && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => navigate(`/transactions`)}
-                        className="w-full mt-2 h-10 text-sm text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg border border-dashed border-neutral-200 font-normal"
-                      >
-                        {t.showMore} <ChevronRight className="w-4 h-4 ml-1" />
-                      </Button>
-                    )}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-        </div>
-
-        {/* RIGHT COLUMN */}
-        <div className="space-y-5">
-          {/* Month Summary */}
-          <AnimatedCard delay={280}>
-            <Card className="border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <CardHeader className="pb-3">
-                <CardTitle className="text-sm font-medium text-black flex items-center gap-2">
-                  <PiggyBank className="w-4 h-4 text-neutral-500" /> {t.yearSummary}
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">{t.income}</span>
-                  <span className="text-sm font-bold text-emerald-600">{formatCurrency(yearData?.income ?? monthIncome)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">{t.expenses}</span>
-                  <span className="text-sm font-bold text-red-600">{formatCurrency(yearData?.expense ?? monthExpense)}</span>
-                </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm text-neutral-500">{t.transactions}</span>
-                  <span className="text-sm text-black font-medium">{yearData?.transactionCount ?? (monthData?.transactions ?? []).length}</span>
-                </div>
-
-                {/* Monthly breakdown */}
-                {yearData?.monthly && (
-                  <div className="pt-3 border-t border-neutral-100 space-y-2">
-                    {yearData.monthly
-                      .filter((m: any) => m.transactionCount > 0)
-                      .map((m: any) => (
-                        <div key={m.monthNum} className="flex justify-between items-center">
-                          <span className="text-xs text-neutral-500">{copy.months[m.monthNum - 1] ?? m.month}</span>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-emerald-600">+{formatCurrency(m.income)}</span>
-                            <span className="text-xs text-red-500">-{formatCurrency(m.expense)}</span>
-                          </div>
-                        </div>
-                      ))}
-                  </div>
-                )}
-
-                <div className="pt-2 border-t border-neutral-100">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-black">{t.bankBalance}</span>
-                    <span className={`text-lg font-bold ${Number(balance) >= 0 ? "text-blue-600" : "text-red-600"}`}>
-                      {formatCurrency(balance)}
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-neutral-400 pt-1">{t.bankBalanceHint}</p>
-                </div>
-              </CardContent>
-            </Card>
-          </AnimatedCard>
-        </div>
-
-      </div>
-    </div>
+      {connecting && <PlaidLinkOverlay onClose={() => setConnecting(false)} onSuccess={() => { setConnecting(false); void utils.invalidate(); }} />}
+    </AnimatedPage>
   );
 }
-
-
