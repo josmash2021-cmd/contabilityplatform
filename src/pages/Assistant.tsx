@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowUp, Bell, CheckCircle2, Clock, FileText, Inbox, Link2, Loader2, Lock, PieChart, RefreshCw, Sparkles, Trash2, Users, type LucideIcon,
+  AlertTriangle, ArrowUp, Bell, CheckCircle2, Clock, FileText, History, Inbox, Link2, Loader2, Lock, PieChart, Plus, RefreshCw, Sparkles, SquarePen, Trash2, Users, type LucideIcon,
 } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../api/router";
 import { AnimatedPage } from "@/components/AnimatedPage";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Switch } from "@/components/ui/switch";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -22,6 +24,7 @@ type Out = inferRouterOutputs<AppRouter>["assistant"];
 type Message = Out["status"]["messages"][number];
 type Source = Message["sources"][number];
 type Weekly = Out["weekly"];
+type Chat = Out["status"]["chats"][number];
 type Notice = { key: string; kind: string; params: Record<string, string | number>; date: string; urgent: boolean; path: string; read: boolean };
 
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-1";
@@ -65,13 +68,19 @@ export default function Assistant() {
   const locale = intlLocale(lang);
   const { user } = useAuth();
   const utils = trpc.useUtils();
-  const { data, isLoading, isError, refetch, isFetching } = trpc.assistant.status.useQuery();
+  // The chat on screen: a saved one's id, null for a new one, undefined for the most recent.
+  const [selected, setSelected] = useState<number | null | undefined>(undefined);
+  const { data, isLoading, isError, refetch, isFetching } = trpc.assistant.status.useQuery(
+    selected === undefined ? undefined : { chatId: selected },
+    { placeholderData: (prev) => prev },
+  );
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState<string | null>(null);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [panelOpen, setPanelOpen] = useState(false);
 
   const ask = trpc.assistant.ask.useMutation({
-    onSuccess: async () => { await utils.assistant.status.invalidate(); setPending(null); },
+    onSuccess: async (res) => { setSelected(res.chatId); await utils.assistant.status.invalidate(); setPending(null); },
     onError: (e, vars) => {
       setPending(null);
       // Give the question back so it can be sent again.
@@ -79,7 +88,9 @@ export default function Assistant() {
       toast.error(e.message || t.error);
     },
   });
-  const clear = trpc.assistant.clear.useMutation({ onSuccess: () => utils.assistant.status.invalidate() });
+  const clear = trpc.assistant.clear.useMutation({ onSuccess: () => { setSelected(undefined); void utils.assistant.status.invalidate(); } });
+  const openChat = (id: number | null) => { setSelected(id); setPending(null); setPanelOpen(false); };
+  const removeChat = (id: number) => { if (window.confirm(t.chats.removeConfirm)) clear.mutate({ chatId: id }); };
 
   const messages = useMemo(() => data?.messages ?? [], [data]);
   const chatRef = useRef<HTMLDivElement>(null);
@@ -94,7 +105,7 @@ export default function Assistant() {
     if (!q || ask.isPending) return;
     setPending(q);
     setQuestion("");
-    ask.mutate({ question: q });
+    ask.mutate({ question: q, chatId: data?.chatId ?? null });
   };
 
   if (isLoading) {
@@ -140,6 +151,14 @@ export default function Assistant() {
       <Link to="/settings?sec=plan" className="font-semibold text-blue-600 underline-offset-2 hover:underline">{t.changePlan}</Link>
     </p>
   );
+  // The right column: saved conversations, what the app did today, and the week's summary.
+  const side = (
+    <>
+      <ChatList chats={data.chats} current={data.chatId} t={t} locale={locale} busy={clear.isPending} onOpen={openChat} onRemove={removeChat} />
+      <ActivityCard t={t} locale={locale} />
+      <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => { setPanelOpen(false); send(t.week.askQuestion); }} />
+    </>
+  );
   const composer = (
     <form className="flex items-center gap-2 rounded-[26px] border border-slate-200 bg-white p-1.5 pl-5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.25)] transition focus-within:border-blue-500 focus-within:ring-[3px] focus-within:ring-blue-50"
       onSubmit={(e) => { e.preventDefault(); send(question); }}>
@@ -157,19 +176,22 @@ export default function Assistant() {
 
   return (
     <AnimatedPage className="flex min-h-full flex-col p-4 lg:p-8">
-      <div className="mx-auto flex w-full max-w-3xl flex-1 flex-col">
+      <div className="mx-auto grid w-full max-w-6xl flex-1 gap-8 lg:grid-cols-[minmax(0,1fr)_300px]">
+      <div className="mx-auto flex w-full min-w-0 max-w-3xl flex-1 flex-col">
         {/* Head: title, the month's limit (one bar), clear */}
         <header className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-[22px] font-[750] tracking-tight text-slate-900">{t.title}</h1>
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             {limit > 0 && <LimitBar limit={limit} used={used} remaining={remaining} t={t} />}
-            {messages.length > 0 && (
-              <button type="button" disabled={clear.isPending} onClick={() => { if (window.confirm(t.clearConfirm)) clear.mutate(); }}
-                className={BTN_SM} aria-label={t.clear} title={t.clear}>
-                {clear.isPending ? <Loader2 className="h-[15px] w-[15px] animate-spin" /> : <Trash2 className="h-[15px] w-[15px]" />}
-                <span className="hidden sm:inline">{t.clearShort}</span>
+            {chatting && (
+              <button type="button" onClick={() => openChat(null)} className={`${BTN_SM} lg:hidden`} aria-label={t.chats.new} title={t.chats.new}>
+                <SquarePen className="h-[15px] w-[15px]" aria-hidden /><span className="hidden sm:inline">{t.chats.new}</span>
               </button>
             )}
+            {/* Phone and tablet: the right column (conversations, what I did, the week) in a sheet. */}
+            <button type="button" onClick={() => setPanelOpen(true)} className={`${BTN_SM} lg:hidden`} aria-label={t.chats.open} title={t.chats.open}>
+              <History className="h-[15px] w-[15px]" aria-hidden />
+            </button>
           </div>
         </header>
 
@@ -197,9 +219,8 @@ export default function Assistant() {
               </button>
             </div>
             <div id="as-more" className={cn("flex-wrap justify-center gap-2", moreOpen ? "flex" : "hidden")}>{examples.more.map(chip)}</div>
-            <div className="mt-2 grid gap-3 md:grid-cols-2">
+            <div className="mt-2 grid gap-3">
               <ReviewCard t={t} />
-              <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => send(t.week.askQuestion)} />
             </div>
           </div>
         ) : (
@@ -232,6 +253,14 @@ export default function Assistant() {
           </>
         )}
       </div>
+      <aside className="hidden min-w-0 lg:block"><div className="sticky top-4 grid gap-3.5">{side}</div></aside>
+      </div>
+      <Sheet open={panelOpen} onOpenChange={setPanelOpen}>
+        <SheetContent side="bottom" className="max-h-[86vh] gap-0 overflow-y-auto rounded-t-[18px] bg-slate-50 p-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden">
+          <SheetHeader className="min-h-8 justify-center p-0 pr-10 text-left"><SheetTitle className="text-[19px] font-[750] tracking-tight text-slate-900">{t.chats.open}</SheetTitle></SheetHeader>
+          <div className="mt-3 grid gap-3.5">{side}</div>
+        </SheetContent>
+      </Sheet>
     </AnimatedPage>
   );
 }
@@ -319,6 +348,97 @@ function ReviewCard({ t }: { t: AssistantCopy }) {
   );
 }
 
+/** "Tus conversaciones": a new chat, and the saved ones (named after their first question), most recent first. */
+function ChatList({ chats, current, t, locale, busy, onOpen, onRemove }: {
+  chats: Chat[]; current: number | null; t: AssistantCopy; locale: string; busy: boolean; onOpen: (id: number | null) => void; onRemove: (id: number) => void;
+}) {
+  const when = (iso: string) => {
+    const d = new Date(iso);
+    const day = (x: Date) => x.toLocaleDateString("en-CA");
+    const now = new Date();
+    const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+    if (day(d) === day(now)) return t.chats.today;
+    if (day(d) === day(yesterday)) return t.chats.yesterday;
+    return d.toLocaleDateString(locale, { day: "numeric", month: "short" }).replace(".", "");
+  };
+  return (
+    <section className={CARD} aria-labelledby="as-chats">
+      <div className="mb-2.5 flex items-center justify-between gap-2">
+        <h2 id="as-chats" className="text-[15px] font-bold text-slate-900">{t.chats.title}</h2>
+        <button type="button" onClick={() => onOpen(null)} className={BTN_SM}><Plus className="h-[15px] w-[15px]" aria-hidden />{t.chats.new}</button>
+      </div>
+      {chats.length === 0 ? (
+        <p className="text-[13px] text-slate-500">{t.chats.empty}</p>
+      ) : (
+        <ul className="-mx-1.5 grid max-h-[320px] gap-0.5 overflow-y-auto">
+          {chats.map((c) => {
+            const on = c.id === current;
+            const title = c.title || t.chats.untitled;
+            return (
+              <li key={c.id} className={cn("group flex items-center gap-1 rounded-[10px] pr-1", on ? "bg-slate-100" : "hover:bg-slate-50")}>
+                <button type="button" onClick={() => onOpen(c.id)} aria-current={on ? "true" : undefined}
+                  className={`min-w-0 flex-1 rounded-[10px] px-2.5 py-2 text-left ${FOCUS}`}>
+                  <span className={cn("block truncate text-[13px]", on ? "font-semibold text-slate-900" : "font-medium text-slate-700")}>{title}</span>
+                  <span className="block text-[11px] text-slate-400">{when(c.at)}</span>
+                </button>
+                <button type="button" disabled={busy} onClick={() => onRemove(c.id)} aria-label={t.chats.remove(title)} title={t.chats.remove(title)}
+                  className={`grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-400 opacity-100 transition hover:bg-white hover:text-red-600 lg:opacity-0 lg:group-hover:opacity-100 lg:focus-visible:opacity-100 ${FOCUS}`}>
+                  <Trash2 className="h-[15px] w-[15px]" aria-hidden />
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+/** "Lo que hice": what the app did on its own today, from real data (no question used). */
+function ActivityCard({ t, locale }: { t: AssistantCopy; locale: string }) {
+  const { data, isLoading, isError } = trpc.assistant.activity.useQuery(undefined, { staleTime: 60_000 });
+  const D = t.did;
+  const time = useMemo(() => {
+    if (!data?.lastSync) return "";
+    const d = new Date(data.lastSync);
+    const sameDay = d.toLocaleDateString("en-CA", { timeZone: "America/Chicago" }) === data.today;
+    return sameDay ? d.toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }).replace(/\s?([ap])\.?\s?m\.?/i, " $1m").toLowerCase() : "";
+  }, [data, locale]);
+  const lines: Array<{ key: string; text: string; path?: string; link?: string }> = [];
+  if (data) {
+    if (data.banks === 0) lines.push({ key: "bank", text: D.noBank, path: data.mode === "personal" ? "/personal/bank" : "/bank", link: D.connect });
+    else lines.push({ key: "bank", text: D.banks(data.added) });
+    if (data.mode === "business") {
+      if (data.banks > 0) lines.push(data.toConfirm > 0 ? { key: "review", text: D.toConfirm(data.toConfirm), path: "/transactions" } : { key: "review", text: D.allReviewed });
+      lines.push(data.owed.late > 0 ? { key: "owed", text: D.late(data.owed.late), path: "/invoices" }
+        : data.owed.count > 0 ? { key: "owed", text: D.owed(data.owed.count), path: "/invoices" } : { key: "owed", text: D.noOwed });
+      if (data.bills.count > 0) lines.push({ key: "bills", text: D.bills(data.bills.count, data.bills.late), path: "/vendors" });
+    }
+  }
+  return (
+    <section className={CARD} aria-labelledby="as-did">
+      <h2 id="as-did" className="text-[15px] font-bold text-slate-900">{D.title}</h2>
+      {isLoading ? (
+        <div className="mt-2 space-y-2" role="status" aria-label={D.title}><Skeleton className="h-4 w-1/3" /><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /></div>
+      ) : isError || !data ? (
+        <p className="mt-1.5 text-sm text-slate-500">{D.error}</p>
+      ) : (
+        <>
+          <p className="mt-1.5 text-xs font-semibold text-slate-500">{D.when(time)}</p>
+          <ul className="mt-1 grid gap-1.5 text-sm leading-snug text-slate-800">
+            {lines.map((l) => (
+              <li key={l.key}>
+                {l.text}
+                {l.path && <> · <Link to={l.path} className={SRC_LINK}>{l.link ?? D.see}</Link></>}
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+    </section>
+  );
+}
+
 /** The month's questions as one bar: "Límite", filling with the share used (red when it's all used). */
 function LimitBar({ limit, used, remaining, t }: { limit: number; used: number; remaining: number; t: AssistantCopy }) {
   const pct = Math.min(100, Math.round((used / limit) * 100));
@@ -347,6 +467,12 @@ function WeeklyCard({ t, locale, canAsk, onAsk }: { t: AssistantCopy; locale: st
     const month = d.toLocaleDateString(locale, { month: "short" }).replace(".", "");
     return locale.startsWith("es") ? `${weekday} ${d.getDate()} ${month}` : `${weekday}, ${month} ${d.getDate()}`;
   }, [data, locale]);
+  const utils = trpc.useUtils();
+  const prefs = trpc.assistant.prefs.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const setEmail = trpc.assistant.setWeeklyEmail.useMutation({
+    onSuccess: (r) => { utils.assistant.prefs.setData(undefined, (p) => p && { ...p, weeklyEmail: r.weeklyEmail }); toast.success(r.weeklyEmail ? t.week.emailOn : t.week.emailOff); },
+    onError: () => toast.error(t.error),
+  });
   return (
     <section className={CARD} aria-labelledby="as-week">
       <div className="mb-2 flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
@@ -355,6 +481,12 @@ function WeeklyCard({ t, locale, canAsk, onAsk }: { t: AssistantCopy; locale: st
         </h2>
         <span className="text-xs text-slate-500">{t.week.note}</span>
       </div>
+      {prefs.data?.mailReady && (
+        <label className="mb-2 flex cursor-pointer items-center justify-between gap-3 rounded-[10px] bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
+          <span>{t.week.email}</span>
+          <Switch checked={!!prefs.data.weeklyEmail} disabled={setEmail.isPending} onCheckedChange={(on) => setEmail.mutate({ on })} aria-label={t.week.email} />
+        </label>
+      )}
       {isLoading ? (
         <div className="space-y-2" role="status" aria-label={t.week.loading}><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /><Skeleton className="h-4 w-4/6" /></div>
       ) : isError || !data ? (

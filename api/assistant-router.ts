@@ -11,7 +11,10 @@ import Anthropic from "@anthropic-ai/sdk";
 import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { assistantMessages, bankTransactions, expenses, personalCategories, personalGoals, sales } from "@db/schema";
+import { assistantMessages, bankAccounts, bankTransactions, expenses, personalCategories, personalGoals, sales } from "@db/schema";
+import type { TrpcContext } from "./context";
+import { mailReady } from "./lib/mailer";
+import { pendingCount } from "./review-router";
 import { assistantMonthlyLimit } from "@contracts/planFeatures";
 import { getPlanContext } from "./lib/planAccess";
 import {
@@ -51,6 +54,27 @@ function ensureAssistantTables(db: Db): Promise<void> {
     .then(() => (db.execute(sql`ALTER TABLE assistantMessages ADD COLUMN sources TEXT NULL`) as Promise<unknown>).catch((e: unknown) => {
       if (!isDuplicateColumn(e)) throw e;
     }))
+    // Saved conversations: each message belongs to a chat (NULL: the conversation from before chats existed).
+    .then(() => (db.execute(sql`ALTER TABLE assistantMessages ADD COLUMN chatId BIGINT UNSIGNED NULL`) as Promise<unknown>).catch((e: unknown) => {
+      if (!isDuplicateColumn(e)) throw e;
+    }))
+    .then(() => db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assistantChats (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        userId BIGINT UNSIGNED NOT NULL,
+        title VARCHAR(160) NOT NULL,
+        createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
+        updatedAt TIMESTAMP DEFAULT NOW() NOT NULL,
+        INDEX assistantChats_user_idx (userId, updatedAt)
+      )`) as Promise<unknown>)
+    // The Monday summary by email: who wants it and the last Monday it went out.
+    .then(() => db.execute(sql`
+      CREATE TABLE IF NOT EXISTS assistantPrefs (
+        userId BIGINT UNSIGNED NOT NULL PRIMARY KEY,
+        weeklyEmail BOOLEAN NOT NULL DEFAULT FALSE,
+        lastWeeklySent DATE NULL,
+        updatedAt TIMESTAMP DEFAULT NOW() NOT NULL
+      )`) as Promise<unknown>)
     .then(() => undefined).catch((e: unknown) => {
       tablesReady = null;
       throw e;
@@ -69,13 +93,47 @@ function isDuplicateColumn(e: unknown): boolean {
 }
 
 type MessageRow = { id: number; role: "user" | "assistant"; content: string; sources: string | null; createdAt: Date };
-/** The visible conversation, oldest first, with each answer's sources. */
-async function visibleMessages(db: Db, userId: number, limit: number) {
+/** Which chat: a saved one's id, or LEGACY_CHAT for the conversation from before chats existed. */
+const LEGACY_CHAT = 0;
+const inChat = (chatId: number) => (chatId === LEGACY_CHAT ? sql`chatId IS NULL` : sql`chatId = ${chatId}`);
+
+/** One chat's visible messages, oldest first, with each answer's sources. */
+async function visibleMessages(db: Db, userId: number, limit: number, chatId: number) {
   const res = await db.execute(sql`
     SELECT id, role, content, sources, createdAt FROM assistantMessages
-    WHERE userId = ${userId} AND hidden = FALSE ORDER BY id DESC LIMIT ${limit}`);
+    WHERE userId = ${userId} AND hidden = FALSE AND ${inChat(chatId)} ORDER BY id DESC LIMIT ${limit}`);
   const rows = (res as unknown as [MessageRow[]])[0];
   return rows.reverse().map((m) => ({ id: Number(m.id), role: m.role, content: m.content, createdAt: m.createdAt, sources: m.role === "assistant" ? parseSources(m.sources) : [] }));
+}
+
+export type ChatSummary = { id: number; title: string; at: string };
+
+/** The saved conversations, most recent first (the one from before chats existed included, as id 0). */
+async function chatsOf(db: Db, userId: number): Promise<ChatSummary[]> {
+  const saved = (await db.execute(sql`
+    SELECT c.id AS id, c.title AS title, c.updatedAt AS at FROM assistantChats c
+    WHERE c.userId = ${userId}
+      AND EXISTS (SELECT 1 FROM assistantMessages m WHERE m.userId = ${userId} AND m.chatId = c.id AND m.hidden = FALSE)
+    ORDER BY c.updatedAt DESC, c.id DESC LIMIT 50`) as unknown as [Array<{ id: number; title: string; at: Date | string }>])[0];
+  const legacy = (await db.execute(sql`
+    SELECT MIN(CASE WHEN role = 'user' THEN id END) AS firstQ, MAX(createdAt) AS at, COUNT(*) AS n FROM assistantMessages
+    WHERE userId = ${userId} AND hidden = FALSE AND chatId IS NULL`) as unknown as [Array<{ firstQ: number | null; at: Date | string | null; n: number | string }>])[0][0];
+  const out: ChatSummary[] = saved.map((c) => ({ id: Number(c.id), title: c.title, at: new Date(c.at).toISOString() }));
+  if (legacy && Number(legacy.n) > 0 && legacy.at) {
+    let title = "";
+    if (legacy.firstQ) {
+      const q = (await db.execute(sql`SELECT content FROM assistantMessages WHERE id = ${legacy.firstQ}`) as unknown as [Array<{ content: string }>])[0][0];
+      title = chatTitle(q?.content ?? "");
+    }
+    out.push({ id: LEGACY_CHAT, title, at: new Date(legacy.at).toISOString() });
+  }
+  return out.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+/** A chat is named after its first question ("¿Cuánto vendí este mes?"), cut to fit a list. */
+export function chatTitle(question: string): string {
+  const q = question.replace(/\s+/g, " ").trim();
+  return q.length > 80 ? `${q.slice(0, 79).trimEnd()}…` : q;
 }
 
 /** First instant of the current calendar month (UTC): the monthly count starts over here. */
@@ -119,19 +177,26 @@ function todayCentral(): string {
 
 export const assistantRouter = createRouter({
   /** Limit, questions used this month, whether the assistant is set up, and the visible conversation. */
-  status: authedQuery.query(async ({ ctx }) => {
-    const db = getDb();
-    await ensureAssistantTables(db);
-    const plan = await getPlanContext(db, ctx.user);
-    const limit = plan.tier ? assistantMonthlyLimit(plan.mode, plan.tier) : 0;
-    const userId = Number(ctx.user.id);
-    const used = await questionsThisMonth(db, userId);
-    const messages = await visibleMessages(db, userId, 40);
-    return { mode: plan.mode, limit, used, remaining: Math.max(0, limit - used), ready: !!process.env.ANTHROPIC_API_KEY, messages };
-  }),
+  status: authedQuery
+    .input(z.object({ chatId: z.number().int().min(0).nullable().optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureAssistantTables(db);
+      const plan = await getPlanContext(db, ctx.user);
+      const limit = plan.tier ? assistantMonthlyLimit(plan.mode, plan.tier) : 0;
+      const userId = Number(ctx.user.id);
+      const used = await questionsThisMonth(db, userId);
+      const chats = await chatsOf(db, userId);
+      // The chat asked for (null: a new, empty one), else the most recent one.
+      const asked = input?.chatId;
+      const chatId = asked === null ? null : asked !== undefined && chats.some((c) => c.id === asked) ? asked : chats[0]?.id ?? null;
+      const messages = chatId === null ? [] : await visibleMessages(db, userId, 60, chatId);
+      return { mode: plan.mode, limit, used, remaining: Math.max(0, limit - used), ready: !!process.env.ANTHROPIC_API_KEY, messages, chats, chatId };
+    }),
 
   ask: authedQuery
-    .input(z.object({ question: z.string().trim().min(1).max(1000) }))
+    // chatId: a saved chat (0: the one from before chats existed); null: start a new chat; missing: the latest one.
+    .input(z.object({ question: z.string().trim().min(1).max(1000), chatId: z.number().int().min(0).nullable().optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       await ensureAssistantTables(db);
@@ -143,7 +208,10 @@ export const assistantRouter = createRouter({
       const api = anthropic();
       if (!api) throw new TRPCError({ code: "PRECONDITION_FAILED", message: msg(ctx.lang, "assistantNotReady") });
 
-      const history = (await visibleMessages(db, userId, HISTORY_MESSAGES)).map((m) => ({ role: m.role, content: m.content }));
+      const chats = await chatsOf(db, userId);
+      let chatId: number | null = input.chatId === undefined ? chats[0]?.id ?? null : input.chatId;
+      if (chatId !== null && !chats.some((c) => c.id === chatId)) chatId = null;
+      const history = chatId === null ? [] : (await visibleMessages(db, userId, HISTORY_MESSAGES, chatId)).map((m) => ({ role: m.role, content: m.content }));
       // The conversation must start with the person and alternate; drop a leading answer if the window cut its question.
       while (history.length && history[0].role !== "user") history.shift();
 
@@ -182,82 +250,149 @@ export const assistantRouter = createRouter({
       }
 
       const sources: AssistantSource[] = sourcesFromCalls(calls, plan.mode);
-      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content) VALUES (${userId}, 'user', ${input.question})`);
-      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null})`);
-      return { answer, sources, remaining: Math.max(0, limit - used - 1) };
+      // A new chat is named after this question.
+      if (chatId === null) {
+        const res = await db.execute(sql`INSERT INTO assistantChats (userId, title) VALUES (${userId}, ${chatTitle(input.question)})`);
+        chatId = Number((res as unknown as [{ insertId: number }])[0].insertId);
+      } else if (chatId !== LEGACY_CHAT) {
+        await db.execute(sql`UPDATE assistantChats SET updatedAt = NOW() WHERE id = ${chatId} AND userId = ${userId}`);
+      }
+      const chatCol = chatId === LEGACY_CHAT ? null : chatId;
+      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId) VALUES (${userId}, 'user', ${input.question}, ${chatCol})`);
+      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources, chatId) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null}, ${chatCol})`);
+      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId };
     }),
 
   /**
    * The weekly summary card: last week (Monday to Sunday) and what's coming, from the user's own data.
    * Worked out here, without the model, so it never uses one of the month's questions.
    */
-  weekly: authedQuery.query(async ({ ctx }) => {
+  weekly: authedQuery.query(({ ctx }) => weeklyOf(getDb(), ctx.user)),
+
+  /** "Lo que hice": what the app did on its own today, from real data (the banks' last update, what's ready to confirm, invoices and bills). */
+  activity: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const plan = await getPlanContext(db, ctx.user);
     const userId = Number(ctx.user.id);
     const today = todayCentral();
-    const week = lastWeek(today);
-    const inWeek = and(eq(bankTransactions.userId, userId), sql`${bankTransactions.transactionDate} >= ${week.from}`, sql`${bankTransactions.transactionDate} <= ${week.to}`);
-    type Tx = { type: string; category: string; amount: string };
-    const txs: Tx[] = await db.select({ type: bankTransactions.type, category: bankTransactions.category, amount: bankTransactions.amount }).from(bankTransactions).where(inWeek);
-    const sum = (list: Tx[]) => cents2(list.reduce((s, t) => s + toCents(t.amount), 0));
-
+    const accts: Array<{ at: Date | string | null; n: number | string }> = await db
+      .select({ at: sql<Date>`MAX(${bankAccounts.lastSyncedAt})`, n: sql<number>`COUNT(*)` }).from(bankAccounts)
+      .where(and(eq(bankAccounts.userId, userId), isNotNull(bankAccounts.plaidAccessToken), sql`COALESCE(${bankAccounts.isActive}, 1) = 1`));
+    const banks = Number(accts[0]?.n ?? 0);
+    const lastSync = accts[0]?.at ? new Date(accts[0].at).toISOString() : null;
+    // Movements that came in today (US Central day).
+    const added: Array<{ n: number | string }> = banks ? await db.select({ n: sql<number>`COUNT(*)` }).from(bankTransactions)
+      .where(and(eq(bankTransactions.userId, userId), sql`DATE(CONVERT_TZ(${bankTransactions.createdAt}, '+00:00', '-06:00')) = ${today}`)) : [{ n: 0 }];
     if (plan.mode === "personal") {
-      const byCat = spendingByCategory(txs);
-      const top = [...byCat.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
-      // Budgets this month: the one furthest over its limit.
-      const month = today.slice(0, 7);
-      type Limit = { name: string; limit: string | null };
-      const limits: Limit[] = await db.select({ name: personalCategories.name, limit: personalCategories.budgetLimit })
-        .from(personalCategories).where(and(eq(personalCategories.userId, userId), isNotNull(personalCategories.budgetLimit)));
-      let over: { category: string; spent: number; limit: number } | null = null;
-      if (limits.length) {
-        const monthTx: Tx[] = await db.select({ type: bankTransactions.type, category: bankTransactions.category, amount: bankTransactions.amount })
-          .from(bankTransactions).where(and(eq(bankTransactions.userId, userId), sql`DATE_FORMAT(${bankTransactions.transactionDate}, '%Y-%m') = ${month}`));
-        const spent = spendingByCategory(monthTx);
-        for (const l of limits) {
-          const limit = cents2(toCents(l.limit));
-          const s = spent.get(l.name) ?? 0;
-          if (limit > 0 && budgetStatus(s, limit) === "over" && (!over || s - limit > over.spent - over.limit)) over = { category: l.name, spent: s, limit };
-        }
-      }
-      type Goal = { target: string; current: string; active: boolean | null };
-      const goals: Goal[] = await db.select({ target: personalGoals.targetAmount, current: personalGoals.currentAmount, active: personalGoals.isActive })
-        .from(personalGoals).where(eq(personalGoals.userId, userId));
-      const active = goals.filter((g) => g.active !== false);
-      return {
-        mode: "personal" as const, today, from: week.from, to: week.to, monday: week.monday, month,
-        spent: sum(txs.filter((t) => t.type === "expense")), moneyIn: sum(txs.filter((t) => t.type === "income")), count: txs.length,
-        top: top ? { category: top[0], amount: top[1] } : null,
-        budgets: limits.filter((l) => toCents(l.limit) > 0).length,
-        over,
-        goals: { count: active.length, saved: cents2(active.reduce((s, g) => s + toCents(g.current), 0)), target: cents2(active.reduce((s, g) => s + toCents(g.target), 0)) },
-      };
+      return { mode: "personal" as const, today, banks, lastSync, added: Number(added[0]?.n ?? 0) };
     }
-
-    const salesWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)`, n: sql<number>`COUNT(*)` }).from(sales)
-      .where(and(eq(sales.createdBy, userId), eq(sales.status, "completed"), sql`DATE(${sales.createdAt}) >= ${week.from}`, sql`DATE(${sales.createdAt}) <= ${week.to}`));
-    const expWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`, n: sql<number>`COUNT(*)` }).from(expenses)
-      .where(and(sql`${expenses.createdBy} = ${userId}`, sql`${expenses.date} >= ${week.from}`, sql`${expenses.date} <= ${week.to}`));
+    const toConfirm = banks ? await pendingCount(db, userId).catch(() => 0) : 0;
     const owed = await receivablesOf(db, userId, today);
-    const late = owed.filter((r) => r.late).sort((a, b) => b.balance - a.balance);
-    const topOwed = late[0] ?? [...owed].sort((a, b) => b.balance - a.balance)[0] ?? null;
     const due = await billsDueOf(db, userId, today, addDays(today, 6));
     return {
-      mode: "business" as const, today, from: week.from, to: week.to, monday: week.monday,
-      bank: { moneyIn: sum(txs.filter((t) => t.type === "income")), moneyOut: sum(txs.filter((t) => t.type === "expense")), count: txs.length },
-      sales: { total: cents2(toCents(salesWeek[0]?.total)), count: Number(salesWeek[0]?.n ?? 0) },
-      expenses: { total: cents2(toCents(expWeek[0]?.total)), count: Number(expWeek[0]?.n ?? 0) },
-      owed: { count: owed.length, total: cents2(owed.reduce((s, r) => s + toCents(r.balance), 0)), late: late.length, top: topOwed },
-      bills: { count: due.length, total: cents2(due.reduce((s, b) => s + toCents(b.amount), 0)), late: due.filter((b) => b.late).length },
+      mode: "business" as const, today, banks, lastSync, added: Number(added[0]?.n ?? 0), toConfirm,
+      owed: { count: owed.length, late: owed.filter((r) => r.late).length },
+      bills: { count: due.length, late: due.filter((b) => b.late).length },
     };
   }),
 
-  /** Clears the visible conversation. Questions already asked still count for this month. */
-  clear: authedQuery.mutation(async ({ ctx }) => {
+  /** The Monday summary by email: whether it's on, and whether the server can send email at all. */
+  prefs: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     await ensureAssistantTables(db);
-    await db.update(assistantMessages).set({ hidden: true }).where(eq(assistantMessages.userId, Number(ctx.user.id)));
-    return { ok: true };
+    const rows = (await db.execute(sql`SELECT weeklyEmail FROM assistantPrefs WHERE userId = ${Number(ctx.user.id)}`) as unknown as [Array<{ weeklyEmail: number | boolean }>])[0];
+    return { weeklyEmail: !!Number(rows[0]?.weeklyEmail ?? 0), mailReady: mailReady() };
   }),
+
+  setWeeklyEmail: authedQuery
+    .input(z.object({ on: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureAssistantTables(db);
+      await db.execute(sql`INSERT INTO assistantPrefs (userId, weeklyEmail) VALUES (${Number(ctx.user.id)}, ${input.on})
+        ON DUPLICATE KEY UPDATE weeklyEmail = VALUES(weeklyEmail), updatedAt = NOW()`);
+      return { weeklyEmail: input.on };
+    }),
+
+  /** Deletes one saved chat (or, without chatId, every one). Questions already asked still count for this month. */
+  clear: authedQuery
+    .input(z.object({ chatId: z.number().int().min(0).optional() }).optional())
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureAssistantTables(db);
+      const userId = Number(ctx.user.id);
+      if (input?.chatId === undefined) {
+        await db.update(assistantMessages).set({ hidden: true }).where(eq(assistantMessages.userId, userId));
+        await db.execute(sql`DELETE FROM assistantChats WHERE userId = ${userId}`);
+        return { ok: true };
+      }
+      await db.execute(sql`UPDATE assistantMessages SET hidden = TRUE WHERE userId = ${userId} AND ${inChat(input.chatId)}`);
+      if (input.chatId !== LEGACY_CHAT) await db.execute(sql`DELETE FROM assistantChats WHERE id = ${input.chatId} AND userId = ${userId}`);
+      return { ok: true };
+    }),
 });
+
+/**
+ * The weekly summary: last week (Monday to Sunday) and what's coming, from the user's own data.
+ * Worked out without the model, so it never uses one of the month's questions; the Monday email uses it too.
+ */
+export async function weeklyOf(db: Db, user: NonNullable<TrpcContext["user"]>) {
+  const plan = await getPlanContext(db, user);
+  const userId = Number(user.id);
+  const today = todayCentral();
+  const week = lastWeek(today);
+  const inWeek = and(eq(bankTransactions.userId, userId), sql`${bankTransactions.transactionDate} >= ${week.from}`, sql`${bankTransactions.transactionDate} <= ${week.to}`);
+  type Tx = { type: string; category: string; amount: string };
+  const txs: Tx[] = await db.select({ type: bankTransactions.type, category: bankTransactions.category, amount: bankTransactions.amount }).from(bankTransactions).where(inWeek);
+  const sum = (list: Tx[]) => cents2(list.reduce((s, t) => s + toCents(t.amount), 0));
+
+  if (plan.mode === "personal") {
+    const byCat = spendingByCategory(txs);
+    const top = [...byCat.entries()].sort((a, b) => b[1] - a[1])[0] ?? null;
+    // Budgets this month: the one furthest over its limit.
+    const month = today.slice(0, 7);
+    type Limit = { name: string; limit: string | null };
+    const limits: Limit[] = await db.select({ name: personalCategories.name, limit: personalCategories.budgetLimit })
+      .from(personalCategories).where(and(eq(personalCategories.userId, userId), isNotNull(personalCategories.budgetLimit)));
+    let over: { category: string; spent: number; limit: number } | null = null;
+    if (limits.length) {
+      const monthTx: Tx[] = await db.select({ type: bankTransactions.type, category: bankTransactions.category, amount: bankTransactions.amount })
+        .from(bankTransactions).where(and(eq(bankTransactions.userId, userId), sql`DATE_FORMAT(${bankTransactions.transactionDate}, '%Y-%m') = ${month}`));
+      const spent = spendingByCategory(monthTx);
+      for (const l of limits) {
+        const limit = cents2(toCents(l.limit));
+        const s = spent.get(l.name) ?? 0;
+        if (limit > 0 && budgetStatus(s, limit) === "over" && (!over || s - limit > over.spent - over.limit)) over = { category: l.name, spent: s, limit };
+      }
+    }
+    type Goal = { target: string; current: string; active: boolean | null };
+    const goals: Goal[] = await db.select({ target: personalGoals.targetAmount, current: personalGoals.currentAmount, active: personalGoals.isActive })
+      .from(personalGoals).where(eq(personalGoals.userId, userId));
+    const active = goals.filter((g) => g.active !== false);
+    return {
+      mode: "personal" as const, today, from: week.from, to: week.to, monday: week.monday, month,
+      spent: sum(txs.filter((t) => t.type === "expense")), moneyIn: sum(txs.filter((t) => t.type === "income")), count: txs.length,
+      top: top ? { category: top[0], amount: top[1] } : null,
+      budgets: limits.filter((l) => toCents(l.limit) > 0).length,
+      over,
+      goals: { count: active.length, saved: cents2(active.reduce((s, g) => s + toCents(g.current), 0)), target: cents2(active.reduce((s, g) => s + toCents(g.target), 0)) },
+    };
+  }
+
+  const salesWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)`, n: sql<number>`COUNT(*)` }).from(sales)
+    .where(and(eq(sales.createdBy, userId), eq(sales.status, "completed"), sql`DATE(${sales.createdAt}) >= ${week.from}`, sql`DATE(${sales.createdAt}) <= ${week.to}`));
+  const expWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`, n: sql<number>`COUNT(*)` }).from(expenses)
+    .where(and(sql`${expenses.createdBy} = ${userId}`, sql`${expenses.date} >= ${week.from}`, sql`${expenses.date} <= ${week.to}`));
+  const owed = await receivablesOf(db, userId, today);
+  const late = owed.filter((r) => r.late).sort((a, b) => b.balance - a.balance);
+  const topOwed = late[0] ?? [...owed].sort((a, b) => b.balance - a.balance)[0] ?? null;
+  const due = await billsDueOf(db, userId, today, addDays(today, 6));
+  return {
+    mode: "business" as const, today, from: week.from, to: week.to, monday: week.monday,
+    bank: { moneyIn: sum(txs.filter((t) => t.type === "income")), moneyOut: sum(txs.filter((t) => t.type === "expense")), count: txs.length },
+    sales: { total: cents2(toCents(salesWeek[0]?.total)), count: Number(salesWeek[0]?.n ?? 0) },
+    expenses: { total: cents2(toCents(expWeek[0]?.total)), count: Number(expWeek[0]?.n ?? 0) },
+    owed: { count: owed.length, total: cents2(owed.reduce((s, r) => s + toCents(r.balance), 0)), late: late.length, top: topOwed },
+    bills: { count: due.length, total: cents2(due.reduce((s, b) => s + toCents(b.amount), 0)), late: due.filter((b) => b.late).length },
+  };
+}

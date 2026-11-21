@@ -9,6 +9,8 @@ type Db = { execute: (q: ReturnType<typeof sql>) => Promise<unknown> };
 /** Table → the columns that point at a user. A row matching any of them goes. */
 export const USER_TABLES: ReadonlyArray<readonly [string, readonly string[]]> = [
   ["assistantMessages", ["userId"]],
+  ["assistantChats", ["userId"]],
+  ["assistantPrefs", ["userId"]],
   ["bankReviewLog", ["userId"]],
   ["bankReviewMatches", ["userId"]],
   ["bankTransactionSplits", ["userId"]],

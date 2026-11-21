@@ -242,6 +242,19 @@ if (env.isProduction) {
   };
   setInterval(runRecurring, 60 * 60 * 1000);
   setTimeout(runRecurring, 60_000);
+
+  // "Tu resumen del lunes" by email (Asistente): checks every hour, sends on Monday mornings, once per person.
+  const runWeekly = async () => {
+    try {
+      const { runWeeklyEmails } = await import("./lib/weeklyEmail");
+      const r = await runWeeklyEmails(getDb());
+      if (r.sent || r.failed) console.log(`[weekly-email] sent ${r.sent}, failed ${r.failed}`);
+    } catch (e: unknown) {
+      console.error("[weekly-email] failed:", e instanceof Error ? e.message : e);
+    }
+  };
+  setInterval(runWeekly, 60 * 60 * 1000);
+  setTimeout(runWeekly, 90_000);
 }
 
 // Endpoint for Railway cron job (calls every X minutes)

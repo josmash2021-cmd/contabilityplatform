@@ -175,7 +175,7 @@ async function ownRows(db: Db, userId: number, ids: number[]): Promise<TxRow[]> 
   return db.select(txCols).from(bankTransactions).where(and(eq(bankTransactions.userId, userId), inArray(bankTransactions.id, unique)));
 }
 
-async function pendingCount(db: Db, userId: number): Promise<number> {
+export async function pendingCount(db: Db, userId: number): Promise<number> {
   const rows: Array<{ n: number | string }> = await db.select({ n: sql<number>`COUNT(*)` }).from(bankTransactions)
     .where(and(eq(bankTransactions.userId, userId), notReviewed(), recent()));
   return Number(rows[0]?.n ?? 0);
