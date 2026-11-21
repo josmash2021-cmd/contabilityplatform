@@ -6,6 +6,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { createContext } from "./context";
 import { env } from "./lib/env";
+import { invoicePeriod, invoiceSubscriptionId, subscriptionPeriod } from "./lib/stripePeriod";
 import { createOAuthCallbackHandler } from "./kimi/auth";
 import { Paths } from "@contracts/constants";
 import { getDb } from "./queries/connection";
@@ -129,14 +130,16 @@ app.post("/api/webhooks/stripe", async (c) => {
       }
       case "invoice.paid": {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
+        const subscriptionId = invoiceSubscriptionId(invoice);
         if (!subscriptionId) break;
         const subs = await db.select().from(subscriptions)
           .where(eq(subscriptions.stripeSubscriptionId, subscriptionId)).limit(1);
         if (subs[0]) {
+          // The paid period comes from the invoice lines; if Stripe sent none, keep what we had.
+          const paid = invoicePeriod(invoice);
           await db.update(subscriptions).set({
-            currentPeriodStart: invoice.period_start ? new Date(invoice.period_start * 1000) : new Date(),
-            currentPeriodEnd: invoice.period_end ? new Date(invoice.period_end * 1000) : new Date(),
+            currentPeriodStart: paid.start ?? subs[0].currentPeriodStart,
+            currentPeriodEnd: paid.end ?? subs[0].currentPeriodEnd,
             status: "active",
           }).where(eq(subscriptions.id, subs[0].id));
           // Prevent duplicate payments from webhook retries
@@ -156,7 +159,7 @@ app.post("/api/webhooks/stripe", async (c) => {
       }
       case "invoice.payment_failed": {
         const invoice = event.data.object;
-        const subscriptionId = invoice.subscription;
+        const subscriptionId = invoiceSubscriptionId(invoice);
         if (subscriptionId) {
           await db.update(subscriptions).set({ status: "past_due" })
             .where(eq(subscriptions.stripeSubscriptionId, subscriptionId));
@@ -177,7 +180,7 @@ app.post("/api/webhooks/stripe", async (c) => {
           await db.update(subscriptions).set({
             status: normalizeSubStatus(stripeSub.status),
             cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
-            currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : subs[0].currentPeriodEnd,
+            currentPeriodEnd: subscriptionPeriod(stripeSub).end ?? subs[0].currentPeriodEnd,
           }).where(eq(subscriptions.id, subs[0].id));
         }
         break;

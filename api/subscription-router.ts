@@ -7,6 +7,7 @@ import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
 import { getTrialInfo, type TrialInfo } from "./lib/trial";
 import { accountMode, planAmountCents, priceLookupKey, type AccountMode, type Plan } from "./lib/plans";
+import { subscriptionPeriod } from "./lib/stripePeriod";
 
 let _stripe: Stripe | null = null;
 function getStripe() {
@@ -98,8 +99,8 @@ async function recoverSubscription(db: any, stripe: Stripe, userId: number) {
       stripeSubscriptionId: finalSub.id,
       plan: "monthly" as const,
       status: finalSub.status,
-      currentPeriodStart: finalSub.current_period_start ? new Date(finalSub.current_period_start * 1000) : new Date(),
-      currentPeriodEnd: finalSub.current_period_end ? new Date(finalSub.current_period_end * 1000) : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+      currentPeriodStart: subscriptionPeriod(finalSub).start ?? new Date(),
+      currentPeriodEnd: subscriptionPeriod(finalSub).end ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
       cancelAtPeriodEnd: false,
     });
 
@@ -236,8 +237,8 @@ export const subscriptionRouter = createRouter({
               stripeSubscriptionId: stripeSub.id,
               plan: plan as "monthly" | "annual",
               status: normalizeSubStatus(stripeSub.status),
-              currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
-              currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
+              currentPeriodStart: subscriptionPeriod(stripeSub).start ?? new Date(),
+              currentPeriodEnd: subscriptionPeriod(stripeSub).end ?? new Date(),
               cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
             });
             // Re-fetch
@@ -336,8 +337,8 @@ export const subscriptionRouter = createRouter({
               stripeSubscriptionId: bestSub.id,
               plan,
               status: normalizeSubStatus(bestSub.status),
-              currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : new Date(),
-              currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : new Date(),
+              currentPeriodStart: subscriptionPeriod(bestSub).start ?? new Date(),
+              currentPeriodEnd: subscriptionPeriod(bestSub).end ?? new Date(),
               cancelAtPeriodEnd: bestSub.cancel_at_period_end || false,
             });
           } else {
@@ -345,8 +346,8 @@ export const subscriptionRouter = createRouter({
             await db.update(subscriptions).set({
               status: normalizeSubStatus(bestSub.status),
               plan,
-              currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000) : sub.currentPeriodEnd,
-              currentPeriodStart: bestSub.current_period_start ? new Date(bestSub.current_period_start * 1000) : sub.currentPeriodStart,
+              currentPeriodEnd: subscriptionPeriod(bestSub).end ?? sub.currentPeriodEnd,
+              currentPeriodStart: subscriptionPeriod(bestSub).start ?? sub.currentPeriodStart,
               cancelAtPeriodEnd: bestSub.cancel_at_period_end,
               updatedAt: new Date(),
             }).where(eq(subscriptions.id, sub.id));
@@ -365,7 +366,7 @@ export const subscriptionRouter = createRouter({
                 active: recActive,
                 plan: "monthly" as const,
                 status: recStatus,
-                currentPeriodEnd: recovered.finalSub.current_period_end ? new Date(recovered.finalSub.current_period_end * 1000).toISOString() : null,
+                currentPeriodEnd: subscriptionPeriod(recovered.finalSub).end?.toISOString() ?? null,
                 cancelAtPeriodEnd: recovered.finalSub.cancel_at_period_end,
               };
             }
@@ -375,7 +376,7 @@ export const subscriptionRouter = createRouter({
             active: isActive,
             plan: plan,
             status: bestSub.status,
-            currentPeriodEnd: bestSub.current_period_end ? new Date(bestSub.current_period_end * 1000).toISOString() : null,
+            currentPeriodEnd: subscriptionPeriod(bestSub).end?.toISOString() ?? null,
             cancelAtPeriodEnd: bestSub.cancel_at_period_end,
           };
         }
@@ -457,8 +458,8 @@ export const subscriptionRouter = createRouter({
           stripeSubscriptionId: activeSub.id,
           plan: plan as "monthly" | "annual",
           status: activeSub.status,
-          currentPeriodStart: activeSub.current_period_start ? new Date(activeSub.current_period_start * 1000) : new Date(),
-          currentPeriodEnd: activeSub.current_period_end ? new Date(activeSub.current_period_end * 1000) : new Date(),
+          currentPeriodStart: subscriptionPeriod(activeSub).start ?? new Date(),
+          currentPeriodEnd: subscriptionPeriod(activeSub).end ?? new Date(),
           cancelAtPeriodEnd: activeSub.cancel_at_period_end || false,
           updatedAt: new Date(),
         }).where(eq(subscriptions.id, existing[0].id));
@@ -469,8 +470,8 @@ export const subscriptionRouter = createRouter({
           stripeSubscriptionId: activeSub.id,
           plan: plan as "monthly" | "annual",
           status: activeSub.status,
-          currentPeriodStart: activeSub.current_period_start ? new Date(activeSub.current_period_start * 1000) : new Date(),
-          currentPeriodEnd: activeSub.current_period_end ? new Date(activeSub.current_period_end * 1000) : new Date(),
+          currentPeriodStart: subscriptionPeriod(activeSub).start ?? new Date(),
+          currentPeriodEnd: subscriptionPeriod(activeSub).end ?? new Date(),
           cancelAtPeriodEnd: activeSub.cancel_at_period_end || false,
         });
       }
@@ -709,8 +710,8 @@ export const subscriptionRouter = createRouter({
           stripeSubscriptionId: stripeSub.id,
           plan: plan as "monthly" | "annual",
           status: normalizeSubStatus(stripeSub.status),
-          currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : new Date(),
-          currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : new Date(),
+          currentPeriodStart: subscriptionPeriod(stripeSub).start ?? new Date(),
+          currentPeriodEnd: subscriptionPeriod(stripeSub).end ?? new Date(),
           cancelAtPeriodEnd: stripeSub.cancel_at_period_end || false,
         });
 
@@ -745,8 +746,8 @@ export const subscriptionRouter = createRouter({
       await db.update(subscriptions).set({
         status: normalizeSubStatus(stripeSub.status),
         plan: plan as "monthly" | "annual",
-        currentPeriodEnd: stripeSub.current_period_end ? new Date(stripeSub.current_period_end * 1000) : sub.currentPeriodEnd,
-        currentPeriodStart: stripeSub.current_period_start ? new Date(stripeSub.current_period_start * 1000) : sub.currentPeriodStart,
+        currentPeriodEnd: subscriptionPeriod(stripeSub).end ?? sub.currentPeriodEnd,
+        currentPeriodStart: subscriptionPeriod(stripeSub).start ?? sub.currentPeriodStart,
         cancelAtPeriodEnd: stripeSub.cancel_at_period_end,
         updatedAt: new Date(),
       }).where(eq(subscriptions.id, sub.id));
@@ -876,7 +877,7 @@ export const subscriptionRouter = createRouter({
         await db.update(subscriptions).set({
           plan: "annual",
           status: updatedSub.status,
-          currentPeriodEnd: updatedSub.current_period_end ? new Date(updatedSub.current_period_end * 1000) : null,
+          currentPeriodEnd: subscriptionPeriod(updatedSub).end ?? null,
           updatedAt: new Date(),
         }).where(eq(subscriptions.id, subs[0].id));
       }
