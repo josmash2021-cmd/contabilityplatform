@@ -18,6 +18,7 @@ import {
   PER_YEAR, addMonths, cancelRoute, daysBetween, detectSubscriptions, manualNext, merchantKeyOf, perYear, round2,
   type DetectTx, type SubFreq,
 } from "./lib/subscriptions";
+import { accountShortLabel } from "./lib/banks";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -192,7 +193,7 @@ export async function listSubscriptions(db: Db, userId: number, today: string) {
     .select({ id: bankAccounts.id, bankName: bankAccounts.bankName, accountNumber: bankAccounts.accountNumber }).from(bankAccounts).where(eq(bankAccounts.userId, userId));
   const acctName = (id: number | null) => {
     const a = id === null ? undefined : accts.find((x) => x.id === id);
-    return a ? `${a.bankName}${a.accountNumber ? ` ••${String(a.accountNumber).slice(-4)}` : ""}` : null;
+    return a ? accountShortLabel(a.bankName, a.accountNumber ? String(a.accountNumber) : null) ?? a.bankName : null;
   };
 
   const states = new Map<string, StateRow>();

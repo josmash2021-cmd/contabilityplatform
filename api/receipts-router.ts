@@ -36,6 +36,7 @@ import {
 } from "./lib/receipts";
 import { bankSpendCategory, expenseSpendCategory, isBusinessSpending, toCents as spendCents } from "./lib/expenses";
 import { displayNameOf } from "./lib/reviewEngine";
+import { accountShortLabel } from "./lib/banks";
 
 type Db = ReturnType<typeof getDb>;
 type CtxUser = { id: number | string; role?: string | null; modePreference?: string | null; createdAt?: Date | string | null };
@@ -556,12 +557,8 @@ function clientToday(v: string | undefined): string {
 }
 
 // ── "Subir recibo" on a bank charge: the account it went out of ──
-const last4 = (n: string | null | undefined) => (n ?? "").replace(/\D/g, "").slice(-4);
 export function accountLabel(bankName: string | null | undefined, accountNumber: string | null | undefined): string | null {
-  const name = (bankName ?? "").trim();
-  const l4 = last4(accountNumber);
-  if (!name && !l4) return null;
-  return l4 ? `${name || "Banco"} ••${l4}` : name;
+  return accountShortLabel(bankName, accountNumber);
 }
 
 /** A receipt category for an existing expense's category (a paid bill has none of its own: "other"). */

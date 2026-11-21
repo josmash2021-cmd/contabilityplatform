@@ -83,6 +83,17 @@ export function displayAccountName(name: string | null | undefined, mask: string
   return cleaned || raw;
 }
 
+/**
+ * "Everyday Checking ••2443": the account's name (without the number the bank already put at its end, so it
+ * isn't shown twice: "Everyday Checking ...2443") and its last 4 digits. Null when there's neither.
+ */
+export function accountShortLabel(bankName: string | null | undefined, accountNumber: string | null | undefined, fallback = "Banco"): string | null {
+  const l4 = (accountNumber ?? "").replace(/\D/g, "").slice(-4);
+  const name = displayAccountName(bankName, l4);
+  if (!name && !l4) return null;
+  return l4 ? `${name || fallback} ••${l4}` : name;
+}
+
 /** A nickname as saved: trimmed, single spaces, at most MAX_NICKNAME characters; empty means "no nickname". */
 export function cleanNickname(value: string | null | undefined): string | null {
   const v = (value ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_NICKNAME).trim();

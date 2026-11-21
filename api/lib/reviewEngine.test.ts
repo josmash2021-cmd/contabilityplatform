@@ -39,6 +39,12 @@ describe("merchant keys and names", () => {
     expect(displayNameOf("NETFLIX.COM 866-579-7172")).toBe("Netflix");
     expect(displayNameOf("SEGUROS DEL VALLE AUTOPAY")).toBe("Seguros del Valle");
     expect(displayNameOf("")).toBe("");
+    // Rows saved by the old sync carry a lowercase, half-tidied name: shown readable, not as is.
+    expect(displayNameOf("AMAZON MKTPL*7T2RD1 AMZN.COM/BILL WA", "amazon mktpl amzn/bill wa")).toBe("Amazon");
+    expect(displayNameOf("PURCHASE AUTHORIZED ON 11/18 TARGET T-1234 AUSTIN TX", "target t-1234 austin tx")).toBe("Target");
+    expect(displayNameOf("SHELL OIL 57134 HOUSTON", "shell oil")).toBe("Shell");
+    expect(displayNameOf("JOE'S TIRE SHOP 2231", "joe's tire shop")).toBe("Joe's Tire Shop");
+    expect(displayNameOf("PROVISIONAL CREDIT ADJUSTMENT 1118", "provisional")).toBe("Provisional Credit Adjustment");
   });
   it("finds a person's or company's name in a description", () => {
     expect(nameInText("Carlos Ruiz", "ZELLE FROM CARLOS RUIZ CONF# 88412")).toBe(true);

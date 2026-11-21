@@ -10,6 +10,7 @@ import {
   CATEGORY_KEY_RE, MAX_BUDGET_LIMIT, averageSpending, budgetTotals, buildBudgetRows, carryOver, isFixedCategory, limitsForMonth, prevYm, rolloverFor,
   roundUp10, spendingByCategory, toCents, ymFromDate, ymOf, type BudgetHistoryRow, type CurrentBudget, type SpendingTx,
 } from "./lib/budgets";
+import { accountShortLabel } from "./lib/banks";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -168,7 +169,7 @@ type AccountRow = { id: number; bankName: string; accountNumber: string | null; 
 
 const isCard = (a: AccountRow) => /credit/i.test(a.accountType ?? "");
 const isSavings = (a: AccountRow) => !isCard(a) && !/loan/i.test(a.accountType ?? "") && /sav|ahorro/i.test(`${a.accountType ?? ""} ${a.bankName}`);
-const acctLabel = (a: AccountRow) => `${a.bankName}${a.accountNumber ? ` ••${String(a.accountNumber).slice(-4)}` : ""}`;
+const acctLabel = (a: AccountRow) => accountShortLabel(a.bankName, a.accountNumber ? String(a.accountNumber) : null) ?? a.bankName;
 
 async function userAccounts(db: Db, userId: number): Promise<AccountRow[]> {
   return db.select({

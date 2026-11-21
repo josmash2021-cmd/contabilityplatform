@@ -687,10 +687,20 @@ export function plaidTransactionRow(userId: number, account: Pick<BankAccount, "
     subcategory: tx.personal_finance_category?.detailed || tx.category?.[1] || null,
     plaidTransactionId: tx.transaction_id,
     plaidCategory: tx.personal_finance_category ? JSON.stringify(tx.personal_finance_category) : null,
-    merchantName: normalizeMerchantName(tx.name || "").slice(0, 255),
+    // Plaid's clean merchant name ("Amazon", "Target") when it has one, like the Bancos screen saves it;
+    // else a tidied version of the bank's text.
+    merchantName: (plaidMerchantNameOf(tx) || normalizeMerchantName(tx.name || "")).slice(0, 255),
     syncStatus: "synced" as const, lastSyncedAt: new Date(),
     reference: tx.transaction_id, isReconciled: false, importedFrom: "plaid",
   };
+}
+
+/** The merchant's name as Plaid gives it: its merchant_name, else the merchant counterparty's name. */
+function plaidMerchantNameOf(tx: Pick<Transaction, "merchant_name" | "counterparties">): string {
+  const own = (tx.merchant_name ?? "").trim();
+  if (own) return own;
+  const cp = (tx.counterparties ?? []).find((c) => c?.type === "merchant" && c.name);
+  return (cp?.name ?? "").trim();
 }
 
 /**

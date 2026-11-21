@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  CHANGE_DAYS, MAX_HISTORY_DAYS, MAX_NICKNAME, accountKind, balanceSeries, clampSince, cleanNickname,
+  CHANGE_DAYS, MAX_HISTORY_DAYS, MAX_NICKNAME, accountKind, accountShortLabel, balanceSeries, clampSince, cleanNickname,
   displayAccountName, plaidProblem, signedPlaidAmount, weekBills, type WeekBillRow,
 } from "./banks";
 import { addDays } from "./vendors";
@@ -159,5 +159,18 @@ describe("plaidProblem", () => {
     expect(plaidProblem("ITEM_NOT_FOUND")).toBe("gone");
     expect(plaidProblem("INTERNAL_SERVER_ERROR")).toBe("error");
     expect(plaidProblem(undefined)).toBe("error");
+  });
+});
+
+describe("accountShortLabel", () => {
+  it("shows the last 4 digits once, even when the bank already put them in the name", () => {
+    expect(accountShortLabel("Everyday Checking ...2443", "2443")).toBe("Everyday Checking ••2443");
+    expect(accountShortLabel("Chase Total Checking", "4410")).toBe("Chase Total Checking ••4410");
+    expect(accountShortLabel("Business Card x9934", "9934")).toBe("Business Card ••9934");
+  });
+  it("falls back to a plain word or nothing", () => {
+    expect(accountShortLabel(null, "4410")).toBe("Banco ••4410");
+    expect(accountShortLabel("Ahorros", null)).toBe("Ahorros");
+    expect(accountShortLabel(null, null)).toBeNull();
   });
 });

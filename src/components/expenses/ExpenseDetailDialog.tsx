@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { MerchantLogo } from "@/components/brand/MerchantLogo";
+import { MovementLogo } from "@/components/brand/MovementLogo";
 import type { ReceiptItem } from "@/components/receipts/ReceiptViewer";
 import { useCopy } from "@/i18n/useI18n";
 import { expensesCopy, spendCategoryLabel } from "@/i18n/copy/expenses";
@@ -61,7 +61,7 @@ export function ExpenseDetailDialog({ item, locale, canChange, canUpload, hasVen
     <Dialog open onOpenChange={(open) => { if (!open && !del.isPending) onClose(); }}>
       <DialogContent className="max-h-[100dvh] content-start gap-0 overflow-y-auto bg-white p-0 sm:max-w-[460px] sm:rounded-2xl">
         <DialogHeader className="flex-row items-center gap-3 px-4 pb-2 pt-4 pr-12 text-left sm:px-5">
-          <MerchantLogo name={item.who} logoUrl={item.logoUrl} size={40} />
+          <MovementLogo name={item.who} logoUrl={item.logoUrl} accountId={item.bankAccountId} size={40} />
           <div className="min-w-0">
             <DialogTitle className="truncate text-[17px] font-bold text-slate-900">{item.who}</DialogTitle>
             <DialogDescription className="text-sm text-slate-500">

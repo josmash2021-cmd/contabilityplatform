@@ -109,12 +109,18 @@ const titleCase = (s: string) => s.split(" ").map((w, i) => (i > 0 && LOWER_WORD
 export function displayNameOf(description: string | null | undefined, merchantName?: string | null): string {
   const desc = (description ?? "").trim();
   const name = (merchantName ?? "").trim();
-  if (name && fold(name) !== fold(desc)) return name;
-  const key = merchantKeyOf(desc);
-  const zelle = /^zelle (?:payment )?(?:from|to) (.+)$/.exec(key);
-  if (zelle) return `Zelle · ${titleCase(zelle[1])}`;
-  for (const [re, label] of KNOWN_NAMES) if (re.test(key)) return label;
-  return key ? titleCase(key) : desc;
+  const readable = (text: string) => {
+    const key = merchantKeyOf(text);
+    const zelle = /^zelle (?:payment )?(?:from|to) (.+)$/.exec(key);
+    if (zelle) return `Zelle · ${titleCase(zelle[1])}`;
+    for (const [re, label] of KNOWN_NAMES) if (re.test(key)) return label;
+    return key ? titleCase(key) : text;
+  };
+  // Plaid's merchant name ("Amazon") is shown as is. An all-lowercase one is what the old sync cut from the
+  // bank's text (it dropped words like "credit": "PROVISIONAL CREDIT …" became "provisional"), so the full
+  // bank text is read instead.
+  if (name && fold(name) !== fold(desc) && name !== name.toLowerCase()) return name;
+  return readable(desc) || readable(name);
 }
 
 /** Significant words of a person or company name ("Grupo Delta S.A. de C.V." → grupo, delta). */

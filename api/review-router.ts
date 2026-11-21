@@ -50,6 +50,7 @@ import {
   loadDismissed, loadHistory, loadLinkedTargets, loadOpenBills, loadReceivables, loadRules, matchesAnyRule, rulesTableReady, writeLog,
   type LogAction, type LogEntry,
 } from "./lib/reviewStore";
+import { accountShortLabel } from "./lib/banks";
 
 type Db = ReturnType<typeof getDb>;
 type Exec = [{ insertId: number | string; affectedRows: number }];
@@ -189,10 +190,7 @@ function sinceOf(since: string | undefined): Date {
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 }
 
-const accountLabelOf = (bankName: string | null, accountNumber: string | null) => {
-  const last = (accountNumber ?? "").replace(/\D/g, "").slice(-4);
-  return [bankName ?? "", last ? `••${last}` : ""].filter(Boolean).join(" ");
-};
+const accountLabelOf = (bankName: string | null, accountNumber: string | null) => accountShortLabel(bankName, accountNumber, "") ?? "";
 
 // ── Writing ──
 /** Marks movements reviewed with a category each (or the one they have), and logs it. */

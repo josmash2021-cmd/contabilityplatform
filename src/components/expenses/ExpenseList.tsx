@@ -3,7 +3,7 @@
 // amount, the action below.
 import { Link } from "react-router";
 import { Camera, Loader2 } from "lucide-react";
-import { MerchantLogo } from "@/components/brand/MerchantLogo";
+import { MovementLogo } from "@/components/brand/MovementLogo";
 import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { expensesCopy, spendCategoryLabel } from "@/i18n/copy/expenses";
@@ -53,7 +53,7 @@ export function ExpenseList({ items, locale, showNext, emptyText, canUpload, att
               >
                 <span className="hidden text-slate-500 md:block">{day}</span>
                 <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:col-start-auto md:row-start-auto">
-                  <MerchantLogo name={i.who} logoUrl={i.logoUrl} size={32} />
+                  <MovementLogo name={i.who} logoUrl={i.logoUrl} accountId={i.bankAccountId} size={32} />
                   <div className="min-w-0">
                     <button
                       type="button"

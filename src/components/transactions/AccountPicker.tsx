@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { movimientosCopy } from "@/i18n/copy/movimientos";
 import { BankLogo } from "@/components/brand/BankLogo";
+import { useInstitutionOf } from "@/components/brand/useInstitutionOf";
 import { accountLabel } from "./shared";
 
 export type PickerAccount = { id: number; bankName: string; accountNumber: string | null; accountType: string | null; pending: number };
@@ -21,7 +22,16 @@ export function AccountPicker({ accounts, value, onChange, totalPending }: {
   const [open, setOpen] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const btn = useRef<HTMLButtonElement>(null);
-  const banks = [...new Set(accounts.map((a) => a.bankName))];
+  // Each account's bank (Plaid's name and original logo); the account's own name while it's not known yet.
+  const institutionOf = useInstitutionOf(accounts.length > 0);
+  const lookOf = (a: PickerAccount) => institutionOf(a.id) ?? { name: a.bankName, logo: null, color: null };
+  const bankLogo = (a: PickerAccount, size: number, className?: string) => {
+    const b = lookOf(a);
+    return <BankLogo name={b.name} logo={b.logo} color={b.color} size={size} className={className} />;
+  };
+  const byBank = new Map<string, PickerAccount>();
+  for (const a of accounts) if (!byBank.has(lookOf(a).name)) byBank.set(lookOf(a).name, a);
+  const banks = [...byBank.keys()];
   const current = value === "all" ? null : accounts.find((a) => a.id === value) ?? null;
   const typeLabel = (type: string | null) => (type ? r.acctTypes[type.toLowerCase()] ?? r.acctOther : r.acctOther);
 
@@ -58,7 +68,7 @@ export function AccountPicker({ accounts, value, onChange, totalPending }: {
   const stack = (size: number) => (
     <span className="inline-flex items-center">
       {banks.slice(0, 3).map((b, i) => (
-        <BankLogo key={b} name={b} size={size} className={cn("rounded-full", i > 0 && "-ml-1.5 ring-2 ring-white")} />
+        <span key={b} className="contents">{bankLogo(byBank.get(b)!, size, cn("rounded-full", i > 0 && "-ml-1.5 ring-2 ring-white"))}</span>
       ))}
     </span>
   );
@@ -86,7 +96,7 @@ export function AccountPicker({ accounts, value, onChange, totalPending }: {
           "inline-flex min-h-11 w-full items-center gap-2 rounded-[10px] border bg-white py-1.5 pl-3 pr-2.5 text-[13px] font-semibold text-slate-900 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-9 sm:w-auto",
           open ? "border-blue-600 shadow-[0_0_0_3px_theme(colors.blue.50)]" : "border-slate-200",
         )}>
-        {current ? <BankLogo name={current.bankName} size={20} className="rounded-full" /> : stack(18)}
+        {current ? bankLogo(current, 20, "rounded-full") : stack(18)}
         <span className="min-w-0 flex-1 truncate text-left">{current ? accountLabel(current.bankName, current.accountNumber, t) : r.acctAll}</span>
         <ChevronDown className={cn("ml-0.5 h-4 w-4 text-slate-500 transition-transform duration-200", open && "rotate-180")} aria-hidden />
       </button>
@@ -96,7 +106,7 @@ export function AccountPicker({ accounts, value, onChange, totalPending }: {
           open ? "visible scale-100 opacity-100" : "invisible -translate-y-1.5 scale-[0.97] opacity-0",
         )}>
         {option("all", r.acctAll, banks.join(` ${r.and} `), totalPending, stack(24))}
-        {accounts.map((a) => option(a.id, accountLabel(a.bankName, a.accountNumber, t), typeLabel(a.accountType), a.pending, <BankLogo name={a.bankName} size={28} className="rounded-full" />))}
+        {accounts.map((a) => option(a.id, accountLabel(a.bankName, a.accountNumber, t), typeLabel(a.accountType), a.pending, bankLogo(a, 28, "rounded-full")))}
       </div>
     </div>
   );

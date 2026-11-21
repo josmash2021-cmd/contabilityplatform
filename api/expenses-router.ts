@@ -95,7 +95,7 @@ type ExpenseRow = {
 };
 type BankRow = {
   id: number; description: string; merchantName: string | null; amount: string; date: string; category: string; type: string;
-  isDuplicate: boolean | number | null; isReconciled: boolean | number | null; bankName: string | null; accountNumber: string | null;
+  isDuplicate: boolean | number | null; isReconciled: boolean | number | null; bankName: string | null; accountNumber: string | null; accountId: number | null;
 };
 
 /** Runs a query on a feature's own table, or returns `empty` when that table doesn't exist yet. */
@@ -152,7 +152,7 @@ async function loadSpendItems(db: Db, userId: number, from: string, to: string, 
     id: bankTransactions.id, description: bankTransactions.description, merchantName: bankTransactions.merchantName,
     amount: bankTransactions.amount, date: ymd(bankTransactions.transactionDate), category: bankTransactions.category,
     type: bankTransactions.type, isDuplicate: bankTransactions.isDuplicate, isReconciled: bankTransactions.isReconciled,
-    bankName: bankAccounts.bankName, accountNumber: bankAccounts.accountNumber,
+    bankName: bankAccounts.bankName, accountNumber: bankAccounts.accountNumber, accountId: bankTransactions.bankAccountId,
   }).from(bankTransactions).leftJoin(bankAccounts, eq(bankAccounts.id, bankTransactions.bankAccountId))
     .where(and(
       eq(bankTransactions.userId, userId),
@@ -181,7 +181,7 @@ async function loadSpendItems(db: Db, userId: number, from: string, to: string, 
       id: Number(r.id), name: displayNameOf(r.description, r.merchantName), text: `${r.description} ${r.merchantName ?? ""}`,
       amountCents: businessCents.has(Number(r.id)) ? businessCents.get(Number(r.id))! : full, fullCents: full,
       date: r.date, category: r.category, reviewed: Number(r.isReconciled) === 1,
-      account: accountLabel(r.bankName, r.accountNumber), logoUrl: r.logoUrl,
+      account: accountLabel(r.bankName, r.accountNumber), accountId: r.accountId === null ? null : Number(r.accountId), logoUrl: r.logoUrl,
     };
   });
 
@@ -269,7 +269,7 @@ export const expensesRouter = createRouter({
       return {
         key: i.key, source: i.source, expenseId: i.expenseId, bankTransactionId: i.bankTransactionId, receiptId: i.receiptId,
         billId: i.billId, vendorId: i.vendorId, who: i.who, detail: i.detail, category: i.category, amount: i.amountCents / 100,
-        date: i.date, method: i.method, account: i.account, logoUrl: i.logoUrl, inReview: i.inReview, hasReceipt: i.hasReceipt,
+        date: i.date, method: i.method, account: i.account, bankAccountId: i.bankAccountId, logoUrl: i.logoUrl, inReview: i.inReview, hasReceipt: i.hasReceipt,
         pairedBy: i.pairedBy, nextCharge: r && r.nextDate >= i.date ? r.nextDate : null,
       };
     });

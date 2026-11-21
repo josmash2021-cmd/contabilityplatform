@@ -20,6 +20,7 @@ import {
   findCauses, movementOutCents, overlaps, statementToCents, STATEMENT_RE, suggestPeriod, utcToday,
   type Cause, type Period, type PeriodProblem, type Row,
 } from "./lib/reconcile";
+import { accountShortLabel } from "./lib/banks";
 
 type Db = ReturnType<typeof getDb>;
 type Exec = [{ insertId: number | string; affectedRows: number }];
@@ -86,8 +87,7 @@ function periodLabel(lang: Lang, p: Period): string {
   return `${dayLabel(lang, p.start)} – ${dayLabel(lang, p.end)}${lang === "en" ? "," : ""} ${year}`;
 }
 function accountLabel(bankName: string | null, accountNumber: string | null): string {
-  const mask = (accountNumber ?? "").slice(-4);
-  return `${bankName || "Banco"}${mask ? ` ••${mask}` : ""}`;
+  return accountShortLabel(bankName, accountNumber) ?? "Banco";
 }
 
 const MESSAGES = {

@@ -6,6 +6,7 @@ import { intlLocale } from "@/i18n/lang";
 import { movimientosCopy } from "@/i18n/copy/movimientos";
 import { BankLogo } from "@/components/brand/BankLogo";
 import { MerchantLogo } from "@/components/brand/MerchantLogo";
+import { useInstitutionOf } from "@/components/brand/useInstitutionOf";
 import { SplitEditor } from "./SplitEditor";
 import { categoryLabel, dayLabel, money } from "./shared";
 import { matchLabel, rowAccount, suggestionLabel, type ReviewItemView } from "./reviewText";
@@ -67,6 +68,8 @@ export function ReviewRow(p: Props) {
   const r = t.rv;
   const locale = intlLocale(useLang().lang);
   const { item, handlers: h } = p;
+  // The bank this movement went through (its original logo next to the account).
+  const bank = useInstitutionOf(item.bankAccountId !== null)(item.bankAccountId);
   const rowRef = useRef<HTMLDivElement>(null);
   const drag = useRef<{ x: number; y: number; dx: number; active: boolean; id: number } | null>(null);
   const isMatch = item.kind === "match";
@@ -187,7 +190,7 @@ export function ReviewRow(p: Props) {
           </span>
         </div>
         <span className="mt-0.5 block truncate text-xs text-slate-500">
-          {item.bankName && <BankLogo name={item.bankName} size={18} className="mr-1.5 inline-block rounded-full align-[-4px]" />}
+          {item.bankName && <BankLogo name={bank?.name ?? item.bankName} logo={bank?.logo} color={bank?.color} size={18} className="mr-1.5 inline-block rounded-full align-[-4px]" />}
           {[rowAccount(item, t), dayLabel(item.date, locale)].filter(Boolean).join(" · ")} · <span title={r.asTheBankShows}>“{item.description}”</span>
         </span>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">{suggestion}</div>
