@@ -162,7 +162,7 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
 
         <div className={`mx-auto mt-10 ${plans.length === 2 ? "max-w-4xl" : "max-w-5xl"}`}>
           {/* Phones: which plan to show, kept in reach while scrolling the table. */}
-          <div className="sticky top-16 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 shadow-[0_10px_14px_-14px_rgba(15,23,42,0.35)] backdrop-blur-md sm:-mx-6 sm:px-6 md:hidden">
+          <div className="sticky top-16 z-20 -mx-4 bg-white/95 px-4 pb-3 pt-2 shadow-[0_10px_14px_-14px_rgba(15,23,42,0.35)] sm:-mx-6 sm:px-6 md:hidden">
             <PreciosSwitch
               label={c.planPicker}
               value={shown}

@@ -51,7 +51,7 @@ export function BankAccountsCard({ accounts, loading, used, limit, canConnect, o
       )}
 
       {loading ? (
-        <div className="mt-3 space-y-2"><Skeleton className="h-14 rounded-xl" /><Skeleton className="h-14 rounded-xl" /></div>
+        <div className="mt-3"><Skeleton className="h-16 rounded-xl" /></div>
       ) : accounts.length === 0 ? (
         <p className="mt-3 text-sm text-slate-500">{t.accounts.empty}</p>
       ) : (

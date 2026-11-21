@@ -132,6 +132,8 @@ html { scroll-behavior: smooth; }
   will-change: opacity, transform;
 }
 .reveal[data-visible="true"] { opacity: 1; transform: none; }
+/* Once a section has shown, drop the layer hint so long pages don't keep dozens of layers alive. */
+.reveal[data-visible="true"] { will-change: auto; }
 
 /* Subtle grid behind dark sections */
 .bg-grid-dark {
@@ -145,6 +147,10 @@ html { scroll-behavior: smooth; }
   html { scroll-behavior: auto; }
   .reveal { opacity: 1; transform: none; transition: none; }
   .animate-soft-float, .animate-hero-in { animation: none !important; }
+  .animate-fade-up, .animate-fade-in, .animate-scale-in, .animate-slide-right, .animate-icon-cycle {
+    animation: none !important; opacity: 1 !important; transform: none !important;
+  }
+  *, *::before, *::after { transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
 }
 
 /* Horizontal scrollbar for charts */

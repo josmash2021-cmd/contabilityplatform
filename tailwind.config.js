@@ -91,15 +91,15 @@ module.exports = {
         },
         "fade-up": {
           "0%": { opacity: "0", transform: "translateY(12px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+          "100%": { opacity: "1", transform: "none" },
         },
         "scale-in": {
           "0%": { opacity: "0", transform: "scale(0.97)" },
-          "100%": { opacity: "1", transform: "scale(1)" },
+          "100%": { opacity: "1", transform: "none" },
         },
         "slide-right": {
           "0%": { opacity: "0", transform: "translateX(-8px)" },
-          "100%": { opacity: "1", transform: "translateX(0)" },
+          "100%": { opacity: "1", transform: "none" },
         },
         "soft-float": {
           "0%, 100%": { transform: "translateY(0)" },

@@ -159,7 +159,7 @@ export default function Assistant() {
       {/* Send bar: fixed above the phone tab bar. Rendered in <body> because the page's entrance
           animation (a transform) would otherwise pin "fixed" to the page instead of the screen. */}
       {createPortal(
-        <div className="fixed inset-x-0 bottom-[calc(66px+env(safe-area-inset-bottom,0px))] z-30 border-t border-slate-200 bg-white/95 px-4 pb-4 pt-3 shadow-[0_-6px_16px_-10px_rgba(15,23,42,0.25)] backdrop-blur lg:bottom-0 lg:left-60 lg:pb-3" role="region" aria-label={t.label}>
+        <div className="fixed inset-x-0 bottom-[calc(66px+env(safe-area-inset-bottom,0px))] z-30 border-t border-slate-200 bg-white/95 px-4 pb-4 pt-3 shadow-[0_-6px_16px_-10px_rgba(15,23,42,0.25)] lg:bottom-0 lg:left-60 lg:pb-3" role="region" aria-label={t.label}>
           <div className="mx-auto max-w-3xl">
             {outOfQuestions && (
               <p className="mb-2 flex flex-wrap items-center gap-x-2 text-sm font-medium text-amber-800">{t.used} <Link to="/settings" className="font-semibold text-blue-600 underline-offset-2 hover:underline">{t.changePlan}</Link></p>

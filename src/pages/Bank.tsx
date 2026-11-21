@@ -169,7 +169,7 @@ export default function Bank() {
             <section className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5" aria-labelledby="bank-total">
               <div className="min-w-0">
                 <p id="bank-total" className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Wallet className="h-3.5 w-3.5" />{t.total}</p>
-                {dbQ.isLoading ? <Skeleton className="mt-2 h-9 w-48" /> : (
+                {dbQ.isLoading ? <Skeleton className="mt-1 h-9 w-48" /> : (
                   <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${available < 0 ? "text-red-700" : "text-slate-900"}`}>{money(available)}</p>
                 )}
                 {owed > 0 && <p className="mt-1 text-sm font-medium text-amber-700">{t.owedCards(money(owed))}</p>}

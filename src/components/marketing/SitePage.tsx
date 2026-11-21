@@ -29,8 +29,8 @@ export function PageHero({ eyebrow, title, text, primary, secondary, visual, chi
   return (
     <section className="relative overflow-hidden bg-[#060B18] pb-20 pt-32 text-white sm:pb-24 sm:pt-40" aria-labelledby="page-title">
       <div aria-hidden className="pointer-events-none absolute inset-0">
-        <div className="absolute -left-40 top-0 h-[520px] w-[520px] rounded-full bg-blue-600/25 blur-[120px]" />
-        <div className="absolute -right-32 bottom-0 h-[420px] w-[420px] rounded-full bg-violet-600/20 blur-[120px]" />
+        <div className="absolute -left-40 top-0 -m-[150px] h-[820px] w-[820px] bg-[radial-gradient(closest-side,rgba(37,99,235,0.3),rgba(37,99,235,0.105)_55%,transparent)]" />
+        <div className="absolute -right-32 bottom-0 -m-[150px] h-[720px] w-[720px] bg-[radial-gradient(closest-side,rgba(124,58,237,0.24),rgba(124,58,237,0.084)_55%,transparent)]" />
       </div>
       <div className={`relative mx-auto grid max-w-7xl items-center gap-12 px-4 sm:px-6 lg:px-8 ${visual ? "lg:grid-cols-2" : ""}`}>
         <div className={visual ? "" : "mx-auto max-w-3xl text-center"}>

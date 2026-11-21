@@ -34,9 +34,9 @@ export function Hero({ c }: { c: C["hero"] }) {
       {/* Background: deep navy with soft lights that drift slowly (still when motion is off). */}
       <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute inset-0 bg-[radial-gradient(120%_85%_at_50%_-10%,#152a57_0%,#0a1633_40%,#060B18_75%)]" />
-        <div className="absolute -top-56 left-[6%] h-[560px] w-[680px] rounded-full bg-blue-600/25 blur-[130px] motion-safe:animate-aurora" />
-        <div className="absolute right-[-8%] top-[14%] h-[480px] w-[600px] rounded-full bg-indigo-500/20 blur-[130px] motion-safe:animate-aurora motion-safe:[animation-delay:-8s]" />
-        <div className="absolute bottom-[-24%] left-[28%] h-[440px] w-[680px] rounded-full bg-cyan-400/10 blur-[140px] motion-safe:animate-aurora motion-safe:[animation-delay:-15s]" />
+        <div className="absolute -top-56 left-[6%] -m-[160px] h-[880px] w-[1000px] bg-[radial-gradient(closest-side,rgba(37,99,235,0.3),rgba(37,99,235,0.105)_55%,transparent)] will-change-transform motion-safe:animate-aurora" />
+        <div className="absolute right-[-8%] top-[14%] -m-[160px] h-[800px] w-[920px] bg-[radial-gradient(closest-side,rgba(99,102,241,0.24),rgba(99,102,241,0.084)_55%,transparent)] will-change-transform motion-safe:animate-aurora motion-safe:[animation-delay:-8s]" />
+        <div className="absolute bottom-[-24%] left-[28%] -m-[170px] h-[780px] w-[1020px] bg-[radial-gradient(closest-side,rgba(34,211,238,0.12),rgba(34,211,238,0.042)_55%,transparent)] will-change-transform motion-safe:animate-aurora motion-safe:[animation-delay:-15s]" />
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-blue-400/30 to-transparent" />
       </div>
 
@@ -459,7 +459,7 @@ export function FinalCta({ c }: { c: C["finalCta"] }) {
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal>
           <div className="relative overflow-hidden rounded-3xl bg-[#0B1224] px-6 py-16 text-center sm:px-16">
-            <div className="pointer-events-none absolute -bottom-32 left-1/2 h-72 w-[700px] -translate-x-1/2 rounded-full bg-blue-600/30 blur-[100px]" />
+            <div className="pointer-events-none absolute -bottom-32 left-1/2 -my-[120px] h-[528px] w-[940px] -translate-x-1/2 bg-[radial-gradient(closest-side,rgba(37,99,235,0.34),rgba(37,99,235,0.119)_55%,transparent)]" />
             <div className="relative">
               <h2 id="cta-title" className="mx-auto max-w-2xl text-3xl font-bold tracking-tight text-white sm:text-4xl">{c.title(TRIAL_DAYS)}</h2>
               <p className="mx-auto mt-4 max-w-xl text-lg text-slate-400">{c.text}</p>
