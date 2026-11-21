@@ -4,9 +4,9 @@ import {
   ArrowDownRight, ArrowUpRight, CheckCircle2, FileText, LayoutDashboard, Landmark,
   Receipt, BarChart3, Users, ShoppingCart, Sparkles, Target, TrendingUp, Wallet, Lock, ChevronRight,
   Home, List, MoreHorizontal, Search, Bell, Plus, Inbox, CreditCard, Camera,
-  Link2, Tag, Check,
+  Link2, Tag, Check, Car, Coffee, Briefcase, CalendarDays, ListChecks,
 } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode, type Ref } from "react";
+import { useEffect, useRef, useState, type ReactNode, type Ref, type RefObject } from "react";
 import { Logo } from "@/components/Logo";
 import { TRIAL_DAYS as TRIAL_DAYS_PREVIEW } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
@@ -204,7 +204,7 @@ export function ReportPreview() {
 // ── Product section: the app on a real phone (same screens as the Ai Aethel 2.0 design) ──
 function StatusBar() {
   return (
-    <div className="relative z-10 grid h-[46px] grid-cols-[1fr_108px_1fr] items-center px-2 pt-1 text-[13px] font-semibold text-black" aria-hidden>
+    <div className="relative z-10 grid h-[46px] grid-cols-[1fr_108px_1fr] items-center bg-white px-2 pt-1 text-[13px] font-semibold text-black" aria-hidden>
       <span className="justify-self-center tabular-nums">9:41</span>
       <span />
       <span className="flex items-center gap-[5px] justify-self-center">
@@ -220,8 +220,49 @@ const sideButton = "absolute w-[4px] bg-gradient-to-b from-slate-400 via-slate-6
 
 type Tab = { Icon: typeof Home; label: string; badge?: number };
 
+/**
+ * Plays the screen like a video: it waits at the top, scrolls slowly to the end, blurs out,
+ * and comes back in at the top from blurry to sharp. Only while on screen; still for reduced motion.
+ */
+function usePhoneScroll(screenRef: RefObject<HTMLDivElement | null>, contentRef: RefObject<HTMLDivElement | null>, barRef: RefObject<HTMLDivElement | null>, active: boolean) {
+  useEffect(() => {
+    const screen = screenRef.current, content = contentRef.current, bar = barRef.current;
+    if (!active || !screen || !content || typeof content.animate !== "function") return;
+    let anim: Animation | null = null;
+    const build = () => {
+      anim?.cancel();
+      const visible = screen.clientHeight - 46 - (bar ? bar.offsetHeight : 0);
+      const d = Math.round(content.scrollHeight - visible);
+      if (d <= 8) return;
+      const tTop = 1800, tScroll = Math.max(3800, d * 11), tBottom = 1500, tOut = 700, tIn = 900;
+      const T = tTop + tScroll + tBottom + tOut + tIn;
+      const o1 = tTop / T, o2 = (tTop + tScroll) / T, o3 = (tTop + tScroll + tBottom) / T, o4 = (tTop + tScroll + tBottom + tOut) / T;
+      const up = `translateY(-${d}px)`;
+      anim = content.animate([
+        { offset: 0, transform: "translateY(0)", filter: "blur(0px)", opacity: 1 },
+        { offset: o1, transform: "translateY(0)", filter: "blur(0px)", opacity: 1, easing: "cubic-bezier(0.45, 0, 0.2, 1)" },
+        { offset: o2, transform: up, filter: "blur(0px)", opacity: 1 },
+        { offset: o3, transform: up, filter: "blur(0px)", opacity: 1, easing: "ease-in" },
+        { offset: o4, transform: up, filter: "blur(12px)", opacity: 0 },
+        { offset: Math.min(o4 + 0.0005, 0.9999), transform: "translateY(0)", filter: "blur(12px)", opacity: 0, easing: "ease-out" },
+        { offset: 1, transform: "translateY(0)", filter: "blur(0px)", opacity: 1 },
+      ], { duration: T, iterations: Infinity });
+    };
+    build();
+    const ro = typeof ResizeObserver !== "undefined" ? new ResizeObserver(build) : null;
+    ro?.observe(screen);
+    return () => { ro?.disconnect(); anim?.cancel(); };
+  }, [screenRef, contentRef, barRef, active]);
+}
+
 /** A real phone: titanium edge, side buttons, island, status bar, the app's bottom bar and the home indicator. */
 function PhoneFrame({ label, tabs, children }: { label: string; tabs: [Tab, Tab, Tab, Tab]; children: ReactNode }) {
+  const screenRef = useRef<HTMLDivElement | null>(null);
+  const contentRef = useRef<HTMLDivElement | null>(null);
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const still = useReducedMotion();
+  const [viewRef, inView] = useInView<HTMLDivElement>();
+  usePhoneScroll(screenRef, contentRef, barRef, inView && !still);
   const tab = (t: Tab, active: boolean) => (
     <span className={`relative grid justify-items-center gap-0.5 pt-1 text-[10px] font-semibold ${active ? "text-blue-600" : "text-slate-500"}`}>
       <t.Icon className="h-[19px] w-[19px]" strokeWidth={1.8} />
@@ -230,18 +271,18 @@ function PhoneFrame({ label, tabs, children }: { label: string; tabs: [Tab, Tab,
     </span>
   );
   return (
-    <div className="relative mx-auto w-[292px] sm:w-[312px]" role="img" aria-label={label}>
+    <div ref={viewRef} className="relative mx-auto w-[292px] sm:w-[312px]" role="img" aria-label={label}>
       <span aria-hidden className={`${sideButton} -left-[3px] top-[112px] h-7 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -left-[3px] top-[158px] h-12 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -left-[3px] top-[218px] h-12 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -right-[3px] top-[178px] h-[76px] rounded-r-md`} />
       <div className="rounded-[3.3rem] bg-gradient-to-br from-slate-300 via-slate-600 to-slate-400 p-[2px] shadow-[0_45px_90px_-30px_rgba(15,23,42,0.65)]">
         <div className="rounded-[3.2rem] bg-[#0b0d12] p-[11px]">
-          <div aria-hidden className="relative h-[612px] overflow-hidden rounded-[2.6rem] bg-white sm:h-[650px]">
+          <div ref={screenRef} aria-hidden className="relative h-[612px] overflow-hidden rounded-[2.6rem] bg-white sm:h-[650px]">
             <div className="absolute left-1/2 top-[11px] z-20 h-[28px] w-[98px] -translate-x-1/2 rounded-full bg-black" />
             <StatusBar />
-            {children}
-            <div className="absolute inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white pb-5">
+            <div ref={contentRef} className="pb-4 will-change-transform">{children}</div>
+            <div ref={barRef} className="absolute inset-x-0 bottom-0 z-10 border-t border-slate-200 bg-white pb-5">
               <div className="grid grid-cols-5 items-start">
                 {tab(tabs[0], true)}
                 {tab(tabs[1], false)}
@@ -312,6 +353,34 @@ export function PhonePreview() {
             ))}
           </div>
         </div>
+
+        <div className={`${box} p-3`}>
+          <div className="flex items-center justify-between">
+            <p className="text-[13px] font-bold text-slate-900">{a.recentTitle}</p>
+            <span className="rounded-lg border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{a.seeAll}</span>
+          </div>
+          <div className="mt-1.5 divide-y divide-slate-100">
+            {a.recent.map((r) => {
+              const RIcon = { car: Car, coffee: Coffee, cart: ShoppingCart, work: Briefcase }[r.kind as "car" | "coffee" | "cart" | "work"];
+              return (
+                <div key={r.who} className="flex items-center gap-2.5 py-2">
+                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${r.income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><RIcon className="h-4 w-4" /></span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[11.5px] font-semibold text-slate-900">{r.who}</p>
+                    <p className="text-[9.5px] text-slate-500">{r.cat}</p>
+                  </div>
+                  <span className={`text-[11.5px] font-semibold tabular-nums ${r.income ? "text-emerald-600" : "text-slate-900"}`}>{r.amt}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className={`${box} p-3`}>
+          <p className="flex items-center gap-1.5 text-[12px] font-bold text-slate-900"><Target className="h-3.5 w-3.5 text-blue-600" />{a.goalTitle}</p>
+          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[68%] rounded-full bg-blue-600" /></div>
+          <p className="mt-1.5 text-[10px] text-slate-500">{a.goalText}</p>
+        </div>
       </div>
     </PhoneFrame>
   );
@@ -374,6 +443,33 @@ export function BusinessPhonePreview() {
               <p className="text-[9.5px] text-slate-500">{b.todo.m}</p>
               <span className="mt-1.5 inline-block rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{b.todo.b}</span>
             </div>
+          </div>
+          {b.todoMore.map((t) => {
+            const TIcon = { bell: Bell, cal: CalendarDays, list: ListChecks }[t.kind as "bell" | "cal" | "list"];
+            return (
+              <div key={t.t} className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
+                <TIcon className={`h-4 w-4 ${t.kind === "bell" ? "text-red-500" : t.kind === "cal" ? "text-amber-600" : "text-blue-600"}`} />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-semibold text-slate-900">{t.t}</p>
+                  <p className="truncate text-[9.5px] text-slate-500">{t.m}</p>
+                </div>
+                <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{t.b}</span>
+              </div>
+            );
+          })}
+        </div>
+        <div className={`${box} p-3`}>
+          <p className="text-[13px] font-bold text-slate-900">{b.forecastTitle}</p>
+          <p className="text-[22px] font-extrabold tracking-tight tabular-nums text-slate-900">{b.forecastTotal}</p>
+          <p className="text-[10px] text-slate-500">{b.forecastIn} <b className="text-slate-800">$2,400</b> · {b.forecastOut} <b className="text-slate-800">$5,860</b></p>
+          <div className="mt-1.5 divide-y divide-slate-100">
+            {b.forecast.map(([dte, who, amt, inc]) => (
+              <div key={who} className="flex items-center gap-2 py-1.5 text-[10.5px]">
+                <span className="w-11 shrink-0 text-slate-400">{dte}</span>
+                <span className="min-w-0 flex-1 truncate text-slate-700">{who}</span>
+                <span className={`font-semibold tabular-nums ${inc ? "text-emerald-600" : "text-slate-900"}`}>{amt}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
