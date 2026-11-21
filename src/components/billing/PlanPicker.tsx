@@ -42,7 +42,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
   return (
     <div className="space-y-5">
       <div className="flex justify-center">
-        <div role="radiogroup" aria-label={p.billingLabel} className={`relative grid grid-cols-2 rounded-xl p-1 ${onDark ? "bg-white/10 ring-1 ring-white/15" : "bg-white shadow-sm ring-1 ring-slate-200"}`}>
+        <div role="radiogroup" aria-label={p.billingLabel} className={`relative grid max-w-full grid-cols-2 rounded-xl p-1 ${onDark ? "bg-white/10 ring-1 ring-white/15" : "bg-white shadow-sm ring-1 ring-slate-200"}`}>
           <span
             aria-hidden
             className={`absolute bottom-1 left-0 top-1 w-[calc(50%-4px)] rounded-lg transition-transform duration-300 ease-out ${onDark ? "bg-white" : "bg-slate-900"}`}
@@ -58,7 +58,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
                 role="radio"
                 aria-checked={on}
                 onClick={() => setBilling(b)}
-                className={`relative z-10 inline-flex h-10 items-center justify-center gap-2 rounded-lg px-5 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${color}`}
+                className={`relative z-10 inline-flex h-11 min-w-0 items-center justify-center gap-1.5 rounded-lg px-3 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-10 sm:gap-2 sm:px-5 ${color}`}
               >
                 {b === "monthly" ? p.monthly : p.annual}
                 {b === "annual" && (
@@ -79,7 +79,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
           const ring = chosen ? "ring-2 ring-blue-600" : plan.featured ? "ring-2 ring-slate-900" : "ring-1 ring-slate-200";
           const badge = chosen ? g.chosen : plan.featured ? p.featured : null;
           return (
-            <div key={plan.key} className={`relative flex flex-col rounded-2xl bg-white p-6 text-slate-900 shadow-sm ${ring}`}>
+            <div key={plan.key} className={`relative flex flex-col rounded-2xl bg-white p-5 text-slate-900 shadow-sm sm:p-6 ${ring}`}>
               {badge && (
                 <span className={`absolute -top-2.5 right-5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold text-white ${chosen ? "bg-blue-600" : "bg-slate-900"}`}>{badge}</span>
               )}
@@ -88,7 +88,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
 
               <div className="mt-4 flex items-baseline gap-1.5">
                 {plan.free ? (
-                  <span className="text-4xl font-bold tracking-tight">{p.free}</span>
+                  <span className="text-4xl font-bold tracking-tight text-slate-900">{p.free}</span>
                 ) : (
                   <>
                     <span className="text-4xl font-bold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
@@ -104,7 +104,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
                 <div className="mt-5 grid gap-2">
                   <Link
                     to="/personal/taxes"
-                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-white text-sm font-semibold text-slate-900 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                   >
                     {g.goTaxes} <ArrowRight className="h-4 w-4" />
                   </Link>
@@ -115,7 +115,7 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
                   type="button"
                   onClick={() => onPick(billing, plan.tier)}
                   disabled={pendingTier !== null}
-                  className={`mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-xl text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${chosen || plan.featured ? "bg-blue-600 hover:bg-blue-500" : "bg-slate-900 hover:bg-slate-800"}`}
+                  className={`mt-5 inline-flex h-11 items-center justify-center gap-2 rounded-[10px] text-sm font-semibold text-white shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:opacity-60 ${chosen || plan.featured ? "bg-blue-600 hover:bg-blue-500" : "bg-slate-900 hover:bg-slate-800"}`}
                 >
                   {pending && <Loader2 className="h-4 w-4 animate-spin" />}
                   {g.choose(c.name)}
