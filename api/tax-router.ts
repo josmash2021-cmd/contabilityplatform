@@ -8,6 +8,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { isMissingTable } from "./lib/dbErrors";
 import { taxDocuments, taxMessages, taxReturns, users } from "@db/schema";
 import { accountMode } from "./lib/plans";
 import { contextHas, getPlanContext } from "./lib/planAccess";
@@ -98,7 +99,7 @@ export async function deleteUserTaxData(db: Db, userId: number): Promise<void> {
     await db.delete(taxDocuments).where(eq(taxDocuments.userId, userId));
   } catch (e: unknown) {
     // The tables don't exist until someone uses Impuestos: nothing to delete then.
-    if (!/doesn't exist|ER_NO_SUCH_TABLE/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    if (!isMissingTable(e)) throw e;
   }
 }
 

@@ -8,6 +8,7 @@ import { and, asc, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { isMissingTable } from "./lib/dbErrors";
 import { accounts, expenses, journalEntries, journalEntryLines, periodClosures } from "@db/schema";
 import { bills, vendors } from "@db/vendorsSchema";
 import { requireFeature, type PlanUser } from "./lib/planAccess";
@@ -113,7 +114,7 @@ export async function deleteUserVendorsData(db: Db, userId: number): Promise<voi
     await db.delete(vendors).where(eq(vendors.userId, userId));
   } catch (e: unknown) {
     // The tables don't exist until someone opens Proveedores: nothing to delete then.
-    if (!/doesn't exist|ER_NO_SUCH_TABLE/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    if (!isMissingTable(e)) throw e;
   }
 }
 

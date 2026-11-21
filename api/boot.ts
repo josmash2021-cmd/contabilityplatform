@@ -393,6 +393,19 @@ if (env.isProduction) {
   // Transaction sync every 3 minutes
   setInterval(syncAllTransactions, 3 * 60 * 1000);
   setTimeout(syncAllTransactions, 15000); // 5s after balance sync
+
+  // Recurring invoices: create the sales that came due (safe to repeat; see api/quotes-router.ts)
+  const runRecurring = async () => {
+    try {
+      const { runRecurringInvoices } = await import("./quotes-router");
+      const { created } = await runRecurringInvoices(getDb());
+      if (created) console.log(`[recurring] created ${created} sale(s)`);
+    } catch (e: unknown) {
+      console.error("[recurring] failed:", e instanceof Error ? e.message : e);
+    }
+  };
+  setInterval(runRecurring, 60 * 60 * 1000);
+  setTimeout(runRecurring, 60_000);
 }
 
 // Endpoint for Railway cron job (calls every X minutes)

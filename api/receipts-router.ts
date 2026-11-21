@@ -11,6 +11,7 @@ import { TRPCError } from "@trpc/server";
 import { and, desc, eq, gte, inArray, isNotNull, sql } from "drizzle-orm";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { isMissingTable } from "./lib/dbErrors";
 import { accounts, expenses, journalEntries, journalEntryLines } from "@db/schema";
 import { receipts } from "@db/receiptsSchema";
 import { TAX_FILE_TYPES, TAX_MAX_FILE_BYTES } from "@contracts/taxRules";
@@ -85,7 +86,7 @@ export async function deleteUserReceipts(db: Db, userId: number): Promise<void> 
     await db.delete(receipts).where(eq(receipts.userId, userId));
   } catch (e: unknown) {
     // The table doesn't exist until someone uses Recibos: nothing to delete then.
-    if (!/doesn't exist|ER_NO_SUCH_TABLE/i.test(e instanceof Error ? e.message : String(e))) throw e;
+    if (!isMissingTable(e)) throw e;
   }
 }
 

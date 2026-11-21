@@ -7,6 +7,7 @@ import { teamMembers } from "@db/teamSchema";
 import { getDb } from "../queries/connection";
 import { contextHas, getPlanContext } from "./planAccess";
 import type { TeamRole } from "./team";
+import { isMissingTable } from "./dbErrors";
 
 export type TeamMemberCtx = { userId: number; name: string | null; email: string | null; role: TeamRole };
 
@@ -27,7 +28,7 @@ export async function resolveMembership(user: User): Promise<{ owner: User; memb
     if (!contextHas(await getPlanContext(db, owner), "team")) return null;
     return { owner, member: { userId: Number(user.id), name: user.name ?? null, email: user.email ?? null, role: row.role } };
   } catch (e: unknown) {
-    if (/doesn't exist|ER_NO_SUCH_TABLE/i.test(e instanceof Error ? e.message : String(e))) missingUntil = Date.now() + 60_000;
+    if (isMissingTable(e)) missingUntil = Date.now() + 60_000;
     // On any error the person simply acts as themselves (their own account): never more access.
     return null;
   }
