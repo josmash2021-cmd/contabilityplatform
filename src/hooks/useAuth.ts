@@ -11,6 +11,9 @@ interface AuthUser {
   modePreference?: "business" | "personal" | null;
 }
 
+/** One owner check per page load (every component using useAuth shares it). */
+let ownerCheckDone = false;
+
 function getStoredUser(): AuthUser | null {
   try {
     const saved = localStorage.getItem("auth_user");
@@ -24,14 +27,13 @@ export function useAuth() {
   const [user, setUser] = useState<AuthUser | null>(getStoredUser);
   const hasSyncedRef = useRef(false);
 
-  // Auto-promote owner to admin on first load
+  // An older saved session of the owner may lack the admin role: ask the server once per page load.
+  // The server alone knows who the owner is (no personal email in the browser code).
   // Uses fetch directly to avoid tRPC hook issues
   useEffect(() => {
-    const OWNER_EMAIL = "josmash2021@gmail.com";
-    if (hasSyncedRef.current) return;
+    if (ownerCheckDone || hasSyncedRef.current) return;
     if (!user?.email || user?.role === "admin") return;
-    if (user.email.toLowerCase() !== OWNER_EMAIL.toLowerCase()) return;
-
+    ownerCheckDone = true;
     hasSyncedRef.current = true;
 
     // Get fresh token from localStorage

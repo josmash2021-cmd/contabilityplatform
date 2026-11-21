@@ -28,7 +28,7 @@ const es = {
   categories: {
     income: {
       zelle_income: "Zelle Recibidos",
-      transfer_income: "Transferencias",
+      transfer_income: "Transferencias recibidas",
       deposit: "Depósitos Directos",
       cash_deposit: "Depósito de Efectivo",
       cash_income: "Efectivo Recibido",
@@ -297,7 +297,7 @@ const en: PersonalCopy = {
   categories: {
     income: {
       zelle_income: "Zelle Received",
-      transfer_income: "Transfers",
+      transfer_income: "Transfers received",
       deposit: "Direct Deposits",
       cash_deposit: "Cash Deposits",
       cash_income: "Cash Received",

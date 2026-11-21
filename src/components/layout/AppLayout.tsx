@@ -238,11 +238,10 @@ export function AppLayout() {
   // ── Maintenance mode ──
   const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, { refetchInterval: 10000 });
   const isMaintenance = maintenance?.enabled === true;
-  const isOwner = user?.email?.toLowerCase() === "josmash2021@gmail.com".toLowerCase();
 
   return (
     <div className="flex h-screen bg-slate-50">
-      {isMaintenance && !isOwner && (
+      {isMaintenance && !isAdmin && (
         <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-neutral-900 p-6">
           <Construction className="mb-4 h-16 w-16 animate-pulse text-amber-400" />
           <h2 className="mb-2 text-center text-xl font-semibold text-white">{t.maintenance.title}</h2>
