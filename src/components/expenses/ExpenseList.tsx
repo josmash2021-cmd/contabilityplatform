@@ -53,7 +53,7 @@ export function ExpenseList({ items, locale, showNext, emptyText, canUpload, att
               >
                 <span className="hidden text-slate-500 md:block">{day}</span>
                 <div className="col-start-1 row-start-1 flex min-w-0 items-center gap-2.5 md:col-start-auto md:row-start-auto">
-                  <MovementLogo name={i.who} logoUrl={i.logoUrl} accountId={i.bankAccountId} size={32} />
+                  <MovementLogo name={i.who} logoUrl={i.logoUrl} accountId={i.bankAccountId} bankOwn={i.bankOwn} size={32} />
                   <div className="min-w-0">
                     <button
                       type="button"

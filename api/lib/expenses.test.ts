@@ -121,7 +121,7 @@ describe("totals and limits", () => {
 describe("charges that repeat", () => {
   const item = (date: string, who = "Google Workspace", cents = 1440): SpendItem => ({
     key: date + who, source: "bank", expenseId: null, bankTransactionId: 1, receiptId: null, billId: null, vendorId: null, who, detail: null,
-    category: "software", amountCents: cents, date, method: null, account: null, bankAccountId: null, logoUrl: null, inReview: false, hasReceipt: false, pairedBy: null,
+    category: "software", amountCents: cents, date, method: null, account: null, bankAccountId: null, bankOwn: false, logoUrl: null, inReview: false, hasReceipt: false, pairedBy: null,
   });
   it("finds a monthly charge and its next date", () => {
     const r = detectRecurring([item("2026-09-16"), item("2026-10-16"), item("2026-11-16")]);

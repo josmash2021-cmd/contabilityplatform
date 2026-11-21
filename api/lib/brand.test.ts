@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  bundledBankLogo, candidateKeys, cleanAccountName, cleanWebsite, contrast, directLogoOf, institutionLogoDataUrl,
+  bundledBankLogo, bundledMerchantLogo, candidateKeys, isBankOwnMovement, cleanAccountName, cleanWebsite, contrast, directLogoOf, institutionLogoDataUrl,
   looksMangled, merchantBrandOf, merchantKey, monogram, monogramColors, normalizeColor, plaidErrorCode,
   repairedName, safeLogoUrl, statusForError,
 } from "./brand";
@@ -143,5 +143,42 @@ describe("account names", () => {
     expect(looksMangled("Way2Save�� Savings")).toBe(true);
     expect(looksMangled("Way2SaveÂ® Savings")).toBe(true);
     expect(looksMangled("Way2Save® Savings")).toBe(false);
+  });
+});
+
+describe("the bank's own movements (shown with the bank's logo)", () => {
+  it("provisional credits, fees, interest and adjustments are the bank's", () => {
+    for (const d of ["PROVISIONAL CREDIT ADJUSTMENT 1118", "provisional", "MONTHLY SERVICE FEE", "OVERDRAFT FEE FOR A $45.00 ITEM",
+      "NON-WF ATM FEE", "INTEREST PAYMENT", "WIRE TRANSFER FEE", "FOREIGN TRANSACTION FEE", "NSF RETURNED ITEM FEE"]) {
+      expect(isBankOwnMovement(d), d).toBe(true);
+    }
+  });
+  it("Plaid's bank-fee category counts too", () => {
+    expect(isBankOwnMovement("SOMETHING", JSON.stringify({ primary: "BANK_FEES", detailed: "BANK_FEES_OTHER_BANK_FEES" }))).toBe(true);
+  });
+  it("a Zelle, a store or a local business is not", () => {
+    for (const d of ["ZELLE TO CLEANING SERVICE", "TACOS EL PASTOR 2231", "STARBUCKS STORE 12345 AUSTIN TX", "AMAZON MKTPL*7T2RD1",
+      "ONLINE TRANSFER TO SAVINGS", "Joe's Tire Shop", ""]) {
+      expect(isBankOwnMovement(d), d).toBe(false);
+    }
+    expect(isBankOwnMovement("SHELL OIL", JSON.stringify({ primary: "TRANSPORTATION", detailed: "TRANSPORTATION_GAS" }))).toBe(false);
+  });
+});
+
+describe("payment apps' saved originals", () => {
+  it("a Zelle movement gets Zelle's own icon", () => {
+    expect(bundledMerchantLogo("ZELLE TO CLEANING SERVICE")).toBe("/brands/merchants/zelle.png");
+    expect(bundledMerchantLogo("Zelle payment from Rosa Diaz")).toBe("/brands/merchants/zelle.png");
+  });
+  it("nothing else does", () => {
+    expect(bundledMerchantLogo("TACOS EL PASTOR LLC")).toBeNull();
+    expect(bundledMerchantLogo("TACO BELL #1234")).toBeNull();
+    expect(bundledMerchantLogo("")).toBeNull();
+  });
+  it("only our saved originals pass as a local path", () => {
+    expect(safeLogoUrl("/brands/merchants/zelle.png")).toBe("/brands/merchants/zelle.png");
+    expect(safeLogoUrl("/brands/../secret.png")).toBeNull();
+    expect(safeLogoUrl("/api/trpc/x.png")).toBeNull();
+    expect(safeLogoUrl("//evil.example/x.png")).toBeNull();
   });
 });

@@ -230,8 +230,10 @@ export type BankIn = {
   category: string;
   reviewed: boolean;
   account: string | null;
-  /** The bank account it went out of (its bank's logo stands in when the merchant has none). */
+  /** The bank account it went out of. */
   accountId?: number | null;
+  /** Made by the bank itself (a provisional credit, a fee): it shows the bank's logo. */
+  bankOwn?: boolean;
   logoUrl: string | null;
 };
 
@@ -252,8 +254,10 @@ export type SpendItem = {
   method: PayMethod | null;
   /** The bank account it went out of ("Chase ••4410"), when known. */
   account: string | null;
-  /** That account's id, so the screen can show its bank's original logo when the merchant has none. */
+  /** That account's id (for its bank's original logo on the bank's own movements). */
   bankAccountId: number | null;
+  /** A movement made by the bank itself (provisional credit, fee, interest): shown with the bank's logo. */
+  bankOwn: boolean;
   logoUrl: string | null;
   /** A bank movement still waiting in Por revisar. */
   inReview: boolean;
@@ -318,6 +322,7 @@ export function buildSpendItems(input: {
       method: e.paymentMethod,
       account: bank?.account ?? null,
       bankAccountId: bank?.accountId ?? null,
+      bankOwn: bank?.bankOwn ?? false,
       logoUrl: bank?.logoUrl ?? null,
       inReview: false,
       hasReceipt: e.receiptId !== null,
@@ -342,6 +347,7 @@ export function buildSpendItems(input: {
       method: null,
       account: b.account,
       bankAccountId: b.accountId ?? null,
+      bankOwn: b.bankOwn ?? false,
       logoUrl: b.logoUrl,
       inReview: isInReview(b, today, reviewWindowDays),
       hasReceipt: false,

@@ -106,13 +106,42 @@ export function monogramColors(color: string | null | undefined): { bg: string; 
   return { bg: toHex(bg), fg: toHex(fg) };
 }
 
+// ── The bank's own movements ──
+
+/** What banks write on their own movements: provisional credits, fees, interest, adjustments. */
+const BANK_OWN = /\b(?:provisional|service (?:charge|fee)|(?:monthly )?(?:service|maintenance) fee|overdraft|od fee|nsf|insufficient funds|returned item|interest (?:payment|paid|earned|charged?)|wire (?:transfer )?fee|atm (?:fee|surcharge)|foreign (?:transaction|exchange) fee|fee reversal|reversal of fee|courtesy credit|account fee|statement fee|stop payment fee|cashier'?s check fee|adjustment|chargeback|dispute credit)\b/i;
+
+/**
+ * A movement made by the bank itself (a provisional credit, a fee, interest, an adjustment), not by a
+ * merchant: it shows the bank's own logo. A Zelle payment or a local business without a logo is not one.
+ */
+export function isBankOwnMovement(text: string | null | undefined, plaidCategory?: string | null): boolean {
+  if (plaidCategory && /"primary"\s*:\s*"BANK_FEES"/.test(plaidCategory)) return true;
+  return BANK_OWN.test(text ?? "");
+}
+
 // ── Merchants ──
 
-/** Logo URLs the browser may load: https only (Plaid serves merchant logos from its CDN), or an inline image. */
+/**
+ * Payment apps Plaid often sends without a logo, with their ORIGINAL icon saved in public/brands/merchants/
+ * (zelle.png: Zelle's own app icon from zellepay.com).
+ */
+const BUNDLED_MERCHANTS: ReadonlyArray<{ match: RegExp; src: string }> = [
+  { match: /\bzelle\b/i, src: "/brands/merchants/zelle.png" },
+];
+
+/** The saved original logo for a movement's text ("ZELLE TO CLEANING SERVICE" → Zelle's), or null. */
+export function bundledMerchantLogo(text: string | null | undefined): string | null {
+  const t = text ?? "";
+  return BUNDLED_MERCHANTS.find((m) => m.match.test(t))?.src ?? null;
+}
+
+/** Logo URLs the browser may load: https only (Plaid serves merchant logos from its CDN), an inline image, or one of our saved originals. */
 export function safeLogoUrl(url: string | null | undefined): string | null {
   if (typeof url !== "string") return null;
   const u = url.trim();
   if (u.length > 1000) return null;
+  if (/^\/brands\/merchants\/[a-z0-9-]+\.png$/.test(u)) return u;
   if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/.test(u)) return u;
   try {
     const parsed = new URL(u);
