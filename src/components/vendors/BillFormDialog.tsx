@@ -1,5 +1,10 @@
-import { useId, useState, type FormEvent } from "react";
+import { useId, useRef, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { FileText, Loader2 } from "lucide-react";
+import { TAX_ACCEPT } from "@/lib/taxFiles";
+import { fileErrorText, preparePhoto } from "@/components/expenses/shared";
+import { expensesCopy } from "@/i18n/copy/expenses";
+import { addDays } from "../../../api/lib/expenses";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -11,6 +16,9 @@ import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { vendorsCopy } from "@/i18n/copy/vendors";
 import { MAX_BILL_AMOUNT, amountInput, errorText, parseAmount, type BillItem, type VendorItem } from "./shared";
+
+/** Same vendor name ignoring case, accents and spaces (as the server: api/lib/vendors.ts sameVendorName). */
+const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, " ").trim().toLowerCase();
 import { BTN, FIELD, LABEL } from "./ui";
 
 const NEW_VENDOR = "__new__";
@@ -24,11 +32,13 @@ type Props = {
   /** Active vendors for the picker. */
   vendors: readonly VendorItem[];
   today: string;
+  /** "Subir factura": the bill's photo or PDF can be read to fill in the form (the server has a Claude key). */
+  canRead?: boolean;
   onClose: () => void;
 };
 
 /** "Nueva factura" / "Editar factura": vendor (pick one or type a new one), concept, amount, due date, note. */
-export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Props) {
+export function BillFormDialog({ bill, vendorId, vendors, today, canRead, onClose }: Props) {
   const copy = useCopy(vendorsCopy);
   const t = copy.billForm;
   const utils = trpc.useUtils();
@@ -45,7 +55,55 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
   const [newVendorName, setNewVendorName] = useState("");
   const [description, setDescription] = useState(bill?.description ?? "");
   const [amount, setAmount] = useState(bill ? amountInput(bill.amount) : "");
-  const [dueDate, setDueDate] = useState(bill?.dueDate ?? today);
+  // A new bill for a vendor with terms ("Plazo") is due that many days from today, until the date is changed.
+  const termsOf = (id: string) => vendors.find((v) => String(v.id) === id)?.terms ?? null;
+  const [dueDate, setDueDate] = useState(() => {
+    if (bill) return bill.dueDate;
+    const tm = termsOf(initialVendor);
+    return tm ? addDays(today, tm) : today;
+  });
+  const [dueTouched, setDueTouched] = useState(!!bill);
+  const pickVendor = (v: string) => {
+    setVendor(v);
+    const tm = termsOf(v);
+    if (!dueTouched && tm !== null) setDueDate(addDays(today, tm));
+  };
+  // Reading a bill (photo or PDF): only to fill the form, nothing is stored.
+  const ex = useCopy(expensesCopy);
+  const r = copy.proto.read;
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [readNote, setReadNote] = useState<string | null>(null);
+  const read = trpc.vendors.bills.read.useMutation();
+  const [reading, setReading] = useState(false);
+  const readBill = async (file: File | undefined) => {
+    if (fileRef.current) fileRef.current.value = "";
+    if (!file) return;
+    setReading(true);
+    setReadNote(null);
+    try {
+      const d = await preparePhoto(file);
+      if (d.previewUrl) URL.revokeObjectURL(d.previewUrl);
+      const res = await read.mutateAsync({ file: { mimeType: d.upload.mimeType, dataBase64: d.upload.dataBase64 }, today });
+      if (res.status !== "read") {
+        setReadNote(res.status === "unsupported" ? r.unsupported : r.failed);
+        return;
+      }
+      const f = res.fields;
+      if (f.vendor) {
+        const match = vendors.find((v) => norm(v.name) === norm(f.vendor!));
+        if (match) pickVendor(String(match.id));
+        else { setVendor(NEW_VENDOR); setNewVendorName(f.vendor); }
+      }
+      if (f.description) setDescription(f.description);
+      if (f.amount !== null) setAmount(amountInput(f.amount));
+      if (f.dueDate) { setDueDate(f.dueDate); setDueTouched(true); }
+      setReadNote(r.done);
+    } catch (e) {
+      setReadNote(e instanceof Error && "data" in e ? errorText(e, r.failed) : fileErrorText(ex, e));
+    } finally {
+      setReading(false);
+    }
+  };
   const [notes, setNotes] = useState(bill?.notes ?? "");
   const [errors, setErrors] = useState<Partial<Record<Field, string>>>({});
 
@@ -97,6 +155,19 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
         </DialogHeader>
 
         <form onSubmit={submit} noValidate className="space-y-4">
+          {canRead && !bill && (
+            <div className="space-y-1.5">
+              <input ref={fileRef} type="file" accept={TAX_ACCEPT} className="sr-only" tabIndex={-1} aria-hidden="true" onChange={(e) => void readBill(e.target.files?.[0])} />
+              <button
+                type="button" onClick={() => fileRef.current?.click()} disabled={reading}
+                className="flex min-h-11 w-full items-center gap-2.5 rounded-xl border border-dashed border-slate-200 bg-slate-100 p-3 text-left text-[13px] font-semibold text-slate-700 transition hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+              >
+                {reading ? <Loader2 className="h-5 w-5 animate-spin text-blue-600" aria-hidden="true" /> : <FileText className="h-5 w-5 text-blue-600" aria-hidden="true" />}
+                {reading ? r.reading : r.cta}
+              </button>
+              <p className="text-xs text-slate-500" role="status">{readNote ?? r.hint}</p>
+            </div>
+          )}
           <div className="space-y-1.5">
             {vendor === NEW_VENDOR ? (
               <>
@@ -117,7 +188,7 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
             ) : (
               <>
                 <Label htmlFor={ids.vendor} className={LABEL}>{t.vendor}</Label>
-                <Select value={vendor} onValueChange={setVendor}>
+                <Select value={vendor} onValueChange={pickVendor}>
                   <SelectTrigger id={ids.vendor} className={cn(FIELD, "w-full data-[size=default]:h-11 sm:data-[size=default]:h-10")} {...errorProps("vendor", ids.vendor)}>
                     <SelectValue placeholder={t.vendorPlaceholder} />
                   </SelectTrigger>
@@ -156,7 +227,7 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
             </div>
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={ids.due} className={LABEL}>{t.due}</Label>
-              <Input className={FIELD} id={ids.due} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} {...errorProps("due", ids.due)} />
+              <Input className={FIELD} id={ids.due} type="date" value={dueDate} onChange={(e) => { setDueDate(e.target.value); setDueTouched(true); }} {...errorProps("due", ids.due)} />
               {errorLine("due", ids.due)}
             </div>
           </div>

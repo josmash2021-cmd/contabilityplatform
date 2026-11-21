@@ -2,6 +2,9 @@
 // Vendors the business buys from and the bills it owes them. Marking a bill paid records the
 // expense (and its journal entry) exactly like expenses.create, and keeps the link in bills.expenseId.
 // Rules (overdue, due this week, totals) live in api/lib/vendors.ts.
+// A vendor also keeps what you buy from them, the days you have to pay them ("Plazo"), and whether they're a
+// contractor who needs a 1099 (with their W-9 on file or not). "Subir factura": when the server has a Claude key,
+// a photo or PDF of the bill can be read to fill in the form (bills.read; nothing is stored).
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { and, asc, desc, eq, inArray, ne, sql, type SQL } from "drizzle-orm";
@@ -12,6 +15,8 @@ import { isMissingTable } from "./lib/dbErrors";
 import { accounts, expenses, journalEntries, journalEntryLines, periodClosures } from "@db/schema";
 import { bills, vendors } from "@db/vendorsSchema";
 import { requireFeature, type PlanUser } from "./lib/planAccess";
+import { TAX_FILE_TYPES, TAX_MAX_FILE_BYTES } from "@contracts/taxRules";
+import { addColumnIfMissing, canReadDocuments, claimRead, decodeReadFile, readDocument, type BillRead, type ReadOutcome } from "./receipts-router";
 import type { Lang } from "./lib/i18n";
 import {
   MAX_BILL_AMOUNT, balancesByVendor, billTiming, cleanText, daysBetween, daysUntilDue, dueSoonRange, effectiveToday,
@@ -78,10 +83,19 @@ export function ensureVendorTables(db: Db): Promise<void> {
         email VARCHAR(320) NULL,
         notes TEXT NULL,
         archived BOOLEAN NOT NULL DEFAULT FALSE,
+        what VARCHAR(120) NULL,
+        terms INT NULL,
+        contractor BOOLEAN NOT NULL DEFAULT FALSE,
+        w9 BOOLEAN NOT NULL DEFAULT FALSE,
         createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
         INDEX vendors_userId_idx (userId)
       )
     `);
+    // Columns added later: older tables get them (additive, nothing existing changes).
+    await addColumnIfMissing(db, "vendors", "what", sql`ALTER TABLE vendors ADD COLUMN what VARCHAR(120) NULL`);
+    await addColumnIfMissing(db, "vendors", "terms", sql`ALTER TABLE vendors ADD COLUMN terms INT NULL`);
+    await addColumnIfMissing(db, "vendors", "contractor", sql`ALTER TABLE vendors ADD COLUMN contractor BOOLEAN NOT NULL DEFAULT FALSE`);
+    await addColumnIfMissing(db, "vendors", "w9", sql`ALTER TABLE vendors ADD COLUMN w9 BOOLEAN NOT NULL DEFAULT FALSE`);
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS bills (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -136,6 +150,12 @@ const vendorFields = {
   phone: z.string().trim().max(40).nullish(),
   email: z.string().trim().max(320).refine((v) => v === "" || EMAIL_RE.test(v), { message: "Invalid email" }).nullish(),
   notes: z.string().trim().max(1000).nullish(),
+  /** What you buy from them. */
+  what: z.string().trim().max(120).nullish(),
+  /** Days to pay them from the bill (0 = cash on delivery); null = not set. */
+  terms: z.number().int().min(0).max(365).nullish(),
+  contractor: z.boolean().optional(),
+  w9: z.boolean().optional(),
 };
 const billFields = {
   /** An existing vendor… */
@@ -153,7 +173,10 @@ const methodInput = z.enum(["cash", "zelle", "card"]);
 /** Calendar days come back as "YYYY-MM-DD" text, so no time zone moves them. */
 const ymd = (col: AnyMySqlColumn) => sql<string>`DATE_FORMAT(${col}, '%Y-%m-%d')`;
 
-type VendorRow = { id: number; name: string; phone: string | null; email: string | null; notes: string | null; archived: boolean; createdAt: Date };
+type VendorRow = {
+  id: number; name: string; phone: string | null; email: string | null; notes: string | null; archived: boolean; createdAt: Date;
+  what: string | null; terms: number | null; contractor: boolean | number; w9: boolean | number;
+};
 type BillRow = {
   id: number; vendorId: number; vendorName: string | null; vendorArchived: boolean | null; description: string; amount: string;
   dueDate: string; status: BillStatus; paidAt: string | null; paymentMethod: PaymentMethod | null; expenseId: number | null;
@@ -163,7 +186,8 @@ type UnpaidRow = { vendorId: number; amount: string; dueDate: string; status: Bi
 
 const vendorCols = {
   id: vendors.id, name: vendors.name, phone: vendors.phone, email: vendors.email, notes: vendors.notes,
-  archived: vendors.archived, createdAt: vendors.createdAt,
+  archived: vendors.archived, createdAt: vendors.createdAt, what: vendors.what, terms: vendors.terms,
+  contractor: vendors.contractor, w9: vendors.w9,
 };
 const billCols = {
   id: bills.id, vendorId: bills.vendorId, vendorName: vendors.name, vendorArchived: vendors.archived, description: bills.description,
@@ -237,8 +261,8 @@ async function isMonthClosed(db: Db, userId: number, day: string): Promise<boole
 // from the second expense of the day, after the expense row is already written; and nothing there runs
 // in a transaction. Here the expense, its entry and the bill change are written together or not at all.
 
-/** Payment account per method, as in expenses.create: cash 1110, Zelle 1130, card 1150; the expense goes to 5100. */
-const PAYMENT_ACCOUNT: Record<PaymentMethod, string> = { cash: "1110", zelle: "1130", card: "1150" };
+/** Payment account per method, as in expenses.create: cash 1110, Zelle 1130, card 1120 (the bank); the expense goes to 5100. */
+const PAYMENT_ACCOUNT: Record<PaymentMethod, string> = { cash: "1110", zelle: "1130", card: "1120" };
 
 async function accountId(tx: Db, userId: number, code: string): Promise<number | undefined> {
   const rows: Array<{ id: number }> = await tx.select({ id: accounts.id }).from(accounts)
@@ -292,7 +316,26 @@ const billsRouter = createRouter({
       const today = effectiveToday(input?.today, utcToday());
       const unpaid: UnpaidRow[] = await db.select({ vendorId: bills.vendorId, amount: bills.amount, dueDate: ymd(bills.dueDate), status: bills.status })
         .from(bills).where(and(eq(bills.userId, userId), eq(bills.status, "unpaid")));
-      return { today, ...summarizeBills(unpaid, today) };
+      const paid: Array<{ n: number | string }> = await db.select({ n: sql<number>`COUNT(*)` }).from(bills)
+        .where(and(eq(bills.userId, userId), eq(bills.status, "paid")));
+      return { today, ...summarizeBills(unpaid, today), paidCount: Number(paid[0]?.n ?? 0) };
+    }),
+
+  /**
+   * "Subir factura de proveedor": reads a photo or PDF of a bill and suggests vendor, concept, total and due date
+   * for the form. Saves nothing; "off" when the server can't read documents (the form is typed by hand).
+   */
+  read: authedQuery
+    .input(z.object({
+      file: z.object({ mimeType: z.enum(TAX_FILE_TYPES), dataBase64: z.string().min(8).max(Math.ceil((TAX_MAX_FILE_BYTES * 4) / 3) + 8) }),
+      today: isoDate.optional(),
+    }))
+    .mutation(async ({ input, ctx }): Promise<ReadOutcome<BillRead>> => {
+      const { userId } = await open(ctx);
+      if (!canReadDocuments()) return { status: "off" };
+      const buf = decodeReadFile(input.file, ctx.lang);
+      claimRead(userId, ctx.lang);
+      return readDocument("bill", { mimeType: input.file.mimeType, buf }, effectiveToday(input?.today, utcToday()));
     }),
 
   create: authedQuery
@@ -337,7 +380,7 @@ const billsRouter = createRouter({
   /**
    * Marks the bill paid and records its expense, in one transaction: the expense row and its
    * journal entry are the same expenses.create writes (debit 5100, credit cash 1110 / Zelle 1130 /
-   * card 1150, reference EXP-<expense id>, type "purchase"); the entry is skipped, as there, when the
+   * card: the bank 1120, reference EXP-<expense id>, type "purchase"); the entry is skipped, as there, when the
    * user's chart of accounts isn't set up yet (the accounting repair adds it later).
    */
   markPaid: authedQuery
@@ -464,12 +507,25 @@ export const vendorsRouter = createRouter({
         : [];
       const lastByVendor = new Map(lastBills.map((b) => [b.vendorId, shapeBill(b, today)]));
 
+      // What was paid to each this calendar year ("Le compraste este año").
+      const yearStart = `${today.slice(0, 4)}-01-01`;
+      const yearRows: Array<{ vendorId: number; total: string; n: number | string }> = await db.select({
+        vendorId: bills.vendorId, total: sql<string>`COALESCE(SUM(${bills.amount}), 0)`, n: sql<number>`COUNT(*)`,
+      }).from(bills).where(and(eq(bills.userId, userId), eq(bills.status, "paid"), sql`${bills.paidAt} >= ${yearStart}`, sql`${bills.paidAt} <= ${today}`))
+        .groupBy(bills.vendorId);
+      const yearBy = new Map(yearRows.map((r) => [Number(r.vendorId), { total: toCents(r.total) / 100, count: Number(r.n) }]));
+
       return rows.map((v) => {
         const bal = balances.get(v.id);
         const last = lastByVendor.get(v.id);
+        const year = yearBy.get(Number(v.id));
         return {
           ...v,
           archived: !!v.archived,
+          contractor: Number(v.contractor) === 1,
+          w9: Number(v.w9) === 1,
+          yearPaidTotal: year?.total ?? 0,
+          yearPaidCount: year?.count ?? 0,
           unpaidTotal: bal?.unpaidTotal ?? 0,
           unpaidCount: bal?.unpaidCount ?? 0,
           overdueCount: bal?.overdueCount ?? 0,
@@ -490,6 +546,7 @@ export const vendorsRouter = createRouter({
       if (dup) fail("CONFLICT", ctx.lang, dup.archived ? "vendorDuplicateArchived" : "vendorDuplicate");
       const res: Exec = await db.insert(vendors).values({
         userId, name, phone: cleanText(input.phone), email: cleanText(input.email), notes: cleanText(input.notes),
+        what: cleanText(input.what), terms: input.terms ?? null, contractor: !!input.contractor, w9: !!input.contractor && !!input.w9,
       });
       return { id: Number(res[0].insertId) };
     }),
@@ -504,10 +561,27 @@ export const vendorsRouter = createRouter({
       if (!name) fail("BAD_REQUEST", ctx.lang, "vendorMissing");
       const dup = await findVendorByName(db, userId, name, vendor.id);
       if (dup) fail("CONFLICT", ctx.lang, dup.archived ? "vendorDuplicateArchived" : "vendorDuplicate");
+      // Fields an older app version doesn't send keep their value.
+      const contractor = input.contractor ?? Number(vendor.contractor) === 1;
       await db.update(vendors).set({
         name, phone: cleanText(input.phone), email: cleanText(input.email), notes: cleanText(input.notes),
+        ...(input.what !== undefined ? { what: cleanText(input.what) } : {}),
+        ...(input.terms !== undefined ? { terms: input.terms } : {}),
+        contractor,
+        w9: contractor && (input.w9 ?? Number(vendor.w9) === 1),
       }).where(and(eq(vendors.id, vendor.id), eq(vendors.userId, userId)));
       return { id: vendor.id };
+    }),
+
+  /** A contractor's W-9 is on file (or not anymore). */
+  setW9: authedQuery
+    .input(z.object({ id: idInput, w9: z.boolean() }))
+    .mutation(async ({ input, ctx }) => {
+      const { db, userId } = await open(ctx);
+      const vendor = await findVendor(db, userId, input.id);
+      if (!vendor) fail("NOT_FOUND", ctx.lang, "vendorNotFound");
+      await db.update(vendors).set({ w9: input.w9 }).where(and(eq(vendors.id, vendor.id), eq(vendors.userId, userId)));
+      return { id: vendor.id, w9: input.w9 };
     }),
 
   /** Archive hides the vendor from the lists and the picker; their bills stay. archived: false restores it. */

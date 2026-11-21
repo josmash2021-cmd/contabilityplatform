@@ -1,117 +1,67 @@
-// Proveedores y facturas por pagar (business Pro and Negocio): what you owe, what's late,
-// what's due this week. Paying a bill records the expense (server: api/vendors-router.ts).
-// Team (api/lib/team.ts): staff never reach this page (AppLayout); the accountant only reads.
-import { useState, type ReactNode } from "react";
-import { useNavigate } from "react-router";
+// Proveedores (the 2.0 prototype's "vendors" screen, business Pro and Negocio): what you owe in total, this week
+// and overdue; your week of payments; the bills (to pay, overdue, paid) and the vendors, each with its own page
+// (/vendors?v=<id>). Paying a bill records the expense (server: api/vendors-router.ts), which Gastos shows once.
+// Team (api/lib/team.ts): employees don't reach this page; the accountant only reads.
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { keepPreviousData } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, CalendarClock, ChevronRight, Info, Lock, Plus, Receipt, Truck, Wallet, type LucideIcon } from "lucide-react";
+import { AlertCircle, Info, Lock, Upload } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { AnimatedPage } from "@/components/AnimatedPage";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { cn, formatCurrency } from "@/lib/utils";
+import { MerchantLogo } from "@/components/brand/MerchantLogo";
+import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { vendorsCopy } from "@/i18n/copy/vendors";
-import { BillCard } from "@/components/vendors/BillCard";
+import { BillRow } from "@/components/vendors/BillRow";
 import { BillFormDialog } from "@/components/vendors/BillFormDialog";
 import { ConfirmDialog } from "@/components/vendors/ConfirmDialog";
 import { PayBillDialog } from "@/components/vendors/PayBillDialog";
-import { VendorDetailDialog } from "@/components/vendors/VendorDetailDialog";
+import { PaymentWeek } from "@/components/vendors/PaymentWeek";
+import { VendorDetailView } from "@/components/vendors/VendorDetailView";
 import { VendorFormDialog } from "@/components/vendors/VendorFormDialog";
 import { errorText, localToday, type BillItem, type VendorItem } from "@/components/vendors/shared";
-import { BTN, TABS } from "@/components/vendors/ui";
+import { BILL_GRID, VEND_GRID } from "@/components/vendors/ui";
+import { CARD, btn, fmt0, fmtMoney } from "@/components/expenses/ui";
+import { Kpi, PageHead, SegTabs } from "@/components/expenses/proto";
+import { paymentWeek } from "../../api/lib/expenses";
 
-type Tab = "unpaid" | "paid" | "vendors";
-type UnpaidFilter = "unpaid" | "overdue" | "week";
-type Tone = "neutral" | "red" | "amber";
-
+type Tab = "open" | "late" | "paid" | "vendors";
 const PAID_PAGE = 50;
-/** A fresh key each time the bill form opens, so it starts from that bill's values. */
 let formSeq = 0;
 const nextFormKey = () => ++formSeq;
-const TONE: Record<Tone, { border: string; icon: string; amount: string; sub: string }> = {
-  neutral: { border: "border-slate-200", icon: "bg-blue-50 text-blue-600", amount: "text-slate-900", sub: "text-slate-500" },
-  red: { border: "border-red-200", icon: "bg-red-50 text-red-600", amount: "text-red-700", sub: "font-medium text-red-700" },
-  amber: { border: "border-amber-200", icon: "bg-amber-50 text-amber-600", amount: "text-slate-900", sub: "font-medium text-amber-800" },
-};
-
-/** A total that also filters the list below (pressed = showing it). */
-function SummaryCard({ label, amount, sub, icon: Icon, tone, active, loading, className, onClick }: {
-  label: string; amount: number; sub: string; icon: LucideIcon; tone: Tone; active: boolean; loading: boolean; className?: string; onClick: () => void;
-}) {
-  const s = TONE[tone];
-  return (
-    <button
-      type="button" aria-pressed={active} onClick={onClick}
-      className={cn(
-        "min-w-0 rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-        s.border, active && "ring-2 ring-blue-600 ring-offset-1", className,
-      )}
-    >
-      <span className="flex items-center gap-2">
-        <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", s.icon)} aria-hidden="true"><Icon className="h-4 w-4" /></span>
-        <span className="truncate text-xs font-medium text-slate-500">{label}</span>
-      </span>
-      {loading ? (
-        <Skeleton className="mt-2 h-8 w-28" />
-      ) : (
-        <>
-          <span className={cn("mt-2 block truncate text-xl font-bold tabular-nums tracking-tight sm:text-2xl", s.amount)}>{formatCurrency(amount)}</span>
-          <span className={cn("mt-0.5 block truncate text-xs", s.sub)}>{sub}</span>
-        </>
-      )}
-    </button>
-  );
-}
 
 function ListSkeleton() {
   const c = useCopy(vendorsCopy);
-  return (
-    <div className="space-y-2" role="status" aria-label={c.loading}>
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
-    </div>
-  );
-}
-
-function ErrorCard({ onRetry }: { onRetry: () => void }) {
-  const c = useCopy(vendorsCopy);
-  return (
-    <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
-      <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden="true" />
-      <p className="mt-2 text-sm font-medium text-slate-900" role="alert">{c.loadError}</p>
-      <button type="button" className={cn(BTN.secondary, "mt-3")} onClick={onRetry}>{c.retry}</button>
-    </section>
-  );
-}
-
-function EmptyCard({ icon: Icon, title, text, action }: { icon: LucideIcon; title?: string; text: string; action?: ReactNode }) {
-  return (
-    <section className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center">
-      <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true"><Icon className="h-7 w-7" /></span>
-      {title && <p className="mt-4 text-lg font-bold tracking-tight text-slate-900">{title}</p>}
-      <p className={cn("mx-auto max-w-sm text-sm text-slate-500", title ? "mt-1.5" : "mt-4")}>{text}</p>
-      {action}
-    </section>
-  );
+  return <div className="grid gap-2 p-3" role="status" aria-label={c.loading}>{[0, 1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>;
 }
 
 export default function Vendors() {
   const c = useCopy(vendorsCopy);
+  const p = c.proto;
   const navigate = useNavigate();
   const utils = trpc.useUtils();
   const [today] = useState(localToday);
-  const [tab, setTab] = useState<Tab>("unpaid");
-  const [filter, setFilter] = useState<UnpaidFilter>("unpaid");
+  const [tab, setTab] = useState<Tab>("open");
   const [paidLimit, setPaidLimit] = useState(PAID_PAGE);
   const [showArchived, setShowArchived] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewId = Number(searchParams.get("v")) || null;
+  const openVendor = (id: number | null) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      if (id) next.set("v", String(id)); else next.delete("v");
+      return next;
+    });
+    document.querySelector("main")?.scrollTo({ top: 0 });
+  };
 
   // Dialogs
   const [billForm, setBillForm] = useState<{ bill?: BillItem; vendorId?: number; key: number } | null>(null);
   const [payBill, setPayBill] = useState<BillItem | null>(null);
   const [confirm, setConfirm] = useState<{ kind: "delete" | "unpay"; bill: BillItem } | null>(null);
   const [vendorForm, setVendorForm] = useState<{ vendor?: VendorItem } | null>(null);
-  const [detailId, setDetailId] = useState<number | null>(null);
   const [archiveAsk, setArchiveAsk] = useState<VendorItem | null>(null);
 
   const plan = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
@@ -122,12 +72,15 @@ export default function Vendors() {
   const opts = { enabled: !planLacks, staleTime: 60_000, retry: (n: number, err: { data?: { code?: string } | null }) => err.data?.code !== "FORBIDDEN" && n < 1 };
 
   const summary = trpc.vendors.bills.summary.useQuery({ today }, opts);
-  const unpaid = trpc.vendors.bills.list.useQuery({ filter, today }, { ...opts, enabled: opts.enabled && tab === "unpaid", placeholderData: keepPreviousData });
+  const unpaid = trpc.vendors.bills.list.useQuery({ filter: "unpaid", today, limit: 500 }, { ...opts, placeholderData: keepPreviousData });
   const paid = trpc.vendors.bills.list.useQuery(
     { filter: "paid", today, limit: paidLimit },
     { ...opts, enabled: opts.enabled && tab === "paid", placeholderData: keepPreviousData },
   );
-  const vendorList = trpc.vendors.list.useQuery({ today, includeArchived: showArchived }, { ...opts, placeholderData: keepPreviousData });
+  const vendorList = trpc.vendors.list.useQuery({ today, includeArchived: showArchived || viewId !== null }, { ...opts, placeholderData: keepPreviousData });
+  // "Subir factura" reads the bill when the server can (receipts.usage says so; Pro and Negocio include Recibos).
+  const reading = trpc.receipts.usage.useQuery(undefined, { ...opts, enabled: opts.enabled && canChange, retry: false });
+  const canRead = canChange && !!reading.data?.reading;
   const locked = planLacks || summary.error?.data?.code === "FORBIDDEN" || vendorList.error?.data?.code === "FORBIDDEN";
 
   const refresh = () => void utils.vendors.invalidate();
@@ -137,19 +90,18 @@ export default function Vendors() {
     onError,
   });
   const unpay = trpc.vendors.bills.markUnpaid.useMutation({
-    onSuccess: (r) => { toast.success(r.removedExpense ? c.unpay.done : c.unpay.doneNoExpense); setConfirm(null); refresh(); },
+    onSuccess: (r) => { toast.success(r.removedExpense ? c.unpay.done : c.unpay.doneNoExpense); setConfirm(null); refresh(); void utils.expenses.overview.invalidate(); },
     onError,
   });
   const archive = trpc.vendors.archive.useMutation({
-    onSuccess: (r) => {
-      toast.success(r.archived ? c.vendorDetail.archived : c.vendorDetail.unarchived);
-      setArchiveAsk(null);
-      if (r.archived && !showArchived) setDetailId(null);
-      refresh();
-    },
+    onSuccess: (r) => { toast.success(r.archived ? c.vendorDetail.archived : c.vendorDetail.unarchived); setArchiveAsk(null); refresh(); },
     onError,
   });
   const busy = delBill.isPending || unpay.isPending || archive.isPending;
+
+  const open = useMemo(() => (unpaid.data?.items ?? []).filter((b) => (b.daysUntilDue ?? 0) >= 0), [unpaid.data]);
+  const late = useMemo(() => (unpaid.data?.items ?? []).filter((b) => (b.daysUntilDue ?? 0) < 0), [unpaid.data]);
+  const week = useMemo(() => paymentWeek(open, today), [open, today]);
 
   if (locked) {
     // The plan includes it but the server still says no: a team member whose role doesn't cover it.
@@ -160,9 +112,7 @@ export default function Vendors() {
           <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Lock className="h-6 w-6" aria-hidden="true" /></span>
           <h1 className="mt-4 text-xl font-bold tracking-tight text-slate-900">{teamBlocked ? c.noAccess.title : c.locked.title}</h1>
           <p className="mt-2 text-sm text-slate-600">{teamBlocked ? c.noAccess.text : c.locked.text}</p>
-          {!teamBlocked && (
-            <button type="button" className={cn(BTN.primary, "mt-6 w-full")} onClick={() => navigate("/settings")}>{c.locked.cta}</button>
-          )}
+          {!teamBlocked && <button type="button" className={btn("primary", "mt-6 w-full")} onClick={() => navigate("/settings?sec=plan")}>{c.locked.cta}</button>}
         </section>
       </AnimatedPage>
     );
@@ -170,8 +120,10 @@ export default function Vendors() {
 
   const vendors = vendorList.data ?? [];
   const activeVendors = vendors.filter((v) => !v.archived);
-  const detailVendor = detailId !== null ? vendors.find((v) => v.id === detailId) ?? null : null;
+  const listedVendors = showArchived ? vendors : activeVendors;
+  const viewing = viewId !== null ? vendors.find((v) => v.id === viewId) ?? null : null;
   const s = summary.data;
+  const uploadLabel = canRead ? p.uploadBill : p.newBill;
 
   const openNewBill = (vendorId?: number) => setBillForm({ vendorId, key: nextFormKey() });
   const billHandlers = {
@@ -180,168 +132,179 @@ export default function Vendors() {
     onDelete: (b: BillItem) => setConfirm({ kind: "delete", bill: b }),
     onUnpay: (b: BillItem) => setConfirm({ kind: "unpay", bill: b }),
   };
-  const showUnpaid = (f: UnpaidFilter) => { setTab("unpaid"); setFilter(f); };
+  const weekTotal = week.reduce((a, d) => a + d.totalCents, 0) / 100;
+  const weekVendors = [...new Set(week.flatMap((d) => d.vendors))];
 
-  const filterLabels: Record<UnpaidFilter, string> = { unpaid: c.filters.all, overdue: c.filters.overdue, week: c.filters.week };
-  const emptyUnpaidText = filter === "overdue" ? c.empty.overdue : filter === "week" ? c.empty.week : c.empty.unpaidText;
-  const overdueCount = s?.overdueCount ?? 0;
-  const weekCount = s?.dueSoonCount ?? 0;
+  const billTable = (list: readonly BillItem[] | undefined, loading: boolean, error: boolean, retry: () => void) => (
+    <div className="overflow-hidden rounded-[14px] border border-slate-200 bg-white">
+      <div className={cn(BILL_GRID, "hidden bg-slate-100 px-4 py-[9px] text-xs font-semibold text-slate-500 md:grid")} aria-hidden="true">
+        <span>{p.head.vendor}</span><span>{p.head.due}</span><span className="text-right">{p.head.amount}</span><span>{p.head.status}</span><span />
+      </div>
+      {loading ? <ListSkeleton /> : error ? (
+        <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-200 p-3 md:border-t">
+          <p className="flex items-center gap-2 text-sm text-slate-700" role="alert"><AlertCircle className="h-4 w-4 text-red-600" aria-hidden="true" />{c.loadError}</p>
+          <button type="button" className={btn("sm")} onClick={retry}>{c.retry}</button>
+        </div>
+      ) : !list || list.length === 0 ? (
+        <p className="border-t border-slate-200 px-4 py-3 text-sm text-slate-500 first:border-t-0 md:first:border-t">{p.nothing}</p>
+      ) : (
+        <ul>{list.map((b) => <BillRow key={b.id} bill={b} today={today} busy={busy} canChange={canChange} onVendor={(id) => openVendor(id)} {...billHandlers} />)}</ul>
+      )}
+    </div>
+  );
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{c.title}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{c.subtitle}</p>
-          </div>
-          {canChange && (
-            <button type="button" className={cn(BTN.primary, "w-full sm:w-auto")} onClick={() => openNewBill()}>
-              <Plus className="h-4 w-4" aria-hidden="true" />{c.newBill}
-            </button>
-          )}
-        </header>
-
-        {!canChange && (
-          <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
-            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />{c.ui.readOnly}
-          </p>
-        )}
-
-        {summary.isError && !summary.data ? (
-          <ErrorCard onRetry={() => void summary.refetch()} />
+      <div className="mx-auto max-w-6xl">
+        {viewId !== null ? (
+          viewing ? (
+            <VendorDetailView
+              vendor={viewing} today={today} busy={busy} canChange={canChange} uploadLabel={p.detail.upload}
+              onBack={() => openVendor(null)}
+              onNewBill={(id) => openNewBill(id)}
+              onEdit={(v) => setVendorForm({ vendor: v })}
+              onArchive={(v) => setArchiveAsk(v)}
+              onRestore={(v) => archive.mutate({ id: v.id, archived: false })}
+              onPay={billHandlers.onPay} onEditBill={billHandlers.onEdit} onDeleteBill={billHandlers.onDelete} onUnpay={billHandlers.onUnpay}
+            />
+          ) : vendorList.isLoading ? (
+            <div className="grid gap-3" role="status" aria-label={c.loading}><Skeleton className="h-10 w-64" /><Skeleton className="h-24" /><Skeleton className="h-64" /></div>
+          ) : (
+            <section className={cn(CARD, "text-center")}>
+              <p className="text-sm text-slate-600">{p.detail.notFound}</p>
+              <button type="button" className={btn("sm", "mt-3")} onClick={() => openVendor(null)}>{p.back}</button>
+            </section>
+          )
         ) : (
-          <section aria-label={c.summary.label} className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-            <SummaryCard
-              className="col-span-2 sm:col-span-1" label={c.summary.unpaid} icon={Wallet} tone="neutral" loading={summary.isLoading}
-              amount={s?.unpaidTotal ?? 0} sub={c.summary.unpaidSub(s?.unpaidCount ?? 0)}
-              active={tab === "unpaid" && filter === "unpaid"} onClick={() => showUnpaid("unpaid")}
+          <>
+            <PageHead
+              title={c.title}
+              sub={p.sub}
+              right={canChange ? (
+                <div className="flex w-full flex-wrap gap-2 sm:w-auto">
+                  <button type="button" className={btn()} onClick={() => setVendorForm({})}>{p.addVendor}</button>
+                  <button type="button" className={btn("primary")} onClick={() => openNewBill()}>
+                    <Upload className="h-4 w-4" aria-hidden="true" />{uploadLabel}
+                  </button>
+                </div>
+              ) : null}
             />
-            <SummaryCard
-              label={c.summary.overdue} icon={AlertTriangle} tone={overdueCount > 0 ? "red" : "neutral"} loading={summary.isLoading}
-              amount={s?.overdueTotal ?? 0} sub={c.summary.overdueSub(overdueCount)}
-              active={tab === "unpaid" && filter === "overdue"} onClick={() => showUnpaid("overdue")}
-            />
-            <SummaryCard
-              label={c.summary.week} icon={CalendarClock} tone={weekCount > 0 ? "amber" : "neutral"} loading={summary.isLoading}
-              amount={s?.dueSoonTotal ?? 0} sub={c.summary.weekSub(weekCount)}
-              active={tab === "unpaid" && filter === "week"} onClick={() => showUnpaid("week")}
-            />
-          </section>
-        )}
+            {!canChange && (
+              <p className="mb-3 flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+                <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />{c.ui.readOnly}
+              </p>
+            )}
 
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-4">
-          <TabsList className={TABS.list} aria-label={c.tabs.label}>
-            <TabsTrigger value="unpaid" className={TABS.trigger}>
-              {c.tabs.unpaid}
-              {s && s.unpaidCount > 0 && (
-                <span className="rounded-full bg-slate-200 px-1.5 text-[11px] font-semibold tabular-nums text-slate-700">{s.unpaidCount}</span>
-              )}
-            </TabsTrigger>
-            <TabsTrigger value="paid" className={TABS.trigger}>{c.tabs.paid}</TabsTrigger>
-            <TabsTrigger value="vendors" className={TABS.trigger}>{c.tabs.vendors}</TabsTrigger>
-          </TabsList>
+            {/* .three */}
+            {summary.isError && !s ? (
+              <section className={cn(CARD, "flex flex-wrap items-center justify-between gap-3 border-red-200")}>
+                <p className="flex items-center gap-2 text-sm text-slate-900" role="alert"><AlertCircle className="h-5 w-5 text-red-600" aria-hidden="true" />{c.loadError}</p>
+                <button type="button" className={btn("sm")} onClick={() => void summary.refetch()}>{c.retry}</button>
+              </section>
+            ) : !s || unpaid.isLoading ? (
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3" role="status" aria-label={c.loading}>{[0, 1, 2].map((i) => <Skeleton key={i} className="h-[92px] rounded-[14px]" />)}</div>
+            ) : (
+              <section className="grid grid-cols-1 gap-3 sm:grid-cols-3" aria-label={c.summary.label}>
+                <Kpi label={p.kpi.owe} value={fmtMoney(s.unpaidTotal)} sub={p.kpi.oweSub(s.unpaidCount)} />
+                <Kpi label={p.kpi.week} value={fmtMoney(weekTotal)} sub={weekVendors.length ? weekVendors.join(", ") : p.kpi.weekNone} />
+                <Kpi label={p.kpi.late} value={fmtMoney(s.overdueTotal)} sub={s.overdueCount ? p.kpi.lateSub(s.overdueCount) : p.kpi.lateNone} tone={s.overdueCount ? "bad" : "good"} />
+              </section>
+            )}
 
-          {/* Por pagar */}
-          <TabsContent value="unpaid" className="space-y-3">
-            <div className="flex flex-wrap gap-2" role="group" aria-label={c.filters.label}>
-              {(["unpaid", "overdue", "week"] as const).map((f) => (
-                <button
-                  key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
-                  className={cn(
-                    "inline-flex h-11 items-center rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-9",
-                    filter === f ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+            {unpaid.data && <PaymentWeek days={week} />}
+
+            <SegTabs<Tab>
+              label={c.tabs.label}
+              value={tab}
+              onChange={setTab}
+              items={[
+                { value: "open", label: p.tabs.open, count: unpaid.data ? open.length : null },
+                { value: "late", label: p.tabs.late, count: unpaid.data ? late.length : null },
+                { value: "paid", label: p.tabs.paid, count: s ? s.paidCount : null },
+                { value: "vendors", label: p.tabs.vendors, count: vendorList.data ? activeVendors.length : null },
+              ]}
+              right={tab === "vendors" ? (
+                <button type="button" className={btn("ghost", "sm", "mb-1.5 text-blue-700")} aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
+                  {showArchived ? c.vendors.hideArchived : c.vendors.showArchived}
+                </button>
+              ) : undefined}
+            />
+
+            <div className="mt-2.5">
+              {tab === "open" && billTable(open, unpaid.isLoading, unpaid.isError, () => void unpaid.refetch())}
+              {tab === "late" && billTable(late, unpaid.isLoading, unpaid.isError, () => void unpaid.refetch())}
+              {tab === "paid" && (
+                <>
+                  {billTable(paid.data?.items, paid.isLoading, paid.isError, () => void paid.refetch())}
+                  {paid.data?.hasMore && (
+                    <div className="mt-3 flex justify-center">
+                      <button type="button" className={btn("w-full sm:w-auto")} disabled={paid.isFetching} onClick={() => setPaidLimit((n) => Math.min(n + PAID_PAGE, 500))}>{c.loadMore}</button>
+                    </div>
                   )}
-                >
-                  {filterLabels[f]}
-                </button>
-              ))}
-            </div>
-            {unpaid.isLoading ? <ListSkeleton /> : unpaid.isError ? <ErrorCard onRetry={() => void unpaid.refetch()} /> : (unpaid.data?.items.length ?? 0) === 0 ? (
-              <EmptyCard
-                icon={Receipt} title={filter === "unpaid" ? c.empty.unpaidTitle : undefined} text={emptyUnpaidText}
-                action={filter === "unpaid" && canChange && (
-                  <button type="button" className={cn(BTN.primary, "mt-5")} onClick={() => openNewBill()}>
-                    <Plus className="h-4 w-4" aria-hidden="true" />{c.newBill}
-                  </button>
-                )}
-              />
-            ) : (
-              <ul className={cn("grid grid-cols-1 gap-3 lg:grid-cols-2", unpaid.isPlaceholderData && "opacity-60")} aria-busy={unpaid.isFetching}>
-                {unpaid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} canChange={canChange} {...billHandlers} />)}
-              </ul>
-            )}
-          </TabsContent>
-
-          {/* Pagadas */}
-          <TabsContent value="paid" className="space-y-3">
-            {paid.isLoading ? <ListSkeleton /> : paid.isError ? <ErrorCard onRetry={() => void paid.refetch()} /> : (paid.data?.items.length ?? 0) === 0 ? (
-              <EmptyCard icon={Receipt} text={c.empty.paid} />
-            ) : (
-              <>
-                <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2" aria-busy={paid.isFetching}>
-                  {paid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} canChange={canChange} {...billHandlers} />)}
-                </ul>
-                {paid.data?.hasMore && (
-                  <div className="flex justify-center">
-                    <button type="button" className={cn(BTN.secondary, "w-full sm:w-auto")} disabled={paid.isFetching} onClick={() => setPaidLimit((n) => Math.min(n + PAID_PAGE, 500))}>
-                      {c.loadMore}
-                    </button>
+                </>
+              )}
+              {tab === "vendors" && (
+                <div className="overflow-hidden rounded-[14px] border border-slate-200 bg-white">
+                  <div className={cn(VEND_GRID, "hidden bg-slate-100 px-4 py-[9px] text-xs font-semibold text-slate-500 md:grid")} aria-hidden="true">
+                    <span>{p.head.vendor}</span><span className="text-right">{p.head.year}</span><span className="text-right">{p.head.owe}</span><span>{p.head.terms}</span>
                   </div>
-                )}
-              </>
-            )}
-          </TabsContent>
-
-          {/* Proveedores */}
-          <TabsContent value="vendors" className="space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              {canChange ? (
-                <button type="button" className={BTN.secondary} onClick={() => setVendorForm({})}>
-                  <Plus className="h-4 w-4" aria-hidden="true" />{c.vendors.new}
-                </button>
-              ) : <span />}
-              <button type="button" className={cn(BTN.ghost, "text-blue-700")} aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
-                {showArchived ? c.vendors.hideArchived : c.vendors.showArchived}
-              </button>
+                  {vendorList.isLoading ? <ListSkeleton /> : vendorList.isError ? (
+                    <div className="flex flex-wrap items-center justify-between gap-2 p-3">
+                      <p className="text-sm text-slate-700" role="alert">{c.loadError}</p>
+                      <button type="button" className={btn("sm")} onClick={() => void vendorList.refetch()}>{c.retry}</button>
+                    </div>
+                  ) : listedVendors.length === 0 ? (
+                    <div className="border-t border-slate-200 px-4 py-6 text-center md:border-t">
+                      <p className="font-semibold text-slate-900">{c.empty.vendorsTitle}</p>
+                      <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{c.empty.vendorsText}</p>
+                      {canChange && <button type="button" className={btn("primary", "mt-4")} onClick={() => setVendorForm({})}>{p.addVendor}</button>}
+                    </div>
+                  ) : (
+                    <ul>
+                      {listedVendors.map((v) => (
+                        <li
+                          key={v.id}
+                          className={cn(VEND_GRID, "cursor-pointer items-center border-t border-slate-200 px-4 py-3 text-sm transition-colors first:border-t-0 hover:bg-slate-100 md:first:border-t")}
+                          onClick={() => openVendor(v.id)}
+                        >
+                          <div className="flex min-w-0 items-center gap-2.5">
+                            <MerchantLogo name={v.name} size={32} />
+                            <div className="min-w-0">
+                              <div className="flex min-w-0 items-baseline gap-1.5">
+                                <button
+                                  type="button" onClick={(e) => { e.stopPropagation(); openVendor(v.id); }}
+                                  className="min-w-0 truncate rounded text-left font-[650] text-slate-900 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                                >
+                                  {v.name}
+                                </button>
+                                {v.contractor && <span className="whitespace-nowrap text-xs text-slate-500">· {p.contractor}</span>}
+                                {v.archived && <span className="whitespace-nowrap text-xs text-slate-500">· {c.vendors.archivedBadge}</span>}
+                              </div>
+                              <span className="block truncate text-xs text-slate-500">{v.what || (v.lastBill ? v.lastBill.description : c.vendors.noBills)}</span>
+                            </div>
+                          </div>
+                          <span className="hidden text-right tabular-nums md:block">{fmt0(v.yearPaidTotal)}</span>
+                          <span className="text-right tabular-nums">{v.unpaidTotal > 0 ? <b className={v.overdueCount ? "text-red-600" : "text-slate-900"}>{fmtMoney(v.unpaidTotal)}</b> : <span className="text-slate-500">—</span>}</span>
+                          <span className="hidden text-slate-500 md:block">{v.terms === null ? "—" : v.terms === 0 ? p.cash : p.days(v.terms)}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
             </div>
-            {vendorList.isLoading ? <ListSkeleton /> : vendorList.isError ? <ErrorCard onRetry={() => void vendorList.refetch()} /> : vendors.length === 0 ? (
-              <EmptyCard
-                icon={Truck} title={c.empty.vendorsTitle} text={c.empty.vendorsText}
-                action={canChange && (
-                  <button type="button" className={cn(BTN.primary, "mt-5")} onClick={() => setVendorForm({})}>
-                    <Plus className="h-4 w-4" aria-hidden="true" />{c.vendors.new}
-                  </button>
-                )}
-              />
-            ) : (
-              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {vendors.map((v) => <VendorRow key={v.id} v={v} onOpen={() => setDetailId(v.id)} />)}
-              </ul>
-            )}
-          </TabsContent>
-        </Tabs>
+          </>
+        )}
       </div>
 
       {/* Dialogs */}
-      {detailVendor && (
-        <VendorDetailDialog
-          vendor={detailVendor} today={today} busy={busy} canChange={canChange}
-          onClose={() => setDetailId(null)}
-          onNewBill={(id) => openNewBill(id)}
-          onEdit={(v) => setVendorForm({ vendor: v })}
-          onArchive={(v) => setArchiveAsk(v)}
-          onRestore={(v) => archive.mutate({ id: v.id, archived: false })}
-          onPay={billHandlers.onPay} onEditBill={billHandlers.onEdit} onDeleteBill={billHandlers.onDelete} onUnpay={billHandlers.onUnpay}
-        />
-      )}
       {billForm && (
         <BillFormDialog
-          key={billForm.key} bill={billForm.bill} vendorId={billForm.vendorId} vendors={activeVendors} today={today}
+          key={billForm.key} bill={billForm.bill} vendorId={billForm.vendorId} vendors={activeVendors} today={today} canRead={canRead}
           onClose={() => setBillForm(null)}
         />
       )}
-      {payBill && <PayBillDialog key={payBill.id} bill={payBill} today={today} onClose={() => setPayBill(null)} />}
+      {payBill && <PayBillDialog key={payBill.id} bill={payBill} today={today} onClose={() => { setPayBill(null); void utils.expenses.overview.invalidate(); }} />}
       {vendorForm && <VendorFormDialog key={vendorForm.vendor?.id ?? "new"} vendor={vendorForm.vendor} onClose={() => setVendorForm(null)} />}
       {confirm?.kind === "delete" && (
         <ConfirmDialog
@@ -362,51 +325,5 @@ export default function Vendors() {
         />
       )}
     </AnimatedPage>
-  );
-}
-
-/** A vendor in the list: what you owe them (overdue in words too) and their last bill. */
-function VendorRow({ v, onOpen }: { v: VendorItem; onOpen: () => void }) {
-  const c = useCopy(vendorsCopy);
-  const overdue = v.overdueCount > 0;
-  return (
-    <li>
-      <button
-        type="button" onClick={onOpen}
-        className={cn(
-          "flex min-h-[64px] w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
-          overdue ? "border-red-200" : "border-slate-200",
-        )}
-      >
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700" aria-hidden="true">
-          {v.name.charAt(0).toUpperCase()}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="flex items-center gap-2">
-            <span className="truncate font-semibold text-slate-900">{v.name}</span>
-            {v.archived && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{c.vendors.archivedBadge}</span>}
-          </span>
-          <span className="block truncate text-xs text-slate-500">
-            {v.lastBill ? c.vendors.lastBill(v.lastBill.description, formatCurrency(v.lastBill.amount)) : c.vendors.noBills}
-          </span>
-          {overdue && (
-            <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-red-700">
-              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{c.vendors.overdueCount(v.overdueCount)}
-            </span>
-          )}
-        </span>
-        <span className="shrink-0 text-right">
-          {v.unpaidTotal > 0 ? (
-            <>
-              <span className="block text-[11px] text-slate-500">{c.vendorDetail.owes}</span>
-              <span className={cn("block font-bold tabular-nums", overdue ? "text-red-700" : "text-slate-900")}>{formatCurrency(v.unpaidTotal)}</span>
-            </>
-          ) : (
-            <span className="text-xs font-medium text-emerald-700">{c.vendors.upToDate}</span>
-          )}
-        </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
-      </button>
-    </li>
   );
 }

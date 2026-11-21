@@ -1,7 +1,7 @@
 // ── Proveedores y facturas por pagar (business Pro and Negocio) ──
 // These tables are created on first use by api/vendors-router.ts (CREATE TABLE IF NOT EXISTS),
 // so they stay out of db/schema.ts and the drizzle-kit migrations. Keep both definitions in step.
-import { bigint, boolean, date, decimal, index, mysqlEnum, mysqlTable, serial, text, timestamp, varchar } from "drizzle-orm/mysql-core";
+import { bigint, boolean, date, decimal, index, int, mysqlEnum, mysqlTable, serial, text, timestamp, varchar } from "drizzle-orm/mysql-core";
 
 export const vendors = mysqlTable("vendors", {
   id: serial("id").primaryKey(),
@@ -11,6 +11,15 @@ export const vendors = mysqlTable("vendors", {
   email: varchar("email", { length: 320 }),
   notes: text("notes"),
   archived: boolean("archived").default(false).notNull(),
+  // Added later (ensureVendorTables adds them to older databases):
+  /** What you buy from them ("Refacciones", "Renta del local"). */
+  what: varchar("what", { length: 120 }),
+  /** Days you have to pay them from the bill ("Plazo"): 0 = cash on delivery, null = not set. */
+  terms: int("terms"),
+  /** A person paid for services, who may need a 1099 at the start of the year. */
+  contractor: boolean("contractor").default(false).notNull(),
+  /** Their W-9 is on file (the owner marks it). */
+  w9: boolean("w9").default(false).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => [
   index("vendors_userId_idx").on(table.userId),

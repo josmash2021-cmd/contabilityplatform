@@ -102,7 +102,7 @@ export function ReceiptViewer({ receipt, canChange, deleting, onClose, onEdit, o
               </div>
             ))}
           </dl>
-          {receipt.expenseId !== null && <p className="text-xs text-slate-500">{v.linked}</p>}
+          {receipt.expenseId !== null && <p className="text-xs text-slate-500">{receipt.attached ? v.attachedNote : v.linked}</p>}
           {!canChange && <p className="text-xs text-slate-500">{t.ui.ownerOnly}</p>}
         </div>
 
@@ -119,9 +119,12 @@ export function ReceiptViewer({ receipt, canChange, deleting, onClose, onEdit, o
           )}
           {canChange && (
             <div className="col-span-2 grid grid-cols-2 gap-2 sm:ml-auto sm:flex">
-              <button type="button" className={BTN.secondary} onClick={() => onEdit(receipt)} disabled={deleting}>
-                <Pencil className="h-4 w-4" aria-hidden="true" /> {v.edit}
-              </button>
+              {/* A photo added to an expense that already existed: the expense is changed in Gastos, not here. */}
+              {!receipt.attached && (
+                <button type="button" className={BTN.secondary} onClick={() => onEdit(receipt)} disabled={deleting}>
+                  <Pencil className="h-4 w-4" aria-hidden="true" /> {v.edit}
+                </button>
+              )}
               <button type="button" className={BTN.dangerOutline} onClick={() => setConfirming(true)} disabled={deleting}>
                 <Trash2 className="h-4 w-4" aria-hidden="true" /> {v.delete}
               </button>
@@ -133,7 +136,7 @@ export function ReceiptViewer({ receipt, canChange, deleting, onClose, onEdit, o
           <AlertDialogContent className="bg-white sm:rounded-2xl">
             <AlertDialogHeader>
               <AlertDialogTitle className="text-slate-900">{t.confirmDelete.title}</AlertDialogTitle>
-              <AlertDialogDescription className="text-slate-600">{t.confirmDelete.text(receipt.merchant, amount)}</AlertDialogDescription>
+              <AlertDialogDescription className="text-slate-600">{receipt.attached ? t.confirmDelete.textAttached : t.confirmDelete.text(receipt.merchant, amount)}</AlertDialogDescription>
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel className="h-11 sm:h-10" disabled={deleting}>{t.confirmDelete.cancel}</AlertDialogCancel>

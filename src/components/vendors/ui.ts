@@ -17,8 +17,7 @@ export const FIELD = "h-11 rounded-[10px] border-slate-200 bg-white text-base te
 export const LABEL = "text-sm font-medium text-slate-700";
 export const CARD = "rounded-2xl border border-slate-200 bg-white p-4 sm:p-5";
 
-/** Overrides for the shadcn Tabs: a segmented control, 44px tall on phones. */
-export const TABS = {
-  list: "h-auto w-full gap-1 rounded-xl bg-slate-100 p-1 sm:w-fit",
-  trigger: "h-11 flex-1 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-blue-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm sm:h-9 sm:flex-none sm:px-4",
-};
+
+/** The prototype's tables: bills (.srow.bill) and vendors (.srow.vend); phones get two columns. */
+export const BILL_GRID = "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1 md:grid-cols-[minmax(0,1fr)_190px_110px_110px_180px]";
+export const VEND_GRID = "grid grid-cols-[minmax(0,1fr)_auto] gap-x-3.5 gap-y-1 md:grid-cols-[minmax(0,1fr)_110px_110px_100px]";

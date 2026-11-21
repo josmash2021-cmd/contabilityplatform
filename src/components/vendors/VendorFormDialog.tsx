@@ -16,7 +16,9 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 type Props = { vendor?: VendorItem; onClose: () => void };
 
-/** "Nuevo proveedor" / "Editar proveedor": name, phone, email, notes. */
+const TERMS = [0, 7, 15, 30, 45, 60, 90];
+
+/** "Nuevo proveedor" / "Editar proveedor": name, what you buy, phone, email, terms, contractor (W-9), notes. */
 export function VendorFormDialog({ vendor, onClose }: Props) {
   const copy = useCopy(vendorsCopy);
   const t = copy.vendorForm;
@@ -26,6 +28,11 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
   const [phone, setPhone] = useState(vendor?.phone ?? "");
   const [email, setEmail] = useState(vendor?.email ?? "");
   const [notes, setNotes] = useState(vendor?.notes ?? "");
+  const [what, setWhat] = useState(vendor?.what ?? "");
+  const [terms, setTerms] = useState<string>(vendor?.terms === null || vendor?.terms === undefined ? "" : String(vendor.terms));
+  const [contractor, setContractor] = useState(vendor?.contractor ?? false);
+  const [w9, setW9] = useState(vendor?.w9 ?? false);
+  const p = copy.proto.form;
   const [errors, setErrors] = useState<{ name?: string; email?: string }>({});
 
   const done = (message: string) => {
@@ -45,7 +52,10 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
     setErrors(next);
     if (next.name) return document.getElementById(`${uid}-name`)?.focus();
     if (next.email) return document.getElementById(`${uid}-email`)?.focus();
-    const input = { name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, notes: notes.trim() || null };
+    const input = {
+      name: name.trim(), phone: phone.trim() || null, email: email.trim() || null, notes: notes.trim() || null,
+      what: what.trim() || null, terms: terms === "" ? null : Number(terms), contractor, w9: contractor && w9,
+    };
     if (vendor) update.mutate({ id: vendor.id, ...input });
     else create.mutate(input);
   };
@@ -68,6 +78,10 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
             />
             {errors.name && <p id={`${uid}-name-error`} className="text-xs text-red-600">{errors.name}</p>}
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${uid}-what`} className={LABEL}>{p.what}</Label>
+            <Input className={FIELD} id={`${uid}-what`} value={what} maxLength={120} placeholder={p.whatPlaceholder} onChange={(e) => setWhat(e.target.value)} />
+          </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0 space-y-1.5">
               <Label htmlFor={`${uid}-phone`} className={LABEL}>{t.phone}</Label>
@@ -82,6 +96,28 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
               />
               {errors.email && <p id={`${uid}-email-error`} className="text-xs text-red-600">{errors.email}</p>}
             </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor={`${uid}-terms`} className={LABEL}>{p.terms}</Label>
+            <select
+              id={`${uid}-terms`} value={terms} onChange={(e) => setTerms(e.target.value)}
+              className={cn(FIELD, "w-full border px-3 focus-visible:outline-none")}
+            >
+              <option value="">{p.termsNone}</option>
+              {TERMS.map((n) => <option key={n} value={String(n)}>{n === 0 ? p.termsCash : p.termsDays(n)}</option>)}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <label className="flex min-h-11 cursor-pointer items-start gap-2.5 text-sm text-slate-800 sm:min-h-0">
+              <input type="checkbox" className="mt-0.5 h-4 w-4 accent-blue-600" checked={contractor} onChange={(e) => setContractor(e.target.checked)} />
+              {p.contractor}
+            </label>
+            {contractor && (
+              <label className="ml-6 flex min-h-11 cursor-pointer items-start gap-2.5 text-sm text-slate-800 sm:min-h-0">
+                <input type="checkbox" className="mt-0.5 h-4 w-4 accent-blue-600" checked={w9} onChange={(e) => setW9(e.target.checked)} />
+                {p.w9}
+              </label>
+            )}
           </div>
           <div className="space-y-1.5">
             <Label htmlFor={`${uid}-notes`} className={LABEL}>{t.notes}</Label>
