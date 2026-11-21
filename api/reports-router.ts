@@ -1,9 +1,32 @@
 import { z } from "zod";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
-import { accounts, journalEntries, journalEntryLines, sales, expenses, bankTransactions, bankAccounts } from "@db/schema";
+import { accounts, journalEntries, journalEntryLines, sales, expenses, bankTransactions, bankAccounts, customers, saleServices, services } from "@db/schema";
 import { sql, desc, eq, and, gte, lte } from "drizzle-orm";
 import { isoDate, tzOffsetHours } from "./lib/security";
+import { requireFeature } from "./lib/planAccess";
+import { buildClientReport, buildServiceReport, toNumber, type ClientAggRow, type Numeric, type ServiceAggRow } from "./lib/clientReports";
+
+// ── Reports by client / by service (Negocio plan) ──
+// Same sales the income statement counts: this user's, status 'completed' (pending,
+// cancelled and refunded are left out), by local day using the client's UTC offset.
+const salesRangeInput = z.object({
+  startDate: isoDate,
+  endDate: isoDate,
+  tzOffsetHours: tzOffsetHours.optional(),
+}).refine((v) => v.startDate <= v.endDate, { message: "startDate must be on or before endDate", path: ["endDate"] });
+type SalesRange = z.infer<typeof salesRangeInput>;
+
+function completedSalesInRange(userId: number, range: SalesRange) {
+  // Bound parameters (not sql.raw), on top of the strict zod validation above.
+  const localDay = sql`DATE(DATE_ADD(${sales.createdAt}, INTERVAL ${range.tzOffsetHours ?? 0} HOUR))`;
+  return and(
+    eq(sales.createdBy, userId),
+    eq(sales.status, "completed"),
+    sql`${localDay} >= ${range.startDate}`,
+    sql`${localDay} <= ${range.endDate}`,
+  );
+}
 
 export const reportsRouter = createRouter({
 
@@ -268,5 +291,76 @@ export const reportsRouter = createRouter({
       }
 
       return Array.from(entryMap.values());
+    }),
+
+  // ── Sales by client: count, total, average ticket, last sale and share of the period ──
+  // Sales with no customer come back as one row with customerId null ("sin cliente").
+  // (sales.byCustomer is one customer's purchase history for the Customers page, not a
+  // per-period summary, so this groups in SQL instead.)
+  byClient: authedQuery
+    .input(salesRangeInput)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireFeature(db, ctx.user, "clientReports", ctx.lang);
+      const userId = ctx.user.id;
+      const rows: ClientAggRow[] = await db.select({
+        customerId: sales.customerId,
+        name: sql<string | null>`MAX(TRIM(CONCAT(${customers.name}, ' ', COALESCE(${customers.lastName}, ''))))`,
+        snapshotName: sql<string | null>`MAX(${sales.customerName})`,
+        salesCount: sql<Numeric>`COUNT(*)`,
+        total: sql<Numeric>`COALESCE(SUM(${sales.total}), 0)`,
+        lastSaleAt: sql<Date | null>`MAX(${sales.createdAt})`.mapWith(sales.createdAt),
+      })
+        .from(sales)
+        .leftJoin(customers, and(eq(sales.customerId, customers.id), eq(customers.userId, userId)))
+        .where(completedSalesInRange(userId, input))
+        .groupBy(sales.customerId);
+
+      return { period: { start: input.startDate, end: input.endDate }, ...buildClientReport(rows) };
+    }),
+
+  // ── Sales by service: quantity, revenue, number of sales, share and average price ──
+  // Line amounts are before the sale's discount; `discounts` and `salesTotal` let the page say so.
+  byService: authedQuery
+    .input(salesRangeInput)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireFeature(db, ctx.user, "clientReports", ctx.lang);
+      const userId = ctx.user.id;
+      const inRange = completedSalesInRange(userId, input);
+
+      const rows: ServiceAggRow[] = await db.select({
+        serviceId: saleServices.serviceId,
+        name: sql<string | null>`MAX(${services.name})`,
+        snapshotName: sql<string | null>`MAX(${saleServices.serviceName})`,
+        quantity: sql<Numeric>`COALESCE(SUM(${saleServices.quantity}), 0)`,
+        revenue: sql<Numeric>`COALESCE(SUM(${saleServices.total}), 0)`,
+        salesCount: sql<Numeric>`COUNT(DISTINCT ${saleServices.saleId})`,
+      })
+        .from(saleServices)
+        .innerJoin(sales, eq(saleServices.saleId, sales.id))
+        .leftJoin(services, and(eq(saleServices.serviceId, services.id), eq(services.userId, userId)))
+        .where(inRange)
+        .groupBy(saleServices.serviceId);
+
+      // Per sale (no join, so nothing is counted twice): what was charged and the discounts given.
+      // Kept as a nested sql chunk: drizzle leaves its columns table-qualified, which the
+      // correlated subquery needs (top-level columns in a single-table select lose the prefix).
+      const hasItems = sql`EXISTS(SELECT 1 FROM ${saleServices} WHERE ${saleServices.saleId} = ${sales.id})`;
+      const summary: Array<{ salesWithItems: Numeric; salesTotal: Numeric; discounts: Numeric }> = await db.select({
+        salesWithItems: sql<Numeric>`COALESCE(SUM(${hasItems}), 0)`,
+        salesTotal: sql<Numeric>`COALESCE(SUM(${sales.total}), 0)`,
+        discounts: sql<Numeric>`COALESCE(SUM(${sales.discount}), 0)`,
+      })
+        .from(sales)
+        .where(inRange);
+      const s = summary[0];
+
+      return {
+        period: { start: input.startDate, end: input.endDate },
+        ...buildServiceReport(rows, s?.salesWithItems),
+        salesTotal: toNumber(s?.salesTotal),
+        discounts: toNumber(s?.discounts),
+      };
     }),
 });

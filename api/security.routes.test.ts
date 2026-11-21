@@ -47,6 +47,14 @@ describe("SQL injection via date inputs is rejected by validation", () => {
   it("reports.incomeStatement", async () => {
     expect(await trpcCode(makeCaller(regularUser).reports.incomeStatement({ endDate: injection }))).toBe("BAD_REQUEST");
   });
+  it("reports.byClient", async () => {
+    expect(await trpcCode(makeCaller(regularUser).reports.byClient({ startDate: injection, endDate: "2026-11-30" }))).toBe("BAD_REQUEST");
+    expect(await trpcCode(makeCaller(regularUser).reports.byClient({ startDate: "2026-11-01", endDate: injection }))).toBe("BAD_REQUEST");
+  });
+  it("reports.byService", async () => {
+    expect(await trpcCode(makeCaller(regularUser).reports.byService({ startDate: injection, endDate: "2026-11-30" }))).toBe("BAD_REQUEST");
+    expect(await trpcCode(makeCaller(regularUser).reports.byService({ startDate: "2026-11-01", endDate: injection }))).toBe("BAD_REQUEST");
+  });
   it("still accepts the dates the frontend actually sends", async () => {
     // Passes validation and only fails because there is no database here.
     const code = await trpcCode(
@@ -151,5 +159,15 @@ describe("Impuestos: uploads are validated before anything is stored", () => {
   });
   it("submit requires both checkboxes", async () => {
     expect(await trpcCode(makeCaller(regularUser).tax.submit({ consent: true, terms: false }))).toBe("BAD_REQUEST");
+  });
+});
+
+describe("assistant", () => {
+  it("needs a session", async () => {
+    expect(await trpcCode(makeCaller().assistant.ask({ question: "hola" }))).toBe("UNAUTHORIZED");
+  });
+  it("rejects empty or very long questions before calling anything", async () => {
+    expect(await trpcCode(makeCaller(regularUser).assistant.ask({ question: "   " }))).toBe("BAD_REQUEST");
+    expect(await trpcCode(makeCaller(regularUser).assistant.ask({ question: "x".repeat(1001) }))).toBe("BAD_REQUEST");
   });
 });

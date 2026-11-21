@@ -1,0 +1,106 @@
+// Copy for the "Clientes y servicios" tab of the Reports page (src/pages/Reports.tsx):
+// reports by client and by service, part of the Negocio plan ("Business" in English). The numbers come from
+// reports.byClient / reports.byService (api/reports-router.ts); here only the words.
+import type { Lang } from "../lang";
+
+const es = {
+  tab: "Clientes y servicios",
+  title: "Reportes por cliente y por servicio",
+  range: (from: string, to: string) => (from === to ? from : `${from} – ${to}`),
+  onlyCompleted: "Solo ventas completadas: las pendientes, canceladas y reembolsadas no cuentan.",
+  viewsLabel: "Tipo de reporte",
+  views: { client: "Por cliente", service: "Por servicio" },
+  monthPh: "Mes",
+  yearPh: "Año",
+  loading: "Cargando reporte…",
+  error: "No pudimos cargar el reporte.",
+  retry: "Reintentar",
+  empty: "No hay ventas completadas en este periodo.",
+  emptyPrefix: "Registra ventas en el ",
+  emptyLink: "Punto de venta",
+  emptySuffix: " para ver quién te compra y qué vendes más.",
+  locked: {
+    title: "Reportes por cliente y por servicio están en el plan Negocio",
+    text: "Con Negocio ves cuánto te compra cada cliente y qué servicios te dejan más dinero, en el periodo que elijas.",
+    cta: "Cambiar de plan",
+  },
+  noCustomer: "Sin cliente",
+  noCustomerHint: "Ventas sin cliente asignado",
+  customCharge: "Cargo personalizado",
+  unnamedCustomer: (id: number) => `Cliente #${id}`,
+  unnamedService: (id: number) => `Servicio #${id}`,
+  total: "Total",
+  client: {
+    caption: "Ventas por cliente en el periodo",
+    top: "Top 5 clientes",
+    topEmpty: "Ninguna venta de este periodo tiene cliente asignado.",
+    stats: { total: "Total vendido", sales: "Ventas", average: "Ticket promedio", customers: "Clientes" },
+    cols: { name: "Cliente", salesCount: "Ventas", total: "Total", averageTicket: "Ticket promedio", lastSaleAt: "Última venta", share: "% del total" },
+  },
+  service: {
+    caption: "Ventas por servicio en el periodo",
+    top: "Top 5 servicios",
+    topEmpty: "No hay servicios vendidos en este periodo.",
+    stats: { revenue: "Ingresos por servicios", quantity: "Unidades vendidas", sales: "Ventas", services: "Servicios vendidos" },
+    cols: { name: "Servicio", quantity: "Cantidad", revenue: "Ingresos", salesCount: "Ventas", share: "% del total", averagePrice: "Precio promedio" },
+    discounts: (amount: string) => `Los ingresos por servicio son antes de descuentos. Descuentos del periodo: ${amount}.`,
+  },
+  salesCount: (n: number) => (n === 1 ? "1 venta" : `${n} ventas`),
+  units: (n: number) => (n === 1 ? "1 unidad" : `${n} unidades`),
+  ofTotal: (pct: string) => `${pct} del total`,
+  sortBy: "Ordenar por",
+  sortToggle: (asc: boolean): string => (asc ? "Orden ascendente; cambiar a descendente" : "Orden descendente; cambiar a ascendente"),
+};
+
+export type ClientReportsCopy = typeof es;
+
+const en: ClientReportsCopy = {
+  tab: "Clients and services",
+  title: "Reports by client and by service",
+  range: (from: string, to: string) => (from === to ? from : `${from} – ${to}`),
+  onlyCompleted: "Completed sales only: pending, cancelled and refunded sales don't count.",
+  viewsLabel: "Report type",
+  views: { client: "By client", service: "By service" },
+  monthPh: "Month",
+  yearPh: "Year",
+  loading: "Loading report…",
+  error: "We couldn't load the report.",
+  retry: "Try again",
+  empty: "No completed sales in this period.",
+  emptyPrefix: "Record sales in the ",
+  emptyLink: "Point of sale",
+  emptySuffix: " to see who buys from you and what sells most.",
+  locked: {
+    title: "Reports by client and by service are in the Business plan",
+    text: "With Business you see how much each client buys and which services bring in the most money, for any period you pick.",
+    cta: "Change plan",
+  },
+  noCustomer: "No client",
+  noCustomerHint: "Sales with no client assigned",
+  customCharge: "Custom charge",
+  unnamedCustomer: (id: number) => `Client #${id}`,
+  unnamedService: (id: number) => `Service #${id}`,
+  total: "Total",
+  client: {
+    caption: "Sales by client in the period",
+    top: "Top 5 clients",
+    topEmpty: "None of this period's sales has a client assigned.",
+    stats: { total: "Total sold", sales: "Sales", average: "Average ticket", customers: "Clients" },
+    cols: { name: "Client", salesCount: "Sales", total: "Total", averageTicket: "Average ticket", lastSaleAt: "Last sale", share: "% of total" },
+  },
+  service: {
+    caption: "Sales by service in the period",
+    top: "Top 5 services",
+    topEmpty: "No services sold in this period.",
+    stats: { revenue: "Service revenue", quantity: "Units sold", sales: "Sales", services: "Services sold" },
+    cols: { name: "Service", quantity: "Quantity", revenue: "Revenue", salesCount: "Sales", share: "% of total", averagePrice: "Average price" },
+    discounts: (amount: string) => `Service revenue is before discounts. Discounts in the period: ${amount}.`,
+  },
+  salesCount: (n: number) => (n === 1 ? "1 sale" : `${n} sales`),
+  units: (n: number) => (n === 1 ? "1 unit" : `${n} units`),
+  ofTotal: (pct: string) => `${pct} of total`,
+  sortBy: "Sort by",
+  sortToggle: (asc: boolean) => (asc ? "Ascending order; switch to descending" : "Descending order; switch to ascending"),
+};
+
+export const clientReportsCopy: Record<Lang, ClientReportsCopy> = { es, en };

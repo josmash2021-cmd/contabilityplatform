@@ -1,7 +1,8 @@
-import { useState, useMemo, useRef, useEffect } from "react";
+import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
+import { keepPreviousData } from "@tanstack/react-query";
 import { Link } from "react-router";
 import { trpc } from "@/providers/trpc";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
@@ -19,11 +20,17 @@ import {
   TrendingUp, TrendingDown, DollarSign, Receipt,
   RefreshCw, AlertTriangle, Wallet, CreditCard, Activity,
   Landmark, ChevronDown, ChevronUp, Link2, Unlink,
+  ArrowDown, ArrowUp, ArrowUpDown, Layers, Loader2, Lock, Package, Users, type LucideIcon,
 } from "lucide-react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { bankCopy } from "@/i18n/copy/bank";
+import { clientReportsCopy } from "@/i18n/copy/clientReports";
+import {
+  nextSort, rangeForPeriod, sortRows, topBy,
+  type ClientReport, type ClientReportRow, type DateRange, type ServiceReport, type ServiceReportRow, type SortState,
+} from "../../api/lib/clientReports";
 
 /** Account dropdown — simple absolute positioning, parent must NOT have overflow:hidden */
 function AccountDropdown({
@@ -108,6 +115,7 @@ function getLocalDateInputs() {
 export default function Reports() {
   const copy = useCopy(bankCopy);
   const t = copy.reports;
+  const crCopy = useCopy(clientReportsCopy);
   const { lang } = useLang();
   const locale = intlLocale(lang);
   const [tab, setTab] = useState("monthly");
@@ -292,6 +300,8 @@ export default function Reports() {
     { key: "month", label: t.periods.month },
     { key: "year", label: t.periods.year },
   ];
+  // Clientes y servicios: same period as the filter above (Mes/Año use the month/year pickers)
+  const clientRange = rangeForPeriod(periodFilter, dateInputs, selectedYear, selectedMonth);
 
 
 
@@ -361,6 +371,7 @@ export default function Reports() {
             { key: "monthly", label: t.tabs.monthly },
             { key: "income", label: t.tabs.income },
             { key: "journal", label: t.tabs.journal },
+            { key: "clients", label: crCopy.tab },
           ].map((t) => (
             <button
               key={t.key}
@@ -621,7 +632,568 @@ export default function Reports() {
             </Card>
           </AnimatedPage>
         </TabsContent>
+
+        {/* CLIENTES Y SERVICIOS — plan Negocio */}
+        <TabsContent value="clients" className="mt-6">
+          <ClientServiceReports
+            range={clientRange}
+            tzOffsetHours={dateInputs.tzOffsetHours}
+            periodFilter={periodFilter}
+            months={months}
+            years={years}
+            selectedMonth={selectedMonth}
+            selectedYear={selectedYear}
+            onMonthChange={setSelectedMonth}
+            onYearChange={setSelectedYear}
+          />
+        </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+// ── Clientes y servicios (plan Negocio): reports by client and by service ──
+// Uses the page's period filter (Mes/Año with the month/year pickers). The server counts only
+// completed sales, like the income statement, and answers FORBIDDEN when the plan lacks
+// "clientReports"; planInfo lets us show the lock without asking for the report first.
+
+type ReportView = "client" | "service";
+type ClientSortKey = "name" | "salesCount" | "total" | "averageTicket" | "lastSaleAt" | "share";
+type ServiceSortKey = "name" | "quantity" | "revenue" | "salesCount" | "share" | "averagePrice";
+type ReportFormat = { pct: (share: number) => string; count: (n: number) => string; day: (iso: string | null) => string };
+type SortableColumn<R, K extends string> = {
+  key: K;
+  label: string;
+  /** Right-aligned with tabular digits. */
+  numeric?: boolean;
+  /** Shown big on the right of each phone card. */
+  primary?: boolean;
+  cell: (row: R) => ReactNode;
+  foot: ReactNode;
+};
+
+const REPORT_CARD = "border-neutral-200 rounded-xl shadow-none hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo";
+
+/** FORBIDDEN means the plan lacks the feature: show the lock right away instead of retrying. */
+const retryUnlessForbidden = (failureCount: number, error: { data?: { code?: string } | null }) =>
+  error.data?.code !== "FORBIDDEN" && failureCount < 1;
+
+function ariaSort<K extends string>(sort: SortState<K>, key: K): "ascending" | "descending" | "none" {
+  return sort.key !== key ? "none" : sort.dir === "asc" ? "ascending" : "descending";
+}
+
+function SortIcon({ active, asc }: { active: boolean; asc: boolean }) {
+  const cls = cn("h-3 w-3 shrink-0", active ? "text-black" : "text-neutral-300");
+  if (!active) return <ArrowUpDown className={cls} aria-hidden="true" />;
+  return asc ? <ArrowUp className={cls} aria-hidden="true" /> : <ArrowDown className={cls} aria-hidden="true" />;
+}
+
+function NameCell({ name, hint }: { name: string; hint?: string }) {
+  return (
+    <span className="block min-w-0">
+      <span className="block truncate" title={name}>{name}</span>
+      {hint && <span className="block truncate text-[11px] font-normal text-neutral-400">{hint}</span>}
+    </span>
+  );
+}
+
+function ShareCell({ share, label }: { share: number; label: string }) {
+  return (
+    <span className="inline-flex items-center justify-end gap-2">
+      <span className="h-1.5 w-12 rounded-full bg-neutral-100" aria-hidden="true">
+        <span className="block h-1.5 rounded-full bg-black" style={{ width: `${Math.min(100, Math.max(share * 100, share > 0 ? 2 : 0))}%` }} />
+      </span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function StatTiles({ items }: { items: Array<{ label: string; value: string; icon: LucideIcon; color: string }> }) {
+  return (
+    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      {items.map((s) => (
+        <Card key={s.label} className={`${REPORT_CARD} h-[88px]`}>
+          <CardContent className="p-3 flex items-center gap-2.5 h-full">
+            <div className={`p-2 rounded-lg shrink-0 ${s.color}`}><s.icon className="w-4 h-4" aria-hidden="true" /></div>
+            <div className="min-w-0 flex-1">
+              <p className="text-[11px] text-neutral-400 truncate">{s.label}</p>
+              <p className="text-base font-semibold text-black truncate">{s.value}</p>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function TopList({ title, empty, items }: {
+  title: string;
+  empty: string;
+  items: Array<{ key: string; name: string; amount: number; share: number; detail: string }>;
+}) {
+  return (
+    <Card className={REPORT_CARD}>
+      <CardContent className="p-4 sm:p-5">
+        <h3 className="text-xs font-normal text-neutral-400 mb-4">{title}</h3>
+        {items.length === 0 ? (
+          <p className="text-xs text-neutral-400 text-center py-6">{empty}</p>
+        ) : (
+          <ol className="space-y-3">
+            {items.map((it, i) => (
+              <li key={it.key}>
+                <div className="flex items-center justify-between gap-3 mb-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-neutral-100 text-[10px] font-semibold text-neutral-600" aria-hidden="true">{i + 1}</span>
+                    <span className="truncate text-sm text-neutral-700" title={it.name}>{it.name}</span>
+                  </div>
+                  <span className="shrink-0 text-sm font-medium text-black tabular-nums">{formatCurrency(it.amount)}</span>
+                </div>
+                <div className="flex items-center gap-2 pl-7">
+                  <div className="h-1.5 flex-1 min-w-0 rounded-full bg-neutral-100" aria-hidden="true">
+                    <div className="h-1.5 rounded-full bg-black transition-[width] duration-500 ease-out-expo" style={{ width: `${Math.min(100, Math.max(it.share * 100, 2))}%` }} />
+                  </div>
+                  <span className="shrink-0 text-[10px] text-neutral-400">{it.detail}</span>
+                </div>
+              </li>
+            ))}
+          </ol>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** Desktop: a table whose column headers sort it (aria-sort tells screen readers the order). */
+function SortableTable<R extends { key: string }, K extends string>({ caption, columns, rows, sort, onSort }: {
+  caption: string;
+  columns: ReadonlyArray<SortableColumn<R, K>>;
+  rows: readonly R[];
+  sort: SortState<K>;
+  onSort: (key: K) => void;
+}) {
+  return (
+    <Table>
+      <TableCaption className="sr-only">{caption}</TableCaption>
+      <TableHeader>
+        <TableRow className="border-neutral-100 hover:bg-transparent">
+          {columns.map((col) => (
+            <TableHead key={col.key} scope="col" aria-sort={ariaSort(sort, col.key)} className={cn("text-[11px]", col.numeric && "text-right")}>
+              <button
+                type="button"
+                onClick={() => onSort(col.key)}
+                className={cn(
+                  "inline-flex items-center gap-1 rounded-md py-1 font-medium transition-colors hover:text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-300",
+                  col.numeric && "flex-row-reverse",
+                  sort.key === col.key ? "text-black" : "text-neutral-500",
+                )}
+              >
+                {col.label}
+                <SortIcon active={sort.key === col.key} asc={sort.dir === "asc"} />
+              </button>
+            </TableHead>
+          ))}
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {rows.map((row) => (
+          <TableRow key={row.key} className="border-neutral-100 hover:bg-neutral-50/50">
+            {columns.map((col, i) =>
+              i === 0 ? (
+                <TableHead key={col.key} scope="row" className="h-auto py-2.5 text-sm font-normal text-black">
+                  <div className="max-w-[14rem] lg:max-w-[20rem]">{col.cell(row)}</div>
+                </TableHead>
+              ) : (
+                <TableCell key={col.key} className={cn("text-sm text-neutral-700", col.numeric && "text-right tabular-nums")}>{col.cell(row)}</TableCell>
+              ),
+            )}
+          </TableRow>
+        ))}
+      </TableBody>
+      <TableFooter className="bg-neutral-50 border-neutral-200">
+        <TableRow className="hover:bg-transparent">
+          {columns.map((col, i) =>
+            i === 0 ? (
+              <TableHead key={col.key} scope="row" className="text-sm font-semibold text-black">{col.foot}</TableHead>
+            ) : (
+              <TableCell key={col.key} className={cn("text-sm font-semibold text-black", col.numeric && "text-right tabular-nums")}>{col.foot}</TableCell>
+            ),
+          )}
+        </TableRow>
+      </TableFooter>
+    </Table>
+  );
+}
+
+/** Phones: one card per row plus a totals card, with a sort picker instead of column headers. */
+function SortableCards<R extends { key: string }, K extends string>({ caption, columns, rows, sort, onSort, onFlip, totalLabel }: {
+  caption: string;
+  columns: ReadonlyArray<SortableColumn<R, K>>;
+  rows: readonly R[];
+  sort: SortState<K>;
+  onSort: (key: K) => void;
+  onFlip: () => void;
+  totalLabel: string;
+}) {
+  const c = useCopy(clientReportsCopy);
+  const [title, ...others] = columns;
+  const primary = others.find((col) => col.primary);
+  const rest = others.filter((col) => !col.primary);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <Select
+          value={sort.key}
+          onValueChange={(v) => {
+            const col = columns.find((x) => x.key === v);
+            if (col) onSort(col.key);
+          }}
+        >
+          <SelectTrigger aria-label={c.sortBy} className="flex-1 min-w-0 text-xs border-neutral-200 rounded-xl">
+            <span className="flex min-w-0 items-center gap-1">
+              <span className="text-neutral-400 shrink-0" aria-hidden="true">{c.sortBy}:</span>
+              <SelectValue className="truncate" />
+            </span>
+          </SelectTrigger>
+          <SelectContent>
+            {columns.map((col) => (<SelectItem key={col.key} value={col.key} className="text-xs">{col.label}</SelectItem>))}
+          </SelectContent>
+        </Select>
+        <Button type="button" variant="outline" size="icon" onClick={onFlip} aria-label={c.sortToggle(sort.dir === "asc")} className="shrink-0 rounded-xl border-neutral-200">
+          {sort.dir === "asc" ? <ArrowUp className="h-4 w-4" aria-hidden="true" /> : <ArrowDown className="h-4 w-4" aria-hidden="true" />}
+        </Button>
+      </div>
+      <ul className="space-y-2" aria-label={caption}>
+        {rows.map((row) => (
+          <li key={row.key} className="rounded-xl border border-neutral-200 p-3">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1 text-sm font-medium text-black">{title.cell(row)}</div>
+              {primary && <p className="shrink-0 text-sm font-semibold text-black tabular-nums">{primary.cell(row)}</p>}
+            </div>
+            <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+              {rest.map((col) => (
+                <div key={col.key} className="min-w-0">
+                  <dt className="text-[11px] text-neutral-400 truncate">{col.label}</dt>
+                  <dd className="text-xs text-neutral-700 tabular-nums truncate">{col.cell(row)}</dd>
+                </div>
+              ))}
+            </dl>
+          </li>
+        ))}
+      </ul>
+      <div className="rounded-xl border border-neutral-200 bg-neutral-50 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <p className="text-sm font-semibold text-black">{totalLabel}</p>
+          {primary && <p className="shrink-0 text-sm font-semibold text-black tabular-nums">{primary.foot}</p>}
+        </div>
+        <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5">
+          {rest.filter((col) => col.foot !== "").map((col) => (
+            <div key={col.key} className="min-w-0">
+              <dt className="text-[11px] text-neutral-400 truncate">{col.label}</dt>
+              <dd className="text-xs font-medium text-black tabular-nums truncate">{col.foot}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </div>
+  );
+}
+
+/** The detail card: table from md up, stacked cards below (no sideways scrolling on phones). */
+function ReportDetail<R extends { key: string }, K extends string>(props: {
+  caption: string;
+  rangeLabel: string;
+  columns: ReadonlyArray<SortableColumn<R, K>>;
+  rows: readonly R[];
+  sort: SortState<K>;
+  onSort: (key: K) => void;
+  onFlip: () => void;
+  notes: string[];
+}) {
+  const c = useCopy(clientReportsCopy);
+  return (
+    <Card className={REPORT_CARD}>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm font-semibold text-black">{props.caption}</CardTitle>
+        <p className="text-[11px] text-neutral-400">{props.rangeLabel}</p>
+      </CardHeader>
+      <CardContent className="p-4 sm:p-5 pt-0 sm:pt-0 space-y-3">
+        <div className="hidden md:block">
+          <SortableTable caption={props.caption} columns={props.columns} rows={props.rows} sort={props.sort} onSort={props.onSort} />
+        </div>
+        <div className="md:hidden">
+          <SortableCards caption={props.caption} columns={props.columns} rows={props.rows} sort={props.sort} onSort={props.onSort} onFlip={props.onFlip} totalLabel={c.total} />
+        </div>
+        {props.notes.map((n) => (<p key={n} className="text-[11px] text-neutral-400">{n}</p>))}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ClientReportView({ data, sort, onSort, onFlip, fmt, rangeLabel }: {
+  data: ClientReport;
+  sort: SortState<ClientSortKey>;
+  onSort: (key: ClientSortKey) => void;
+  onFlip: () => void;
+  fmt: ReportFormat;
+  rangeLabel: string;
+}) {
+  const c = useCopy(clientReportsCopy);
+  const name = (r: ClientReportRow) => (r.customerId == null ? c.noCustomer : r.name ?? c.unnamedCustomer(r.customerId));
+  const { totals } = data;
+  const columns: Array<SortableColumn<ClientReportRow, ClientSortKey>> = [
+    { key: "name", label: c.client.cols.name, cell: (r) => <NameCell name={name(r)} hint={r.customerId == null ? c.noCustomerHint : undefined} />, foot: c.total },
+    { key: "salesCount", label: c.client.cols.salesCount, numeric: true, cell: (r) => fmt.count(r.salesCount), foot: fmt.count(totals.salesCount) },
+    { key: "total", label: c.client.cols.total, numeric: true, primary: true, cell: (r) => formatCurrency(r.total), foot: formatCurrency(totals.total) },
+    { key: "averageTicket", label: c.client.cols.averageTicket, numeric: true, cell: (r) => formatCurrency(r.averageTicket), foot: formatCurrency(totals.averageTicket) },
+    { key: "lastSaleAt", label: c.client.cols.lastSaleAt, numeric: true, cell: (r) => fmt.day(r.lastSaleAt), foot: "" },
+    { key: "share", label: c.client.cols.share, numeric: true, cell: (r) => <ShareCell share={r.share} label={fmt.pct(r.share)} />, foot: fmt.pct(totals.total > 0 ? 1 : 0) },
+  ];
+  const top = topBy(data.rows, "total", 5, (r) => r.customerId != null);
+  return (
+    <div className="space-y-4">
+      <StatTiles items={[
+        { label: c.client.stats.total, value: formatCurrency(totals.total), icon: DollarSign, color: "bg-green-50 text-green-600" },
+        { label: c.client.stats.sales, value: fmt.count(totals.salesCount), icon: Receipt, color: "bg-neutral-100 text-neutral-600" },
+        { label: c.client.stats.average, value: formatCurrency(totals.averageTicket), icon: TrendingUp, color: "bg-neutral-100 text-neutral-600" },
+        { label: c.client.stats.customers, value: fmt.count(totals.customers), icon: Users, color: "bg-neutral-100 text-neutral-600" },
+      ]} />
+      <TopList
+        title={c.client.top}
+        empty={c.client.topEmpty}
+        items={top.map((r) => ({ key: r.key, name: name(r), amount: r.total, share: r.share, detail: `${c.salesCount(r.salesCount)} · ${c.ofTotal(fmt.pct(r.share))}` }))}
+      />
+      <ReportDetail
+        caption={c.client.caption}
+        rangeLabel={rangeLabel}
+        columns={columns}
+        rows={sortRows(data.rows, sort.key, sort.dir)}
+        sort={sort}
+        onSort={onSort}
+        onFlip={onFlip}
+        notes={[c.onlyCompleted]}
+      />
+    </div>
+  );
+}
+
+function ServiceReportView({ data, sort, onSort, onFlip, fmt, rangeLabel }: {
+  data: ServiceReport & { discounts: number };
+  sort: SortState<ServiceSortKey>;
+  onSort: (key: ServiceSortKey) => void;
+  onFlip: () => void;
+  fmt: ReportFormat;
+  rangeLabel: string;
+}) {
+  const c = useCopy(clientReportsCopy);
+  // Custom charges are saved under one service with a Spanish name; show it in the UI language.
+  const name = (r: ServiceReportRow) => (r.name === "Cargo personalizado" ? c.customCharge : r.name ?? c.unnamedService(r.serviceId ?? 0));
+  const { totals } = data;
+  const columns: Array<SortableColumn<ServiceReportRow, ServiceSortKey>> = [
+    { key: "name", label: c.service.cols.name, cell: (r) => <NameCell name={name(r)} />, foot: c.total },
+    { key: "quantity", label: c.service.cols.quantity, numeric: true, cell: (r) => fmt.count(r.quantity), foot: fmt.count(totals.quantity) },
+    { key: "revenue", label: c.service.cols.revenue, numeric: true, primary: true, cell: (r) => formatCurrency(r.revenue), foot: formatCurrency(totals.revenue) },
+    { key: "salesCount", label: c.service.cols.salesCount, numeric: true, cell: (r) => fmt.count(r.salesCount), foot: fmt.count(totals.salesCount) },
+    { key: "share", label: c.service.cols.share, numeric: true, cell: (r) => <ShareCell share={r.share} label={fmt.pct(r.share)} />, foot: fmt.pct(totals.revenue > 0 ? 1 : 0) },
+    { key: "averagePrice", label: c.service.cols.averagePrice, numeric: true, cell: (r) => formatCurrency(r.averagePrice), foot: formatCurrency(totals.averagePrice) },
+  ];
+  const top = topBy(data.rows, "revenue", 5);
+  const notes = [c.onlyCompleted];
+  if (data.discounts > 0) notes.push(c.service.discounts(formatCurrency(data.discounts)));
+  return (
+    <div className="space-y-4">
+      <StatTiles items={[
+        { label: c.service.stats.revenue, value: formatCurrency(totals.revenue), icon: DollarSign, color: "bg-green-50 text-green-600" },
+        { label: c.service.stats.quantity, value: fmt.count(totals.quantity), icon: Package, color: "bg-neutral-100 text-neutral-600" },
+        { label: c.service.stats.sales, value: fmt.count(totals.salesCount), icon: Receipt, color: "bg-neutral-100 text-neutral-600" },
+        { label: c.service.stats.services, value: fmt.count(totals.services), icon: Layers, color: "bg-neutral-100 text-neutral-600" },
+      ]} />
+      <TopList
+        title={c.service.top}
+        empty={c.service.topEmpty}
+        items={top.map((r) => ({ key: r.key, name: name(r), amount: r.revenue, share: r.share, detail: `${c.units(r.quantity)} · ${c.ofTotal(fmt.pct(r.share))}` }))}
+      />
+      <ReportDetail
+        caption={c.service.caption}
+        rangeLabel={rangeLabel}
+        columns={columns}
+        rows={sortRows(data.rows, sort.key, sort.dir)}
+        sort={sort}
+        onSort={onSort}
+        onFlip={onFlip}
+        notes={notes}
+      />
+    </div>
+  );
+}
+
+function ClientServiceReports({
+  range, tzOffsetHours, periodFilter, months, years, selectedMonth, selectedYear, onMonthChange, onYearChange,
+}: {
+  range: DateRange;
+  tzOffsetHours: number;
+  periodFilter: string;
+  months: Array<{ value: number; label: string }>;
+  years: number[];
+  selectedMonth: number;
+  selectedYear: number;
+  onMonthChange: (month: number) => void;
+  onYearChange: (year: number) => void;
+}) {
+  const c = useCopy(clientReportsCopy);
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
+  const [view, setView] = useState<ReportView>("client");
+  const [clientSort, setClientSort] = useState<SortState<ClientSortKey>>({ key: "total", dir: "desc" });
+  const [serviceSort, setServiceSort] = useState<SortState<ServiceSortKey>>({ key: "revenue", dir: "desc" });
+
+  const planQuery = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
+  const lacksFeature = !!planQuery.data && !planQuery.data.features.includes("clientReports");
+  const canQuery = !planQuery.isLoading && !lacksFeature;
+  const input = { ...range, tzOffsetHours };
+  const queryOpts = { retry: retryUnlessForbidden, placeholderData: keepPreviousData, staleTime: 0, refetchOnWindowFocus: true };
+  const clientQuery = trpc.reports.byClient.useQuery(input, { ...queryOpts, enabled: canQuery && view === "client" });
+  const serviceQuery = trpc.reports.byService.useQuery(input, { ...queryOpts, enabled: canQuery && view === "service" });
+  const locked = lacksFeature
+    || clientQuery.error?.data?.code === "FORBIDDEN"
+    || serviceQuery.error?.data?.code === "FORBIDDEN";
+
+  if (locked) {
+    return (
+      <AnimatedPage>
+        <Card className={REPORT_CARD}>
+          <CardContent className="p-6 sm:p-8">
+            <div className="mx-auto max-w-md text-center">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-neutral-100"><Lock className="h-5 w-5 text-neutral-500" aria-hidden="true" /></span>
+              <h2 className="mt-4 text-lg font-semibold text-black">{c.locked.title}</h2>
+              <p className="mt-2 text-sm text-neutral-600">{c.locked.text}</p>
+              <Button asChild className="mt-5 w-full sm:w-auto bg-black text-white hover:bg-neutral-800">
+                <Link to="/settings">{c.locked.cta}</Link>
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      </AnimatedPage>
+    );
+  }
+
+  const fmt: ReportFormat = {
+    pct: (share) => share.toLocaleString(locale, { style: "percent", minimumFractionDigits: 1, maximumFractionDigits: 1 }),
+    count: (n) => n.toLocaleString(locale),
+    day: (iso) => (iso ? new Date(iso).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "—"),
+  };
+  const ymd = (s: string) => {
+    const [y, m, d] = s.split("-").map(Number);
+    return new Date(y, m - 1, d).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
+  };
+  const rangeLabel = c.range(ymd(range.startDate), ymd(range.endDate));
+
+  const active = view === "client"
+    ? { hasData: !!clientQuery.data, empty: clientQuery.data?.rows.length === 0, error: clientQuery.error, refetch: () => void clientQuery.refetch(), stale: clientQuery.isPlaceholderData }
+    : { hasData: !!serviceQuery.data, empty: serviceQuery.data?.rows.length === 0, error: serviceQuery.error, refetch: () => void serviceQuery.refetch(), stale: serviceQuery.isPlaceholderData };
+
+  let body: ReactNode;
+  if (active.hasData && active.empty) {
+    body = (
+      <Card className={REPORT_CARD}>
+        <CardContent className="p-5">
+          <div className="text-center py-8">
+            <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" aria-hidden="true" />
+            <p className="text-sm text-neutral-400">{c.empty}</p>
+            <p className="text-xs text-neutral-400 mt-1">{c.emptyPrefix}<Link to="/pos" className="font-medium text-black">{c.emptyLink}</Link>{c.emptySuffix}</p>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  } else if (view === "client" && clientQuery.data) {
+    body = (
+      <ClientReportView
+        data={clientQuery.data}
+        sort={clientSort}
+        onSort={(key) => setClientSort((s) => nextSort(s, key, ["name"]))}
+        onFlip={() => setClientSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))}
+        fmt={fmt}
+        rangeLabel={rangeLabel}
+      />
+    );
+  } else if (view === "service" && serviceQuery.data) {
+    body = (
+      <ServiceReportView
+        data={serviceQuery.data}
+        sort={serviceSort}
+        onSort={(key) => setServiceSort((s) => nextSort(s, key, ["name"]))}
+        onFlip={() => setServiceSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))}
+        fmt={fmt}
+        rangeLabel={rangeLabel}
+      />
+    );
+  } else if (active.error) {
+    body = (
+      <Card className={REPORT_CARD}>
+        <CardContent className="p-5">
+          <div className="text-center py-8" role="alert">
+            <AlertTriangle className="w-10 h-10 text-red-400 mx-auto mb-3" aria-hidden="true" />
+            <p className="text-sm text-black">{c.error}</p>
+            <Button onClick={active.refetch} variant="outline" className="mt-4 text-xs">{c.retry}</Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  } else {
+    body = (
+      <div className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-500" role="status">
+        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> {c.loading}
+      </div>
+    );
+  }
+
+  return (
+    <AnimatedPage className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-black">{c.title}</h2>
+          <p className="text-[11px] text-neutral-400 mt-0.5">{rangeLabel}</p>
+        </div>
+        <div role="group" aria-label={c.viewsLabel} className="flex gap-1 bg-gray-100 rounded-xl p-1 self-start">
+          {(["client", "service"] as const).map((v) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+              className={cn(
+                "inline-flex items-center gap-1.5 py-1.5 px-4 text-xs font-medium rounded-full transition-colors",
+                view === v ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700",
+              )}
+            >
+              {v === "client" ? <Users className="h-3.5 w-3.5" aria-hidden="true" /> : <Package className="h-3.5 w-3.5" aria-hidden="true" />}
+              {c.views[v]}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {(periodFilter === "month" || periodFilter === "year") && (
+        <div className="flex flex-wrap gap-3">
+          {periodFilter === "month" && (
+            <Select value={String(selectedMonth)} onValueChange={(v) => onMonthChange(Number(v))}>
+              <SelectTrigger aria-label={c.monthPh} className="w-40 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder={c.monthPh} /></SelectTrigger>
+              <SelectContent>
+                {months.map((m) => (<SelectItem key={m.value} value={String(m.value)} className="text-xs">{m.label}</SelectItem>))}
+              </SelectContent>
+            </Select>
+          )}
+          <Select value={String(selectedYear)} onValueChange={(v) => onYearChange(Number(v))}>
+            <SelectTrigger aria-label={c.yearPh} className="w-28 text-xs border-neutral-200 rounded-xl"><SelectValue placeholder={c.yearPh} /></SelectTrigger>
+            <SelectContent>
+              {years.map((y) => (<SelectItem key={y} value={String(y)} className="text-xs">{y}</SelectItem>))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      <div className={cn("transition-opacity", active.stale && "opacity-60")} aria-busy={active.stale || undefined}>
+        {body}
+      </div>
+    </AnimatedPage>
   );
 }
