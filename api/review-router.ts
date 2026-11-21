@@ -24,7 +24,7 @@
 // Team access (api/lib/team.ts): the accountant can read; every mutation here is refused for members.
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, ne, or, sql } from "drizzle-orm";
 import { createRouter, authedQuery } from "./middleware";
 import type { TrpcContext } from "./context";
 import { getDb } from "./queries/connection";
@@ -192,6 +192,9 @@ function sinceOf(since: string | undefined): Date {
 
 const accountLabelOf = (bankName: string | null, accountNumber: string | null) => accountShortLabel(bankName, accountNumber, "") ?? "";
 
+/** Excluded for a reason other than being a transfer between the owner's accounts. */
+const notTransfer = () => sql`(${bankReviewLog.reason} IS NULL OR ${bankReviewLog.reason} <> 'transfer')`;
+
 // ── Writing ──
 /** Marks movements reviewed with a category each (or the one they have), and logs it. */
 async function markReviewed(db: Db, userId: number, rows: TxRow[], pick: (r: TxRow) => { category: string; type?: MoneyType }, action: LogAction, extra?: (r: TxRow) => Partial<LogEntry>): Promise<number> {
@@ -337,14 +340,15 @@ export const reviewRouter = createRouter({
       const countOf = new Map(perAcct.map((p) => [p.acct === null ? null : Number(p.acct), Number(p.n)]));
       const accountNames = new Map(accts.map((a) => [Number(a.id), accountLabelOf(a.bankName, a.accountNumber)]));
 
-      // Tabs and progress.
-      const doneRows: Array<{ action: LogAction; n: number | string }> = await db
-        .select({ action: bankReviewLog.action, n: sql<number>`COUNT(*)` }).from(bankReviewLog)
-        .where(and(eq(bankReviewLog.userId, userId), sql`${bankReviewLog.reviewedAt} >= ${since}`)).groupBy(bankReviewLog.action);
-      const doneToday = doneRows.filter((d) => d.action !== "excluded").reduce((a, d) => a + Number(d.n), 0);
-      const excludedToday = doneRows.filter((d) => d.action === "excluded").reduce((a, d) => a + Number(d.n), 0);
+      // Tabs and progress. An approved transfer between the owner's accounts counts as reviewed, not excluded.
+      const doneRows: Array<{ action: LogAction; reason: string | null; n: number | string }> = await db
+        .select({ action: bankReviewLog.action, reason: bankReviewLog.reason, n: sql<number>`COUNT(*)` }).from(bankReviewLog)
+        .where(and(eq(bankReviewLog.userId, userId), sql`${bankReviewLog.reviewedAt} >= ${since}`)).groupBy(bankReviewLog.action, bankReviewLog.reason);
+      const leftOut = (d: { action: LogAction; reason: string | null }) => d.action === "excluded" && d.reason !== "transfer";
+      const doneToday = doneRows.filter((d) => !leftOut(d)).reduce((a, d) => a + Number(d.n), 0);
+      const excludedToday = doneRows.filter(leftOut).reduce((a, d) => a + Number(d.n), 0);
       const exc: Array<{ n: number | string }> = await db.select({ n: sql<number>`COUNT(*)` }).from(bankReviewLog)
-        .where(and(eq(bankReviewLog.userId, userId), eq(bankReviewLog.action, "excluded")));
+        .where(and(eq(bankReviewLog.userId, userId), eq(bankReviewLog.action, "excluded"), notTransfer()));
 
       return {
         total,
@@ -380,10 +384,10 @@ export const reviewRouter = createRouter({
       const db = getDb();
       const userId = Number(ctx.user.id);
       await ensureReviewTables(db);
-      const rows: Array<TxRow & { action: LogAction; at: Date | string }> = await db
-        .select({ ...txCols, action: bankReviewLog.action, at: bankReviewLog.reviewedAt })
+      const rows: Array<TxRow & { action: LogAction; reason: string | null; at: Date | string }> = await db
+        .select({ ...txCols, action: bankReviewLog.action, reason: bankReviewLog.reason, at: bankReviewLog.reviewedAt })
         .from(bankReviewLog).innerJoin(bankTransactions, and(eq(bankTransactions.id, bankReviewLog.bankTransactionId), eq(bankTransactions.userId, userId)))
-        .where(and(eq(bankReviewLog.userId, userId), ne(bankReviewLog.action, "excluded"), sql`${bankReviewLog.reviewedAt} >= ${sinceOf(input?.since)}`))
+        .where(and(eq(bankReviewLog.userId, userId), or(ne(bankReviewLog.action, "excluded"), eq(bankReviewLog.reason, "transfer")), sql`${bankReviewLog.reviewedAt} >= ${sinceOf(input?.since)}`))
         .orderBy(desc(bankReviewLog.reviewedAt), desc(bankReviewLog.id)).limit(200);
       const splitIds = rows.filter((r) => r.action === "split").map((r) => Number(r.id));
       const parts: Array<{ tx: number; category: string; amount: string }> = splitIds.length
@@ -394,12 +398,14 @@ export const reviewRouter = createRouter({
       const logos = await withMerchantLogos(db, rows.map((r) => ({ id: Number(r.id), merchantName: r.merchantName, description: r.description })));
       return rows.map((r, i) => ({
         id: Number(r.id), who: displayNameOf(r.description, r.merchantName), description: r.description, amount: Math.abs(Number(r.amount)),
-        type: r.type, category: r.category, action: r.action, at: r.at, logoUrl: logos[i].logoUrl,
+        type: r.type, category: r.category, at: r.at, logoUrl: logos[i].logoUrl,
+        // An approved transfer between the owner's accounts ("Entre tus cuentas").
+        action: (r.action === "excluded" && r.reason === "transfer" ? "transfer" : r.action) as LogAction | "transfer",
         parts: parts.filter((p) => Number(p.tx) === Number(r.id)).map((p) => ({ category: p.category, amount: Number(p.amount) })),
       }));
     }),
 
-  /** "Excluidos": movements left out of the reports, newest first, with why. */
+  /** "Excluidos": what the owner left out of the reports (duplicates, others), newest first, with why. Transfers are in "Revisados". */
   excluded: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
     const userId = Number(ctx.user.id);
@@ -407,7 +413,7 @@ export const reviewRouter = createRouter({
     const rows: Array<TxRow & { reason: "duplicate" | "transfer" | "other" | null; relatedId: number | null }> = await db
       .select({ ...txCols, reason: bankReviewLog.reason, relatedId: bankReviewLog.relatedId })
       .from(bankReviewLog).innerJoin(bankTransactions, and(eq(bankTransactions.id, bankReviewLog.bankTransactionId), eq(bankTransactions.userId, userId)))
-      .where(and(eq(bankReviewLog.userId, userId), eq(bankReviewLog.action, "excluded")))
+      .where(and(eq(bankReviewLog.userId, userId), eq(bankReviewLog.action, "excluded"), notTransfer()))
       .orderBy(desc(bankReviewLog.reviewedAt), desc(bankReviewLog.id)).limit(200);
     const logos = await withMerchantLogos(db, rows.map((r) => ({ id: Number(r.id), merchantName: r.merchantName, description: r.description })));
     return rows.map((r, i) => ({

@@ -6,6 +6,7 @@ import { MovementLogo } from "@/components/brand/MovementLogo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
+import { transferTarget } from "../../../api/lib/banks";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { bancosCopy } from "@/i18n/copy/bancos";
 import { bankCopy } from "@/i18n/copy/bank";
@@ -199,17 +200,14 @@ function MovementRow({ r, reviewFrom, accountId, cat, lang, monthsShort }: {
   );
 }
 
-const titleWords = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-
 /**
  * The bold name: a transfer between your accounts says where it went ("Transferencia a Way2save Savings ••8492"),
  * anything else what people recognize (the server's `who`: "Apple", "DoorDash", "Zelle · Papa Yonel").
  */
 function movementName(r: MonthMovement, t: { transferTo: (a: string) => string; transferFrom: (a: string) => string; transfer: string }): string {
   if (r.bankOwn && /\b(?:online|mobile) transfer\b/i.test(r.description)) {
-    const acct = /\b([a-z0-9]+)\s+(savings|checking)\b(?:\s+x*(\d{4}))?/i.exec(r.description);
-    if (!acct) return t.transfer;
-    const label = `${titleWords(`${acct[1]} ${acct[2]}`)}${acct[3] ? ` ••${acct[3]}` : ""}`;
+    const label = transferTarget(r.description);
+    if (!label) return t.transfer;
     return r.direction === "in" ? t.transferFrom(label) : t.transferTo(label);
   }
   return r.who || r.description;

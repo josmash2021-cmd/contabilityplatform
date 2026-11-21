@@ -94,6 +94,17 @@ export function accountShortLabel(bankName: string | null | undefined, accountNu
   return l4 ? `${name || fallback} ••${l4}` : name;
 }
 
+/**
+ * The other account in a bank's transfer text ("ONLINE TRANSFER TO MARTINEZ TOSTA J WAY2SAVE SAVINGS XXXXXX8492 …"
+ * → "Way2save Savings ••8492"), or null when the text doesn't name one.
+ */
+export function transferTarget(description: string | null | undefined): string | null {
+  const m = /\b([a-z0-9]+)\s+(savings|checking)\b(?:\s+x*(\d{4}))?/i.exec(description ?? "");
+  if (!m) return null;
+  const words = `${m[1]} ${m[2]}`.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+  return m[3] ? `${words} ••${m[3]}` : words;
+}
+
 /** A nickname as saved: trimmed, single spaces, at most MAX_NICKNAME characters; empty means "no nickname". */
 export function cleanNickname(value: string | null | undefined): string | null {
   const v = (value ?? "").replace(/\s+/g, " ").trim().slice(0, MAX_NICKNAME).trim();

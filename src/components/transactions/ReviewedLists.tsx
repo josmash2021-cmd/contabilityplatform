@@ -6,6 +6,7 @@ import { MerchantLogo } from "@/components/brand/MerchantLogo";
 import { useCopy } from "@/i18n/useI18n";
 import { movimientosCopy } from "@/i18n/copy/movimientos";
 import { categoryLabel, errorText, money } from "./shared";
+import { transferTarget } from "../../../api/lib/banks";
 
 const item = "grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 rounded-xl bg-slate-100 px-3 py-[11px]";
 
@@ -36,13 +37,17 @@ export function DoneList({ since }: { since: string }) {
     <div className="rounded-[14px] border border-slate-200 bg-white p-4">
       <ul className="grid gap-2">
         {rows.map((x) => {
-          const cat = x.parts.length ? x.parts.map((p) => `${categoryLabel(p.category, t)} ${money(p.amount)}`).join(" + ") : categoryLabel(x.category, t);
+          const isTransfer = x.action === "transfer";
+          const cat = isTransfer ? null : x.parts.length ? x.parts.map((p) => `${categoryLabel(p.category, t)} ${money(p.amount)}`).join(" + ") : categoryLabel(x.category, t);
+          // A transfer says where the money went ("Transferencia a Way2save Savings ••8492").
+          const target = isTransfer ? transferTarget(x.description) : null;
+          const name = !isTransfer ? x.who : target ? (x.type === "income" ? r.transferFrom(target) : r.transferTo(target)) : r.betweenAccounts;
           return (
             <li key={x.id} className={item}>
-              <MerchantLogo name={x.who} logoUrl={x.logoUrl} size={22} fallback={<span className="grid w-[22px] place-items-center text-emerald-600"><CheckCircle2 className="h-5 w-5" aria-hidden /></span>} />
+              <MerchantLogo name={name} logoUrl={isTransfer ? null : x.logoUrl} size={22} fallback={<span className="grid w-[22px] place-items-center text-emerald-600"><CheckCircle2 className="h-5 w-5" aria-hidden /></span>} />
               <div className="min-w-0">
-                <b className="block truncate text-sm font-[650] text-slate-900">{x.who}</b>
-                <span className="block truncate text-xs text-slate-500">{r.how[x.action] ?? r.how.approved} · {cat}</span>
+                <b className="block truncate text-sm font-[650] text-slate-900">{name}</b>
+                <span className="block truncate text-xs text-slate-500">{[r.how[x.action] ?? r.how.approved, cat].filter(Boolean).join(" · ")}</span>
               </div>
               <span className="text-sm font-bold tabular-nums text-slate-900">{x.type === "income" ? "+" : "−"}{money(x.amount)}</span>
             </li>
