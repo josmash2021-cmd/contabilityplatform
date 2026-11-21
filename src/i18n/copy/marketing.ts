@@ -87,6 +87,26 @@ const es = {
       { title: "Conecta tu banco", text: "Vincula tu cuenta de forma segura con Plaid. Acceso de solo lectura." },
       { title: "Recibe tus números", text: "Tus movimientos se organizan solos y tus reportes se actualizan automáticamente." },
     ],
+    visuals: {
+      aria: [
+        "Pantalla de registro: eliges Negocio o Personal y empiezas tu prueba gratis sin tarjeta.",
+        "Conexión con Plaid: eliges tu banco e inicias sesión dentro de Plaid, con acceso de solo lectura.",
+        "Tus movimientos ya clasificados y tu resumen del mes, actualizados solos.",
+      ],
+      signup: { title: "Crea tu cuenta", modes: ["Negocio", "Personal"], name: "Nombre", email: "Correo", cta: (d: number) => `Empezar ${d} días gratis`, noCard: "Sin tarjeta" },
+      connect: { title: "Ai Aethel usa Plaid para conectar tu banco", pick: "Elige tu banco", banks: ["Chase", "Bank of America", "Wells Fargo"], safe: "Solo lectura · tu contraseña no pasa por Ai Aethel" },
+      numbers: {
+        month: "Noviembre",
+        auto: "Se actualiza solo",
+        rows: [
+          { name: "Empresa ABC", cat: "Nómina", amount: 1625, income: true },
+          { name: "Supermercado", cat: "Comida", amount: 86.4, income: false },
+          { name: "Gasolinera", cat: "Gasolina", amount: 42.1, income: false },
+        ],
+        chart: "Ingresos vs. gastos",
+        months: ["Ago", "Sep", "Oct", "Nov"],
+      },
+    },
   },
   security: {
     eyebrow: "Seguridad",
@@ -230,6 +250,13 @@ const es = {
       perMonth: "/mes",
       goal: "Fondo de emergencia",
       goalProgress: "$3,400 de $5,000 · 68%",
+      aria: "Así se ve Ai Aethel en un teléfono: tu saldo, tus ingresos y gastos del mes y tus últimos movimientos. Datos de ejemplo.",
+      user: "Ana Rivera",
+      tx: [
+        { name: "Empresa ABC · Nómina", cat: "Nómina", date: "15/11/2026", amount: 1625, income: true },
+        { name: "Supermercado", cat: "Comida", date: "14/11/2026", amount: 86.4, income: false },
+        { name: "Streaming", cat: "Suscripciones", date: "12/11/2026", amount: 15.49, income: false },
+      ],
     },
     mini: {
       title: "Utilidad de noviembre",
@@ -326,6 +353,26 @@ const en: MarketingCopy = {
       { title: "Connect your bank", text: "Link your account securely with Plaid. Read-only access." },
       { title: "Get your numbers", text: "Your transactions organize themselves and your reports update automatically." },
     ],
+    visuals: {
+      aria: [
+        "Sign-up screen: you choose Business or Personal and start your free trial with no card.",
+        "Connecting with Plaid: you pick your bank and log in inside Plaid, with read-only access.",
+        "Your transactions already categorized and your month at a glance, updated on their own.",
+      ],
+      signup: { title: "Create your account", modes: ["Business", "Personal"], name: "Name", email: "Email", cta: (d: number) => `Start ${d} days free`, noCard: "No card needed" },
+      connect: { title: "Ai Aethel uses Plaid to connect your bank", pick: "Select your bank", banks: ["Chase", "Bank of America", "Wells Fargo"], safe: "Read-only · your password never reaches Ai Aethel" },
+      numbers: {
+        month: "November",
+        auto: "Updates itself",
+        rows: [
+          { name: "Empresa ABC", cat: "Paycheck", amount: 1625, income: true },
+          { name: "Grocery store", cat: "Food", amount: 86.4, income: false },
+          { name: "Gas station", cat: "Gas", amount: 42.1, income: false },
+        ],
+        chart: "Income vs. expenses",
+        months: ["Aug", "Sep", "Oct", "Nov"],
+      },
+    },
   },
   security: {
     eyebrow: "Security",
@@ -469,6 +516,13 @@ const en: MarketingCopy = {
       perMonth: "/mo",
       goal: "Emergency fund",
       goalProgress: "$3,400 of $5,000 · 68%",
+      aria: "What Ai Aethel looks like on a phone: your balance, this month's income and expenses, and your latest transactions. Sample data.",
+      user: "Ana Rivera",
+      tx: [
+        { name: "Empresa ABC · Paycheck", cat: "Paycheck", date: "11/15/2026", amount: 1625, income: true },
+        { name: "Grocery store", cat: "Food", date: "11/14/2026", amount: 86.4, income: false },
+        { name: "Streaming", cat: "Subscriptions", date: "11/12/2026", amount: 15.49, income: false },
+      ],
     },
     mini: {
       title: "November profit",

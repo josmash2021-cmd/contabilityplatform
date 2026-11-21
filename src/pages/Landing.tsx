@@ -3,13 +3,13 @@ import { Link } from "react-router";
 import {
   ArrowRight, Check, ShieldCheck, Lock, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
   ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User,
-  UserPlus, Link2, LineChart, Sparkles, LayoutDashboard,
+  Sparkles, LayoutDashboard,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { Reveal } from "@/components/marketing/Reveal";
-import { DashboardPreview, PhonePreview, ReportPreview } from "@/components/marketing/Previews";
+import { ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, ReportPreview, SignupStepPreview } from "@/components/marketing/Previews";
 import { PLAN_PRICES, TRIAL_DAYS, annualPerMonth, type PlanKey } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
@@ -187,33 +187,32 @@ function Product({ c }: { c: C["product"] }) {
   );
 }
 
-// ── How it works ──
-const stepIcons = [UserPlus, Link2, LineChart];
+// ── How it works: each step with a picture of what you'll see ──
+const stepVisuals = [SignupStepPreview, ConnectStepPreview, NumbersStepPreview];
 function HowItWorks({ c }: { c: C["how"] }) {
   return (
     <section id="como-funciona" className="scroll-mt-nav bg-white py-24 sm:py-28" aria-labelledby="how-title">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <SectionHeading id="how-title" eyebrow={c.eyebrow} title={c.title} text={c.text} />
-        <div className="relative mt-16">
-          <div aria-hidden className="absolute left-[16.6%] right-[16.6%] top-7 hidden h-px bg-gradient-to-r from-transparent via-slate-300 to-transparent md:block" />
-          <ol className="relative grid gap-10 md:grid-cols-3 md:gap-8">
-            {c.steps.map((s, i) => {
-              const Icon = stepIcons[i];
-              return (
-                <li key={s.title} className="text-center">
-                  <Reveal delay={i * 120}>
-                    <span className="relative mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-900 text-white shadow-lg shadow-slate-900/20">
-                      <Icon className="h-6 w-6" />
-                      <span className="absolute -right-2 -top-2 flex h-6 w-6 items-center justify-center rounded-full bg-blue-600 text-xs font-bold ring-4 ring-white">{i + 1}</span>
-                    </span>
-                    <h3 className="mt-6 text-lg font-semibold text-slate-900">{s.title}</h3>
-                    <p className="mx-auto mt-2 max-w-xs leading-relaxed text-slate-600">{s.text}</p>
-                  </Reveal>
-                </li>
-              );
-            })}
-          </ol>
-        </div>
+        <ol className="mt-16 grid gap-14 md:grid-cols-3 md:gap-8">
+          {c.steps.map((s, i) => {
+            const Visual = stepVisuals[i];
+            return (
+              <li key={s.title}>
+                <Reveal delay={i * 120}>
+                  <Visual />
+                  <div className="mx-auto mt-6 flex max-w-sm items-start gap-3.5 px-1">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-sm font-bold text-white shadow-md shadow-slate-900/15">{i + 1}</span>
+                    <div>
+                      <h3 className="text-lg font-semibold text-slate-900">{s.title}</h3>
+                      <p className="mt-1.5 leading-relaxed text-slate-600">{s.text}</p>
+                    </div>
+                  </div>
+                </Reveal>
+              </li>
+            );
+          })}
+        </ol>
       </div>
     </section>
   );
