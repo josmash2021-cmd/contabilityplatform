@@ -1,347 +1,238 @@
+// Reportes (business), as the 2.0 prototype's "reports" screen: the period button and the view switch
+// (Simple, Para contador, Por cliente), the numbers against the previous period, 12 months of money in and out,
+// what it went on and where it came from (tap a line for its movements), the month close card, and Exportar
+// (a real PDF and Excel file, previewed first). Data: api/reports-router.ts; rules: api/lib/reportBooks.ts.
+// Plans: Simple for every business plan; Para contador and the exports need Pro (accountant); Por cliente needs
+// Negocio (clientReports). The server enforces both. Team: the accountant reads everything here (it's all queries);
+// staff never reach this page (AppLayout).
 import { useMemo, useState } from "react";
+import { Link } from "react-router";
 import { keepPreviousData } from "@tanstack/react-query";
 import { AlertTriangle, Lock } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
 import { AnimatedPage } from "@/components/AnimatedPage";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
-import { bankCopy } from "@/i18n/copy/bank";
 import { reportesCopy } from "@/i18n/copy/reportes";
-import { nextSort, rangeForPeriod, type SortState } from "../../api/lib/clientReports";
-import { PeriodPicker } from "@/components/reports/PeriodPicker";
-import { SummaryRow } from "@/components/reports/SummaryRow";
-import { MoneyChart, type DayDatum } from "@/components/reports/MoneyChart";
-import { IncomeStatement, PaymentMethods } from "@/components/reports/IncomeStatement";
-import { SalesByMonth, SalesList } from "@/components/reports/SalesList";
-import { BalanceSheet, BankCard } from "@/components/reports/BalanceSheet";
-import { JournalList } from "@/components/reports/JournalList";
-import { ClientServiceReports, type ClientSortKey, type ServiceSortKey } from "@/components/reports/ClientServiceReports";
-import {
-  fromYmd, monthRange, num, upperFirst, ymd,
-  type BankAccountRow, type JournalEntry, type MonthTotals, type Period, type SaleRow,
-} from "@/components/reports/format";
+import { receiptsCopy } from "@/i18n/copy/receipts";
+import { isOwed } from "../../api/lib/invoices";
+import { daysBetween, localIso, reportPeriod } from "../../api/lib/reportBooks";
+import { PeriodMenu, type PeriodSel } from "@/components/reports/PeriodMenu";
+import { SimpleView } from "@/components/reports/SimpleView";
+import { ProView, type ApItem, type ArItem, type ProTab } from "@/components/reports/ProView";
+import { ClientView } from "@/components/reports/ClientView";
+import { CloseCard } from "@/components/reports/CloseCard";
+import { DrillDialog, type DrillTarget } from "@/components/reports/DrillDialog";
+import { ExportDialog, type ExportDoc, type ExportTab } from "@/components/reports/ExportDialog";
+import { fileBaseFor, pdfPages, xlsxSheets, type ExportModel } from "@/components/reports/export/model";
+import { BTN, SEG, SEG_BTN, dayLabel, periodWords, spendLabel } from "@/components/reports/ui";
 
-type Tab = "income" | "sales" | "client" | "service" | "balance" | "journal";
-const TABS: Tab[] = ["income", "sales", "client", "service", "balance", "journal"];
-/** dashboard.monthly sends at most this many sales per month. */
-const MONTH_SALES_LIMIT = 50;
-
-/** The user's own dates (the server clock may already be "tomorrow"), computed once per visit. */
-function localDates() {
-  const now = new Date();
-  const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
-  return {
-    todayDate: ymd(now),
-    weekStartDate: ymd(weekStart),
-    monthStartDate: `${ymd(now).slice(0, 8)}01`,
-    tzOffsetHours: now.getTimezoneOffset() / -60,
-    year: now.getFullYear(),
-    month: now.getMonth() + 1,
-    day: now.getDate(),
-    weekStartYear: weekStart.getFullYear(),
-    weekStartMonth: weekStart.getMonth() + 1,
-  };
-}
+type View = "simple" | "pro" | "client";
 
 export default function Reports() {
-  const t = useCopy(reportesCopy);
-  const months = useCopy(bankCopy).months;
+  const c = useCopy(reportesCopy);
+  const rc = useCopy(receiptsCopy);
   const { lang } = useLang();
   const locale = intlLocale(lang);
-  const now = useMemo(() => localDates(), []);
-
-  const [period, setPeriod] = useState<Period>("month");
-  const [selectedMonth, setSelectedMonth] = useState<number>(now.month);
-  const [selectedYear, setSelectedYear] = useState<number>(now.year);
-  const [tab, setTab] = useState<Tab>("income");
-  const [clientSort, setClientSort] = useState<SortState<ClientSortKey>>({ key: "total", dir: "desc" });
-  const [serviceSort, setServiceSort] = useState<SortState<ServiceSortKey>>({ key: "revenue", dir: "desc" });
-
-  // Everything below the picker uses this range. Month-based pieces (daily chart, payment methods,
-  // the sales list, bank activity) show the picked month in Mes, and the current month in Hoy / Semana.
-  const range = rangeForPeriod(period, now, selectedYear, selectedMonth);
-  const focus = period === "month" ? { year: selectedYear, month: selectedMonth } : { year: now.year, month: now.month };
-  const weekCrossesMonth = now.weekStartMonth !== now.month || now.weekStartYear !== now.year;
-
-  // ── Queries ──
-  const live = { staleTime: 0, refetchOnWindowFocus: true, placeholderData: keepPreviousData };
-  // Income statement for the exact range of the period (Hoy and Semana included, so expenses and
-  // profit are real there too; a past year covers all of it).
-  const incomeQuery = trpc.reports.incomeStatement.useQuery({ tzOffsetHours: now.tzOffsetHours, ...range }, live);
-  // Año: one income statement per month for the chart; together they add up to the year above.
-  const yearQueries = trpc.useQueries((q) =>
-    Array.from({ length: 12 }, (_, i) =>
-      q.reports.incomeStatement({ tzOffsetHours: now.tzOffsetHours, ...monthRange(selectedYear, i + 1) }, { ...live, enabled: period === "year" })),
-  );
-  const balanceQuery = trpc.reports.balanceSheet.useQuery();
-  const journalQuery = trpc.reports.journalEntries.useQuery({ limit: 100 });
-  const salesQuery = trpc.sales.stats.useQuery({
-    todayDate: now.todayDate, weekStartDate: now.weekStartDate, monthStartDate: now.monthStartDate, tzOffsetHours: now.tzOffsetHours,
+  // The device's day and UTC offset, read once (sales are grouped by the local day).
+  const [clock] = useState(() => {
+    const now = new Date();
+    return { today: localIso(now), tz: now.getTimezoneOffset() / -60, at: now };
   });
-  const monthlyQuery = trpc.dashboard.monthly.useQuery(focus, { enabled: period !== "year", placeholderData: keepPreviousData });
-  const prevMonthQuery = trpc.dashboard.monthly.useQuery(
-    { year: now.weekStartYear, month: now.weekStartMonth },
-    { enabled: period === "week" && weekCrossesMonth },
-  );
-  const planQuery = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60 * 1000 });
-  const bankConnectionQuery = trpc.bank.checkConnection.useQuery();
-  const plaidAccountsQuery = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { retry: false });
-  const dbAccountsQuery = trpc.bank.listAccounts.useQuery(undefined, { retry: false });
-  const hasBank = bankConnectionQuery.data?.hasBank === true;
-  const bankMonthQuery = trpc.bank.getMonthData.useQuery({ year: focus.year, month: focus.month }, { enabled: hasBank });
-  const bankBalanceQuery = trpc.bank.getLiveBalance.useQuery(undefined, { enabled: hasBank });
-  const utils = trpc.useUtils();
+  const [view, setView] = useState<View>("simple");
+  const [sel, setSel] = useState<PeriodSel>({ key: "month" });
+  const [source, setSource] = useState<"svc" | "cli">("svc");
+  const [proTab, setProTab] = useState<ProTab>("pl");
+  const [drill, setDrill] = useState<DrillTarget | null>(null);
+  const [exp, setExp] = useState<{ open: boolean; tab: ExportTab }>({ open: false, tab: "pdf" });
 
-  // ── Derived ──
-  const income = incomeQuery.data;
-  const moneyIn = num(income?.breakdown.salesRevenue);
-  const moneyOut = num(income?.businessExpenses);
-  const monthly = monthlyQuery.data;
-  const salesCount = period === "today" ? num(salesQuery.data?.today.count)
-    : period === "week" ? num(salesQuery.data?.week.count)
-    : period === "month" && monthly && !monthlyQuery.isPlaceholderData ? num(monthly.totalSalesCount)
-    : null;
+  const p = useMemo(() => reportPeriod(sel, clock.today), [sel, clock.today]);
+  const words = periodWords(p, c);
+  const catLabel = useMemo(() => (category: string) => spendLabel(category, rc, c), [rc, c]);
+  const asOf = p.range.endDate < clock.today ? p.range.endDate : clock.today;
 
-  // Bank accounts: Plaid's list with the database ids and balances when it answers, else the database's.
-  const plaidAccounts = (plaidAccountsQuery.data?.accounts ?? []) as BankAccountRow[];
-  const dbAccounts = (dbAccountsQuery.data ?? []) as BankAccountRow[];
-  const bankAccounts: BankAccountRow[] = plaidAccounts.length > 0
-    ? plaidAccounts.map((pa) => {
-        const match = dbAccounts.find((d) => d.plaidAccountId === pa.plaidAccountId);
-        return match ? { ...pa, id: match.id, currentBalance: match.currentBalance } : pa;
-      })
-    : dbAccounts;
-  const bankBalance = num(bankBalanceQuery.data?.liveBalance ?? bankMonthQuery.data?.liveBalance);
-  const bankName = bankBalanceQuery.data?.bankName ?? bankAccounts[0]?.bankName ?? "";
-  const bankCount = bankAccounts.length || num(bankBalanceQuery.data?.accountCount);
+  // ── Plan, team role ──
+  const plan = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const features = plan.data?.features ?? [];
+  const canPro = features.includes("accountant");
+  const canClients = features.includes("clientReports");
+  const membership = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const isMember = !!membership.data;
+  const shown: View = view === "pro" && !canPro ? "simple" : view === "client" && !canClients ? "simple" : view;
 
-  // Words for the period
-  const dayLong = (d: Date) => d.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" });
-  const rangeWords = (a: Date, b: Date) => new Intl.DateTimeFormat(locale, { day: "numeric", month: "long", year: "numeric" }).formatRange(a, b);
-  const monthName = (y: number, m: number) => new Date(y, m - 1, 15).toLocaleDateString(locale, { month: "long", year: "numeric" });
-  const coverage = period === "today" ? t.period.today(dayLong(fromYmd(now.todayDate)))
-    : period === "week" ? t.period.lastWeek(rangeWords(fromYmd(now.weekStartDate), fromYmd(now.todayDate)))
-    : period === "month" ? t.period.covers(rangeWords(fromYmd(range.startDate), fromYmd(range.endDate)))
-    : selectedYear === now.year ? t.period.yearToDate(selectedYear) : t.period.fullYear(selectedYear);
-  const periodShort = period === "today" ? t.period.options.today
-    : period === "week" ? t.chart.highlight.week
-    : period === "month" ? upperFirst(monthName(selectedYear, selectedMonth))
-    : String(selectedYear);
-  const focusMonthName = monthName(focus.year, focus.month);
+  // ── Data ──
+  const live = { staleTime: 30_000, refetchOnWindowFocus: true, placeholderData: keepPreviousData };
+  const overview = trpc.reports.overview.useQuery({ range: p.range, prev: p.prev, seriesEnd: p.seriesEnd, tzOffsetHours: clock.tz }, live);
+  const close = trpc.reports.closeStatus.useQuery(undefined, { staleTime: 60_000 });
+  const needPro = canPro && (shown === "pro" || exp.open);
+  const pro = trpc.reports.pro.useQuery({ range: p.range, asOf }, { ...live, enabled: needPro, retry: 1 });
+  const invoices = trpc.invoices.list.useQuery(undefined, { enabled: needPro, staleTime: 30_000, retry: 1 });
+  const bills = trpc.vendors.bills.list.useQuery({ filter: "unpaid", limit: 500, today: clock.today }, { enabled: needPro, staleTime: 30_000, retry: 1 });
+  const allExpenses = trpc.reports.drill.useQuery({ kind: "expenses", range: p.range, tzOffsetHours: clock.tz }, { enabled: canPro && exp.open, staleTime: 30_000, retry: 1 });
+  const settings = trpc.settings.get.useQuery(undefined, { staleTime: Infinity });
 
-  // Daily chart (Hoy / Semana / Mes)
-  const days: DayDatum[] = (monthly?.dailySales ?? []).map((d) => {
-    const date = new Date(focus.year, focus.month - 1, d.day);
-    const key = ymd(date);
-    const on = period === "today" ? key === now.todayDate : period === "week" ? key >= now.weekStartDate && key <= now.todayDate : true;
-    return { day: d.day, long: date.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" }), total: num(d.total), count: num(d.count), on };
-  });
-  const clockNote = period === "month" && !!monthly && !!income && !monthlyQuery.isPlaceholderData && !incomeQuery.isPlaceholderData
-    && Math.abs(num(monthly.totalSales) - moneyIn) > 0.009;
+  const ar: ArItem[] | undefined = useMemo(() => invoices.data?.items
+    .filter((i) => isOwed(i.state) && i.balanceCents > 0)
+    .map((i) => ({ ref: i.ref, number: i.number ?? "", client: i.customerName?.trim() || c.whence.noClient, issued: i.issueDate, due: i.dueDate, balance: i.balanceCents / 100 })), [invoices.data, c]);
+  const ap: ApItem[] | undefined = useMemo(() => bills.data?.items
+    .map((b) => ({ id: Number(b.id), vendor: b.vendorName, what: b.description, due: b.dueDate, amount: b.amount })), [bills.data]);
 
-  // Year chart (Año)
-  const lastMonth = selectedYear === now.year ? now.month : selectedYear > now.year ? 0 : 12;
-  const yearMonths: MonthTotals[] = yearQueries.map((q, i) => {
-    const inn = num(q.data?.breakdown.salesRevenue);
-    const out = num(q.data?.businessExpenses);
-    const date = new Date(selectedYear, i, 15);
+  // ── The export: one model, drawn as PDF pages and Excel sheets ──
+  const company = settings.data?.companyName?.trim() || "";
+  const model: ExportModel | null = useMemo(() => {
+    const o = overview.data;
+    if (!o || !pro.data || !ar || !ap || !allExpenses.data || overview.isPlaceholderData || pro.isPlaceholderData) return null;
+    const s = settings.data;
+    const place = [s?.city, s?.state].filter(Boolean).join(", ");
+    const companyLine = [place, s?.phone].filter(Boolean).join(" · ") || null;
+    const name = company || c.title;
+    const expRows = allExpenses.data.rows as Array<{ date: string; title: string; category?: string; method: string | null; account?: string | null; source?: string; receipt?: boolean; amount: number }>;
     return {
-      month: i + 1,
-      label: date.toLocaleDateString(locale, { month: "short" }).replace(".", "").slice(0, 3),
-      long: date.toLocaleDateString(locale, { month: "long" }),
-      in: inn,
-      out,
-      net: inn - out,
+      company: name,
+      companyLine,
+      periodLabel: words.label,
+      vsLabel: words.vs,
+      curCol: words.curCol,
+      prevCol: words.prevCol,
+      generatedOn: dayLabel(clock.today, locale),
+      asOfLabel: dayLabel(asOf, locale),
+      openingLabel: dayLabel(p.range.startDate, locale),
+      fileBase: fileBaseFor(name, c.file.base, words.label),
+      moneyIn: o.current.moneyIn,
+      prevIn: o.previous.moneyIn,
+      moneyOut: o.current.moneyOut,
+      prevOut: o.previous.moneyOut,
+      salesCount: o.current.salesCount,
+      categories: o.categories.map((x) => ({ name: catLabel(x.category), total: x.total, prev: x.prevTotal })),
+      booked: o.statement.booked.map((x) => ({ name: catLabel(x.category), total: x.total, prev: x.prevTotal })),
+      unbookedBank: { total: o.statement.unbookedBank.total, prev: o.statement.unbookedBank.prevTotal },
+      expenses: expRows.map((e) => ({
+        date: e.date, description: e.title, category: catLabel(e.category ?? ""),
+        paid: e.account ?? (e.method ? c.methods[e.method] ?? e.method : e.source === "bank" ? c.drill.bank : ""),
+        receipt: e.source === "bank" ? null : !!e.receipt, amount: e.amount,
+      })),
+      services: o.services.map((x) => ({ name: x.name || c.whence.noService, total: x.total })),
+      clients: o.clients ? o.clients.map((x) => ({ name: x.name || c.whence.noClient, total: x.total })) : null,
+      balance: pro.data.balance,
+      cashFlow: pro.data.cashFlow,
+      ar: ar.map((a) => ({ number: a.number, client: a.client, issued: a.issued, due: a.due, late: a.due ? Math.max(0, daysBetween(a.due, clock.today)) : 0, balance: a.balance })),
+      ap: ap.map((x) => ({ vendor: x.vendor, what: x.what, due: x.due, amount: x.amount, late: x.due < clock.today })),
     };
-  });
-  const yearLoading = yearQueries.some((q) => q.isLoading);
-  const yearStale = yearQueries.some((q) => q.isPlaceholderData);
+  }, [overview.data, overview.isPlaceholderData, pro.data, pro.isPlaceholderData, ar, ap, allExpenses.data, settings.data, company, words, clock.today, asOf, p.range.startDate, locale, c, catLabel]);
+  const doc: ExportDoc | null = useMemo(() => (model ? {
+    pages: pdfPages(model, c, (iso) => dayLabel(iso, locale)),
+    sheets: xlsxSheets(model, c),
+    fileBase: model.fileBase,
+    pdfTitle: `${c.file.title} · ${model.periodLabel} · ${model.company}`,
+    xlsxTitle: `${c.file.title} · ${model.periodLabel}`,
+    author: model.company,
+  } : null), [model, c, locale]);
+  const exportError = !!(pro.error || invoices.error || bills.error || allExpenses.error || overview.error);
+  const exportLoading = !exportError && !model;
 
-  // Sales list: the month's sales, cut to Hoy / Semana. Semana can start in the previous month.
-  const monthSales = (monthly?.recentSales ?? []) as SaleRow[];
-  const prevSales = period === "week" && weekCrossesMonth ? ((prevMonthQuery.data?.recentSales ?? []) as SaleRow[]) : [];
-  const listSales = [...monthSales, ...prevSales]
-    .filter((s) => {
-      if (period === "month") return true;
-      const key = ymd(new Date(s.createdAt));
-      return period === "today" ? key === now.todayDate : key >= now.weekStartDate && key <= now.todayDate;
-    })
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  const listCapped = monthSales.length >= MONTH_SALES_LIMIT || prevSales.length >= MONTH_SALES_LIMIT ? MONTH_SALES_LIMIT : null;
+  const utils = trpc.useUtils();
+  const labels = { label: words.label, vs: words.vs, curCol: words.curCol, prevCol: words.prevCol, asOf: dayLabel(asOf, locale), opening: dayLabel(p.range.startDate, locale) };
 
-  const lacksClientReports = !!planQuery.data && !planQuery.data.features.includes("clientReports");
-  const years = Array.from({ length: 5 }, (_, i) => now.year - i);
-  const monthOptions = months.map((label, i) => ({ value: i + 1, label }));
-  const tabLabel: Record<Tab, string> = {
-    income: t.tabs.income, sales: t.tabs.sales, client: t.tabs.client, service: t.tabs.service, balance: t.tabs.balance, journal: t.tabs.journal,
-  };
-
-  const failed = [
-    incomeQuery.error && t.error.parts.income,
-    balanceQuery.error && t.error.parts.balance,
-    salesQuery.error && t.error.parts.sales,
-  ].filter(Boolean) as string[];
+  const viewBtn = (id: View, label: string) => (
+    <button key={id} type="button" aria-pressed={shown === id} className={cn(SEG_BTN, "flex-1")} onClick={() => setView(id)}>{label}</button>
+  );
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <header>
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
-          <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
+      <div className="mx-auto max-w-6xl space-y-3.5">
+        <header className="mb-[18px] flex flex-wrap items-end justify-between gap-3">
+          <h1 className="text-[22px] font-[750] tracking-tight text-slate-900">{c.title}</h1>
+          <div className="flex w-full flex-wrap items-center gap-1.5 sm:w-auto">
+            <PeriodMenu sel={sel} onSel={setSel} today={clock.today} c={c} />
+            <div className={cn(SEG, "w-full sm:w-auto")} role="group" aria-label={c.views.label}>
+              {viewBtn("simple", c.views.simple)}
+              {canPro || plan.isLoading
+                ? viewBtn("pro", c.views.pro)
+                : <Link to="/settings?sec=plan" title={c.views.lockedPro} aria-label={`${c.views.pro} · ${c.views.lockedPro}`} className={cn(SEG_BTN, "flex-1")}><Lock className="h-[13px] w-[13px]" aria-hidden="true" />{c.views.pro}</Link>}
+              {canClients && viewBtn("client", c.views.client)}
+            </div>
+          </div>
         </header>
 
-        <PeriodPicker
-          period={period}
-          onPeriod={setPeriod}
-          month={selectedMonth}
-          onMonth={setSelectedMonth}
-          year={selectedYear}
-          onYear={setSelectedYear}
-          months={monthOptions}
-          years={years}
-          coverage={coverage}
-        />
-
-        {failed.length > 0 && (
-          <div role="alert" className="flex flex-col gap-3 rounded-2xl border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" aria-hidden="true" />
-              <div>
-                <p className="text-sm font-semibold text-red-900">{t.error.title}</p>
-                <p className="text-xs text-red-800">{failed.join(" · ")}</p>
-              </div>
-            </div>
-            <button type="button" onClick={() => void utils.invalidate()} className="inline-flex h-11 items-center justify-center rounded-[10px] border border-red-200 bg-white px-4 text-sm font-semibold text-red-800 hover:bg-red-50 sm:h-10">
-              {t.error.retry}
-            </button>
+        {overview.error && !overview.data ? (
+          <div role="alert" className="flex flex-col gap-3 rounded-[14px] border border-red-200 bg-red-50 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-center gap-2 text-sm font-semibold text-red-900"><AlertTriangle className="h-5 w-5 text-red-600" aria-hidden="true" />{c.error.title}</p>
+            <button type="button" className={BTN} onClick={() => void utils.reports.invalidate()}>{c.error.retry}</button>
+          </div>
+        ) : !overview.data ? (
+          <div className="space-y-3.5" role="status" aria-label={c.export.loading}>
+            <div className="grid gap-3 md:grid-cols-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-[106px] rounded-[14px]" />)}</div>
+            <Skeleton className="h-[260px] rounded-[14px]" />
+            <div className="grid gap-3.5 md:grid-cols-2"><Skeleton className="h-64 rounded-[14px]" /><Skeleton className="h-64 rounded-[14px]" /></div>
+          </div>
+        ) : (
+          <div className={cn("space-y-3.5 transition-opacity", overview.isPlaceholderData && "opacity-60")} aria-busy={overview.isFetching}>
+            {shown === "simple" && (
+              <SimpleView
+                data={overview.data}
+                highlight={p.highlight}
+                vs={words.vs}
+                today={clock.today}
+                source={source}
+                onSource={setSource}
+                canClients={canClients}
+                onDrill={setDrill}
+                catLabel={catLabel}
+                c={c}
+              />
+            )}
+            {shown === "pro" && (
+              <ProView
+                tab={proTab}
+                onTab={setProTab}
+                overview={overview.data}
+                pro={pro.data}
+                proLoading={pro.isLoading}
+                ar={ar}
+                arLoading={invoices.isLoading}
+                ap={ap}
+                apLoading={bills.isLoading}
+                range={p.range}
+                labels={labels}
+                today={clock.today}
+                locale={locale}
+                onDrill={setDrill}
+                catLabel={catLabel}
+                c={c}
+              />
+            )}
+            {shown === "client" && <ClientView range={p.range} tzOffsetHours={clock.tz} onDrill={setDrill} c={c} />}
           </div>
         )}
 
-        <SummaryRow
-          loading={incomeQuery.isLoading}
-          stale={incomeQuery.isPlaceholderData}
-          moneyIn={moneyIn}
-          moneyOut={moneyOut}
-          salesCount={salesCount}
-          bank={{ connected: hasBank, loading: bankConnectionQuery.isLoading || (hasBank && bankBalanceQuery.isLoading), balance: bankBalance, name: bankName, accounts: bankCount }}
+        <CloseCard
+          status={close.data}
+          today={clock.today}
           locale={locale}
+          canExport={canPro}
+          canInvite={isMember ? null : features.includes("team")}
+          inviteLockedLabel={c.views.lockedClient}
+          onExport={(tab) => setExp({ open: true, tab })}
+          c={c}
         />
-
-        {period === "year" ? (
-          <MoneyChart kind="year" months={yearMonths} year={selectedYear} lastMonth={lastMonth} loading={yearLoading} stale={yearStale} />
-        ) : (
-          <MoneyChart
-            kind="daily"
-            days={days}
-            monthLabel={focusMonthName}
-            highlight={period === "today" ? "today" : period === "week" ? "week" : null}
-            clockNote={clockNote}
-            loading={monthlyQuery.isLoading}
-            stale={monthlyQuery.isPlaceholderData}
-          />
-        )}
-
-        <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-4">
-          <TabsList aria-label={t.tabs.label} className="grid h-auto w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 md:flex md:w-fit md:flex-wrap">
-            {TABS.map((k) => {
-              const locked = lacksClientReports && (k === "client" || k === "service");
-              return (
-                <TabsTrigger
-                  key={k}
-                  value={k}
-                  title={locked ? t.tabs.locked : undefined}
-                  className={cn(
-                    "h-11 flex-none gap-1.5 rounded-lg px-3 text-sm font-semibold text-slate-600 hover:text-slate-900 focus-visible:ring-2 focus-visible:ring-blue-500 data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm md:h-9",
-                    k === "journal" && "text-slate-500",
-                  )}
-                >
-                  {k === "income" ? (
-                    <>
-                      <span className="md:hidden">{t.tabs.incomeShort}</span>
-                      <span className="hidden md:inline">{tabLabel[k]}</span>
-                    </>
-                  ) : tabLabel[k]}
-                  {locked && <Lock className="h-3.5 w-3.5 text-slate-400" aria-label={t.tabs.locked} />}
-                </TabsTrigger>
-              );
-            })}
-          </TabsList>
-
-          <TabsContent value="income">
-            <div className={cn("grid gap-4", period !== "year" && "lg:grid-cols-[1.35fr_1fr]")}>
-              <IncomeStatement data={income} loading={incomeQuery.isLoading} stale={incomeQuery.isPlaceholderData} periodLabel={periodShort} locale={locale} />
-              {period !== "year" && (
-                <PaymentMethods
-                  rows={monthly?.paymentBreakdown ?? []}
-                  monthLabel={focusMonthName}
-                  loading={monthlyQuery.isLoading}
-                  stale={monthlyQuery.isPlaceholderData}
-                  locale={locale}
-                />
-              )}
-            </div>
-          </TabsContent>
-
-          <TabsContent value="sales">
-            {period === "year" ? (
-              <SalesByMonth
-                months={yearMonths.filter((m) => m.month <= lastMonth)}
-                loading={yearLoading}
-                onPick={(m) => { setSelectedMonth(m); setPeriod("month"); }}
-              />
-            ) : (
-              <SalesList
-                sales={listSales}
-                periodLabel={periodShort}
-                capped={listCapped}
-                loading={monthlyQuery.isLoading || (period === "week" && weekCrossesMonth && prevMonthQuery.isLoading)}
-                stale={monthlyQuery.isPlaceholderData}
-                locale={locale}
-              />
-            )}
-          </TabsContent>
-
-          {(["client", "service"] as const).map((view) => (
-            <TabsContent key={view} value={view}>
-              <ClientServiceReports
-                view={view}
-                range={range}
-                tzOffsetHours={now.tzOffsetHours}
-                rangeLabel={coverage}
-                clientSort={clientSort}
-                onClientSort={(key) => setClientSort((s) => nextSort(s, key, ["name"]))}
-                onClientFlip={() => setClientSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))}
-                serviceSort={serviceSort}
-                onServiceSort={(key) => setServiceSort((s) => nextSort(s, key, ["name"]))}
-                onServiceFlip={() => setServiceSort((s) => ({ ...s, dir: s.dir === "asc" ? "desc" : "asc" }))}
-              />
-            </TabsContent>
-          ))}
-
-          <TabsContent value="balance">
-            <div className="grid gap-4 lg:grid-cols-[1.35fr_1fr]">
-              <BalanceSheet data={balanceQuery.data} loading={balanceQuery.isLoading} error={!!balanceQuery.error} />
-              <BankCard
-                connected={hasBank}
-                loading={bankConnectionQuery.isLoading}
-                accounts={bankAccounts}
-                total={bankBalance}
-                monthLabel={focusMonthName}
-                monthIn={num(bankMonthQuery.data?.income)}
-                monthOut={num(bankMonthQuery.data?.expense)}
-                moves={bankMonthQuery.data?.transactions.length ?? 0}
-                monthLoading={bankMonthQuery.isLoading}
-              />
-            </div>
-          </TabsContent>
-
-          <TabsContent value="journal">
-            <JournalList entries={(journalQuery.data ?? []) as JournalEntry[]} loading={journalQuery.isLoading} error={!!journalQuery.error} locale={locale} />
-          </TabsContent>
-        </Tabs>
       </div>
+
+      <DrillDialog target={drill} onClose={() => setDrill(null)} range={p.range} tzOffsetHours={clock.tz} periodLabel={words.label} locale={locale} catLabel={catLabel} c={c} />
+      <ExportDialog
+        open={exp.open}
+        onOpenChange={(o) => setExp((e) => ({ ...e, open: o }))}
+        tab={exp.tab}
+        onTab={(tab) => setExp((e) => ({ ...e, tab }))}
+        title={c.export.title(words.label)}
+        doc={doc}
+        loading={exportLoading}
+        error={exportError}
+        onRetry={() => { void pro.refetch(); void invoices.refetch(); void bills.refetch(); void allExpenses.refetch(); }}
+        c={c}
+        generated={clock.at}
+      />
     </AnimatedPage>
   );
 }

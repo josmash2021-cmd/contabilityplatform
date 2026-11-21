@@ -1,8 +1,8 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales, expenses, journalEntries, journalEntryLines, accounts } from "@db/schema";
-import { eq, desc, and, gte, lte, sql } from "drizzle-orm";
+import { eq, desc, and, gte, lte, sql, inArray } from "drizzle-orm";
 
 export const exportRouter = createRouter({
 
@@ -64,34 +64,25 @@ export const exportRouter = createRouter({
       const limit = input?.limit ?? 500;
 
       try {
-        // Fetch all entries with their lines in a single query
-        const rows = await db.select({
-          entry: journalEntries,
-          line: {
+        // The limit counts entries (not their lines): page the entries first, then fetch their lines.
+        const page: Array<typeof journalEntries.$inferSelect> = await db.select().from(journalEntries)
+          .where(eq(journalEntries.createdBy, userId))
+          .orderBy(desc(journalEntries.date), desc(journalEntries.id))
+          .limit(limit);
+        const lineRows: Array<{ entryId: number; code: string | null; name: string | null; debit: string | null; credit: string | null }> = page.length
+          ? await db.select({
+            entryId: journalEntryLines.journalEntryId,
             code: accounts.code,
             name: accounts.name,
             debit: journalEntryLines.debit,
             credit: journalEntryLines.credit,
-          },
-        })
-        .from(journalEntries)
-        .leftJoin(journalEntryLines, eq(journalEntries.id, journalEntryLines.journalEntryId))
-        .leftJoin(accounts, eq(journalEntryLines.accountId, accounts.id))
-        .where(eq(journalEntries.createdBy, userId))
-        .orderBy(desc(journalEntries.date))
-        .limit(limit);
-
-        // Group lines by entry
-        const entryMap = new Map<number, { entry: typeof journalEntries.$inferSelect; lines: Array<NonNullable<typeof rows[0]['line']>> }>();
-        for (const row of rows) {
-          const entryId = row.entry.id;
-          if (!entryMap.has(entryId)) {
-            entryMap.set(entryId, { entry: row.entry, lines: [] });
-          }
-          if (row.line && row.line.code !== null) {
-            entryMap.get(entryId)!.lines.push(row.line);
-          }
-        }
+          })
+            .from(journalEntryLines)
+            .leftJoin(accounts, and(eq(journalEntryLines.accountId, accounts.id), eq(accounts.userId, userId)))
+            .where(inArray(journalEntryLines.journalEntryId, page.map((e) => e.id)))
+            .orderBy(journalEntryLines.id)
+          : [];
+        const entryMap = new Map(page.map((entry) => [Number(entry.id), { entry, lines: lineRows.filter((l) => Number(l.entryId) === Number(entry.id) && l.code !== null) }]));
 
         const lines: string[] = [];
         lines.push("Asiento,Fecha,Descripcion,Cuenta,Debito ($),Credito ($)");

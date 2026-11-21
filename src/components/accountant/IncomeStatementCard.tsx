@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+import { ChevronRight } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
@@ -5,26 +7,45 @@ import { accountantCopy } from "@/i18n/copy/accountant";
 import { receiptsCopy } from "@/i18n/copy/receipts";
 import { formatPercent } from "@/lib/accountantExport";
 import type { BankTotals, IncomeStatement } from "../../../api/lib/accountant";
-import { CARD, money } from "./ui";
+import { CARD, H3, SUB, TD, TH } from "@/components/reports/ui";
+import { money } from "./ui";
 import { expenseCategoryLabel } from "./labels";
 
-/** One row of a <dl>; `strong` rows are totals, drawn under a rule. Negative amounts carry a minus sign, not only a color. */
-function Line({ label, value, strong, tone }: { label: string; value: number; strong?: boolean; tone?: "income" | "expense" | "auto" }) {
-  const color =
-    tone === "income" ? "text-emerald-700"
-    : tone === "expense" ? "text-red-700"
-    : tone === "auto" ? (value >= 0 ? "text-emerald-700" : "text-red-700")
-    : "text-slate-900";
+type Line = { label: string; value: ReactNode; strong?: boolean; total?: boolean; onClick?: () => void };
+
+/** The prototype's statement table (.stmt): concept left, amount right, totals in bold; lines can open their movements. */
+function Stmt({ head, rows }: { head: [string, string]; rows: Line[] }) {
   return (
-    <div className={cn("flex items-baseline justify-between gap-3 text-sm", strong && "border-t border-slate-200 pt-2 font-semibold")}>
-      <dt className={cn("min-w-0 break-words", strong ? "text-slate-900" : "text-slate-600")}>{label}</dt>
-      <dd className={cn("shrink-0 tabular-nums", strong ? color : "font-medium text-slate-900")}>{tone === "auto" && value > 0 ? "+" : ""}{money(value)}</dd>
+    <div className="mt-2 overflow-x-auto">
+      <table className="w-full border-collapse text-sm">
+        <thead><tr><th scope="col" className={TH}>{head[0]}</th><th scope="col" className={cn(TH, "text-right")}>{head[1]}</th></tr></thead>
+        <tbody>
+          {rows.map((r, i) => (
+            <tr key={i} className={cn(r.onClick && "hover:bg-slate-50")}>
+              <td className={cn(TD, "pr-3", (r.strong || r.total) && "font-bold", r.total && "border-b-0 font-[750]")}>
+                {r.onClick ? (
+                  <button type="button" onClick={r.onClick} className="inline-flex min-h-11 items-center gap-1 text-left text-slate-900 hover:text-blue-600 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-0">
+                    {r.label}<ChevronRight className="h-3.5 w-3.5 text-slate-400" aria-hidden="true" />
+                  </button>
+                ) : r.label}
+              </td>
+              <td className={cn(TD, "text-right tabular-nums", (r.strong || r.total) && "font-bold", r.total && "border-b-0 font-[750]")}>{r.value}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }
 
-/** Estado de resultados del periodo (same rules as the Reports page) and the bank totals beside it. */
-export function IncomeStatementCard({ statement, bank, periodLabel }: { statement: IncomeStatement; bank: BankTotals; periodLabel: string }) {
+/** Estado de resultados del periodo (same rules as Reportes) and the bank totals beside it. */
+export function IncomeStatementCard({ statement, bank, periodLabel, onDrillIncome, onDrillCategory }: {
+  statement: IncomeStatement;
+  bank: BankTotals;
+  periodLabel: string;
+  onDrillIncome: () => void;
+  onDrillCategory: (category: string, label: string) => void;
+}) {
   const c = useCopy(accountantCopy);
   const rc = useCopy(receiptsCopy);
   const { lang } = useLang();
@@ -32,53 +53,45 @@ export function IncomeStatementCard({ statement, bank, periodLabel }: { statemen
   const s = c.statement;
   const gain = statement.profit >= 0;
 
+  const rows: Line[] = [
+    { label: s.salesCompleted(statement.salesCount), value: money(statement.income), onClick: statement.salesCount > 0 ? onDrillIncome : undefined },
+    { label: s.totalIncome, value: money(statement.income), strong: true },
+    ...(statement.expenseLines.length === 0
+      ? [{ label: s.noExpenses, value: money(0) }]
+      : statement.expenseLines.map((l) => {
+          const label = expenseCategoryLabel(l.category, c, rc);
+          return { label, value: money(-l.total), onClick: () => onDrillCategory(l.category, label) };
+        })),
+    { label: s.totalExpenses, value: money(-statement.totalExpenses), strong: true },
+    {
+      label: gain ? s.profit : c.ui.lossNet,
+      total: true,
+      value: <span className={gain ? "text-emerald-600" : "text-red-600"}>{money(statement.profit)}</span>,
+    },
+  ];
+  if (statement.margin !== null) rows.push({ label: s.margin, value: formatPercent(statement.margin, locale) });
+
   return (
-    <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-      <section className={cn(CARD, "lg:col-span-2")} aria-labelledby="acc-statement">
-        <h2 id="acc-statement" className="font-semibold text-slate-900">{s.title}</h2>
-        <p className="text-xs text-slate-500">{periodLabel}</p>
-        <div className="mt-4 space-y-4">
-          <section aria-label={s.income}>
-            <h3 className="mb-2 text-xs font-medium text-slate-500">{s.income}</h3>
-            <dl className="space-y-2">
-              <Line label={s.salesCompleted(statement.salesCount)} value={statement.income} />
-              <Line label={s.totalIncome} value={statement.income} strong tone="income" />
-            </dl>
-          </section>
-          <section aria-label={s.expenses} className="border-t border-slate-100 pt-4">
-            <h3 className="mb-2 text-xs font-medium text-slate-500">{s.expenses}</h3>
-            {statement.expenseLines.length === 0 && <p className="mb-2 text-sm text-slate-500">{s.noExpenses}</p>}
-            <dl className="space-y-2">
-              {statement.expenseLines.map((l) => (
-                <Line key={l.category} label={expenseCategoryLabel(l.category, c, rc)} value={l.total} />
-              ))}
-              <Line label={s.totalExpenses} value={statement.totalExpenses} strong tone="expense" />
-            </dl>
-          </section>
-          <div className={cn("flex flex-wrap items-center justify-between gap-2 rounded-xl px-4 py-3", gain ? "bg-emerald-50" : "bg-red-50")}>
-            <span className={cn("font-bold", gain ? "text-emerald-900" : "text-red-900")}>{gain ? s.profit : c.ui.lossNet}</span>
-            <div className="flex items-center gap-2">
-              {statement.margin !== null && (
-                <span className={cn("rounded-full bg-white px-2 py-0.5 text-xs font-semibold tabular-nums", gain ? "text-emerald-700" : "text-red-700")}>
-                  {c.stats.margin(formatPercent(statement.margin, locale))}
-                </span>
-              )}
-              <span className={cn("text-lg font-bold tabular-nums", gain ? "text-emerald-700" : "text-red-700")}>{money(statement.profit)}</span>
-            </div>
-          </div>
-          <p className="text-xs text-slate-500">{s.onlyCompleted}</p>
-        </div>
+    <div className="grid grid-cols-1 items-start gap-3.5 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)]">
+      <section className={CARD} aria-labelledby="acc-statement">
+        <h2 id="acc-statement" className={H3}>{s.title}</h2>
+        <p className={SUB}>{periodLabel} · {c.ui.statementSub}</p>
+        <Stmt head={[c.workbook.summary.concept, c.workbook.summary.amount]} rows={rows} />
+        <p className="mt-2 text-xs text-slate-500">{s.onlyCompleted}</p>
       </section>
 
       <section className={CARD} aria-labelledby="acc-bank">
-        <h2 id="acc-bank" className="font-semibold text-slate-900">{c.workbook.summary.bank}</h2>
-        <p className="text-xs text-slate-500">{periodLabel}</p>
-        <dl className="mt-4 space-y-2">
-          <Line label={c.bank.moneyIn} value={bank.moneyIn} />
-          <Line label={c.bank.moneyOut} value={bank.moneyOut} />
-          <Line label={c.bank.net} value={bank.net} strong tone="auto" />
-        </dl>
-        <p className="mt-3 text-xs text-slate-500">{s.bankNote}</p>
+        <h2 id="acc-bank" className={H3}>{c.workbook.summary.bank}</h2>
+        <p className={SUB}>{periodLabel}</p>
+        <Stmt
+          head={[c.workbook.summary.concept, c.workbook.summary.amount]}
+          rows={[
+            { label: c.bank.moneyIn, value: money(bank.moneyIn) },
+            { label: c.bank.moneyOut, value: money(-bank.moneyOut) },
+            { label: c.bank.net, total: true, value: `${bank.net > 0 ? "+" : ""}${money(bank.net)}` },
+          ]}
+        />
+        <p className="mt-2 text-xs text-slate-500">{s.bankNote}</p>
       </section>
     </div>
   );

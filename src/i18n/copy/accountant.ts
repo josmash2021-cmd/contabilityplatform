@@ -7,7 +7,7 @@ import type { Lang } from "../lang";
 const es = {
   title: "Para tu contador",
   subtitle: "Los libros del periodo en un solo lugar: resumen, ventas, gastos y banco.",
-  share: "Descarga el Excel o guarda el PDF y mándaselo a tu contador. Tiene el estado de resultados y el detalle de cada venta, gasto y movimiento del banco del periodo.",
+  share: "Exporta el Excel o el PDF y mándaselo a tu contador. Tiene el estado de resultados y el detalle de cada venta, gasto y movimiento del banco del periodo.",
   excel: "Descargar Excel",
   excelBusy: "Preparando Excel…",
   excelDone: "Excel descargado",
@@ -154,6 +154,10 @@ const es = {
     noMargin: "Sin ventas en el periodo",
     /** Expense category "vendors": paid bills (api/lib/vendors.ts). */
     vendorsCategory: "Pagos a proveedores",
+    exportExcel: "Exportar a Excel",
+    exportPdf: "Exportar a PDF",
+    exportTitle: (period: string) => `Exportar los libros · ${period}`,
+    statementSub: "Toca una línea para ver sus movimientos.",
   },
 };
 
@@ -162,7 +166,7 @@ export type AccountantCopy = typeof es;
 const en: AccountantCopy = {
   title: "For your accountant",
   subtitle: "The period's books in one place: summary, sales, expenses and bank.",
-  share: "Download the Excel file or save the PDF and send it to your accountant. It has the income statement and every sale, expense and bank movement of the period.",
+  share: "Export the Excel file or the PDF and send it to your accountant. It has the income statement and every sale, expense and bank movement of the period.",
   excel: "Download Excel",
   excelBusy: "Preparing Excel…",
   excelDone: "Excel downloaded",
@@ -306,6 +310,10 @@ const en: AccountantCopy = {
     bankSub: (moneyIn, moneyOut) => `In ${moneyIn} · out ${moneyOut}`,
     noMargin: "No sales in this period",
     vendorsCategory: "Vendor payments",
+    exportExcel: "Export to Excel",
+    exportPdf: "Export to PDF",
+    exportTitle: (period) => `Export the books · ${period}`,
+    statementSub: "Tap a line to see its movements.",
   },
 };
 

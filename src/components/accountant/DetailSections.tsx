@@ -1,7 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { ArrowDownLeft, ArrowUpRight, Landmark, Receipt, Wallet, type LucideIcon } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
@@ -9,7 +8,8 @@ import { accountantCopy } from "@/i18n/copy/accountant";
 import { receiptsCopy } from "@/i18n/copy/receipts";
 import { formatDay } from "@/lib/accountantExport";
 import type { AccountantPeriod, BankRow, ExpenseRow, SaleRow } from "../../../api/lib/accountant";
-import { BTN, CARD, TABS } from "./ui";
+import { CARD, H3 } from "@/components/reports/ui";
+import { BTN } from "./ui";
 import { expenseCategoryLabel } from "./labels";
 
 /** Rows drawn at first and per "show more", so long periods stay quick. */
@@ -35,7 +35,7 @@ function Section<R extends { id: number }>(props: {
 
   return (
     <section className={cn(CARD, "space-y-3")} aria-label={props.caption}>
-      <h2 className="font-semibold text-slate-900">{props.caption}</h2>
+      <h2 className={H3}>{props.caption}</h2>
         {props.rows.length === 0 ? (
           <div className="py-8 text-center">
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true"><props.empty.icon className="h-6 w-6" /></span>
@@ -43,13 +43,13 @@ function Section<R extends { id: number }>(props: {
           </div>
         ) : (
           <>
-            <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
+            <div className="hidden overflow-hidden rounded-[14px] border border-slate-200 md:block">
               <Table>
                 <TableCaption className="sr-only">{props.caption}</TableCaption>
                 <TableHeader>
-                  <TableRow className="bg-slate-50 hover:bg-slate-50">
+                  <TableRow className="bg-slate-100 hover:bg-slate-100">
                     {props.columns.map((col) => (
-                      <TableHead key={col.key} scope="col" className={cn("text-xs text-slate-500", col.numeric && "text-right", col.className)}>
+                      <TableHead key={col.key} scope="col" className={cn("h-9 px-4 text-xs font-semibold text-slate-500", col.numeric && "text-right", col.className)}>
                         {col.label}
                       </TableHead>
                     ))}
@@ -59,7 +59,7 @@ function Section<R extends { id: number }>(props: {
                   {visible.map((r) => (
                     <TableRow key={r.id}>
                       {props.columns.map((col) => (
-                        <TableCell key={col.key} className={cn("text-sm", col.numeric && "text-right tabular-nums", col.className)}>
+                        <TableCell key={col.key} className={cn("px-4 py-3 text-sm", col.numeric && "text-right tabular-nums", col.className)}>
                           {col.cell(r)}
                         </TableCell>
                       ))}
@@ -70,7 +70,7 @@ function Section<R extends { id: number }>(props: {
                   <TableFooter>
                     <TableRow className="hover:bg-transparent">
                       {props.columns.map((col) => (
-                        <TableCell key={col.key} className={cn("text-sm font-semibold", col.numeric && "text-right tabular-nums", col.className)}>
+                        <TableCell key={col.key} className={cn("px-4 text-sm font-[750]", col.numeric && "text-right tabular-nums", col.className)}>
                           {col.foot}
                         </TableCell>
                       ))}
@@ -281,28 +281,29 @@ export function DetailSections({ data }: { data: AccountantPeriod }) {
   const periodKey = `${data.period.startDate}_${data.period.endDate}`;
 
   return (
-    <Tabs value={tab} onValueChange={setTab} className="gap-4">
-      <TabsList aria-label={c.tabs.label} className={TABS.list}>
+    <div className="space-y-3.5">
+      <div role="tablist" aria-label={c.tabs.label} className="flex gap-6 overflow-x-auto border-b border-slate-200 [scrollbar-width:none]">
         {tabs.map((t) => (
-          <TabsTrigger
+          <button
             key={t.key}
-            value={t.key}
-            className={TABS.trigger}
+            type="button"
+            role="tab"
+            id={`acc-tab-${t.key}`}
+            aria-selected={tab === t.key}
+            aria-controls={`acc-panel-${t.key}`}
+            onClick={() => setTab(t.key)}
+            className="group relative inline-flex min-h-11 items-center gap-[7px] whitespace-nowrap pb-3 pt-2.5 text-sm font-semibold text-slate-500 transition hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 aria-selected:text-slate-900 after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:scale-x-0 after:rounded-sm after:bg-blue-600 after:transition-transform aria-selected:after:scale-x-100"
           >
             {t.label}
-            <span className="tabular-nums text-slate-500">{t.count.toLocaleString(locale)}</span>
-          </TabsTrigger>
+            <span className="min-w-5 rounded-full bg-slate-100 px-1.5 py-px text-center text-[11px] font-bold tabular-nums text-slate-500 group-aria-selected:bg-blue-50 group-aria-selected:text-blue-600">{t.count.toLocaleString(locale)}</span>
+          </button>
         ))}
-      </TabsList>
-      <TabsContent value="sales">
-        <SalesSection key={periodKey} data={data.sales} locale={locale} />
-      </TabsContent>
-      <TabsContent value="expenses">
-        <ExpensesSection key={periodKey} data={data.expenses} locale={locale} />
-      </TabsContent>
-      <TabsContent value="bank">
-        <BankSection key={periodKey} data={data.bank} locale={locale} />
-      </TabsContent>
-    </Tabs>
+      </div>
+      <div role="tabpanel" id={`acc-panel-${tab}`} aria-labelledby={`acc-tab-${tab}`}>
+        {tab === "sales" && <SalesSection key={periodKey} data={data.sales} locale={locale} />}
+        {tab === "expenses" && <ExpensesSection key={periodKey} data={data.expenses} locale={locale} />}
+        {tab === "bank" && <BankSection key={periodKey} data={data.bank} locale={locale} />}
+      </div>
+    </div>
   );
 }
