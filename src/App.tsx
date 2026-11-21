@@ -66,6 +66,11 @@ const Assistant = lazyPage(() => import("@/pages/Assistant"));
 const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"));
 const Team = lazyPage(() => import("@/pages/Team"));
 const JoinTeam = lazyPage(() => import("@/pages/JoinTeam"));
+const SiteProducto = lazyPage(() => import("@/pages/site/Producto"));
+const SiteComoFunciona = lazyPage(() => import("@/pages/site/ComoFunciona"));
+const SiteSeguridad = lazyPage(() => import("@/pages/site/Seguridad"));
+const SitePrecios = lazyPage(() => import("@/pages/site/Precios"));
+const SitePreguntas = lazyPage(() => import("@/pages/site/Preguntas"));
 const Receipts = lazyPage(() => import("@/pages/Receipts"));
 const Vendors = lazyPage(() => import("@/pages/Vendors"));
 const Quotes = lazyPage(() => import("@/pages/Quotes"));
@@ -123,6 +128,13 @@ export default function App() {
 
         {/* Privacy Policy - public, required by Plaid */}
         <Route path="/privacy" element={<PrivacyPolicy />} />
+
+        {/* Public site pages (the marketing menu) */}
+        <Route path="/producto" element={<SiteProducto />} />
+        <Route path="/como-funciona" element={<SiteComoFunciona />} />
+        <Route path="/seguridad" element={<SiteSeguridad />} />
+        <Route path="/precios" element={<SitePrecios />} />
+        <Route path="/preguntas" element={<SitePreguntas />} />
 
         {/* Protected routes with ModeProvider ("/" shows the landing page to visitors) */}
         <Route element={<AuthGuard><ModeProvider><AppLayout /></ModeProvider></AuthGuard>}>

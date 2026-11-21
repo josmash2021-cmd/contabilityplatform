@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
+import { Link, NavLink } from "react-router";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useCopy } from "@/i18n/useI18n";
@@ -52,14 +52,16 @@ export function MarketingNav() {
         <ul className="hidden items-center gap-1 xl:flex">
           {nav.links.map((l) => (
             <li key={l.href}>
-              <a
-                href={l.href}
-                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
-                  solid ? "text-slate-600 hover:text-slate-900 hover:bg-slate-100" : "text-slate-300 hover:text-white hover:bg-white/10"
+              <NavLink
+                to={l.href}
+                className={({ isActive }) => `rounded-lg px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                  solid
+                    ? isActive ? "bg-slate-100 text-slate-900" : "text-slate-600 hover:text-slate-900 hover:bg-slate-100"
+                    : isActive ? "bg-white/10 text-white" : "text-slate-300 hover:text-white hover:bg-white/10"
                 }`}
               >
                 {l.label}
-              </a>
+              </NavLink>
             </li>
           ))}
         </ul>
@@ -107,13 +109,13 @@ export function MarketingNav() {
         <ul className="space-y-1 px-4 pb-4 pt-3">
           {nav.links.map((l) => (
             <li key={l.href}>
-              <a
-                href={l.href}
+              <NavLink
+                to={l.href}
                 onClick={() => setOpen(false)}
-                className="block rounded-lg px-3 py-3 text-base font-medium text-slate-700 hover:bg-slate-50 hover:text-slate-900"
+                className={({ isActive }) => `block rounded-lg px-3 py-3 text-base font-medium hover:bg-slate-50 hover:text-slate-900 ${isActive ? "bg-slate-100 text-slate-900" : "text-slate-700"}`}
               >
                 {l.label}
-              </a>
+              </NavLink>
             </li>
           ))}
         </ul>
