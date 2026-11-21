@@ -72,8 +72,10 @@ const SiteSeguridad = lazyPage(() => import("@/pages/site/Seguridad"));
 const SitePrecios = lazyPage(() => import("@/pages/site/Precios"));
 const SitePreguntas = lazyPage(() => import("@/pages/site/Preguntas"));
 const Receipts = lazyPage(() => import("@/pages/Receipts"));
+const Expenses = lazyPage(() => import("@/pages/Expenses"));
 const Vendors = lazyPage(() => import("@/pages/Vendors"));
 const Quotes = lazyPage(() => import("@/pages/Quotes"));
+const Invoices = lazyPage(() => import("@/pages/Invoices"));
 const Accountant = lazyPage(() => import("@/pages/Accountant"));
 
 function PageLoader() {
@@ -150,9 +152,11 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/assistant" element={<Assistant />} />
+          <Route path="/expenses" element={<Expenses />} />
           <Route path="/receipts" element={<Receipts />} />
           <Route path="/vendors" element={<Vendors />} />
           <Route path="/quotes" element={<Quotes />} />
+          <Route path="/invoices" element={<Invoices />} />
           <Route path="/accountant" element={<Accountant />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />

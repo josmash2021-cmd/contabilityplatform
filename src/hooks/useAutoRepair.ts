@@ -3,8 +3,8 @@ import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 
 /**
- * Auto-repair accounting: silently fixes unbalanced journal entries
- * after user login. Runs once per session, only when authenticated.
+ * Once per session after login: makes sure the user's chart of accounts has every account the app books to
+ * (accounting.rebuild adds the missing ones and books nothing). Silent.
  */
 export function useAutoRepair() {
   const { isAuthenticated } = useAuth();
@@ -15,17 +15,11 @@ export function useAutoRepair() {
     if (!isAuthenticated || hasRunRef.current) return;
     hasRunRef.current = true;
 
-    // Wait 3 seconds after login for everything to settle, then repair silently
+    // A few seconds after login, so it doesn't compete with the first screen's data.
     const timer = setTimeout(() => {
       repairMutation.mutate(undefined, {
         onSuccess: (data) => {
-          if (data.success && (data as any).entries && (data as any).entries > 0) {
-            console.log(`[AutoRepair] Created ${(data as any).entries} missing journal entries. Balance fixed.`);
-          } else if (data.success) {
-            console.log("[AutoRepair] Balance OK. No missing entries.");
-          } else {
-            console.error("[AutoRepair] Failed:", data.error);
-          }
+          if (!data.success) console.error("[AutoRepair] Failed:", data.error);
         },
         onError: (err) => {
           console.error("[AutoRepair] Error:", err.message);

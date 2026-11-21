@@ -11,11 +11,13 @@ import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOver
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import { useCopy } from "@/i18n/useI18n";
 import { GlobalSearch, NoticesBell } from "@/components/layout/TopBar";
+import { useEffectiveRole } from "@/components/team/viewAs";
+import { ViewAsBanner } from "@/components/team/ViewAsBanner";
 import { appCopy, type AppCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
 import type { Feature } from "@contracts/planFeatures";
 import {
-  Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Camera, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
+  Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Wallet, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
   FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Lock,
   LogOut, Construction, Gift, Loader2, type LucideIcon,
 } from "lucide-react";
@@ -26,8 +28,8 @@ type Group = { title?: string; sep?: boolean; items: Item[] };
 // ── The 2.0 menu: grouped like accounting software, but shorter ──
 const BUSINESS_GROUPS: Group[] = [
   { items: [{ path: "/", icon: Home }, { path: "/transactions", icon: Inbox }] },
-  { title: "sales", items: [{ path: "/pos", icon: ShoppingCart }, { path: "/quotes", icon: ClipboardList, feature: "quotes" }, { path: "/customers", icon: Users }, { path: "/services", icon: Tag }] },
-  { title: "spend", items: [{ path: "/receipts", icon: Camera, feature: "receipts" }, { path: "/vendors", icon: Truck, feature: "vendors" }] },
+  { title: "sales", items: [{ path: "/pos", icon: ShoppingCart }, { path: "/invoices", icon: FileText }, { path: "/quotes", icon: ClipboardList, feature: "quotes" }, { path: "/customers", icon: Users }, { path: "/services", icon: Tag }] },
+  { title: "spend", items: [{ path: "/expenses", icon: Wallet }, { path: "/vendors", icon: Truck, feature: "vendors" }] },
   { title: "money", items: [{ path: "/bank", icon: Landmark }, { path: "/reports", icon: BarChart3 }, { path: "/accountant", icon: BookOpen, feature: "accountant" }, { path: "/taxes", icon: FileText, feature: "taxes" }] },
   { title: "general", items: [{ path: "/assistant", icon: Sparkles }, { path: "/team", icon: UsersRound, feature: "team" }, { path: "/settings", icon: Settings }] },
 ];
@@ -38,10 +40,11 @@ const PERSONAL_GROUPS: Group[] = [
   { title: "account", items: [{ path: "/personal/bank", icon: Landmark }, { path: "/personal/assistant", icon: Sparkles }, { path: "/settings", icon: Settings }] },
 ];
 /** The phone tab bar: two tabs, the "+" button, one tab, and "Más". */
-const TABS = { business: ["/", "/transactions", "/pos"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
+const TABS = { business: ["/", "/transactions", "/invoices"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
 
 /** An employee on a team: takes payments, serves clients, photographs receipts. */
-const STAFF_PATHS = new Set(["/pos", "/customers", "/receipts"]);
+/** /expenses is where receipt photos are taken now (the page shows employees only that). */
+const STAFF_PATHS = new Set(["/pos", "/invoices", "/customers", "/receipts", "/expenses"]);
 /** The accountant reads the books; these are the owner's alone. */
 const ACCOUNTANT_HIDDEN = new Set(["/taxes", "/assistant", "/team", "/settings"]);
 
@@ -63,7 +66,7 @@ function TrialBanner() {
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-900 sm:text-sm">
       <span className="inline-flex items-center gap-1.5"><Gift className="h-4 w-4 text-emerald-600" />{t.trial.banner(trial.daysLeft)}</span>
-      <Link to="/settings" className="font-semibold underline-offset-2 hover:underline">{t.trial.choosePlan}</Link>
+      <Link to="/settings?sec=plan" className="font-semibold underline-offset-2 hover:underline">{t.trial.choosePlan}</Link>
     </div>
   );
 }
@@ -132,7 +135,7 @@ function SideNav({ groups, pathname, locked, label, t, onGo, counts }: NavProps)
 
 /** Jump to any section by typing its name (or what it's for). */
 /** "+ Nuevo": the things people create most, one tap away. */
-function NewMenu({ items, t, onGo, round }: { items: [string, string][]; t: AppCopy; onGo: (p: string) => void; round?: boolean }) {
+function NewMenu({ items, t, onGo, round }: { items: [string, string, string?][]; t: AppCopy; onGo: (p: string) => void; round?: boolean }) {
   if (items.length === 0) return null;
   return (
     <DropdownMenu>
@@ -149,8 +152,11 @@ function NewMenu({ items, t, onGo, round }: { items: [string, string][]; t: AppC
       </DropdownMenuTrigger>
       <DropdownMenuContent align={round ? "center" : "end"} side={round ? "top" : "bottom"} className="w-56">
         <DropdownMenuLabel>{t.shell.newTitle}</DropdownMenuLabel>
-        {items.map(([path, label]) => (
-          <DropdownMenuItem key={path + label} onSelect={() => onGo(path)} className="py-2.5">{label}</DropdownMenuItem>
+        {items.map(([path, label, sub]) => (
+          <DropdownMenuItem key={path + label} onSelect={() => onGo(path)} className="flex-col items-start gap-0 py-2">
+            <span className="text-sm font-semibold text-slate-900">{label}</span>
+            {sub && <span className="text-xs text-slate-500">{sub}</span>}
+          </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
     </DropdownMenu>
@@ -203,7 +209,9 @@ export function AppLayout() {
 
   // Team members see only what their role allows (the server enforces it too: api/lib/team.ts).
   const { data: membership } = trpc.team.myMembership.useQuery(undefined, { enabled: !!user && userMode === "business", staleTime: 60_000 });
-  const memberRole = membership?.role ?? null;
+  // "Ver como" (Equipo): the owner can preview the app as an employee or the accountant. Everything below
+  // (menu, tabs, + Nuevo, route guard) follows that role; actions are still the owner's (see ViewAsBanner).
+  const memberRole = useEffectiveRole(membership?.role ?? null);
   useEffect(() => {
     if (memberRole === "staff" && !STAFF_PATHS.has(pathname)) navigate("/pos", { replace: true });
     if (memberRole === "accountant" && ACCOUNTANT_HIDDEN.has(pathname)) navigate("/", { replace: true });
@@ -223,11 +231,11 @@ export function AppLayout() {
   const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);
   const go = (path: string) => { setMoreOpen(false); navigate(path); };
 
-  const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/receipts"] : TABS[userMode])
+  const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/expenses"] : TABS[userMode])
     .map((p) => allItems.find((i) => i.path === p)).filter((i): i is Item => !!i);
   const rest = allItems.filter((i) => !tabs.includes(i));
   const newItems = memberRole === "accountant" ? [] : memberRole === "staff"
-    ? t.shell.newItems.business.filter(([p]) => STAFF_PATHS.has(p))
+    ? t.shell.newItems.business.filter(([p]) => STAFF_PATHS.has(p.split("?")[0]))
     : t.shell.newItems[userMode];
 
   const companyName = userMode === "personal" ? (user?.name || t.myAccount) : (settings?.companyName || t.myCompany);
@@ -277,6 +285,7 @@ export function AppLayout() {
         </header>
 
         <main className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
+          <ViewAsBanner />
           <TeamBanner />
           <TrialBanner />
           <SubscriptionPageGate>

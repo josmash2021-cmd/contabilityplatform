@@ -35,7 +35,7 @@ const es = {
   shell: {
     groups: { sales: "Ventas", spend: "Gastos", money: "Dinero", general: "General", taxes: "Impuestos", plan: "Planear", account: "Cuenta" } as Record<string, string>,
     labels: {
-      "/": "Inicio", "/pos": "Cobrar", "/quotes": "Cotizaciones", "/customers": "Clientes", "/services": "Productos y servicios",
+      "/": "Inicio", "/pos": "Cobrar", "/quotes": "Cotizaciones", "/customers": "Clientes", "/services": "Productos y servicios", "/invoices": "Facturas", "/expenses": "Gastos",
       "/receipts": "Recibos", "/vendors": "Proveedores", "/bank": "Bancos", "/transactions": "Por revisar", "/reports": "Reportes",
       "/accountant": "Contador", "/taxes": "Impuestos", "/assistant": "Asistente", "/team": "Equipo", "/settings": "Ajustes",
       "/personal": "Inicio", "/personal/transactions": "Movimientos", "/personal/budgets": "Presupuestos", "/personal/goals": "Metas",
@@ -44,7 +44,7 @@ const es = {
     } as Record<string, string>,
     short: { "/personal/transactions": "Movimientos", "/transactions": "Revisar" } as Record<string, string>,
     desc: {
-      "/pos": "Cobra en el momento", "/quotes": "Presupuestos que se vuelven venta", "/customers": "Tus clientes y lo que te compran",
+      "/pos": "Cobra en el momento", "/invoices": "Lo que te deben y lo cobrado", "/expenses": "Todo lo que gasta el negocio", "/quotes": "Presupuestos que se vuelven venta", "/customers": "Tus clientes y lo que te compran",
       "/services": "Precios de lo que vendes", "/receipts": "Foto del recibo y listo", "/vendors": "Lo que debes y a quién",
       "/bank": "Tus cuentas y cómo van", "/transactions": "Confirma lo que llegó del banco", "/reports": "Cómo va tu negocio",
       "/accountant": "Excel y PDF para tu contador", "/taxes": "Tu declaración y tus documentos", "/assistant": "Pregunta sobre tu dinero",
@@ -57,9 +57,16 @@ const es = {
     newBtn: "Nuevo",
     newTitle: "Crear",
     newItems: {
-      business: [["/pos", "Cobrar"], ["/quotes", "Cotización"], ["/receipts", "Foto de recibo"], ["/vendors", "Factura por pagar"], ["/customers", "Cliente"]],
-      personal: [["/personal/goals", "Meta de ahorro"], ["/personal/budgets", "Presupuesto"], ["/personal/taxes", "Documento de impuestos"], ["/personal/assistant", "Pregunta al asistente"]],
-    } as Record<"business" | "personal", [string, string][]>,
+      business: [
+        ["/pos", "Cobrar", "Venta en el momento"], ["/invoices?new=1", "Factura", "Con link para pagar"],
+        ["/quotes?new=1", "Cotización", "Presupuesto para un cliente"], ["/expenses?new=1", "Gasto", "Registra un pago que hiciste"],
+        ["/expenses?photo=1", "Foto de recibo", "Tómale foto y listo"], ["/customers?new=1", "Cliente", "Nombre y teléfono"],
+      ],
+      personal: [
+        ["/personal/transactions?new=1", "Gasto en efectivo", "Para lo que no pasa por el banco"],
+        ["/personal/goals?new=1", "Meta de ahorro", "Define cuánto y para cuándo"], ["/personal/budgets", "Presupuesto", "Un límite por categoría"],
+      ],
+    } as Record<"business" | "personal", [string, string, string][]>,
     search: "Busca una sección…",
     searchLabel: "Buscar en la app",
     noResults: "No encontramos esa sección.",
@@ -154,7 +161,7 @@ const en: AppCopy = {
   shell: {
     groups: { sales: "Sales", spend: "Spending", money: "Money", general: "General", taxes: "Taxes", plan: "Plan", account: "Account" },
     labels: {
-      "/": "Home", "/pos": "Checkout", "/quotes": "Quotes", "/customers": "Clients", "/services": "Products & services",
+      "/": "Home", "/pos": "Checkout", "/quotes": "Quotes", "/customers": "Clients", "/services": "Products & services", "/invoices": "Invoices", "/expenses": "Expenses",
       "/receipts": "Receipts", "/vendors": "Vendors", "/bank": "Banks", "/transactions": "To review", "/reports": "Reports",
       "/accountant": "Accountant", "/taxes": "Taxes", "/assistant": "Assistant", "/team": "Team", "/settings": "Settings",
       "/personal": "Home", "/personal/transactions": "Transactions", "/personal/budgets": "Budgets", "/personal/goals": "Goals",
@@ -163,7 +170,7 @@ const en: AppCopy = {
     },
     short: { "/personal/transactions": "Activity", "/transactions": "Review" },
     desc: {
-      "/pos": "Take a payment now", "/quotes": "Estimates that become sales", "/customers": "Your clients and what they buy",
+      "/pos": "Take a payment now", "/invoices": "What you're owed and what's paid", "/expenses": "Everything the business spends", "/quotes": "Estimates that become sales", "/customers": "Your clients and what they buy",
       "/services": "Prices of what you sell", "/receipts": "Snap the receipt, done", "/vendors": "What you owe and to whom",
       "/bank": "Your accounts and how they're doing", "/transactions": "Confirm what came from the bank", "/reports": "How your business is doing",
       "/accountant": "Excel and PDF for your accountant", "/taxes": "Your return and your documents", "/assistant": "Ask about your money",
@@ -176,8 +183,15 @@ const en: AppCopy = {
     newBtn: "New",
     newTitle: "Create",
     newItems: {
-      business: [["/pos", "Checkout"], ["/quotes", "Quote"], ["/receipts", "Receipt photo"], ["/vendors", "Bill to pay"], ["/customers", "Client"]],
-      personal: [["/personal/goals", "Savings goal"], ["/personal/budgets", "Budget"], ["/personal/taxes", "Tax document"], ["/personal/assistant", "Ask the assistant"]],
+      business: [
+        ["/pos", "Checkout", "A sale right now"], ["/invoices?new=1", "Invoice", "With a link to pay"],
+        ["/quotes?new=1", "Quote", "An estimate for a client"], ["/expenses?new=1", "Expense", "Record a payment you made"],
+        ["/expenses?photo=1", "Receipt photo", "Snap it and you're done"], ["/customers?new=1", "Client", "Name and phone"],
+      ],
+      personal: [
+        ["/personal/transactions?new=1", "Cash expense", "For what doesn't go through the bank"],
+        ["/personal/goals?new=1", "Savings goal", "How much and by when"], ["/personal/budgets", "Budget", "A limit per category"],
+      ],
     },
     search: "Find a section…",
     searchLabel: "Search the app",

@@ -7,6 +7,7 @@ import { expensesRouter } from "./expenses-router";
 import { settingsRouter } from "./settings-router";
 import { reportsRouter } from "./reports-router";
 import { bankRouter } from "./bank-router";
+import { banksRouter } from "./banks-router";
 import { cloverRouter } from "./clover-router";
 import { subscriptionRouter } from "./subscription-router";
 import { accountingRouter } from "./accounting-router";
@@ -22,14 +23,19 @@ import { teamRouter } from "./team-router";
 import { receiptsRouter } from "./receipts-router";
 import { vendorsRouter } from "./vendors-router";
 import { quotesRouter } from "./quotes-router";
+import { invoicesRouter } from "./invoices-router";
 import { accountantRouter } from "./accountant-router";
 import { reviewRouter } from "./review-router";
+import { brandRouter } from "./brand-router";
+import { reconcileRouter } from "./reconcile-router";
+import { homeRouter } from "./home-router";
+import { subscriptionsRouter } from "./subscriptions-router";
 import { searchRouter } from "./search-router";
 import { noticesRouter } from "./notices-router";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales } from "@db/schema";
-import { desc, sql, eq } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 
 export const appRouter = createRouter({
   ping: publicQuery.query(() => ({ ok: true, ts: Date.now() })),
@@ -42,6 +48,7 @@ export const appRouter = createRouter({
   settings: settingsRouter,
   reports: reportsRouter,
   bank: bankRouter,
+  banks: banksRouter,
   clover: cloverRouter,
   subscription: subscriptionRouter,
   accounting: accountingRouter,
@@ -57,10 +64,15 @@ export const appRouter = createRouter({
   receipts: receiptsRouter,
   vendors: vendorsRouter,
   quotes: quotesRouter,
+  invoices: invoicesRouter,
   accountant: accountantRouter,
   review: reviewRouter,
   search: searchRouter,
   notices: noticesRouter,
+  brand: brandRouter,
+  reconcile: reconcileRouter,
+  home: homeRouter,
+  subs: subscriptionsRouter,
   debug: createRouter({
     myData: authedQuery.query(async ({ ctx }) => {
       const db = getDb();
