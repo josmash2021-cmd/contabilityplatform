@@ -14,7 +14,7 @@ import { appCopy, type AppCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
 import type { Feature } from "@contracts/planFeatures";
 import {
-  Home, ShoppingCart, ClipboardList, Users, Wrench, Camera, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
+  Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Camera, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
   FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Search, Lock,
   LogOut, Construction, Gift, Loader2, type LucideIcon,
 } from "lucide-react";
@@ -24,10 +24,10 @@ type Group = { title?: string; sep?: boolean; items: Item[] };
 
 // ── The 2.0 menu: grouped like accounting software, but shorter ──
 const BUSINESS_GROUPS: Group[] = [
-  { items: [{ path: "/", icon: Home }] },
-  { title: "sales", items: [{ path: "/pos", icon: ShoppingCart }, { path: "/quotes", icon: ClipboardList, feature: "quotes" }, { path: "/customers", icon: Users }, { path: "/services", icon: Wrench }] },
+  { items: [{ path: "/", icon: Home }, { path: "/transactions", icon: Inbox }] },
+  { title: "sales", items: [{ path: "/pos", icon: ShoppingCart }, { path: "/quotes", icon: ClipboardList, feature: "quotes" }, { path: "/customers", icon: Users }, { path: "/services", icon: Tag }] },
   { title: "spend", items: [{ path: "/receipts", icon: Camera, feature: "receipts" }, { path: "/vendors", icon: Truck, feature: "vendors" }] },
-  { title: "money", items: [{ path: "/bank", icon: Landmark }, { path: "/transactions", icon: ArrowLeftRight }, { path: "/reports", icon: BarChart3 }, { path: "/accountant", icon: BookOpen, feature: "accountant" }, { path: "/taxes", icon: FileText, feature: "taxes" }] },
+  { title: "money", items: [{ path: "/bank", icon: Landmark }, { path: "/reports", icon: BarChart3 }, { path: "/accountant", icon: BookOpen, feature: "accountant" }, { path: "/taxes", icon: FileText, feature: "taxes" }] },
   { title: "general", items: [{ path: "/assistant", icon: Sparkles }, { path: "/team", icon: UsersRound, feature: "team" }, { path: "/settings", icon: Settings }] },
 ];
 const PERSONAL_GROUPS: Group[] = [
@@ -37,7 +37,7 @@ const PERSONAL_GROUPS: Group[] = [
   { title: "account", items: [{ path: "/personal/bank", icon: Landmark }, { path: "/personal/assistant", icon: Sparkles }, { path: "/settings", icon: Settings }] },
 ];
 /** The phone tab bar: two tabs, the "+" button, one tab, and "Más". */
-const TABS = { business: ["/", "/pos", "/customers"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
+const TABS = { business: ["/", "/transactions", "/pos"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
 
 /** An employee on a team: takes payments, serves clients, photographs receipts. */
 const STAFF_PATHS = new Set(["/pos", "/customers", "/receipts"]);
@@ -82,10 +82,16 @@ function TeamBanner() {
   );
 }
 
-type NavProps = { groups: Group[]; pathname: string; locked: (i: Item) => boolean; label: (path: string) => string; t: AppCopy; onGo: (path: string) => void };
+type NavProps = { groups: Group[]; pathname: string; locked: (i: Item) => boolean; label: (path: string) => string; t: AppCopy; onGo: (path: string) => void; counts: Record<string, number> };
+
+/** A small count pill, like "Por revisar 9" in the prototype. */
+function CountPill({ n, on, className }: { n: number; on?: boolean; className?: string }) {
+  if (!n) return null;
+  return <span className={cn("min-w-[22px] rounded-full px-1.5 py-px text-center text-[11px] font-bold tabular-nums", on ? "bg-blue-500 text-white" : "bg-blue-600 text-white", className)}>{n > 99 ? "99+" : n}</span>;
+}
 
 /** Desktop side menu: groups with small titles; the current page is a dark pill. */
-function SideNav({ groups, pathname, locked, label, t, onGo }: NavProps) {
+function SideNav({ groups, pathname, locked, label, t, onGo, counts }: NavProps) {
   return (
     <nav aria-label={t.shell.searchLabel} className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
       {groups.map((g, gi) => (
@@ -109,6 +115,7 @@ function SideNav({ groups, pathname, locked, label, t, onGo }: NavProps) {
                   >
                     <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={on ? 2.2 : 1.8} aria-hidden />
                     <span className="min-w-0 flex-1 truncate">{label(item.path)}</span>
+                    {!lock && <CountPill n={counts[item.path] ?? 0} on={on} />}
                     {lock && <Lock className={cn("h-3.5 w-3.5 shrink-0", on ? "text-white/70" : "text-slate-300")} aria-label={t.shell.locked} />}
                   </button>
                 </li>
@@ -252,6 +259,8 @@ export function AppLayout() {
     if (isAdmin && !memberRole) g.push({ items: [{ path: "/admin", icon: Shield }] });
     return g;
   }, [userMode, memberRole, isAdmin]);
+  const { data: review } = trpc.review.count.useQuery(undefined, { enabled: !!user && userMode === "business" && memberRole !== "staff", staleTime: 60_000, refetchInterval: 120_000 });
+  const counts: Record<string, number> = { "/transactions": review?.count ?? 0 };
   const allItems = groups.flatMap((g) => g.items);
   const label = (path: string) => (path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : t.shell.labels[path] ?? path);
   const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);
@@ -294,7 +303,7 @@ export function AppLayout() {
             <p className="truncate text-xs text-slate-500">{planLabel || "Personal & Business Solutions"}</p>
           </div>
         </div>
-        <SideNav groups={groups} pathname={pathname} locked={locked} label={label} t={t} onGo={go} />
+        <SideNav groups={groups} pathname={pathname} locked={locked} label={label} t={t} onGo={go} counts={counts} />
         <div className="border-t border-slate-100 px-5 py-3">
           <Link to="/privacy" className="text-[11px] text-slate-400 hover:text-slate-600">{t.shell.privacy}</Link>
         </div>
@@ -330,9 +339,9 @@ export function AppLayout() {
 
         {/* ── Phone tab bar ── */}
         <nav aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[calc(6px+env(safe-area-inset-bottom,0px))] pt-1.5 lg:hidden">
-          {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} /> : <span key="empty-l" />)}
+          {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} count={counts[tab.path]} /> : <span key="empty-l" />)}
           <div className="grid place-items-center">{newItems.length ? <NewMenu items={newItems} t={t} onGo={go} round /> : null}</div>
-          {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} /> : <span />}
+          {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
           <button
             onClick={() => setMoreOpen(true)}
             aria-current={rest.some((i) => isOn(pathname, i.path)) ? "page" : undefined}
@@ -357,6 +366,7 @@ export function AppLayout() {
                         <span className="block text-sm font-semibold">{label(i.path)}</span>
                         {t.shell.desc[i.path] && <span className={cn("block truncate text-xs", on ? "text-white/70" : "text-slate-500")}>{t.shell.desc[i.path]}</span>}
                       </span>
+                      {!locked(i) && <CountPill n={counts[i.path] ?? 0} on={on} />}
                       {locked(i) && <Lock className="h-4 w-4 shrink-0 text-slate-300" aria-label={t.shell.locked} />}
                     </button>
                   </li>
@@ -373,12 +383,15 @@ export function AppLayout() {
   );
 }
 
-function TabButton({ item, on, label, onGo }: { item: Item; on: boolean; label: string; onGo: (p: string) => void }) {
+function TabButton({ item, on, label, onGo, count = 0 }: { item: Item; on: boolean; label: string; onGo: (p: string) => void; count?: number }) {
   const Icon = item.icon;
   return (
     <button onClick={() => onGo(item.path)} aria-current={on ? "page" : undefined}
       className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", on ? "text-blue-600" : "text-slate-500")}>
-      <Icon className="h-[22px] w-[22px]" strokeWidth={on ? 2.2 : 1.8} aria-hidden />
+      <span className="relative">
+        <Icon className="h-[22px] w-[22px]" strokeWidth={on ? 2.2 : 1.8} aria-hidden />
+        {count > 0 && <CountPill n={count} className="absolute -right-3 -top-2 ring-2 ring-white" />}
+      </span>
       <span className="max-w-full truncate">{label}</span>
     </button>
   );
