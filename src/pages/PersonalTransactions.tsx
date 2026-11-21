@@ -1,478 +1,375 @@
-import { useState, useRef, useEffect } from "react";
-import { trpc } from "@/providers/trpc";
-import { AnimatedPage } from "@/components/AnimatedPage";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
+import { useId, useMemo, useState } from "react";
+import { Link } from "react-router";
+import { ChevronRight, Loader2, Plus, Receipt, RefreshCw, Search, SearchX } from "lucide-react";
 import { toast } from "sonner";
-import {
-  RefreshCw, Landmark, ChevronDown, TrendingUp, TrendingDown, Wallet,
-  Receipt, CheckCircle, Search, Tv,
-} from "lucide-react";
+import { AnimatedPage } from "@/components/AnimatedPage";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import { Skeleton } from "@/components/ui/skeleton";
+import { CategoryIcon } from "@/components/personal/CategoryIcon";
+import { ConnectBankHero } from "@/components/personal/ConnectBankHero";
+import { ManualTxDialog } from "@/components/personal/ManualTxDialog";
+import { MonthNav } from "@/components/personal/MonthNav";
+import {
+  accountName, dayKey, isDebt, localTodayKey, money, monthIndex, monthOnly, num, signed, txDay, ui, upperFirst,
+  type BankTx, type ManualTx, type PersonalAccount, type YearMonth,
+} from "@/components/personal/personalUtils";
+import { trpc } from "@/providers/trpc";
+import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { personalCopy } from "@/i18n/copy/personal";
+import { budgetCategoryLabel } from "@/i18n/copy/budgets";
+import { personalPagesCopy } from "@/i18n/copy/personalPages";
 
-/** Account dropdown - avoids scroll issues */
-function AccountDropdown({
-  accounts,
-  selectedId,
-  onChange,
-}: {
-  accounts: any[];
-  selectedId: string;
-  onChange: (id: string) => void;
-}) {
-  const { common } = useCopy(personalCopy);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+// ─── Filters (the same rules as before; a chip only shows when the month has movements for it) ───
+type FilterKey = "all" | "income" | "expense" | "devoluciones" | "zelle_in" | "zelle_out" | "cash_deposit" | "cash_withdrawal" | "gasolina" | "streaming" | "p2p";
+type Matchable = { category: string; description: string; type: string };
 
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
+const P2P_KEYWORDS = ["paypal", "cash app", "venmo", "square", "clover", "facebook pay"];
+const GAS_BRANDS = [
+  // Major brands
+  "shell", "exxon", "chevron", "bp", "mobil", "texaco", "marathon", "speedway",
+  "valero", "citgo", "phillips 66", "sinclair", "gulf", "esso", "arco",
+  // Regional chains
+  "76", "union 76", "kum & go", "kum and go", "quik trip", "quiktrip", "race trac",
+  "racetrac", "sheetz", "wawa", "pilot", "flying j", "love's", "maverik", "thorntons",
+  "stripes", "murphy usa", "casey's", "caseys", "holiday", "cumberland farms",
+  "royal farms", "getgo", "parkers", "parker's", "quick chek", "quickchek",
+  "stewart's", "stewarts", "oncue", "p66", "kennedy",
+  // Warehouse/club gas
+  "costco gas", "walmart gas", "sam's club gas", "buc-ee's", "bucees",
+  "7-eleven gas", "7 eleven gas",
+  // Generic keywords
+  "gasoline", "petrol", "fuel", "gas station", "gas sta", "gasoline station",
+];
+const GAS_RES = GAS_BRANDS.map((b) => new RegExp(`\\b${b.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "i"));
+// Streaming services: Netflix, Spotify, Disney, HBO, etc.
+const STREAMING_SERVICES = [
+  "netflix", "spotify", "disney", "hulu", "hbo", "max", "paramount", "peacock",
+  "prime video", "youtube premium", "youtube tv", "crunchyroll", "twitch",
+  "starz", "showtime", "amc+", "apple tv", "apple music", "apple arcade",
+  "amazon prime", "netflix.com", "disneyplus", "hbomax",
+];
 
-  const selected = selectedId ? accounts.find((a) => String(a.id) === selectedId) : null;
+const lower = (t: Matchable) => t.description.toLowerCase();
+const isDevolucion = (t: Matchable) => {
+  const n = lower(t);
+  return t.category === "refund" || n.includes("refund") || n.includes("devolucion") || n.includes("reembolso");
+};
+const isP2P = (t: Matchable) => t.category === "transfer" || P2P_KEYWORDS.some((k) => lower(t).includes(k));
+const isGas = (t: Matchable) => {
+  const n = lower(t);
+  // Zelle transactions are never gas, even if the backend mis-categorized them.
+  if (n.includes("zelle")) return false;
+  if (t.category === "gasolina") return true;
+  return GAS_RES.some((re) => re.test(n));
+};
+const isStreaming = (t: Matchable) => t.category === "subscription" || t.category === "membership" || STREAMING_SERVICES.some((s) => lower(t).includes(s));
 
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
-      >
-        <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected ? selected.bankName : common.allAccounts}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-          <button
-            onClick={() => { onChange(""); setOpen(false); }}
-            className={`w-full text-left px-3 py-2 text-sm flex items-center gap-2 transition-colors ${
-              !selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            <Landmark className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>{common.allAccounts}</span>
-          </button>
-          <div className="border-t border-neutral-100 my-1" />
-          {accounts.map((acc: any) => (
-            <button
-              key={acc.id}
-              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
-                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate">{acc.bankName} {acc.accountType ? `(${acc.accountType})` : ""}</span>
-              </div>
-              <span className={`text-xs font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+const FILTERS: Record<Exclude<FilterKey, "all">, (t: Matchable) => boolean> = {
+  income: (t) => t.type === "income",
+  expense: (t) => t.type === "expense",
+  devoluciones: isDevolucion,
+  zelle_in: (t) => t.category === "zelle_income",
+  zelle_out: (t) => t.category === "zelle_sent",
+  cash_deposit: (t) => t.category === "cash_deposit",
+  cash_withdrawal: (t) => t.category === "cash_withdrawal",
+  gasolina: isGas,
+  streaming: isStreaming,
+  p2p: isP2P,
+};
+const FILTER_ORDER = Object.keys(FILTERS) as Exclude<FilterKey, "all">[];
 
+/** One line in the list: a bank movement or one the person added by hand. */
+type Row = Matchable & { key: string; amount: number; date: unknown; bankName: string | null; manual: ManualTx | null };
+
+/**
+ * 2.0 personal movements: the month's bank movements (all accounts or one), plus the ones the person adds by hand,
+ * with month navigation, account, search, the category filters, and a manual "Refresh" from the bank.
+ */
 export default function PersonalTransactions() {
+  const all = useCopy(personalPagesCopy);
+  const t = all.tx;
+  const { categories } = useCopy(personalCopy);
   const { lang } = useLang();
-  const { transactions: copy, common, categories } = useCopy(personalCopy);
-  const now = new Date();
-  const [year, setYear] = useState(String(now.getFullYear()));
-  const [month, setMonth] = useState(String(now.getMonth() + 1));
-  const [filterType, setFilterType] = useState("all");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedAccountId, setSelectedAccountId] = useState<string>("");
-  const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
+  const locale = intlLocale(lang);
+  const uid = useId();
   const utils = trpc.useUtils();
 
-  // Check if bank is connected
-  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
-    staleTime: 60000,
-    refetchOnMount: true,
-  });
-  const hasBankConnected = bankConnection?.hasBank === true;
+  // This month, the oldest month to pick (January two years back, as the old year list), today and yesterday.
+  const calendar = useMemo(() => {
+    const now = new Date();
+    const current: YearMonth = { y: now.getFullYear(), m: now.getMonth() + 1 };
+    return {
+      current,
+      min: { y: current.y - 2, m: 1 },
+      today: localTodayKey(now),
+      yesterday: localTodayKey(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1)),
+    };
+  }, []);
+  const [picked, setPicked] = useState<YearMonth | null>(null);
+  const period = picked ?? calendar.current;
+  const [filterType, setFilterType] = useState<FilterKey>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedAccountId, setSelectedAccountId] = useState("");
+  const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
+  const [dialog, setDialog] = useState<{ editing: ManualTx | null; defaultDate: string } | null>(null);
 
-  // Fetch ALL accounts from Plaid (always try — if it fails we still have DB accounts)
-  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
-    staleTime: 60000,
-  });
+  trpc.bank.checkConnection.useQuery(undefined, { staleTime: 60000, refetchOnMount: true });
+  // Accounts: live from Plaid with the saved balance (and the saved id, which movements point to); the saved ones when Plaid can't answer.
+  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, { staleTime: 60000 });
+  const { data: dbAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { staleTime: 30000 });
+  const accounts: PersonalAccount[] = useMemo(() => {
+    const saved = (dbAccounts ?? []) as PersonalAccount[];
+    const live = (plaidAccountsData?.accounts ?? []) as PersonalAccount[];
+    if (live.length === 0) return saved;
+    return live.map((pa) => {
+      const match = saved.find((s) => s.id === pa.id || s.plaidAccountId === pa.plaidAccountId);
+      return match ? { ...pa, id: match.id, currentBalance: match.currentBalance } : pa;
+    });
+  }, [dbAccounts, plaidAccountsData]);
+  const hasAccounts = accounts.length > 0;
+  const accountId = selectedAccountId ? parseInt(selectedAccountId) : undefined;
 
-  // Fetch bank accounts from DB (ALWAYS — if accounts exist, user has a bank)
-  const { data: dbAccounts } = trpc.bank.listAccounts.useQuery(undefined, {
-    staleTime: 30000,
-  });
-
-  const plaidAccounts = plaidAccountsData?.accounts ?? [];
-  // Use DB account IDs (not Plaid IDs) so filtering works correctly
-  // bankTransactions.bankAccountId references the DB account id
-  const accounts = plaidAccounts.length > 0
-    ? plaidAccounts.map((pa: any) => {
-        const dbMatch = (dbAccounts ?? []).find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
-        // Return with DB id so selectedAccountId matches bankTransactions.bankAccountId
-        return dbMatch ? { ...pa, id: dbMatch.id, plaidAccountId: pa.plaidAccountId, currentBalance: dbMatch.currentBalance } : pa;
-      })
-    : (dbAccounts ?? []);
-
-  // NO default account selection - user chooses or "All accounts" shows everything
-  const effectiveAccountId = selectedAccountId;
-
-  // Fetch bank transactions (only when bank is connected)
-  const { data: monthData, isLoading: isLoadingBank } = trpc.bank.getMonthData.useQuery({
-    year: parseInt(year),
-    month: parseInt(month),
-    accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-  });
+  const monthQ = trpc.bank.getMonthData.useQuery({ year: period.y, month: period.m, accountId });
+  const manualQ = trpc.personal.listTransactions.useQuery({ year: period.y, month: period.m });
 
   const syncMutation = trpc.bank.syncTransactions.useMutation({
     onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        toast.success(common.txSynced(data.added));
-      }
-      utils.bank.getMonthData.invalidate();
+      if (data.success && data.added && data.added > 0) toast.success(t.synced(data.added));
+      void utils.bank.getMonthData.invalidate();
     },
     onError: (err) => toast.error(err.message),
   });
 
-  const allBankTransactions = monthData?.transactions ?? [];
-  const accountFilteredTransactions = allBankTransactions;
+  const catLabel = (cat: string, type: string) =>
+    (type === "income" ? categories.income : categories.expense)[cat] ?? categories.short[cat] ?? budgetCategoryLabel(cat, {});
 
-  // ─── Filter helpers ───
-  const isZelleRecibido = (t: any) => t.category === "zelle_income";
-  const isZelleEnviado = (t: any) => t.category === "zelle_sent";
-  const isCashDeposit = (t: any) => t.category === "cash_deposit";
-  const isCashWithdrawal = (t: any) => t.category === "cash_withdrawal";
-  const isDevolucion = (t: any) => {
-    const n = (t.description || "").toLowerCase();
-    return t.category === "refund" || n.includes("refund") || n.includes("devolucion") || n.includes("reembolso");
-  };
-  const P2P_KEYWORDS = ["paypal","cash app","venmo","square","clover","facebook pay"];
-  const isP2P = (t: any) => {
-    const n = (t.description || "").toLowerCase();
-    return t.category === "transfer" || P2P_KEYWORDS.some(k => n.includes(k));
-  };
-  const GAS_BRANDS = [
-    // Major brands
-    "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway",
-    "valero","citgo","phillips 66","sinclair","gulf","esso","arco",
-    // Regional chains
-    "76","union 76","kum & go","kum and go","quik trip","quiktrip","race trac",
-    "racetrac","sheetz","wawa","pilot","flying j","love's","maverik","thorntons",
-    "stripes","murphy usa","casey's","caseys","holiday","cumberland farms",
-    "royal farms","getgo","parkers","parker's","quick chek","quickchek",
-    "stewart's","stewarts","oncue","p66","kennedy",
-    // Warehouse/club gas
-    "costco gas","walmart gas","sam's club gas","buc-ee's","bucees",
-    "7-eleven gas","7 eleven gas",
-    // Generic keywords
-    "gasoline","petrol","fuel","gas station","gas sta","gasoline station"];
-  const isGas = (t: any) => {
-    const n = (t.description || "").toLowerCase();
-    // Safety: Zelle transactions are NEVER gas — even if backend mis-categorized
-    if (n.includes("zelle")) return false;
-    // If backend already categorized as gasolina, include it
-    if (t.category === "gasolina") return true;
-    for (const b of GAS_BRANDS) {
-      const regex = new RegExp(`\\b${b.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, "i");
-      if (regex.test(n)) return true;
-    }
-    return false;
-  };
-
-  // ─── Streaming services: Netflix, Spotify, Disney, HBO, etc. ───
-  const STREAMING_SERVICES = [
-    "netflix","spotify","disney","hulu","hbo","max","paramount","peacock",
-    "prime video","youtube premium","youtube tv","crunchyroll","twitch",
-    "starz","showtime","amc+","apple tv","apple music","apple arcade",
-    "amazon prime","netflix.com","disneyplus","hbomax",
+  // ─── The month's rows: bank (when there are accounts) + by hand (only with every account, they belong to none) ───
+  const bankTxs = (monthQ.data?.transactions ?? []) as BankTx[];
+  const manualTxs = (manualQ.data ?? []) as ManualTx[];
+  const rows: Row[] = [
+    ...(hasAccounts ? bankTxs : []).map((x, i): Row => ({
+      key: `b-${x.plaidTransactionId ?? x.id ?? i}`, description: x.description ?? "", category: x.category ?? "other", type: x.type,
+      amount: num(x.amount), date: x.transactionDate, bankName: x.bankName ?? null, manual: null,
+    })),
+    ...(accountId ? [] : manualTxs).map((x): Row => ({
+      key: `m-${x.id}`, description: x.description, category: x.category, type: x.type,
+      amount: num(x.amount), date: x.transactionDate, bankName: null, manual: x,
+    })),
   ];
-  const isStreaming = (t: any) => {
-    if (t.category === "subscription" || t.category === "membership") return true;
-    const n = (t.description || "").toLowerCase();
-    for (const s of STREAMING_SERVICES) {
-      if (n.includes(s)) return true;
-    }
-    return false;
+  const income = rows.filter((r) => r.type === "income");
+  const expense = rows.filter((r) => r.type === "expense");
+  const totalIncome = income.reduce((s, r) => s + r.amount, 0);
+  const totalExpense = expense.reduce((s, r) => s + r.amount, 0);
+
+  const available: FilterKey[] = ["all", ...FILTER_ORDER.filter((k) => rows.some(FILTERS[k]))];
+  const filter: FilterKey = available.includes(filterType) ? filterType : "all";
+  const q = searchQuery.trim().toLowerCase();
+  const shown = rows
+    .filter((r) => filter === "all" || FILTERS[filter](r))
+    .filter((r) => !q || r.description.toLowerCase().includes(q))
+    .map((r, i) => ({ r, i, day: dayKey(r.date) }))
+    .sort((a, b) => (a.day === b.day ? a.i - b.i : a.day < b.day ? 1 : -1));
+  const groups: { day: string; date: unknown; items: Row[] }[] = [];
+  for (const { r, day } of shown) {
+    const last = groups[groups.length - 1];
+    if (last && last.day === day) last.items.push(r);
+    else groups.push({ day, date: r.date, items: [r] });
+  }
+  const dayTitle = (day: string, date: unknown) =>
+    day === calendar.today ? t.today : day === calendar.yesterday ? t.yesterday : upperFirst(txDay(date, locale, { weekday: "long", day: "numeric", month: "long" }));
+
+  // Third tile: the picked account's balance, what's available across accounts, or what you kept without a bank.
+  const selectedAccount = accounts.find((a) => String(a.id) === selectedAccountId);
+  const cashAccounts = accounts.filter((a) => !isDebt(a.accountType));
+  const kept = totalIncome - totalExpense;
+
+  const loading = manualQ.isLoading || loadingAccounts || (hasAccounts && monthQ.isLoading);
+  const showConnect = !loadingAccounts && !hasAccounts;
+  const monthName = monthOnly(period, locale);
+  const isCurrent = monthIndex(period) === monthIndex(calendar.current);
+
+  const openNew = () => {
+    const now = new Date();
+    // Today in this month; the month's last day when looking at an earlier one, so it shows up in this list.
+    const last = new Date(period.y, period.m, 0).getDate();
+    setDialog({ editing: null, defaultDate: isCurrent ? localTodayKey(now) : `${period.y}-${String(period.m).padStart(2, "0")}-${String(last).padStart(2, "0")}` });
   };
-
-  // ─── Apply bank filters ───
-  const filteredBankTransactions =
-    filterType === "all" ? accountFilteredTransactions :
-    filterType === "income" ? accountFilteredTransactions.filter((t: any) => t.type === "income") :
-    filterType === "expense" ? accountFilteredTransactions.filter((t: any) => t.type === "expense") :
-    filterType === "devoluciones" ? accountFilteredTransactions.filter((t: any) => isDevolucion(t)) :
-    filterType === "zelle_in" ? accountFilteredTransactions.filter((t: any) => isZelleRecibido(t)) :
-    filterType === "zelle_out" ? accountFilteredTransactions.filter((t: any) => isZelleEnviado(t)) :
-    filterType === "cash_deposit" ? accountFilteredTransactions.filter((t: any) => isCashDeposit(t)) :
-    filterType === "cash_withdrawal" ? accountFilteredTransactions.filter((t: any) => isCashWithdrawal(t)) :
-    filterType === "gasolina" ? accountFilteredTransactions.filter((t: any) => isGas(t)) :
-    filterType === "streaming" ? accountFilteredTransactions.filter((t: any) => isStreaming(t)) :
-    filterType === "p2p" ? accountFilteredTransactions.filter((t: any) => isP2P(t)) :
-    accountFilteredTransactions;
-
-  // Apply text search filter on top of type filters
-  const searchFilteredTransactions = searchQuery.trim()
-    ? filteredBankTransactions.filter((t: any) =>
-        (t.description || "").toLowerCase().includes(searchQuery.toLowerCase())
-      )
-    : filteredBankTransactions;
-
-  const displayTransactions = accounts.length > 0 ? searchFilteredTransactions : [];
-
-  const totalIncome = accountFilteredTransactions
-    .filter((t: any) => t.type === "income")
-    .reduce((s: number, t: any) => s + Number(t.amount), 0);
-  const totalExpense = accountFilteredTransactions
-    .filter((t: any) => t.type === "expense")
-    .reduce((s: number, t: any) => s + Number(t.amount), 0);
-
-  const selectedAccount = accounts.find((a: any) => String(a.id) === effectiveAccountId);
-  const liveBalance = parseFloat(selectedAccount?.currentBalance ?? "0");
-
-  // Only show filter buttons if transactions exist for that category
-  const hasIncome = accountFilteredTransactions.some((t: any) => t.type === "income");
-  const hasExpense = accountFilteredTransactions.some((t: any) => t.type === "expense");
-  const hasDevoluciones = accountFilteredTransactions.some((t: any) => isDevolucion(t));
-  const hasZelleIn = accountFilteredTransactions.some((t: any) => isZelleRecibido(t));
-  const hasZelleOut = accountFilteredTransactions.some((t: any) => isZelleEnviado(t));
-  const hasCashDeposit = accountFilteredTransactions.some((t: any) => isCashDeposit(t));
-  const hasCashWithdrawal = accountFilteredTransactions.some((t: any) => isCashWithdrawal(t));
-  const hasGas = accountFilteredTransactions.some((t: any) => isGas(t));
-  const hasStreaming = accountFilteredTransactions.some((t: any) => isStreaming(t));
-  const hasP2P = accountFilteredTransactions.some((t: any) => isP2P(t));
-
-  const filterButtons = [
-    { key: "all", label: copy.filters.all },
-    ...(hasIncome ? [{ key: "income", label: copy.filters.income }] : []),
-    ...(hasExpense ? [{ key: "expense", label: copy.filters.expense }] : []),
-    ...(hasDevoluciones ? [{ key: "devoluciones", label: copy.filters.devoluciones }] : []),
-    ...(hasZelleIn ? [{ key: "zelle_in", label: copy.filters.zelle_in }] : []),
-    ...(hasZelleOut ? [{ key: "zelle_out", label: copy.filters.zelle_out }] : []),
-    ...(hasCashDeposit ? [{ key: "cash_deposit", label: copy.filters.cash_deposit }] : []),
-    ...(hasCashWithdrawal ? [{ key: "cash_withdrawal", label: copy.filters.cash_withdrawal }] : []),
-    ...(hasGas ? [{ key: "gasolina", label: copy.filters.gasolina }] : []),
-    ...(hasStreaming ? [{ key: "streaming", label: copy.filters.streaming }] : []),
-    ...(hasP2P ? [{ key: "p2p", label: copy.filters.p2p }] : []),
-  ];
-
-  const filterTitle =
-    filterType === "income" ? copy.titles.income :
-    filterType === "expense" ? copy.titles.expense :
-    filterType === "devoluciones" ? copy.titles.devoluciones :
-    filterType === "zelle_in" ? copy.titles.zelle_in :
-    filterType === "zelle_out" ? copy.titles.zelle_out :
-    filterType === "cash_deposit" ? copy.titles.cash_deposit :
-    filterType === "cash_withdrawal" ? copy.titles.cash_withdrawal :
-    filterType === "gasolina" ? copy.titles.gasolina :
-    filterType === "streaming" ? copy.titles.streaming :
-    filterType === "p2p" ? copy.titles.p2p :
-    copy.titles.default;
-
-  const isLoading = isLoadingBank;
-
-  // ─── NOT CONNECTED banner (non-blocking) ───
-  // Only show if NO accounts exist — if there are accounts, user has a bank connected
-  const showConnectBanner = accounts.length === 0;
+  const refresh = () => syncMutation.mutate({ year: period.y, month: period.m, accountId });
+  const clearFilters = () => { setFilterType("all"); setSearchQuery(""); };
 
   return (
-    <AnimatedPage className="p-4 lg:p-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <h1 className="text-lg font-semibold text-black">{filterTitle}</h1>
-          <p className="text-xs text-neutral-500">
-            {copy.records(searchFilteredTransactions.length, accountFilteredTransactions.length)}
-            {searchQuery.trim() ? copy.searching(searchQuery) : ""}
-            {" · "}{monthData?.monthName ? `${common.months[parseInt(month) - 1]} ${year}` : ""}
-          </p>
-        </div>
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex items-start justify-between gap-3 sm:items-end">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
+          </div>
+          <button type="button" onClick={openNew} className={cn(ui.primary, "shrink-0")}>
+            <Plus className="h-4 w-4" aria-hidden="true" /><span className="sm:hidden">{t.addShort}</span><span className="hidden sm:inline">{t.add}</span>
+          </button>
+        </header>
+
+        {showConnect && <ConnectBankHero onConnect={() => setShowPlaidOverlay(true)} />}
+
+        {/* Month, account, search, refresh and the filters */}
+        <section className={ui.card} aria-label={t.toolsLabel}>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+            <MonthNav value={period} min={calendar.min} max={calendar.current} onChange={setPicked} locale={locale} picker showLabel
+              labels={{ month: all.shared.month, prev: all.shared.prevMonth, next: all.shared.nextMonth }} className="lg:w-[20rem]" />
+            {accounts.length > 1 && (
+              <div className="lg:w-72">
+                <label htmlFor={`${uid}-acct`} className="mb-1.5 block text-xs font-medium text-slate-600">{all.shared.account}</label>
+                <select id={`${uid}-acct`} value={selectedAccountId} onChange={(e) => setSelectedAccountId(e.target.value)} className={ui.control}>
+                  <option value="">{t.allAccounts}</option>
+                  {accounts.map((a) => (
+                    <option key={a.id} value={String(a.id)}>{accountName(a, all.shared.accountFallback)} · {money(num(a.currentBalance), true)}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className="flex items-end gap-2 lg:flex-1">
+              <div className="min-w-0 flex-1">
+                <label htmlFor={`${uid}-q`} className="mb-1.5 block text-xs font-medium text-slate-600">{t.search}</label>
+                <div className="relative">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+                  <input id={`${uid}-q`} type="search" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder={t.searchPh} className={cn(ui.control, "pl-9")} />
+                </div>
+              </div>
+              {hasAccounts && (
+                <button type="button" onClick={refresh} disabled={syncMutation.isPending} aria-label={t.refreshAria} title={t.refreshAria} className={cn(ui.secondary, "w-11 px-0 sm:w-auto sm:px-4")}>
+                  {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
+                  <span className="hidden sm:inline">{t.refresh}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {available.length > 1 && (
+            <div className="-mx-4 mt-4 overflow-x-auto px-4 sm:mx-0 sm:overflow-visible sm:px-0" style={{ scrollbarWidth: "none" }}>
+              <div className="flex w-max gap-2 sm:w-auto sm:flex-wrap" role="group" aria-label={t.filtersLabel}>
+                {available.map((key) => (
+                  <button key={key} type="button" onClick={() => setFilterType(key)} aria-pressed={filter === key} className={ui.chip(filter === key)}>
+                    {t.filters[key]}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+
+        {/* The month in three numbers (once there's a bank or something added by hand) */}
+        {(loading || hasAccounts || rows.length > 0) && <section className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label={upperFirst(monthName)}>
+          <Kpi label={t.kpi.in} value={totalIncome > 0 ? `+${money(totalIncome, true)}` : money(0, true)} sub={t.kpi.inSub(income.length)} tone={totalIncome > 0 ? "good" : undefined} loading={loading} />
+          <Kpi label={t.kpi.out} value={totalExpense > 0 ? `−${money(totalExpense, true)}` : money(0, true)} sub={t.kpi.inSub(expense.length)} loading={loading} />
+          {selectedAccount ? (
+            <Kpi label={t.kpi.accountBalance} value={money(num(selectedAccount.currentBalance), true)} sub={accountName(selectedAccount, all.shared.accountFallback)}
+              tone={num(selectedAccount.currentBalance) < 0 ? "bad" : undefined} className="col-span-2 sm:col-span-1" />
+          ) : hasAccounts ? (
+            <Kpi label={t.kpi.balance} value={money(cashAccounts.reduce((s, a) => s + num(a.currentBalance), 0), true)} sub={t.kpi.balanceSub(cashAccounts.length)} className="col-span-2 sm:col-span-1" />
+          ) : (
+            <Kpi label={kept >= 0 ? t.kpi.kept : t.kpi.overspent} value={money(Math.abs(kept), true)} sub={t.kpi.keptSub} tone={kept > 0 ? "good" : kept < 0 ? "bad" : undefined} loading={loading} className="col-span-2 sm:col-span-1" />
+          )}
+        </section>}
+
+        {/* The list, by day */}
+        <section className={ui.card} aria-labelledby={`${uid}-list`}>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h2 id={`${uid}-list`} className="font-semibold text-slate-900">{t.listTitles[filter]}</h2>
+            {!loading && rows.length > 0 && (
+              <p className="text-xs text-slate-500" aria-live="polite">{t.count(shown.length, rows.length)}{q ? ` ${t.searching(searchQuery.trim())}` : ""}</p>
+            )}
+          </div>
+
+          {loading ? (
+            <div className="mt-3 space-y-2" aria-busy="true">
+              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}
+            </div>
+          ) : hasAccounts && monthQ.isError ? (
+            <div className="py-8 text-center">
+              <p className="text-sm text-slate-700" role="alert">{t.loadError}</p>
+              <button type="button" onClick={() => void monthQ.refetch()} className={cn(ui.secondary, "mt-3")}>{all.shared.retry}</button>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-10 text-center">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400"><Receipt className="h-6 w-6" aria-hidden="true" /></span>
+              <p className="mt-3 text-sm font-semibold text-slate-800">{t.empty.title(monthName)}</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-slate-500">{hasAccounts ? t.empty.text : t.empty.textNoBank}</p>
+              <div className="mt-4 flex flex-wrap justify-center gap-2">
+                {hasAccounts && (
+                  <button type="button" onClick={refresh} disabled={syncMutation.isPending} className={ui.secondary}>
+                    {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}{t.refresh}
+                  </button>
+                )}
+                <button type="button" onClick={openNew} className={ui.primary}><Plus className="h-4 w-4" aria-hidden="true" />{t.add}</button>
+              </div>
+            </div>
+          ) : shown.length === 0 ? (
+            <div className="py-10 text-center">
+              <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-slate-100 text-slate-400"><SearchX className="h-6 w-6" aria-hidden="true" /></span>
+              <p className="mt-3 text-sm font-semibold text-slate-800">{t.empty.noMatch}</p>
+              <p className="mt-1 text-sm text-slate-500">{t.empty.noMatchText}</p>
+              <button type="button" onClick={clearFilters} className={cn(ui.secondary, "mt-4")}>{t.empty.clear}</button>
+            </div>
+          ) : (
+            <div className="mt-1">
+              {groups.map((g) => (
+                <section key={g.day || "undated"} aria-label={dayTitle(g.day, g.date)}>
+                  <h3 className="pb-1 pt-4 text-xs font-semibold text-slate-500">{dayTitle(g.day, g.date)}</h3>
+                  <ul className="divide-y divide-slate-100">
+                    {g.items.map((r) => {
+                      const isIn = r.type === "income";
+                      const label = catLabel(r.category, r.type);
+                      const body = (
+                        <>
+                          <CategoryIcon category={r.category} type={r.type} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate text-sm font-medium text-slate-900">{r.description}</span>
+                            <span className="mt-0.5 flex min-w-0 items-center gap-1.5 text-xs text-slate-500">
+                              <span className="truncate">{label}{r.bankName ? ` · ${r.bankName}` : ""}</span>
+                              {r.manual && <span className="shrink-0 rounded-full bg-blue-50 px-2 py-0.5 text-[11px] font-medium text-blue-700">{t.manualTag}</span>}
+                            </span>
+                          </span>
+                          <span className={cn("shrink-0 text-sm font-semibold tabular-nums", isIn ? "text-emerald-700" : "text-slate-900")}>{signed(r.amount, isIn)}</span>
+                          <ChevronRight className="hidden h-4 w-4 shrink-0 text-slate-300 sm:block" aria-hidden="true" />
+                        </>
+                      );
+                      const rowCls = "-mx-2 flex min-h-[60px] w-[calc(100%+1rem)] items-center gap-3 rounded-xl px-2 py-2.5 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
+                      const manual = r.manual;
+                      return (
+                        <li key={r.key}>
+                          {manual ? (
+                            <button type="button" onClick={() => setDialog({ editing: manual, defaultDate: dayKey(manual.transactionDate) })} aria-label={t.editAria(r.description)} className={rowCls}>{body}</button>
+                          ) : (
+                            <Link to={`/personal/category/${encodeURIComponent(r.category)}?month=${period.m}&year=${period.y}`} aria-label={t.openAria(r.description, label)} className={rowCls}>{body}</Link>
+                          )}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              ))}
+            </div>
+          )}
+        </section>
       </div>
 
-      {/* Connect bank banner — only when no bank AND no data */}
-      {showConnectBanner && (
-        <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
-          <CardContent className="p-8 flex flex-col items-center justify-center text-center">
-            <div className="w-12 h-12 bg-neutral-100 rounded-full flex items-center justify-center mb-3">
-              <Landmark className="w-6 h-6 text-neutral-400" />
-            </div>
-            <h3 className="text-base font-semibold text-black mb-1">{common.noBank.title}</h3>
-            <p className="text-xs text-neutral-400 max-w-sm mb-4">{common.noBank.text}</p>
-            <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-9 px-5 text-xs">
-              <Landmark className="w-3.5 h-3.5 mr-2" /> {common.noBank.connect}
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-      {showConnectBanner && showPlaidOverlay && <PlaidLinkOverlay onClose={() => setShowPlaidOverlay(false)} />}
-
-      {/* Controls: dropdown, month, year, sync */}
-          <div className="flex items-center gap-2 mb-3 flex-wrap">
-            {(accounts ?? []).length > 0 && (
-              <AccountDropdown
-                accounts={accounts ?? []}
-                selectedId={effectiveAccountId}
-                onChange={setSelectedAccountId}
-              />
-            )}
-            <Select value={month} onValueChange={setMonth}>
-              <SelectTrigger className="h-8 w-[100px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {(() => {
-                  const currentYear = new Date().getFullYear();
-                  const currentMonth = new Date().getMonth() + 1;
-                  const maxMonth = parseInt(year) === currentYear ? currentMonth : 12;
-                  return Array.from({ length: maxMonth }, (_, i) => (
-                    <SelectItem key={i + 1} value={String(i + 1)}>
-                      {common.monthsShort[i]}
-                    </SelectItem>
-                  ));
-                })()}
-              </SelectContent>
-            </Select>
-            <Select value={year} onValueChange={setYear}>
-              <SelectTrigger className="h-8 w-[72px] text-xs border-neutral-200"><SelectValue /></SelectTrigger>
-              <SelectContent>
-                {[2026,2025,2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={() => syncMutation.mutate({
-                year: parseInt(year),
-                month: parseInt(month),
-                accountId: effectiveAccountId ? parseInt(effectiveAccountId) : undefined,
-              })}
-              disabled={syncMutation.isPending}
-              variant="outline"
-              size="sm"
-              className="h-8 px-2 border-neutral-200"
-            >
-              {syncMutation.isPending ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
-            </Button>
-          </div>
-
-          {/* Search input */}
-          <div className="relative mb-3">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-            <input
-              type="text"
-              placeholder={copy.searchPh}
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full h-9 pl-8 pr-3 text-xs border border-neutral-200 rounded-lg bg-white focus:outline-none focus:border-neutral-400 focus:ring-1 focus:ring-neutral-200 transition-colors"
-            />
-          </div>
-
-          {/* Filter buttons */}
-          <div
-            className="flex bg-gray-100 rounded-xl p-1 mb-4 gap-1 overflow-x-auto snap-x snap-mandatory scrollbar-hide"
-            style={{ scrollbarWidth: "none", WebkitOverflowScrolling: "touch" }}
-          >
-            <style>{`.scrollbar-hide::-webkit-scrollbar{display:none}`}</style>
-            {(filterButtons as const).map((f: any) => (
-              <button
-                key={f.key}
-                onClick={() => setFilterType(f.key)}
-                className={`snap-start flex-shrink-0 py-1.5 text-xs font-medium rounded-full transition-colors px-4 ${filterType === f.key ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700"}`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Summary Cards */}
-          <div className="grid grid-cols-3 gap-3 mb-4">
-            <Card className="border-emerald-200 rounded-xl shadow-none">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-md bg-emerald-100 flex items-center justify-center">
-                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                  </div>
-                  <p className="text-[10px] text-neutral-500">{common.income}</p>
-                </div>
-                <p className="text-sm font-semibold text-emerald-700">{formatCurrency(totalIncome)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-rose-200 rounded-xl shadow-none">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center">
-                    <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
-                  </div>
-                  <p className="text-[10px] text-neutral-500">{common.expenses}</p>
-                </div>
-                <p className="text-sm font-semibold text-rose-700">{formatCurrency(totalExpense)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-sky-200 rounded-xl shadow-none">
-              <CardContent className="p-3">
-                <div className="flex items-center gap-1.5 mb-1">
-                  <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center">
-                    <Wallet className="w-3.5 h-3.5 text-sky-600" />
-                  </div>
-                  <p className="text-[10px] text-neutral-500">{copy.accountBalance}</p>
-                </div>
-                <p className="text-sm font-semibold text-sky-700">{formatCurrency(liveBalance)}</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Transaction List */}
-          <div className="space-y-0">
-            {isLoading ? (
-              <div className="space-y-2 py-4">
-                {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}
-              </div>
-            ) : displayTransactions.length === 0 ? (
-              <div className="text-center py-10">
-                <Receipt className="w-10 h-10 text-neutral-300 mx-auto mb-3" />
-                <p className="text-sm text-neutral-400">{common.noTxThisMonth}</p>
-                <p className="text-xs text-neutral-400 mt-1">{copy.pressSync}</p>
-              </div>
-            ) : (
-              displayTransactions.map((tx: any) => {
-                const txDate = tx.transactionDate ? new Date(tx.transactionDate) : null;
-                const dateStr = txDate ? txDate.toLocaleDateString(intlLocale(lang), { day: "numeric", month: "short" }) : "";
-                const timeStr = txDate ? txDate.toLocaleTimeString(intlLocale(lang), { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-                return (
-                  <div
-                    key={tx.id}
-                    className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-normal text-black truncate">{tx.description}</p>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="text-[11px] text-neutral-400">{dateStr} · {timeStr}</span>
-                        <span className="text-[10px] px-2 py-0.5 rounded-full bg-neutral-100 text-neutral-500 capitalize">
-                          {getCategoryLabel(tx.category ?? "", categories.short)}
-                        </span>
-                      </div>
-                    </div>
-                    <span className={`text-sm font-medium shrink-0 ml-3 ${
-                      tx.type === "income" ? "text-emerald-600" : "text-rose-600"
-                    }`}>
-                      {tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}
-                    </span>
-                  </div>
-                );
-              })
-            )}
-          </div>
+      {dialog && <ManualTxDialog key={dialog.editing?.id ?? "new"} editing={dialog.editing} defaultDate={dialog.defaultDate} onClose={() => setDialog(null)} />}
+      {showConnect && showPlaidOverlay && <PlaidLinkOverlay onClose={() => setShowPlaidOverlay(false)} />}
     </AnimatedPage>
   );
 }
 
-/** Display label for a category key; labels come from the copy (keys are database values). */
-function getCategoryLabel(cat: string, labels: Record<string, string>): string {
-  return labels[cat] || cat;
+function Kpi({ label, value, sub, tone, loading, className }: { label: string; value: string; sub: string; tone?: "good" | "bad"; loading?: boolean; className?: string }) {
+  return (
+    <div className={cn("rounded-2xl border border-slate-200 bg-white p-4", className)}>
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      {loading ? <Skeleton className="mt-2 h-7 w-28 rounded-md" /> : (
+        <p className={cn("mt-1 truncate text-xl font-bold tabular-nums tracking-tight sm:text-2xl", tone === "good" ? "text-emerald-700" : tone === "bad" ? "text-red-700" : "text-slate-900")}>{value}</p>
+      )}
+      <p className="mt-0.5 truncate text-xs text-slate-500">{sub}</p>
+    </div>
+  );
 }
