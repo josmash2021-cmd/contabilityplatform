@@ -32,7 +32,7 @@ import { effectiveToday, utcToday } from "./lib/vendors";
 import { MAX_RECEIPT_AMOUNT, isIsoDate } from "./lib/receipts";
 import {
   PAIR_DAYS_AFTER, SPEND_CATEGORIES, addDays, buildSpendItems, comparisonRange, daysBetween, detectRecurring, inRange,
-  isBusinessSpending, manualEntryNumber, monthDays, recurringKeyOf, shiftMonth, spendTotals, toCents,
+  isBusinessSpending, isDigitalPayment, manualEntryNumber, monthDays, recurringKeyOf, shiftMonth, spendTotals, toCents,
   type BankIn, type ExpenseIn, type PairLink, type PayMethod, type SpendCategory, type SpendItem,
 } from "./lib/expenses";
 import { accountLabel, deleteExpenseEntries, ensureExpenseTables, ensureReceiptsTable } from "./receipts-router";
@@ -185,6 +185,7 @@ async function loadSpendItems(db: Db, userId: number, from: string, to: string, 
       date: r.date, category: r.category, reviewed: Number(r.isReconciled) === 1,
       account: accountLabel(r.bankName, r.accountNumber), accountId: r.accountId === null ? null : Number(r.accountId), logoUrl: r.logoUrl,
       bankOwn: isBankOwnMovement(`${r.description} ${r.merchantName ?? ""}`, r.plaidCategory),
+      digital: isDigitalPayment(`${r.description} ${r.merchantName ?? ""}`, { category: r.category, plaidCategory: r.plaidCategory }),
     };
   });
 
@@ -272,7 +273,7 @@ export const expensesRouter = createRouter({
       return {
         key: i.key, source: i.source, expenseId: i.expenseId, bankTransactionId: i.bankTransactionId, receiptId: i.receiptId,
         billId: i.billId, vendorId: i.vendorId, who: i.who, detail: i.detail, category: i.category, amount: i.amountCents / 100,
-        date: i.date, method: i.method, account: i.account, bankAccountId: i.bankAccountId, bankOwn: i.bankOwn, logoUrl: i.logoUrl, inReview: i.inReview, hasReceipt: i.hasReceipt,
+        date: i.date, method: i.method, account: i.account, bankAccountId: i.bankAccountId, bankOwn: i.bankOwn, logoUrl: i.logoUrl, inReview: i.inReview, hasReceipt: i.hasReceipt, receiptNeeded: i.receiptNeeded,
         pairedBy: i.pairedBy, nextCharge: r && r.nextDate >= i.date ? r.nextDate : null,
       };
     });
@@ -283,6 +284,7 @@ export const expensesRouter = createRouter({
       total: totals.totalCents / 100,
       count: totals.count,
       withReceipt: totals.withReceipt,
+      needReceipt: totals.needReceipt,
       previous: { total: spendTotals(prevItems).totalCents / 100, partial: cmp.partial, from: cmp.from, to: cmp.to },
       byCategory: totals.byCategory.map((c) => ({ category: c.category, total: c.cents / 100, count: c.count })),
       limits,

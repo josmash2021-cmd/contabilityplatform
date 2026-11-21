@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  addMonth, bankSpendCategory, buildSpendItems, comparisonRange, detectRecurring, expenseSpendCategory, isBusinessSpending,
+  addMonth, bankSpendCategory, buildSpendItems, comparisonRange, detectRecurring, expenseSpendCategory, isBusinessSpending, isDigitalPayment,
   limitState, manualEntryNumber, monthDays, pairBankMovements, paymentWeek, pctChange, spendTotals,
   type BankIn, type ExpenseIn, type SpendItem,
 } from "./expenses";
@@ -121,7 +121,7 @@ describe("totals and limits", () => {
 describe("charges that repeat", () => {
   const item = (date: string, who = "Google Workspace", cents = 1440): SpendItem => ({
     key: date + who, source: "bank", expenseId: null, bankTransactionId: 1, receiptId: null, billId: null, vendorId: null, who, detail: null,
-    category: "software", amountCents: cents, date, method: null, account: null, bankAccountId: null, bankOwn: false, logoUrl: null, inReview: false, hasReceipt: false, pairedBy: null,
+    category: "software", amountCents: cents, date, method: null, account: null, bankAccountId: null, bankOwn: false, receiptNeeded: true, logoUrl: null, inReview: false, hasReceipt: false, pairedBy: null,
   });
   it("finds a monthly charge and its next date", () => {
     const r = detectRecurring([item("2026-09-16"), item("2026-10-16"), item("2026-11-16")]);
@@ -159,5 +159,40 @@ describe("pairing and numbers", () => {
     expect(w.map((d) => d.date)).toEqual(["2026-11-21", "2026-11-22", "2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]);
     expect(w[0]).toMatchObject({ totalCents: 65000, count: 2, vendors: ["Garza"] });
     expect(w[2].count).toBe(0);
+  });
+});
+
+describe("digital payments don't need a receipt photo (the owner's rule)", () => {
+  it("payment apps, automatic payments, bills and buying online or by app are digital", () => {
+    for (const d of [
+      "ZELLE TO PAPA YONEL ON 11/14 REF # WFCT22WKRRXM", "PURCHASE DD *DOORDASH +16506819470 CA CARD3537", "TMOBILE*AUTO PAY 800-937-8997 WA",
+      "T-Mobile", "RECURRING PAYMENT AUTHORIZED ON 11/17 APPLE.COM/BILL CA S346321839069008 CARD 3537",
+      "PURCHASE AUTHORIZED ON 11/15 TEMU.COM MA S586319376688669 CARD 3537", "ALABAMA POWER ACH PMT", "VENMO PAYMENT 1023", "UBER *TRIP",
+    ]) expect(isDigitalPayment(d), d).toBe(true);
+    expect(isDigitalPayment("SOMETHING", { category: "utilities" })).toBe(true);
+    expect(isDigitalPayment("SOMETHING", { plaidCategory: JSON.stringify({ primary: "RENT_AND_UTILITIES", detailed: "RENT_AND_UTILITIES_TELEPHONE" }) })).toBe(true);
+  });
+  it("buying in a store still asks for its receipt", () => {
+    for (const d of ["HOME DEPOT #4821 HOUSTON TX", "PURCHASE AUTHORIZED ON 11/18 TARGET T-1234 AUSTIN TX", "SHELL OIL 57134 HOUSTON", "TACOS EL PASTOR LLC"]) {
+      expect(isDigitalPayment(d), d).toBe(false);
+    }
+    expect(isDigitalPayment("AUTOZONE 4412", { category: "shopping" })).toBe(false);
+  });
+  it("Gastos: a digital charge doesn't count as missing its receipt", () => {
+    const items = buildSpendItems({
+      expenses: [],
+      banks: [
+        { id: 1, name: "Zelle · Papa Yonel", text: "ZELLE TO PAPA YONEL", amountCents: 5000, fullCents: 5000, date: "2026-11-14", category: "zelle_sent", reviewed: true, account: null, logoUrl: null, digital: true },
+        { id: 2, name: "Home Depot", text: "HOME DEPOT #4821", amountCents: 8000, fullCents: 8000, date: "2026-11-15", category: "shopping", reviewed: true, account: null, logoUrl: null, digital: false },
+      ],
+      links: [], reviewBillLinks: [], today: "2026-11-21", reviewWindowDays: 60,
+    });
+    const zelle = items.find((i) => i.bankTransactionId === 1)!;
+    const store = items.find((i) => i.bankTransactionId === 2)!;
+    expect(zelle.receiptNeeded).toBe(false);
+    expect(store.receiptNeeded).toBe(true);
+    const totals = spendTotals(items);
+    expect(totals.needReceipt).toBe(1);
+    expect(totals.withReceipt).toBe(0);
   });
 });

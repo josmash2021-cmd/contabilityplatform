@@ -72,7 +72,7 @@ export function ExpenseDetailDialog({ item, locale, canChange, canUpload, hasVen
 
         <div className="grid gap-3 px-4 pb-4 pt-2 sm:px-5 sm:pb-5">
           <div>
-            {item.inReview ? <Dst label={t.status.review} tone="open" /> : item.hasReceipt ? <Dst label={t.status.with} tone="good" /> : <Dst label={t.status.without} tone="warn" />}
+            {item.inReview ? <Dst label={t.status.review} tone="open" /> : item.hasReceipt ? <Dst label={t.status.with} tone="good" /> : !item.receiptNeeded ? <Dst label={item.bankOwn ? t.status.bank : t.status.digital} tone="muted" /> : <Dst label={t.status.without} tone="warn" />}
           </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-2.5 text-sm">
             {facts.map(([k, v]) => (
@@ -86,7 +86,8 @@ export function ExpenseDetailDialog({ item, locale, canChange, canUpload, hasVen
           {item.pairedBy && item.account && (
             <Note icon={Link2}>{d.joined(item.account, item.pairedBy)}</Note>
           )}
-          {item.source === "bank" && !item.hasReceipt && !item.inReview && <p className="text-[13px] text-slate-500">{d.bankHint}</p>}
+          {!item.hasReceipt && !item.inReview && !item.receiptNeeded && <p className="text-[13px] text-slate-500">{d.digitalHint}</p>}
+          {item.source === "bank" && !item.hasReceipt && !item.inReview && item.receiptNeeded && <p className="text-[13px] text-slate-500">{d.bankHint}</p>}
 
           <SrcLine label={d.from}>
             {item.receiptId !== null && (
@@ -104,7 +105,7 @@ export function ExpenseDetailDialog({ item, locale, canChange, canUpload, hasVen
 
           {(canChange || canUnpair || canDelete) && (
             <div className="flex flex-wrap gap-2 pt-1">
-              {!item.hasReceipt && !item.inReview && canUpload && (
+              {!item.hasReceipt && !item.inReview && item.receiptNeeded && canUpload && (
                 <button type="button" className={btn("primary")} onClick={() => { onClose(); onUpload(item); }}>
                   <Camera className="h-4 w-4" aria-hidden="true" />{d.upload}
                 </button>

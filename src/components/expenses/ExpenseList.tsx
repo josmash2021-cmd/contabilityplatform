@@ -71,12 +71,12 @@ export function ExpenseList({ items, locale, showNext, emptyText, canUpload, att
                   <b className="font-bold tabular-nums text-slate-900">{fmtMoney(-i.amount)}</b>
                 </span>
                 <span className="col-start-2 row-start-2 justify-self-end md:col-start-auto md:row-start-auto md:justify-self-start">
-                  {i.inReview ? <Dst label={t.status.review} tone="open" /> : i.hasReceipt ? <Dst label={t.status.with} tone="good" /> : <Dst label={t.status.without} tone="warn" />}
+                  {i.inReview ? <Dst label={t.status.review} tone="open" /> : i.hasReceipt ? <Dst label={t.status.with} tone="good" /> : !i.receiptNeeded ? <Dst label={i.bankOwn ? t.status.bank : t.status.digital} tone="muted" /> : <Dst label={t.status.without} tone="warn" />}
                 </span>
                 <span className="col-span-2 flex justify-start gap-1.5 empty:hidden md:col-span-1 md:justify-end" onClick={(e) => e.stopPropagation()}>
                   {i.inReview ? (
                     <Link to="/transactions" className={btn("sm")} aria-label={t.actions.reviewAria(i.who)}>{t.actions.review}</Link>
-                  ) : !i.hasReceipt && canUpload ? (
+                  ) : !i.hasReceipt && i.receiptNeeded && canUpload ? (
                     <button type="button" className={btn("sm")} disabled={!!attaching} onClick={() => onUpload(i)} aria-label={t.actions.uploadAria(i.who)}>
                       {busy ? <Loader2 className="h-[15px] w-[15px] animate-spin" aria-hidden="true" /> : <Camera className="h-[15px] w-[15px]" aria-hidden="true" />}
                       {busy ? t.actions.uploading : t.actions.upload}

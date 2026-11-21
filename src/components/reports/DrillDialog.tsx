@@ -68,9 +68,9 @@ export function DrillDialog({ target, onClose, range, tzOffsetHours, periodLabel
         ) : (
           <ul className="overflow-hidden rounded-[14px] border border-slate-200 bg-white">
             {d.rows.map((r) => {
-              const spend = "source" in r ? (r as { source: string; category: string; account: string | null; receipt: boolean }) : null;
-              // A bank charge has no receipt to ask for; an expense shows whether it has its photo.
-              const receipt = spend && spend.source !== "bank" ? spend.receipt : null;
+              const spend = "source" in r ? (r as { source: string; category: string; account: string | null; receipt: boolean; receiptNeeded?: boolean }) : null;
+              // A bank charge or a digital payment has no receipt to ask for; an expense shows whether it has its photo.
+              const receipt = spend && spend.source !== "bank" && spend.receiptNeeded !== false ? spend.receipt : null;
               const qty = "quantity" in r ? (r as { quantity: number; unitPrice: number }) : null;
               const paid = spend ? (spend.account ?? (r.method ? c.methods[r.method] ?? r.method : null)) : r.method ? c.methods[r.method] ?? r.method : null;
               return (

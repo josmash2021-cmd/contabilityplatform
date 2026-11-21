@@ -42,7 +42,8 @@ const es = {
   },
   ready: {
     title: "Listo para impuestos",
-    text: (withR: number, total: number) => `${withR} de ${total} ${plural(total, "gasto tiene", "gastos tienen")} su recibo.`,
+    text: (withR: number, total: number) => `${withR} de ${total} ${plural(total, "gasto que lo necesita tiene", "gastos que lo necesitan tienen")} su recibo.`,
+    digitalNote: "Los pagos digitales (Zelle, pagos automáticos, compras en línea) no necesitan foto: el banco es su comprobante.",
     missing: (n: number) => ` ${plural(n, "Falta 1: súbelo", `Faltan ${n}: súbelos`)} con una foto.`,
     done: " ¡Todo completo!",
     empty: "Cuando anotes gastos, aquí ves cuántos tienen su recibo.",
@@ -74,7 +75,7 @@ const es = {
   tabs: { label: "Gastos del mes", all: "Todos", norec: "Sin recibo", rec: "Se repiten" },
   filter: { showing: (label: string) => `Solo ${label}`, clear: "Quitar filtro" },
   table: { date: "Fecha", who: "Gasto", amount: "Monto", receipt: "Recibo" },
-  status: { review: "En Por revisar", with: "Con recibo", without: "Sin recibo" },
+  status: { review: "En Por revisar", with: "Con recibo", without: "Sin recibo", digital: "Pago digital", bank: "Del banco" },
   nextCharge: (date: string) => `Próximo cargo: ${date}`,
   empty: {
     month: "Todavía no hay gastos este mes. Toma foto a un recibo o anota un gasto en efectivo.",
@@ -157,6 +158,7 @@ const es = {
     seeVendor: "Ver proveedor",
     upload: "Subir recibo",
     bankHint: "Este cargo llegó del banco. Súbele su recibo y queda listo para impuestos.",
+    digitalHint: "Es un pago digital: el movimiento del banco es su comprobante, no necesita foto de recibo.",
   },
   toasts: {
     saved: (amount: string) => `Gasto guardado: ${amount}.`,
@@ -232,7 +234,8 @@ const en: ExpensesCopy = {
   },
   ready: {
     title: "Ready for taxes",
-    text: (withR: number, total: number) => `${withR} of ${total} ${plural(total, "expense has", "expenses have")} a receipt.`,
+    text: (withR: number, total: number) => `${withR} of ${total} ${plural(total, "expense that needs one has", "expenses that need one have")} a receipt.`,
+    digitalNote: "Digital payments (Zelle, automatic payments, online purchases) don't need a photo: the bank's record is their proof.",
     missing: (n: number) => ` ${plural(n, "1 missing: add it", `${n} missing: add them`)} with a photo.`,
     done: " All done!",
     empty: "Once you record expenses, you'll see here how many have a receipt.",
@@ -264,7 +267,7 @@ const en: ExpensesCopy = {
   tabs: { label: "This month's expenses", all: "All", norec: "No receipt", rec: "Recurring" },
   filter: { showing: (label: string) => `Only ${label}`, clear: "Clear filter" },
   table: { date: "Date", who: "Expense", amount: "Amount", receipt: "Receipt" },
-  status: { review: "In To review", with: "Has receipt", without: "No receipt" },
+  status: { review: "In To review", with: "Has receipt", without: "No receipt", digital: "Digital payment", bank: "From the bank" },
   nextCharge: (date: string) => `Next charge: ${date}`,
   empty: {
     month: "No expenses this month yet. Take a photo of a receipt or record a cash expense.",
@@ -347,6 +350,7 @@ const en: ExpensesCopy = {
     seeVendor: "See vendor",
     upload: "Add receipt",
     bankHint: "This charge came from the bank. Add its receipt and it's ready for taxes.",
+    digitalHint: "It's a digital payment: the bank's record is its proof, no receipt photo needed.",
   },
   toasts: {
     saved: (amount: string) => `Expense saved: ${amount}.`,

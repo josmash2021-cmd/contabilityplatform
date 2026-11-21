@@ -56,7 +56,7 @@ export function CategoryCard({ rows, selected, onSelect }: {
   );
 }
 
-/** "Listo para impuestos": how many of the month's expenses have their receipt. */
+/** "Listo para impuestos": how many of the month's expenses that need a receipt (not digital payments) have it. */
 export function ReadyCard({ withReceipt, count }: { withReceipt: number; count: number }) {
   const t = useCopy(expensesCopy);
   const pct = count > 0 ? Math.round((withReceipt / count) * 100) : 0;
@@ -73,6 +73,7 @@ export function ReadyCard({ withReceipt, count }: { withReceipt: number; count: 
         <>
           <ProgressBar pct={pct} label={t.ready.progress} />
           <p className="mt-2 text-[13px] text-slate-500">{t.ready.text(withReceipt, count)}{missing ? t.ready.missing(missing) : t.ready.done}</p>
+          <p className="mt-1 text-xs text-slate-400">{t.ready.digitalNote}</p>
         </>
       )}
     </section>

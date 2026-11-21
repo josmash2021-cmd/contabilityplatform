@@ -114,7 +114,8 @@ export default function Expenses() {
   const ov = overview.data;
   const items = useMemo(() => ov?.items ?? [], [ov]);
   const filtered = useMemo(() => (cat ? items.filter((i) => i.category === cat) : items), [items, cat]);
-  const noRec = filtered.filter((i) => !i.hasReceipt);
+  // Only what needs a receipt photo: digital payments (Zelle, bills, online) don't.
+  const noRec = filtered.filter((i) => !i.hasReceipt && i.receiptNeeded);
   const recur = filtered.filter((i) => i.nextCharge);
   const list = tab === "norec" ? noRec : tab === "rec" ? recur : filtered;
   const isCurrent = sameMonth(month, thisMonth);
@@ -193,7 +194,7 @@ export default function Expenses() {
                 <div className="mb-1 grid items-start gap-3.5 md:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)]">
                   <CategoryCard rows={ov.byCategory} selected={cat} onSelect={(c) => { setCat(c); setTab("all"); }} />
                   <div className="grid gap-3">
-                    <ReadyCard withReceipt={ov.withReceipt} count={ov.count} />
+                    <ReadyCard withReceipt={ov.withReceipt} count={ov.needReceipt} />
                     <LimitsCard limits={ov.limits} canChange={canChange} onEdit={() => setLimitsOpen(true)} />
                   </div>
                 </div>

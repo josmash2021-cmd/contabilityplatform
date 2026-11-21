@@ -469,9 +469,9 @@ export const reportsRouter = createRouter({
         const kept = list.slice(0, DRILL_CAP);
         return {
           kind, total: spendSum(list), count: list.length, truncated: list.length > DRILL_CAP, methods: null,
-          rows: kept.map((i): DrillRow & { category: string; receipt: boolean; source: string; account: string | null } => ({
+          rows: kept.map((i): DrillRow & { category: string; receipt: boolean; receiptNeeded: boolean; source: string; account: string | null } => ({
             key: i.key, id: i.expenseId ?? i.bankTransactionId ?? 0, date: i.date, title: i.who, sub: i.detail, category: i.category,
-            method: i.method, amount: fromCents(i.amountCents), logoUrl: i.logoUrl, ref: null, receipt: i.hasReceipt, source: i.source, account: i.account,
+            method: i.method, amount: fromCents(i.amountCents), logoUrl: i.logoUrl, ref: null, receipt: i.hasReceipt, receiptNeeded: i.receiptNeeded, source: i.source, account: i.account,
           })),
         };
       }

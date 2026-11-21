@@ -133,6 +133,26 @@ export function pctChange(now: number, before: number): number | null {
 
 // ── Pairing expenses with bank movements ──
 export type PayMethod = "cash" | "zelle" | "card";
+
+// ── Which spending needs a receipt photo ──
+// The owner's rule: a digital payment's bank record is its proof, so only purchases in a store and in cash
+// ask for a photo. Digital: payment apps (Zelle, Venmo, Cash App, PayPal), automatic payments and bills
+// (phone, power, internet, insurance, subscriptions, loans), and buying online or through an app.
+const DIGITAL_TEXT = new RegExp([
+  String.raw`\b(?:zelle|venmo|cash ?app|sq ?cash|paypal)\b`,
+  String.raw`\b(?:recurring|autopay|auto pay|auto-pay|ach|bill ?pay|online pmt|web pmt|epay|e-pay)\b`,
+  String.raw`\b(?:doordash|uber|lyft|grubhub|instacart|postmates|t-?mobile|verizon|at&t|spectrum|comcast|xfinity|netflix|spotify|hulu)\b`,
+  String.raw`\.(?:com|net|org|io|app)\b`,
+].join("|"), "i");
+const DIGITAL_CATEGORIES = new Set(["subscription", "utilities", "insurance", "loan", "zelle_sent", "transfer", "software", "phone", "internet"]);
+const DIGITAL_PLAID = /"primary"\s*:\s*"(?:RENT_AND_UTILITIES|LOAN_PAYMENTS|BANK_FEES|TRANSFER_OUT)"|"detailed"\s*:\s*"(?:GENERAL_SERVICES_INSURANCE|GENERAL_MERCHANDISE_ONLINE_MARKETPLACES|TRANSPORTATION_TAXIS_AND_RIDE_SHARES)"/;
+
+/** A payment whose bank record is enough (no receipt photo to ask for): see the rule above. */
+export function isDigitalPayment(text: string | null | undefined, opts: { category?: string | null; plaidCategory?: string | null } = {}): boolean {
+  if (opts.category && DIGITAL_CATEGORIES.has(opts.category)) return true;
+  if (opts.plaidCategory && DIGITAL_PLAID.test(opts.plaidCategory)) return true;
+  return DIGITAL_TEXT.test(text ?? "");
+}
 /** A bank charge may post this many days before / after the expense's date. */
 export const PAIR_DAYS_BEFORE = 1;
 export const PAIR_DAYS_AFTER = 5;
@@ -234,6 +254,8 @@ export type BankIn = {
   accountId?: number | null;
   /** Made by the bank itself (a provisional credit, a fee): it shows the bank's logo. */
   bankOwn?: boolean;
+  /** A digital payment (isDigitalPayment): its bank record is its proof, no receipt photo needed. */
+  digital?: boolean;
   logoUrl: string | null;
 };
 
@@ -258,6 +280,8 @@ export type SpendItem = {
   bankAccountId: number | null;
   /** A movement made by the bank itself (provisional credit, fee, interest): shown with the bank's logo. */
   bankOwn: boolean;
+  /** False for digital payments (Zelle, bills, online): the bank's record is their proof, no photo is asked for. */
+  receiptNeeded: boolean;
   logoUrl: string | null;
   /** A bank movement still waiting in Por revisar. */
   inReview: boolean;
@@ -323,6 +347,7 @@ export function buildSpendItems(input: {
       account: bank?.account ?? null,
       bankAccountId: bank?.accountId ?? null,
       bankOwn: bank?.bankOwn ?? false,
+      receiptNeeded: !(e.paymentMethod === "zelle" || bank?.digital || bank?.bankOwn),
       logoUrl: bank?.logoUrl ?? null,
       inReview: false,
       hasReceipt: e.receiptId !== null,
@@ -348,6 +373,7 @@ export function buildSpendItems(input: {
       account: b.account,
       bankAccountId: b.accountId ?? null,
       bankOwn: b.bankOwn ?? false,
+      receiptNeeded: !(b.digital || b.bankOwn),
       logoUrl: b.logoUrl,
       inReview: isInReview(b, today, reviewWindowDays),
       hasReceipt: false,
@@ -364,6 +390,8 @@ export function inRange(items: readonly SpendItem[], from: string, to: string): 
 export type SpendTotals = {
   totalCents: number;
   count: number;
+  /** How many need a receipt photo (digital payments don't), and how many of those have it. */
+  needReceipt: number;
   withReceipt: number;
   byCategory: Array<{ category: SpendCategory; cents: number; count: number }>;
 };
@@ -371,10 +399,13 @@ export type SpendTotals = {
 /** The month's total, how many have their receipt, and the split by category (biggest first). */
 export function spendTotals(items: readonly SpendItem[]): SpendTotals {
   const by = new Map<SpendCategory, { cents: number; count: number }>();
-  let total = 0, withReceipt = 0;
+  let total = 0, needReceipt = 0, withReceipt = 0;
   for (const i of items) {
     total += i.amountCents;
-    if (i.hasReceipt) withReceipt++;
+    if (i.receiptNeeded) {
+      needReceipt++;
+      if (i.hasReceipt) withReceipt++;
+    }
     const cur = by.get(i.category) ?? { cents: 0, count: 0 };
     cur.cents += i.amountCents;
     cur.count++;
@@ -382,7 +413,7 @@ export function spendTotals(items: readonly SpendItem[]): SpendTotals {
   }
   const byCategory = [...by.entries()].map(([category, v]) => ({ category, ...v }))
     .sort((a, b) => b.cents - a.cents || a.category.localeCompare(b.category));
-  return { totalCents: total, count: items.length, withReceipt, byCategory };
+  return { totalCents: total, count: items.length, needReceipt, withReceipt, byCategory };
 }
 
 // ── Charges that repeat ("Se repiten") ──
