@@ -201,7 +201,7 @@ export function ReportPreview() {
   );
 }
 
-// ── Product section: the app on a real phone (same screens as the Ai Aethel 2.0 design) ──
+// ── Product section: the app on a real phone (same screens as the 2.0 design) ──
 function StatusBar() {
   return (
     <div className="relative z-10 grid h-[46px] grid-cols-[1fr_108px_1fr] items-center bg-white px-2 pt-1 text-[13px] font-semibold text-black" aria-hidden>
@@ -668,7 +668,7 @@ export function ConnectStepPreview() {
   );
 }
 
-// Step 3, as in the Ai Aethel 2.0 "To review" inbox: each transaction arrives already
+// Step 3, as in the 2.0 "To review" inbox: each transaction arrives already
 // sorted or matched, you confirm it, and the month's report (In / Out / You kept) updates.
 const REVIEW_BASE = { inn: 23730, out: 8902.48 };
 const REVIEW_DELTAS = [{ inn: 850, out: 0 }, { inn: 0, out: 184.32 }, { inn: 0, out: 48.2 }];

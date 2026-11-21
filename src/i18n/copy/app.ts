@@ -40,7 +40,7 @@ const es = {
     title: "Desbloquea el acceso completo",
     text: "Suscríbete para acceder a esta página y todas las funciones.",
     trialEndedTitle: "Tu prueba gratis terminó",
-    trialEndedText: "Elige un plan para seguir usando Ai Aethel. Tus datos siguen guardados.",
+    trialEndedText: "Elige un plan para seguir usando Personal & Business Solutions. Tus datos siguen guardados.",
   },
 };
 
@@ -85,7 +85,7 @@ const en: AppCopy = {
     title: "Unlock full access",
     text: "Subscribe to access this page and every feature.",
     trialEndedTitle: "Your free trial has ended",
-    trialEndedText: "Choose a plan to keep using Ai Aethel. Your data is still saved.",
+    trialEndedText: "Choose a plan to keep using Personal & Business Solutions. Your data is still saved.",
   },
 };
 

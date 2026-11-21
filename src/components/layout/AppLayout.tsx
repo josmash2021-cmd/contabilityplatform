@@ -107,7 +107,7 @@ export function AppLayout() {
           <Logo className="w-7 h-7 shrink-0" />
           <div className="min-w-0">
             <h1 className="text-xs font-semibold text-black tracking-tight truncate">{companyName}</h1>
-            <p className="text-[9px] text-neutral-400 truncate">{userMode === "personal" ? t.personalFinance : "Ai Aethel Personal & Business Solutions"}</p>
+            <p className="text-[9px] text-neutral-400 truncate">{userMode === "personal" ? t.personalFinance : "Personal & Business Solutions"}</p>
           </div>
         </div>
       </div>
@@ -198,7 +198,7 @@ export function AppLayout() {
             <Logo className="w-6 h-6 shrink-0" />
             <div className="min-w-0">
               <span className="text-sm font-semibold text-black truncate block">{companyName}</span>
-              <span className="text-[9px] text-neutral-400 truncate block">Ai Aethel Personal & Business Solutions</span>
+              <span className="text-[9px] text-neutral-400 truncate block">Personal & Business Solutions</span>
             </div>
           </div>
         </div>

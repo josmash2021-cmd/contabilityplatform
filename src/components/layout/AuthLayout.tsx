@@ -23,8 +23,7 @@ export default function AuthLayout() {
         <Link to="/" className="relative inline-flex w-fit items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
           <Logo className="h-9 w-9" />
           <span className="leading-tight">
-            <span className="block text-base font-semibold text-white">Ai Aethel</span>
-            <span className="block text-xs text-slate-400">Personal &amp; Business Solutions</span>
+            <span className="block text-base font-semibold text-white">Personal &amp; Business Solutions</span>
           </span>
         </Link>
 
@@ -44,7 +43,7 @@ export default function AuthLayout() {
           </div>
         </div>
 
-        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} Ai Aethel Personal & Business Solutions</p>
+        <p className="relative text-xs text-slate-500">© {new Date().getFullYear()} Personal & Business Solutions</p>
       </aside>
 
       {/* Form side */}
@@ -52,7 +51,7 @@ export default function AuthLayout() {
         <div className="flex items-center justify-between gap-3 px-5 py-5 sm:px-10">
           <Link to="/" className="inline-flex items-center gap-2 lg:hidden">
             <Logo className="h-8 w-8" />
-            <span className="text-[15px] font-semibold text-slate-900">Ai Aethel</span>
+            <span className="text-[15px] font-semibold text-slate-900">Personal &amp; Business Solutions</span>
           </Link>
           <div className="ml-auto flex items-center gap-2">
             <LanguageSwitcher />

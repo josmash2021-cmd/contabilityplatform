@@ -122,7 +122,7 @@ async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "bu
   const amount = planAmountCents(plan, mode);
   const interval = plan === "monthly" ? "month" : "year";
   const modeLabel = mode === "personal" ? "Personal " : "";
-  const productName = `AI AETHEL - ${modeLabel}${plan === "monthly" ? "Mensual" : "Anual"}`;
+  const productName = `Personal & Business Solutions - ${modeLabel}${plan === "monthly" ? "Mensual" : "Anual"}`;
   const productDesc = plan === "monthly"
     ? "Acceso completo a Accounting Platform - Facturado mensualmente"
     : "Acceso completo a Accounting Platform - Facturado anualmente";
@@ -804,7 +804,7 @@ export const subscriptionRouter = createRouter({
               currency: "usd",
               unit_amount: amountDue,
               product_data: {
-                name: "Upgrade a Plan Anual - Ai Aethel Personal & Business Solutions",
+                name: "Upgrade a Plan Anual - Personal & Business Solutions",
                 description: `Pago de diferencia para upgrade a plan anual. Incluye todo lo del plan mensual + beneficios anuales.`,
               },
             },
@@ -945,8 +945,8 @@ export const subscriptionRouter = createRouter({
       const appUrl = getAppUrl();
       const amountCents = planAmountCents(input.plan, userMode);
       const productName = userMode === "personal"
-        ? (input.plan === "monthly" ? "AI Aethel - Personal Mensual" : "AI Aethel - Personal Anual")
-        : (input.plan === "monthly" ? "AI AETHEL - Mensual" : "AI AETHEL - Anual");
+        ? (input.plan === "monthly" ? "Personal & Business Solutions - Personal Mensual" : "Personal & Business Solutions - Personal Anual")
+        : (input.plan === "monthly" ? "Personal & Business Solutions - Mensual" : "Personal & Business Solutions - Anual");
       const annualSavings = userMode === "personal" ? "$80" : "$160";
 
       // Create Stripe Checkout session

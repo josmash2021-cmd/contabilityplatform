@@ -21,7 +21,7 @@ const es = {
   hero: {
     titleA: "Tu contabilidad en orden,",
     titleB: "siempre al día.",
-    text: "Ai Aethel conecta tu banco, organiza automáticamente tus ingresos y gastos, y te entrega reportes claros para tomar mejores decisiones. Para tu negocio y para tus finanzas personales.",
+    text: "Personal & Business Solutions conecta tu banco, organiza automáticamente tus ingresos y gastos, y te entrega reportes claros para tomar mejores decisiones. Para tu negocio y para tus finanzas personales.",
     primary: "Empieza gratis",
     secondary: "Ver cómo funciona",
     bullets: (days: number) => [`${days} días gratis`, "Sin tarjeta de crédito", "Cancela cuando quieras"],
@@ -29,16 +29,16 @@ const es = {
   trust: {
     label: "Seguridad y confianza",
     items: [
-      { title: "Tu banco se conecta con Plaid", text: "Entras a tu banco dentro de Plaid. Ai Aethel nunca ve tu contraseña." },
+      { title: "Tu banco se conecta con Plaid", text: "Entras a tu banco dentro de Plaid. Personal & Business Solutions nunca ve tu contraseña." },
       { title: "Funciona con tu banco", text: "Chase, Bank of America, Wells Fargo y miles de bancos más." },
       { title: "En tu idioma", text: "Todo en español y sin palabras de contador. También en inglés." },
       { title: "Tus datos viajan protegidos", text: "Todo lo que envías y recibes va cifrado, igual que en la página de tu banco." },
     ],
   },
   value: {
-    eyebrow: "Por qué Ai Aethel",
+    eyebrow: "Por qué Personal & Business Solutions",
     title: "Menos tiempo con papeles, más claridad sobre tu dinero",
-    text: "Llevar las cuentas no debería quitarte horas cada semana. Ai Aethel hace el trabajo repetitivo para que tú te enfoques en decidir.",
+    text: "Llevar las cuentas no debería quitarte horas cada semana. Personal & Business Solutions hace el trabajo repetitivo para que tú te enfoques en decidir.",
     items: [
       { title: "Todo en un solo lugar", text: "Ventas, gastos, clientes y tu cuenta bancaria en un mismo panel. Se acabaron las hojas de cálculo sueltas." },
       { title: "Automático de verdad", text: "Tus movimientos bancarios llegan solos y se clasifican por categoría. Tú solo revisas." },
@@ -93,7 +93,7 @@ const es = {
         "La bandeja Por revisar: cada movimiento llega ya clasificado o vinculado, tú confirmas y el reporte del mes se actualiza solo.",
       ],
       signup: { title: "Crea tu cuenta", modes: ["Negocio", "Personal"], name: "Nombre", email: "Correo", cta: (d: number) => `Empezar ${d} días gratis`, noCard: "Sin tarjeta", done: "Cuenta creada" },
-      connect: { title: "Ai Aethel usa Plaid para conectar tu banco", pick: "Elige tu banco", safe: "Solo lectura · tu contraseña no pasa por Ai Aethel" },
+      connect: { title: "Usamos Plaid para conectar tu banco", pick: "Elige tu banco", safe: "Solo lectura · tu contraseña no pasa por nosotros" },
       review: {
         title: "Por revisar",
         progress: (n: number) => `${n} de 9 revisados`,
@@ -113,8 +113,8 @@ const es = {
     title: "Tu información financiera, protegida",
     text: "Trabajamos con proveedores especializados en seguridad financiera para que conectar tu banco y pagar tu plan sea tan seguro como usar la app de tu banco.",
     points: [
-      { title: "Tus credenciales nunca pasan por nosotros", text: "Inicias sesión en tu banco dentro de Plaid. Ai Aethel no ve ni guarda tu usuario o contraseña bancaria." },
-      { title: "Solo lectura", text: "La conexión permite ver movimientos y saldos. Nadie puede hacer pagos ni transferencias desde Ai Aethel." },
+      { title: "Tus credenciales nunca pasan por nosotros", text: "Inicias sesión en tu banco dentro de Plaid. Personal & Business Solutions no ve ni guarda tu usuario o contraseña bancaria." },
+      { title: "Solo lectura", text: "La conexión permite ver movimientos y saldos. Nadie puede hacer pagos ni transferencias desde Personal & Business Solutions." },
       { title: "Pagos con Stripe", text: "Tu suscripción se paga en la plataforma segura de Stripe. No almacenamos datos de tarjetas." },
       { title: "Tú tienes el control", text: "Desconecta tu banco cuando quieras desde la sección Banco." },
     ],
@@ -217,13 +217,13 @@ const es = {
     eyebrow: "Preguntas frecuentes",
     title: "Resolvemos tus dudas",
     items: (days: number) => [
-      { q: "¿Cómo funciona la prueba gratis?", a: `Al crear tu cuenta tienes ${days} días de acceso completo. No te pedimos tarjeta. Cuando termina, eliges el plan que prefieras para seguir usando Ai Aethel.` },
+      { q: "¿Cómo funciona la prueba gratis?", a: `Al crear tu cuenta tienes ${days} días de acceso completo. No te pedimos tarjeta. Cuando termina, eliges el plan que prefieras para seguir usando Personal & Business Solutions.` },
       { q: "¿Se me cobrará algo al terminar la prueba?", a: "No. Como no registras una tarjeta durante la prueba, no hay cobros automáticos. Solo pagas si decides suscribirte." },
-      { q: "¿Es seguro conectar mi banco?", a: "Sí. La conexión se hace a través de Plaid: inicias sesión en tu banco dentro de Plaid y Ai Aethel nunca ve tu usuario ni tu contraseña. El acceso es de solo lectura, así que nadie puede mover dinero desde la plataforma." },
+      { q: "¿Es seguro conectar mi banco?", a: "Sí. La conexión se hace a través de Plaid: inicias sesión en tu banco dentro de Plaid y Personal & Business Solutions nunca ve tu usuario ni tu contraseña. El acceso es de solo lectura, así que nadie puede mover dinero desde la plataforma." },
       { q: "¿Qué bancos puedo conectar?", a: "Puedes conectar la mayoría de bancos y cooperativas de crédito de Estados Unidos a través de Plaid." },
       { q: "¿Cuál es la diferencia entre Negocio y Personal?", a: "Negocio incluye punto de venta, clientes, servicios, gastos y reportes de ingresos, gastos y utilidad. Personal está pensado para tus finanzas del día a día: movimientos, categorías, suscripciones y metas de ahorro." },
-      { q: "¿Necesito saber de contabilidad?", a: "No. Ai Aethel organiza tus números por ti y te los muestra en reportes fáciles de leer." },
-      { q: "¿Está disponible en inglés?", a: "Sí. Ai Aethel se muestra en el idioma de tu dispositivo, español o inglés, y puedes cambiarlo cuando quieras." },
+      { q: "¿Necesito saber de contabilidad?", a: "No. Personal & Business Solutions organiza tus números por ti y te los muestra en reportes fáciles de leer." },
+      { q: "¿Está disponible en inglés?", a: "Sí. Personal & Business Solutions se muestra en el idioma de tu dispositivo, español o inglés, y puedes cambiarlo cuando quieras." },
       { q: "¿Puedo cancelar cuando quiera?", a: "Sí. Puedes cancelar tu suscripción en cualquier momento desde Ajustes, sin llamadas ni trámites." },
     ],
   },
@@ -264,8 +264,8 @@ const es = {
         ],
       },
     ] as Array<{ title: string; links: Array<{ label: string; href: string; internal?: boolean }> }>,
-    rights: (year: number) => `© ${year} Ai Aethel Personal & Business Solutions. Todos los derechos reservados.`,
-    disclaimer: "Ai Aethel no sustituye la asesoría de un contador o asesor fiscal certificado.",
+    rights: (year: number) => `© ${year} Personal & Business Solutions. Todos los derechos reservados.`,
+    disclaimer: "Personal & Business Solutions no sustituye la asesoría de un contador o asesor fiscal certificado.",
   },
   previews: {
     sample: "Datos de ejemplo",
@@ -302,7 +302,7 @@ const es = {
       perMonth: "/mes",
       goal: "Fondo de emergencia",
       goalProgress: "$3,400 de $5,000 · 68%",
-      aria: "Así se ve Ai Aethel en un teléfono: tu saldo, tus ingresos y gastos del mes y tus últimos movimientos. Datos de ejemplo.",
+      aria: "Así se ve Personal & Business Solutions en un teléfono: tu saldo, tus ingresos y gastos del mes y tus últimos movimientos. Datos de ejemplo.",
       user: "Ana Rivera",
       tx: [
         { name: "Empresa ABC · Nómina", cat: "Nómina", date: "15/11/2026", amount: 1625, income: true },
@@ -339,7 +339,7 @@ const es = {
       goalText: "$3,400 de $5,000 · 68%",
     },
     businessApp: {
-      aria: "Así se ve Ai Aethel en un teléfono en modo Negocio: lo que te queda este mes, el banco, lo que te deben y lo que debes, accesos rápidos y la lista Para hoy. Datos de ejemplo.",
+      aria: "Así se ve Personal & Business Solutions en un teléfono en modo Negocio: lo que te queda este mes, el banco, lo que te deben y lo que debes, accesos rápidos y la lista Para hoy. Datos de ejemplo.",
       search: "Busca clientes, facturas o movimientos",
       hello: "Hola, María",
       date: "Miércoles 19 de noviembre",
@@ -400,7 +400,7 @@ const en: MarketingCopy = {
   hero: {
     titleA: "Your books in order,",
     titleB: "always up to date.",
-    text: "Ai Aethel connects to your bank, organizes your income and expenses automatically, and gives you clear reports so you can make better decisions. For your business and your personal finances.",
+    text: "Personal & Business Solutions connects to your bank, organizes your income and expenses automatically, and gives you clear reports so you can make better decisions. For your business and your personal finances.",
     primary: "Start for free",
     secondary: "See how it works",
     bullets: (days: number) => [`${days} days free`, "No credit card required", "Cancel anytime"],
@@ -408,16 +408,16 @@ const en: MarketingCopy = {
   trust: {
     label: "Security and trust",
     items: [
-      { title: "Your bank connects through Plaid", text: "You log in to your bank inside Plaid. Ai Aethel never sees your password." },
+      { title: "Your bank connects through Plaid", text: "You log in to your bank inside Plaid. Personal & Business Solutions never sees your password." },
       { title: "Works with your bank", text: "Chase, Bank of America, Wells Fargo and thousands more." },
       { title: "In your language", text: "Plain English, no accounting jargon. Also in Spanish." },
       { title: "Your data travels protected", text: "Everything you send and receive is encrypted, just like on your bank's website." },
     ],
   },
   value: {
-    eyebrow: "Why Ai Aethel",
+    eyebrow: "Why Personal & Business Solutions",
     title: "Less time on paperwork, more clarity about your money",
-    text: "Keeping your books shouldn't eat hours of your week. Ai Aethel handles the repetitive work so you can focus on decisions.",
+    text: "Keeping your books shouldn't eat hours of your week. Personal & Business Solutions handles the repetitive work so you can focus on decisions.",
     items: [
       { title: "Everything in one place", text: "Sales, expenses, clients and your bank account in a single dashboard. No more scattered spreadsheets." },
       { title: "Truly automatic", text: "Your bank transactions flow in on their own and get categorized. You just review." },
@@ -472,7 +472,7 @@ const en: MarketingCopy = {
         "The To review inbox: each transaction arrives already sorted or matched, you confirm it and the month's report updates on its own.",
       ],
       signup: { title: "Create your account", modes: ["Business", "Personal"], name: "Name", email: "Email", cta: (d: number) => `Start ${d} days free`, noCard: "No card needed", done: "Account created" },
-      connect: { title: "Ai Aethel uses Plaid to connect your bank", pick: "Select your bank", safe: "Read-only · your password never reaches Ai Aethel" },
+      connect: { title: "We use Plaid to connect your bank", pick: "Select your bank", safe: "Read-only · your password never reaches us" },
       review: {
         title: "To review",
         progress: (n: number) => `${n} of 9 reviewed`,
@@ -492,8 +492,8 @@ const en: MarketingCopy = {
     title: "Your financial information, protected",
     text: "We work with providers that specialize in financial security, so connecting your bank and paying for your plan is as safe as using your bank's app.",
     points: [
-      { title: "Your credentials never touch our servers", text: "You log in to your bank inside Plaid. Ai Aethel never sees or stores your bank username or password." },
-      { title: "Read-only", text: "The connection can see transactions and balances. No one can make payments or transfers from Ai Aethel." },
+      { title: "Your credentials never touch our servers", text: "You log in to your bank inside Plaid. Personal & Business Solutions never sees or stores your bank username or password." },
+      { title: "Read-only", text: "The connection can see transactions and balances. No one can make payments or transfers from Personal & Business Solutions." },
       { title: "Payments with Stripe", text: "Your subscription is paid on Stripe's secure platform. We don't store card details." },
       { title: "You're in control", text: "Disconnect your bank anytime from the Bank section." },
     ],
@@ -596,13 +596,13 @@ const en: MarketingCopy = {
     eyebrow: "FAQ",
     title: "Answers to your questions",
     items: (days: number) => [
-      { q: "How does the free trial work?", a: `When you create your account you get ${days} days of full access. We don't ask for a card. When it ends, you pick the plan you prefer to keep using Ai Aethel.` },
+      { q: "How does the free trial work?", a: `When you create your account you get ${days} days of full access. We don't ask for a card. When it ends, you pick the plan you prefer to keep using Personal & Business Solutions.` },
       { q: "Will I be charged when the trial ends?", a: "No. Since you don't add a card during the trial, there are no automatic charges. You only pay if you decide to subscribe." },
-      { q: "Is it safe to connect my bank?", a: "Yes. The connection goes through Plaid: you log in to your bank inside Plaid and Ai Aethel never sees your username or password. Access is read-only, so no one can move money from the platform." },
+      { q: "Is it safe to connect my bank?", a: "Yes. The connection goes through Plaid: you log in to your bank inside Plaid and Personal & Business Solutions never sees your username or password. Access is read-only, so no one can move money from the platform." },
       { q: "Which banks can I connect?", a: "You can connect most banks and credit unions in the United States through Plaid." },
       { q: "What's the difference between Business and Personal?", a: "Business includes point of sale, clients, services, expenses and income, expense and profit reports. Personal is designed for your day-to-day finances: transactions, categories, subscriptions and savings goals." },
-      { q: "Do I need to know accounting?", a: "No. Ai Aethel organizes your numbers for you and shows them in easy-to-read reports." },
-      { q: "Is it available in Spanish?", a: "Yes. Ai Aethel follows your device's language, English or Spanish, and you can switch it anytime." },
+      { q: "Do I need to know accounting?", a: "No. Personal & Business Solutions organizes your numbers for you and shows them in easy-to-read reports." },
+      { q: "Is it available in Spanish?", a: "Yes. Personal & Business Solutions follows your device's language, English or Spanish, and you can switch it anytime." },
       { q: "Can I cancel anytime?", a: "Yes. You can cancel your subscription anytime from Settings, no calls or paperwork." },
     ],
   },
@@ -643,8 +643,8 @@ const en: MarketingCopy = {
         ],
       },
     ],
-    rights: (year: number) => `© ${year} Ai Aethel Personal & Business Solutions. All rights reserved.`,
-    disclaimer: "Ai Aethel is not a substitute for advice from a certified accountant or tax advisor.",
+    rights: (year: number) => `© ${year} Personal & Business Solutions. All rights reserved.`,
+    disclaimer: "Personal & Business Solutions is not a substitute for advice from a certified accountant or tax advisor.",
   },
   previews: {
     sample: "Sample data",
@@ -681,7 +681,7 @@ const en: MarketingCopy = {
       perMonth: "/mo",
       goal: "Emergency fund",
       goalProgress: "$3,400 of $5,000 · 68%",
-      aria: "What Ai Aethel looks like on a phone: your balance, this month's income and expenses, and your latest transactions. Sample data.",
+      aria: "What Personal & Business Solutions looks like on a phone: your balance, this month's income and expenses, and your latest transactions. Sample data.",
       user: "Ana Rivera",
       tx: [
         { name: "Empresa ABC · Paycheck", cat: "Paycheck", date: "11/15/2026", amount: 1625, income: true },
@@ -718,7 +718,7 @@ const en: MarketingCopy = {
       goalText: "$3,400 of $5,000 · 68%",
     },
     businessApp: {
-      aria: "What Ai Aethel looks like on a phone in Business mode: what's left this month, the bank, what you're owed and what you owe, quick actions and the Today list. Sample data.",
+      aria: "What Personal & Business Solutions looks like on a phone in Business mode: what's left this month, the bank, what you're owed and what you owe, quick actions and the Today list. Sample data.",
       search: "Search clients, invoices or transactions",
       hello: "Hi, María",
       date: "Wednesday, November 19",

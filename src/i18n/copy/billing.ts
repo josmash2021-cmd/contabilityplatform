@@ -184,11 +184,11 @@ const es = {
   expired: {
     title: "Suscripción expirada",
     subtitle: "Tu plan ha finalizado",
-    text: "Tu suscripción ha expirado. Para seguir usando todas las funciones de Ai Aethel Personal & Business Solutions, renueva tu plan ahora.",
+    text: "Tu suscripción ha expirado. Para seguir usando todas las funciones de Personal & Business Solutions, renueva tu plan ahora.",
     renewMonthly: "Renovar suscripción mensual",
     billedMonthly: "Facturado mensualmente",
     renewAnnual: "Renovar suscripción anual",
-    terms: "Al renovar, aceptas los términos de servicio de Ai Aethel Personal & Business Solutions.",
+    terms: "Al renovar, aceptas los términos de servicio de Personal & Business Solutions.",
   },
   // pages/Settings.tsx
   settings: {
@@ -497,11 +497,11 @@ const en: BillingCopy = {
   expired: {
     title: "Subscription expired",
     subtitle: "Your plan has ended",
-    text: "Your subscription has expired. To keep using every Ai Aethel Personal & Business Solutions feature, renew your plan now.",
+    text: "Your subscription has expired. To keep using every Personal & Business Solutions feature, renew your plan now.",
     renewMonthly: "Renew monthly subscription",
     billedMonthly: "Billed monthly",
     renewAnnual: "Renew annual subscription",
-    terms: "By renewing, you agree to the Ai Aethel Personal & Business Solutions terms of service.",
+    terms: "By renewing, you agree to the Personal & Business Solutions terms of service.",
   },
   settings: {
     example: (value: string) => `e.g. ${value}`,

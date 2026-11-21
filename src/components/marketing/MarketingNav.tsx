@@ -45,8 +45,7 @@ export function MarketingNav() {
         <Link to="/" className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => setOpen(false)}>
           <Logo className="h-8 w-8" />
           <span className="leading-tight">
-            <span className={`block text-[15px] font-semibold tracking-tight transition-colors ${solid ? "text-slate-900" : "text-white"}`}>Ai Aethel</span>
-            <span className={`block whitespace-nowrap text-[11px] transition-colors ${solid ? "text-slate-500" : "text-slate-400"}`}>Personal &amp; Business Solutions</span>
+            <span className={`block text-[15px] font-semibold tracking-tight transition-colors ${solid ? "text-slate-900" : "text-white"}`}>Personal &amp; Business Solutions</span>
           </span>
         </Link>
 
