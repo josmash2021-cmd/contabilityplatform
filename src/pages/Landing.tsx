@@ -9,7 +9,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/
 import { MarketingNav } from "@/components/marketing/MarketingNav";
 import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { Reveal } from "@/components/marketing/Reveal";
-import { ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, ReportPreview, SignupStepPreview } from "@/components/marketing/Previews";
+import { BusinessPhonePreview, ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, SignupStepPreview } from "@/components/marketing/Previews";
 import { LANDING_PLANS, TRIAL_DAYS, annualPerMonth } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
@@ -183,7 +183,7 @@ function Product({ c }: { c: C["product"] }) {
               })}
             </div>
           </div>
-          <div className="mx-auto w-full max-w-md lg:max-w-lg">{tab === "business" ? <ReportPreview /> : <PhonePreview />}</div>
+          <div className="mx-auto w-full max-w-md lg:max-w-lg">{tab === "business" ? <BusinessPhonePreview /> : <PhonePreview />}</div>
         </div>
       </div>
     </section>
