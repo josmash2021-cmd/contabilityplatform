@@ -158,7 +158,7 @@ describe("the bank's own movements (shown with the bank's logo)", () => {
   });
   it("a Zelle, a store or a local business is not", () => {
     for (const d of ["ZELLE TO CLEANING SERVICE", "TACOS EL PASTOR 2231", "STARBUCKS STORE 12345 AUSTIN TX", "AMAZON MKTPL*7T2RD1",
-      "ONLINE TRANSFER TO SAVINGS", "Joe's Tire Shop", ""]) {
+      "Joe's Tire Shop", ""]) {
       expect(isBankOwnMovement(d), d).toBe(false);
     }
     expect(isBankOwnMovement("SHELL OIL", JSON.stringify({ primary: "TRANSPORTATION", detailed: "TRANSPORTATION_GAS" }))).toBe(false);
@@ -180,5 +180,18 @@ describe("payment apps' saved originals", () => {
     expect(safeLogoUrl("/brands/../secret.png")).toBeNull();
     expect(safeLogoUrl("/api/trpc/x.png")).toBeNull();
     expect(safeLogoUrl("//evil.example/x.png")).toBeNull();
+  });
+});
+
+describe("movements as the user's bank writes them (Wells Fargo)", () => {
+  it("finds the merchant behind a processor prefix and bank boilerplate", () => {
+    expect(candidateKeys({ description: "PURCHASE DD *DOORDASH +16506819470 CA CARD3537" })).toContain("doordash");
+    expect(candidateKeys({ description: "RECURRING PAYMENT AUTHORIZED ON 11/17 APPLE.COM/BILL CA S346321839069008 CARD 3537" })).toContain("apple");
+    expect(candidateKeys({ description: "PURCHASE AUTHORIZED ON 11/15 TEMU.COM MA S586319376688669 CARD 3537" })).toContain("temu");
+  });
+  it("moving money between your own accounts is the bank's (its logo)", () => {
+    expect(isBankOwnMovement("ONLINE TRANSFER TO MARTINEZ TOSTA J WAY2SAVE SAVINGS XXXXXX8492 REF #IB04549YQG ON 11/18/26")).toBe(true);
+    expect(isBankOwnMovement("SHELL", JSON.stringify({ primary: "TRANSFER_OUT", detailed: "TRANSFER_OUT_ACCOUNT_TRANSFER" }))).toBe(true);
+    expect(isBankOwnMovement("ZELLE TO PAPA YONEL ON 11/14 REF # WFCT22WKRRXM")).toBe(false);
   });
 });

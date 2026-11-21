@@ -100,7 +100,22 @@ const KNOWN_NAMES: Array<[RegExp, string]> = [
   [/^chevron\b/, "Chevron"], [/^exxon/, "Exxon"], [/^netflix/, "Netflix"], [/^spotify\b/, "Spotify"],
   [/^uber\b/, "Uber"], [/^lyft\b/, "Lyft"], [/^starbucks\b/, "Starbucks"], [/^mcdonald'?s\b/, "McDonald's"],
   [/^sams? club\b|^sam's club\b/, "Sam's Club"], [/^autozone\b/, "AutoZone"], [/^office depot\b/, "Office Depot"],
+  [/^apple\b/, "Apple"], [/^temu\b/, "Temu"], [/^doordash\b/, "DoorDash"], [/^t-?mobile\b/, "T-Mobile"], [/^paypal\b/, "PayPal"],
+  [/^venmo\b/, "Venmo"], [/^(cash app|cashapp|sq cash)\b/, "Cash App"], [/^walgreens\b/, "Walgreens"], [/^cvs\b/, "CVS"],
+  [/^at&?t\b/, "AT&T"], [/^verizon\b/, "Verizon"], [/^google\b/, "Google"], [/^microsoft\b/, "Microsoft"], [/^taco bell\b/, "Taco Bell"],
+  [/^chick-?fil-?a\b/, "Chick-fil-A"], [/^dollar general\b/, "Dollar General"], [/^dollar tree\b/, "Dollar Tree"], [/^publix\b/, "Publix"],
+  [/^kroger\b/, "Kroger"], [/^instacart\b/, "Instacart"], [/^grubhub\b/, "Grubhub"], [/^lyft\b/, "Lyft"],
 ];
+
+/** US state codes banks add after the merchant ("TEMU.COM MA"): where it was processed, not part of the name. */
+const US_STATES = new Set("al ak az ar ca co ct de fl ga hi id il in ia ks ky la me md ma mi mn ms mo mt ne nv nh nj nm ny nc nd oh ok or pa ri sc sd tn tx ut vt va wa wv wi wy dc".split(" "));
+
+/** "apple.combill ca" → "apple", "temu.com ma" → "temu": a web address is the name, and the state goes. */
+function tidyKey(key: string): string {
+  const words = key.split(" ").map((w) => w.replace(/\.(?:com|net|org|co|us|io|app)\S*$/, "")).filter(Boolean);
+  while (words.length > 1 && US_STATES.has(words[words.length - 1])) words.pop();
+  return words.join(" ");
+}
 
 const LOWER_WORDS = new Set(["de", "del", "la", "las", "los", "y", "of", "and"]);
 const titleCase = (s: string) => s.split(" ").map((w, i) => (i > 0 && LOWER_WORDS.has(w) ? w : w.charAt(0).toUpperCase() + w.slice(1))).join(" ");
@@ -110,7 +125,7 @@ export function displayNameOf(description: string | null | undefined, merchantNa
   const desc = (description ?? "").trim();
   const name = (merchantName ?? "").trim();
   const readable = (text: string) => {
-    const key = merchantKeyOf(text);
+    const key = tidyKey(merchantKeyOf(text));
     const zelle = /^zelle (?:payment )?(?:from|to) (.+)$/.exec(key);
     if (zelle) return `Zelle · ${titleCase(zelle[1])}`;
     for (const [re, label] of KNOWN_NAMES) if (re.test(key)) return label;

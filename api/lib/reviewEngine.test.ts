@@ -45,6 +45,12 @@ describe("merchant keys and names", () => {
     expect(displayNameOf("SHELL OIL 57134 HOUSTON", "shell oil")).toBe("Shell");
     expect(displayNameOf("JOE'S TIRE SHOP 2231", "joe's tire shop")).toBe("Joe's Tire Shop");
     expect(displayNameOf("PROVISIONAL CREDIT ADJUSTMENT 1118", "provisional")).toBe("Provisional Credit Adjustment");
+    // As Wells Fargo writes them.
+    expect(displayNameOf("RECURRING PAYMENT AUTHORIZED ON 11/17 APPLE.COM/BILL CA S346321839069008 CARD 3537", "apple")).toBe("Apple");
+    expect(displayNameOf("PURCHASE AUTHORIZED ON 11/15 TEMU.COM MA S586319376688669 CARD 3537", "temu")).toBe("Temu");
+    expect(displayNameOf("PURCHASE DD *DOORDASH +16506819470 CA CARD3537", "dd *doordash")).toBe("DoorDash");
+    expect(displayNameOf("TMOBILE*AUTO PAY 800-937-8997 WA")).toBe("T-Mobile");
+    expect(displayNameOf("JOE'S TIRE SHOP BIRMINGHAM AL")).toBe("Joe's Tire Shop Birmingham");
   });
   it("finds a person's or company's name in a description", () => {
     expect(nameInText("Carlos Ruiz", "ZELLE FROM CARLOS RUIZ CONF# 88412")).toBe(true);

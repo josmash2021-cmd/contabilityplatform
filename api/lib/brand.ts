@@ -108,15 +108,15 @@ export function monogramColors(color: string | null | undefined): { bg: string; 
 
 // ── The bank's own movements ──
 
-/** What banks write on their own movements: provisional credits, fees, interest, adjustments. */
-const BANK_OWN = /\b(?:provisional|service (?:charge|fee)|(?:monthly )?(?:service|maintenance) fee|overdraft|od fee|nsf|insufficient funds|returned item|interest (?:payment|paid|earned|charged?)|wire (?:transfer )?fee|atm (?:fee|surcharge)|foreign (?:transaction|exchange) fee|fee reversal|reversal of fee|courtesy credit|account fee|statement fee|stop payment fee|cashier'?s check fee|adjustment|chargeback|dispute credit)\b/i;
+/** What banks write on their own movements: provisional credits, fees, interest, adjustments, moving money between your accounts. */
+const BANK_OWN = /\b(?:provisional|service (?:charge|fee)|(?:monthly )?(?:service|maintenance) fee|overdraft|od fee|nsf|insufficient funds|returned item|interest (?:payment|paid|earned|charged?)|wire (?:transfer )?fee|atm (?:fee|surcharge)|foreign (?:transaction|exchange) fee|fee reversal|reversal of fee|courtesy credit|account fee|statement fee|stop payment fee|cashier'?s check fee|adjustment|chargeback|dispute credit|(?:online|mobile) transfer|overdraft protection)\b/i;
 
 /**
  * A movement made by the bank itself (a provisional credit, a fee, interest, an adjustment), not by a
  * merchant: it shows the bank's own logo. A Zelle payment or a local business without a logo is not one.
  */
 export function isBankOwnMovement(text: string | null | undefined, plaidCategory?: string | null): boolean {
-  if (plaidCategory && /"primary"\s*:\s*"BANK_FEES"/.test(plaidCategory)) return true;
+  if (plaidCategory && /"primary"\s*:\s*"BANK_FEES"|"detailed"\s*:\s*"TRANSFER_(?:IN|OUT)_ACCOUNT_TRANSFER"/.test(plaidCategory)) return true;
   return BANK_OWN.test(text ?? "");
 }
 
@@ -198,6 +198,8 @@ export function directLogoOf(tx: PlaidTxBrand): string | null {
 const LEADING_NOISE = new Set([
   "purchase", "purchases", "authorized", "auth", "on", "pos", "debit", "credit", "card", "checkcard", "check", "recurring",
   "payment", "pmt", "online", "ach", "web", "ppd", "id", "sq", "tst", "dda", "visa", "mc", "withdrawal", "bill", "the",
+  // Payment processors in front of the merchant ("DD *DOORDASH", "SP *SHOP NAME").
+  "dd", "sp",
 ]);
 
 /**

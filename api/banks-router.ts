@@ -14,7 +14,10 @@ import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { bankAccounts, bankTransactions } from "@db/schema";
 import { bills, vendors } from "@db/vendorsSchema";
-import { determineTypeAndCategory, initPlaid, plaidBalance } from "./bank-router";
+import { determineTypeAndCategory, initPlaid, plaidBalance, plaidMerchantNameOf, takeOverPending } from "./bank-router";
+import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
+import { isBankOwnMovement } from "./lib/brand";
+import { displayNameOf } from "./lib/reviewEngine";
 import { accountMode, bankLimit } from "./lib/plans";
 import { contextHas, getPlanContext, lastPaidTier } from "./lib/planAccess";
 import { REVIEW_WINDOW_DAYS } from "./lib/bankReview";
@@ -92,6 +95,9 @@ type PlaidAccount = {
 type PlaidTx = {
   transaction_id: string; account_id: string; amount: number; date: string; name: string; merchant_name?: string | null;
   category?: string[] | null; personal_finance_category?: { primary: string; detailed: string } | null;
+  pending?: boolean | null; pending_transaction_id?: string | null;
+  logo_url?: string | null; website?: string | null;
+  counterparties?: Array<{ name?: string | null; type?: string | null; logo_url?: string | null; website?: string | null }> | null;
 };
 type PlaidClient = {
   accountsGet(req: { access_token: string }): Promise<{ data: { accounts?: PlaidAccount[] } }>;
@@ -199,6 +205,8 @@ async function syncItem(db: Db, client: PlaidClient, userId: number, itemId: str
       offset += txs.length;
       if (txs.length < 500 || offset >= (page.data.total_transactions ?? 0)) break;
     }
+    // Plaid's original merchant logos, kept for every screen (withMerchantLogos).
+    await rememberMerchantLogos(db, all);
     const ids = [...new Set(all.map((t) => t.transaction_id).filter(Boolean))];
     const saved = new Set<string>();
     for (let i = 0; i < ids.length; i += 500) {
@@ -207,9 +215,10 @@ async function syncItem(db: Db, client: PlaidClient, userId: number, itemId: str
         .where(inArray(bankTransactions.plaidTransactionId, chunk));
       for (const r of rowsSaved) if (r.id) saved.add(r.id);
     }
-    const fresh = all.filter((t) => t.transaction_id && !saved.has(t.transaction_id) && Math.abs(t.amount) > 0 && byPlaidId.has(t.account_id));
+    // Settled movements only: a pending one gets a new id once it posts, so saving it too would count it twice.
+    const fresh = all.filter((t) => t.transaction_id && !t.pending && !saved.has(t.transaction_id) && Math.abs(t.amount) > 0 && byPlaidId.has(t.account_id));
     let added = 0;
-    const values = fresh.map((t) => {
+    const built = fresh.map((t) => {
       const acc = byPlaidId.get(t.account_id)!;
       const { type, category } = determineTypeAndCategory(
         t.amount, t.personal_finance_category?.detailed ? [t.personal_finance_category.primary, t.personal_finance_category.detailed] : t.category ?? [], t.name,
@@ -221,10 +230,16 @@ async function syncItem(db: Db, client: PlaidClient, userId: number, itemId: str
         amount: Math.abs(t.amount).toFixed(2), plaidAmount: t.amount.toFixed(2), type, category: category.slice(0, 40),
         subcategory: t.personal_finance_category?.detailed || t.category?.[1] || null,
         plaidTransactionId: t.transaction_id, plaidCategory: t.personal_finance_category ? JSON.stringify(t.personal_finance_category) : null,
-        merchantName: (t.merchant_name || t.name || "").slice(0, 255), syncStatus: "synced" as const, lastSyncedAt: new Date(),
+        merchantName: (plaidMerchantNameOf(t) || t.name || "").slice(0, 255), syncStatus: "synced" as const, lastSyncedAt: new Date(),
         reference: t.transaction_id, isReconciled: false, importedFrom: "plaid",
       };
     });
+    // One saved while it was still pending (older syncs kept them) becomes the settled one instead of a second row.
+    const values: typeof built = [];
+    for (let i = 0; i < built.length; i++) {
+      if (await takeOverPending(db, userId, fresh[i], built[i])) added++;
+      else values.push(built[i]);
+    }
     for (let i = 0; i < values.length; i += 100) {
       const chunk = values.slice(i, i + 100);
       try {
@@ -257,7 +272,7 @@ type AccountRow = {
 type TxRow = { bankAccountId: number; date: string; plaidAmount: string | null; amount: string; type: string };
 type MonthRow = {
   id: number; date: string; description: string; merchantName: string | null; amount: string; plaidAmount: string | null;
-  type: string; category: string; isReconciled: number | boolean | null; importedFrom: string | null;
+  type: string; category: string; isReconciled: number | boolean | null; importedFrom: string | null; plaidCategory: string | null;
 };
 
 const KIND_ORDER: Record<AccountKind, number> = { cash: 0, credit: 1, loan: 2 };
@@ -379,17 +394,22 @@ export const banksRouter = createRouter({
         id: bankTransactions.id, date: sql<string>`DATE_FORMAT(${bankTransactions.transactionDate}, '%Y-%m-%d')`,
         description: bankTransactions.description, merchantName: bankTransactions.merchantName, amount: bankTransactions.amount,
         plaidAmount: bankTransactions.plaidAmount, type: bankTransactions.type, category: bankTransactions.category,
-        isReconciled: bankTransactions.isReconciled, importedFrom: bankTransactions.importedFrom,
+        isReconciled: bankTransactions.isReconciled, importedFrom: bankTransactions.importedFrom, plaidCategory: bankTransactions.plaidCategory,
       }).from(bankTransactions).where(and(
         eq(bankTransactions.userId, userId), eq(bankTransactions.bankAccountId, input.accountId),
         sql`${bankTransactions.transactionDate} BETWEEN ${start} AND ${end}`,
       )).orderBy(desc(bankTransactions.transactionDate), desc(bankTransactions.id)).limit(2000);
       let inCents = 0, outCents = 0;
-      const transactions = rows.map((r) => {
+      // Each movement's original logo (Plaid's, kept per merchant; Zelle's saved one).
+      const logos = await withMerchantLogos(db, rows.map((r) => ({ description: r.description, merchantName: r.merchantName, logoUrl: null as string | null })));
+      const transactions = rows.map((r, i) => {
         const signed = signedPlaidAmount(r);
         if (signed < 0) inCents += Math.round(-signed * 100); else outCents += Math.round(signed * 100);
         return {
           id: Number(r.id), date: r.date, description: r.description, merchantName: r.merchantName,
+          // What people recognize ("Apple", "DoorDash"), its logo, and whether the bank itself made it (its logo then).
+          who: displayNameOf(r.description, r.merchantName), logoUrl: logos[i].logoUrl,
+          bankOwn: isBankOwnMovement(`${r.description} ${r.merchantName ?? ""}`, r.plaidCategory),
           amount: Math.abs(Number(r.amount) || 0), direction: signed < 0 ? ("in" as const) : ("out" as const),
           category: r.category, reviewed: !!Number(r.isReconciled), importedFrom: r.importedFrom,
         };

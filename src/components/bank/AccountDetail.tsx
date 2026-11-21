@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 import { Link } from "react-router";
 import { AlertCircle, ArrowLeft, ArrowRight, ChevronRight } from "lucide-react";
 import { BankLogo } from "@/components/brand/BankLogo";
+import { MovementLogo } from "@/components/brand/MovementLogo";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
@@ -171,15 +172,22 @@ function MovementRow({ r, reviewFrom, accountId, cat, lang, monthsShort }: {
   const t = useCopy(bancosCopy).detail;
   const pending = !r.reviewed && r.date >= reviewFrom;
   const state = r.reviewed ? "ok" : pending ? "pend" : "old";
+  const name = movementName(r, t);
   return (
     <li className="grid grid-cols-[52px_minmax(0,1fr)_auto] items-center gap-3 border-b border-slate-200 py-[11px] last:border-b-0">
       <span className="text-xs text-slate-500">{shortDay(r.date, lang, monthsShort)}</span>
-      <div className="min-w-0">
-        <b className="block truncate text-sm font-semibold text-slate-900">{r.description}</b>
-        <span className="flex items-center gap-1.5 text-xs text-slate-500">
-          <i className={cn("h-1.5 w-1.5 shrink-0 rounded-full", state === "ok" ? "bg-emerald-600" : state === "pend" ? "bg-amber-600" : "bg-slate-400")} aria-hidden="true" />
-          <span className="truncate">{state === "ok" ? t.reviewed(cat(r.category)) : state === "pend" ? t.pending : cat(r.category)}{r.importedFrom === "csv" ? ` · ${t.csv}` : ""}</span>
-        </span>
+      <div className="flex min-w-0 items-center gap-3">
+        {/* The merchant's original logo; the bank's own on its own movements; else the name's letter. */}
+        <MovementLogo name={name} logoUrl={r.logoUrl} accountId={accountId} bankOwn={r.bankOwn} size={36} />
+        <div className="min-w-0">
+          <b className="block truncate text-sm font-semibold text-slate-900">{name}</b>
+          <span className="flex items-center gap-1.5 text-xs text-slate-500">
+            <i className={cn("h-1.5 w-1.5 shrink-0 rounded-full", state === "ok" ? "bg-emerald-600" : state === "pend" ? "bg-amber-600" : "bg-slate-400")} aria-hidden="true" />
+            <span className="truncate">{state === "ok" ? t.reviewed(cat(r.category)) : state === "pend" ? t.pending : cat(r.category)}{r.importedFrom === "csv" ? ` · ${t.csv}` : ""}</span>
+          </span>
+          {/* The bank's own text, small, for whoever wants to check it. */}
+          <span className="block truncate text-[11px] text-slate-400" title={r.description}>{r.description}</span>
+        </div>
       </div>
       <div className="grid justify-items-end">
         <span className={cn("whitespace-nowrap text-[15px] font-[750] tabular-nums", r.direction === "in" ? "text-emerald-600" : "text-slate-900")}>
@@ -189,6 +197,22 @@ function MovementRow({ r, reviewFrom, accountId, cat, lang, monthsShort }: {
       </div>
     </li>
   );
+}
+
+const titleWords = (s: string) => s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
+
+/**
+ * The bold name: a transfer between your accounts says where it went ("Transferencia a Way2save Savings ••8492"),
+ * anything else what people recognize (the server's `who`: "Apple", "DoorDash", "Zelle · Papa Yonel").
+ */
+function movementName(r: MonthMovement, t: { transferTo: (a: string) => string; transferFrom: (a: string) => string; transfer: string }): string {
+  if (r.bankOwn && /\b(?:online|mobile) transfer\b/i.test(r.description)) {
+    const acct = /\b([a-z0-9]+)\s+(savings|checking)\b(?:\s+x*(\d{4}))?/i.exec(r.description);
+    if (!acct) return t.transfer;
+    const label = `${titleWords(`${acct[1]} ${acct[2]}`)}${acct[3] ? ` ••${acct[3]}` : ""}`;
+    return r.direction === "in" ? t.transferFrom(label) : t.transferTo(label);
+  }
+  return r.who || r.description;
 }
 
 /** The month by category, linking to the category drill-down (/bank/category/:key), as the old month view did. */

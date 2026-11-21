@@ -696,7 +696,7 @@ export function plaidTransactionRow(userId: number, account: Pick<BankAccount, "
 }
 
 /** The merchant's name as Plaid gives it: its merchant_name, else the merchant counterparty's name. */
-function plaidMerchantNameOf(tx: Pick<Transaction, "merchant_name" | "counterparties">): string {
+export function plaidMerchantNameOf(tx: { merchant_name?: string | null; counterparties?: Array<{ type?: string | null; name?: string | null }> | null }): string {
   const own = (tx.merchant_name ?? "").trim();
   if (own) return own;
   const cp = (tx.counterparties ?? []).find((c) => c?.type === "merchant" && c.name);
@@ -709,7 +709,10 @@ function plaidMerchantNameOf(tx: Pick<Transaction, "merchant_name" | "counterpar
  * the settled movement (its id, final amount, day and text) instead of a second row, so the money isn't
  * counted twice and how it was reviewed stays. Returns true when it took one over.
  */
-async function takeOverPending(db: Db, userId: number, tx: Transaction, row: ReturnType<typeof plaidTransactionRow>): Promise<boolean> {
+export async function takeOverPending(
+  db: Db, userId: number, tx: { pending_transaction_id?: string | null },
+  row: Pick<ReturnType<typeof plaidTransactionRow>, "plaidTransactionId" | "reference" | "amount" | "plaidAmount" | "description" | "merchantName" | "lastSyncedAt"> & { transactionDate: Date | string },
+): Promise<boolean> {
   const pendingId = tx.pending_transaction_id;
   if (!pendingId) return false;
   const res = await db.update(bankTransactions).set({
