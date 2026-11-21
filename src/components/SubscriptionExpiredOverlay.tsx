@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { AlertTriangle, Crown, CalendarDays, Zap, X } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { useCopy } from "@/i18n/useI18n";
 import { billingCopy } from "@/i18n/copy/billing";
+import { useAuth } from "@/hooks/useAuth";
+import { findPlan } from "@/components/marketing/content";
 
 export function SubscriptionExpiredOverlay() {
   const { plans, expired: t } = useCopy(billingCopy);
@@ -15,6 +16,11 @@ export function SubscriptionExpiredOverlay() {
     undefined,
     { refetchInterval: 60000 } // Check every minute
   );
+  // Renew at the price of the plan the person had (before tiers: Negocio or Pro).
+  const { user } = useAuth();
+  const mode = user?.modePreference === "personal" ? "personal" : "business";
+  const { data: tierData } = trpc.subscription.currentTier.useQuery();
+  const renewPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, mode === "personal" ? "pro" : "standard")!;
 
   // Check if subscription is expired
   const isExpired = (() => {
@@ -75,7 +81,7 @@ export function SubscriptionExpiredOverlay() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-black">{t.renewMonthly}</p>
-              <p className="text-xs text-neutral-500">$80{plans.perMonth} — {t.billedMonthly}</p>
+              <p className="text-xs text-neutral-500">${renewPlan.monthly}{plans.perMonth} — {t.billedMonthly}</p>
             </div>
             <Crown className="w-4 h-4 text-yellow-500 shrink-0" />
           </button>
@@ -93,7 +99,7 @@ export function SubscriptionExpiredOverlay() {
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-sm font-medium text-black">{t.renewAnnual}</p>
-              <p className="text-xs text-neutral-500">$800{plans.perYear} — <span className="text-emerald-600 font-medium">{plans.savings("$400")}</span></p>
+              <p className="text-xs text-neutral-500">${renewPlan.annual.toLocaleString("en-US")}{plans.perYear} — <span className="text-emerald-600 font-medium">{plans.savings(`$${renewPlan.monthly * 2}`)}</span></p>
             </div>
             <div className="shrink-0">
               <span className="text-[10px] bg-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">{plans.bestValue}</span>

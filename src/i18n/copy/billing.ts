@@ -31,6 +31,9 @@ const es = {
     text: "Suscríbete para acceder a esta página y todas las funciones.",
     termsPre: "Al suscribirte, aceptas los términos de servicio de ",
     termsPost: ".",
+    choose: (name: string) => `Elegir ${name}`,
+    chosen: "Elegiste este plan",
+    freeStays: "Tu cuenta gratis se queda contigo. Impuestos llega muy pronto y te avisaremos.",
     business: {
       monthly: {
         subtitle: "Suscripción Premium",
@@ -347,6 +350,9 @@ const en: BillingCopy = {
     text: "Subscribe to access this page and every feature.",
     termsPre: "By subscribing, you agree to the terms of service of ",
     termsPost: ".",
+    choose: (name: string) => `Choose ${name}`,
+    chosen: "You picked this plan",
+    freeStays: "Your free account stays with you. Taxes is coming very soon and we'll let you know.",
     business: {
       monthly: {
         subtitle: "Premium subscription",

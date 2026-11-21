@@ -6,7 +6,7 @@ import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
 import { getTrialInfo, type TrialInfo } from "./lib/trial";
-import { accountMode, planAmountCents, priceLookupKey, type AccountMode, type Plan } from "./lib/plans";
+import { accountMode, defaultTier, isPaidTier, planAmountCents, priceLookupKey, tierFromAmountCents, tierName, type AccountMode, type Plan, type Tier } from "./lib/plans";
 import { subscriptionPeriod } from "./lib/stripePeriod";
 
 let _stripe: Stripe | null = null;
@@ -23,7 +23,15 @@ function getAppUrl() {
   return process.env.APP_URL || "https://aethelaccountingplatform.com";
 }
 
-// Prices live in ./lib/plans (business $80/$800, personal $40/$400).
+// Prices live in ./lib/plans: business Básico $40, Negocio $80, Pro $150; personal Básico free, Pro $40.
+const tierInput = z.enum(["basic", "standard", "pro"]).optional();
+
+/** The plan the client asked for, checked against the account's mode. Throws for a plan that can't be bought. */
+function paidTier(mode: AccountMode, requested: Tier | undefined): Tier {
+  const tier = requested ?? defaultTier(mode);
+  if (!isPaidTier(mode, tier)) throw new Error("Ese plan no está disponible para tu tipo de cuenta");
+  return tier;
+}
 
 /**
  * Adds the free-trial state to a status result. A user with no paid access
@@ -114,14 +122,16 @@ async function recoverSubscription(db: any, stripe: Stripe, userId: number) {
 // Cache price IDs in memory to avoid repeated Stripe API calls (keyed by lookup key)
 const _priceIdCache = new Map<string, string>();
 
-async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "business"): Promise<string> {
-  const lookupKey = priceLookupKey(plan, mode);
+async function getOrCreatePrice(stripe: any, plan: Plan, mode: AccountMode = "business", tier: Tier = defaultTier(mode)): Promise<string> {
+  const lookupKey = priceLookupKey(plan, mode, tier);
   const cached = _priceIdCache.get(lookupKey);
   if (cached) return cached;
 
-  const amount = planAmountCents(plan, mode);
+  const amount = planAmountCents(plan, mode, tier);
   const interval = plan === "monthly" ? "month" : "year";
-  const modeLabel = mode === "personal" ? "Personal " : "";
+  // The plans sold before tiers keep their product names; new tiers name the plan.
+  const isLegacy = tier === defaultTier(mode);
+  const modeLabel = (mode === "personal" ? "Personal " : "") + (isLegacy ? "" : `${tierName(mode, tier)} `);
   const productName = `Personal & Business Solutions - ${modeLabel}${plan === "monthly" ? "Mensual" : "Anual"}`;
   const productDesc = plan === "monthly"
     ? "Acceso completo a Accounting Platform - Facturado mensualmente"
@@ -504,11 +514,13 @@ export const subscriptionRouter = createRouter({
 
   // ── Create checkout session ──
   createCheckoutSession: authedQuery
-    .input(z.object({ plan: z.enum(["monthly", "annual"]) }))
+    .input(z.object({ plan: z.enum(["monthly", "annual"]), tier: tierInput }))
     .mutation(async ({ input, ctx }) => {
       const stripe = getStripe();
-      // Price depends on the account's mode as stored in the DB (personal = $40/$400).
-      const priceId = await getOrCreatePrice(stripe, input.plan, accountMode(ctx.user.modePreference));
+      // Price depends on the account's mode as stored in the DB and on the chosen plan.
+      const mode = accountMode(ctx.user.modePreference);
+      const tier = paidTier(mode, input.tier);
+      const priceId = await getOrCreatePrice(stripe, input.plan, mode, tier);
       if (!priceId) throw new Error("No se pudo crear el plan de precios");
 
       // Create or get Stripe customer
@@ -542,10 +554,26 @@ export const subscriptionRouter = createRouter({
         subscription_data: {
           metadata: { platformUserId: String(ctx.user.id) },
         },
-        metadata: { platformUserId: String(ctx.user.id), plan: input.plan },
+        metadata: { platformUserId: String(ctx.user.id), plan: input.plan, tier },
       });
       return { url: session.url!, sessionId: session.id };
     }),
+
+  // ── Which plan (Básico / Negocio / Pro) the user paid for, from their latest payment ──
+  // Tiers aren't stored: the amount Stripe charged tells them apart.
+  currentTier: authedQuery.query(async ({ ctx }) => {
+    if (!ctx.user) return { tier: null as Tier | null };
+    const db = getDb();
+    const mode = accountMode(ctx.user.modePreference);
+    const last = await db.select().from(subscriptionPayments)
+      .where(eq(subscriptionPayments.userId, Number(ctx.user.id)))
+      .orderBy(desc(subscriptionPayments.paidAt))
+      .limit(1);
+    const p = last[0];
+    if (!p || p.status !== "succeeded") return { tier: null as Tier | null };
+    const cents = Math.round(Number(p.amount) * 100);
+    return { tier: tierFromAmountCents(cents, p.plan as Plan, mode) };
+  }),
 
   // ── Get payment history ──
   payments: authedQuery.query(async ({ ctx }) => {
@@ -916,7 +944,7 @@ export const subscriptionRouter = createRouter({
 
   // ── Create Stripe Checkout for direct subscription ──
   createCheckout: authedQuery
-    .input(z.object({ plan: z.enum(["monthly", "annual"]), mode: z.enum(["business", "personal"]).optional() }))
+    .input(z.object({ plan: z.enum(["monthly", "annual"]), mode: z.enum(["business", "personal"]).optional(), tier: tierInput }))
     .mutation(async ({ input, ctx }) => {
       const stripe = getStripe();
       const db = getDb();
@@ -924,6 +952,7 @@ export const subscriptionRouter = createRouter({
       // The account's mode decides the price. input.mode is ignored on purpose:
       // trusting it would let a business account pay the personal price.
       const userMode = accountMode(ctx.user.modePreference);
+      const tier = paidTier(userMode, input.tier);
 
       // Get or create Stripe customer
       let customerId: string;
@@ -943,11 +972,10 @@ export const subscriptionRouter = createRouter({
       }
 
       const appUrl = getAppUrl();
-      const amountCents = planAmountCents(input.plan, userMode);
-      const productName = userMode === "personal"
-        ? (input.plan === "monthly" ? "Personal & Business Solutions - Personal Mensual" : "Personal & Business Solutions - Personal Anual")
-        : (input.plan === "monthly" ? "Personal & Business Solutions - Mensual" : "Personal & Business Solutions - Anual");
-      const annualSavings = userMode === "personal" ? "$80" : "$160";
+      const amountCents = planAmountCents(input.plan, userMode, tier);
+      const productName = `Personal & Business Solutions - ${userMode === "personal" ? "Personal " : ""}${tierName(userMode, tier)} ${input.plan === "monthly" ? "Mensual" : "Anual"}`;
+      // Annual = 10 months: the saving is two monthly payments.
+      const annualSavings = `$${(planAmountCents("monthly", userMode, tier) * 2) / 100}`;
 
       // Create Stripe Checkout session
       const session = await stripe.checkout.sessions.create({
@@ -970,6 +998,7 @@ export const subscriptionRouter = createRouter({
           platformUserId: String(userId),
           plan: input.plan,
           mode: userMode,
+          tier,
         },
       });
 

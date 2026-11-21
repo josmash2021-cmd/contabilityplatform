@@ -3,68 +3,14 @@ import { useNavigate, useLocation } from "react-router";
 import { trpc } from "@/providers/trpc";
 import { useCopy } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
-import { billingCopy, type BillingCopy } from "@/i18n/copy/billing";
+import { billingCopy } from "@/i18n/copy/billing";
+import { PlanPicker } from "@/components/billing/PlanPicker";
 import { useAuth } from "@/hooks/useAuth";
-import { Crown, Landmark, CheckCircle, CalendarDays, Zap, X } from "lucide-react";
+import { Crown, Landmark, CheckCircle, X } from "lucide-react";
 
 interface SubscriptionGateProps {
   children: React.ReactNode;
 }
-
-// ── Plans: prices only. Names, badges, descriptions and features live in billingCopy.gate ──
-const BIZ_MONTHLY = { price: "$80", originalPrice: "$120" };
-const BIZ_ANNUAL = { price: "$800", originalPrice: "$1200", savings: "$400" };
-const PERS_MONTHLY = { price: "$40", originalPrice: "$80" };
-const PERS_ANNUAL = { price: "$400", originalPrice: "$700", savings: "$300" };
-
-/** Combines the plan prices with the copy for the current language. */
-function buildPlans(t: BillingCopy, isBusiness: boolean) {
-  const text = isBusiness ? t.gate.business : t.gate.personal;
-  const annual = isBusiness ? BIZ_ANNUAL : PERS_ANNUAL;
-  return {
-    monthlyPlan: { ...(isBusiness ? BIZ_MONTHLY : PERS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...text.monthly },
-    annualPlan: { ...annual, name: t.plans.annual, period: t.plans.perYear, ...text.annual, savings: t.plans.savings(annual.savings) },
-  };
-}
-
-// ── Shimmer animation styles ──
-const SHIMMER_STYLES = `
-  @keyframes shimmer-silver {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-  @keyframes shimmer-gold {
-    0% { background-position: -200% center; }
-    100% { background-position: 200% center; }
-  }
-  .shimmer-silver {
-    background: linear-gradient(90deg, 
-      #9ca3af 0%, #d1d5db 25%, #f3f4f6 50%, #d1d5db 75%, #9ca3af 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-silver 3s linear infinite;
-  }
-  .shimmer-gold {
-    background: linear-gradient(90deg, 
-      #b45309 0%, #fbbf24 25%, #fde68a 50%, #fbbf24 75%, #b45309 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-gold 3s linear infinite;
-  }
-  .shimmer-elite {
-    background: linear-gradient(90deg, 
-      #000000 0%, #4b5563 25%, #9ca3af 50%, #4b5563 75%, #000000 100%);
-    background-size: 200% auto;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    animation: shimmer-gold 3s linear infinite;
-  }
-`;
 
 export function SubscriptionGate({ children }: SubscriptionGateProps) {
   const t = useCopy(billingCopy);
@@ -168,8 +114,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
 
   // ── SUBSCRIBE FULL-SCREEN OVERLAY — Glassmorphism, shows page behind ──
   const isBusiness = userMode === "business";
-  const { monthlyPlan, annualPlan } = buildPlans(t, isBusiness);
-  const title = isBusiness ? "Negocio" : "Personal";
 
   return (
     <>
@@ -177,7 +121,6 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
       <div className="relative">
         {children}
       </div>
-      <style>{SHIMMER_STYLES}</style>
       {/* Overlay: transparent with blur so page behind is visible */}
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-start justify-center p-0 md:p-4 pt-12 md:pt-16">
         {/* Container: no border, fully transparent */}
@@ -190,7 +133,7 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto">
+          <div className="p-4 space-y-6 max-w-5xl mx-auto">
             {/* Success banner - transparent */}
             <div className="flex items-center gap-3 p-3 bg-emerald-500/20 border border-emerald-400/30 rounded-lg backdrop-blur-sm">
               <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0" />
@@ -210,94 +153,12 @@ export function SubscriptionGate({ children }: SubscriptionGateProps) {
               </p>
             </div>
 
-            {/* Cards - horizontal on desktop, same height */}
-            <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
-              {/* Monthly Card */}
-              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-                <div className="absolute -top-2.5 right-3">
-                  <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
-                    <Crown className="w-3.5 h-3.5 text-gray-400" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  {/* Plan name as main title */}
-                  <h3 className="text-xl font-semibold text-black">{monthlyPlan.name}</h3>
-                  {/* Price row */}
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
-                    <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
-                    <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
-                  </div>
-                  {/* Subtitle + description */}
-                  <p className="text-[11px] text-neutral-500 mt-1">
-                    <span className="font-medium text-neutral-600">{monthlyPlan.subtitle}</span> — {monthlyPlan.description}
-                  </p>
-                </div>
-                <ul className="space-y-0.5 mt-2 flex-1">
-                  {monthlyPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6" />
-                <button
-                  onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
-                  disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}
-                </button>
-              </div>
-
-              {/* Annual Card */}
-              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-                <div className="absolute -top-2.5 right-3">
-                  <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
-                    <Crown className="w-3.5 h-3.5 text-black drop-shadow-sm" />
-                  </div>
-                </div>
-                <div className="mt-2">
-                  {/* Plan name as main title */}
-                  <h3 className="text-xl font-semibold text-black">{annualPlan.name}</h3>
-                  {/* Price row */}
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
-                    <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
-                    <span className="text-xs text-neutral-400">{annualPlan.period}</span>
-                  </div>
-                  {/* Savings badge */}
-                  {annualPlan.savings && (
-                    <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
-                  )}
-                  {/* Subtitle + description */}
-                  <p className="text-[11px] text-neutral-500 mt-1">
-                    <span className="font-medium text-neutral-600">{annualPlan.subtitle}</span> — {annualPlan.description}
-                  </p>
-                </div>
-                <ul className="space-y-0.5 mt-2 flex-1">
-                  {annualPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6" />
-                <button
-                  onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
-                  disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}
-                </button>
-              </div>
-            </div>
+            <PlanPicker
+              mode={isBusiness ? "business" : "personal"}
+              onDark
+              pendingTier={checkoutMut.isPending ? checkoutMut.variables?.tier ?? null : null}
+              onPick={(plan, tier) => checkoutMut.mutate({ plan, tier })}
+            />
 
             {/* Footer */}
             <p className="text-[10px] text-neutral-400 text-center pb-4">
@@ -367,9 +228,6 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
   const userMode = user?.modePreference || "business";
   const isBusiness = userMode === "business";
 
-  const { monthlyPlan, annualPlan } = buildPlans(t, isBusiness);
-  const title = isBusiness ? "Negocio" : "Personal";
-
   const checkoutMut = trpc.subscription.createCheckout.useMutation({
     onSuccess: (data) => {
       if (data.success && data.url) {
@@ -385,7 +243,6 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
 
   return (
     <>
-      <style>{SHIMMER_STYLES}</style>
       <div className="fixed inset-0 z-[99998] bg-black/40 backdrop-blur-xl flex items-start justify-center p-0 md:p-4 pt-12 md:pt-16">
         <div className="w-full h-full md:h-auto md:max-h-[95vh] md:rounded-2xl overflow-y-auto animate-in fade-in zoom-in-95 duration-300 relative">
           {/* Floating close button - no header bar */}
@@ -396,7 +253,7 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
             <X className="w-4 h-4" />
           </button>
 
-          <div className="p-4 space-y-6 max-w-lg mx-auto">
+          <div className="p-4 space-y-6 max-w-5xl mx-auto">
             <div className="text-center space-y-1">
               <div className="w-12 h-12 rounded-full border-2 border-yellow-500 flex items-center justify-center mx-auto">
                 <Crown className="w-6 h-6 text-yellow-500" />
@@ -409,83 +266,12 @@ function SubscriptionOverlayOnly({ trialEnded = false }: { trialEnded?: boolean 
               </p>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
-              {/* Monthly */}
-              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-                <div className="absolute -top-2.5 right-3">
-                  <span className="bg-emerald-600 text-white text-[10px] px-2 py-0.5 rounded-full font-medium">{monthlyPlan.badge}</span>
-                </div>
-                <div>
-                  {/* Plan name as main title */}
-                  <h3 className="text-xl font-semibold text-black">{monthlyPlan.name}</h3>
-                  {/* Price row */}
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-medium text-black">{monthlyPlan.price}</span>
-                    <span className="text-xs text-neutral-400 line-through">{monthlyPlan.originalPrice}</span>
-                    <span className="text-xs text-neutral-400">{monthlyPlan.period}</span>
-                  </div>
-                  {/* Subtitle + description */}
-                  <p className="text-[11px] text-neutral-500 mt-1">
-                    <span className="font-medium text-neutral-600">{monthlyPlan.subtitle}</span> — {monthlyPlan.description}
-                  </p>
-                </div>
-                <ul className="space-y-0.5 mt-2 flex-1">
-                  {monthlyPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6" />
-                <button
-                  onClick={() => checkoutMut.mutate({ plan: "monthly", mode: userMode })}
-                  disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}
-                </button>
-              </div>
-
-              {/* Annual */}
-              <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-                <div className="absolute -top-2.5 right-3">
-                  <span className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 rounded-full font-medium">{annualPlan.badge}</span>
-                </div>
-                <div>
-                  {/* Plan name as main title */}
-                  <h3 className="text-xl font-semibold text-black">{annualPlan.name}</h3>
-                  {/* Price row */}
-                  <div className="flex items-baseline gap-2 mt-1">
-                    <span className="text-3xl font-medium text-black">{annualPlan.price}</span>
-                    <span className="text-xs text-neutral-400 line-through">{annualPlan.originalPrice}</span>
-                    <span className="text-xs text-neutral-400">{annualPlan.period}</span>
-                  </div>
-                  {/* Savings badge */}
-                  {annualPlan.savings && (
-                    <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{annualPlan.savings}</p>
-                  )}
-                  {/* Subtitle + description */}
-                  <p className="text-[11px] text-neutral-500 mt-1">
-                    <span className="font-medium text-neutral-600">{annualPlan.subtitle}</span> — {annualPlan.description}
-                  </p>
-                </div>
-                <ul className="space-y-0.5 mt-2 flex-1">
-                  {annualPlan.features.map((f) => (
-                    <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                      <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-                <div className="mt-6" />
-                <button
-                  onClick={() => checkoutMut.mutate({ plan: "annual", mode: userMode })}
-                  disabled={checkoutMut.isPending}
-                  className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  <Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}
-                </button>
-              </div>
-            </div>
+            <PlanPicker
+              mode={isBusiness ? "business" : "personal"}
+              onDark
+              pendingTier={checkoutMut.isPending ? checkoutMut.variables?.tier ?? null : null}
+              onPick={(plan, tier) => checkoutMut.mutate({ plan, tier })}
+            />
           </div>
         </div>
       </div>

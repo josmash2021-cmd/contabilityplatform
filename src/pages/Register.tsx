@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
+import { CHOSEN_PLAN_KEY, LANDING_PLAN_GROUPS } from "@/components/marketing/content";
 import { Check, Gift } from "lucide-react";
 import { toast } from "sonner";
 import { useFieldIds } from "@/components/auth/useFieldIds";
@@ -77,6 +78,13 @@ export default function Register() {
       toast.error(t.mismatch);
       return;
     }
+
+    // Remember the plan picked on the landing page, to preselect it when the trial ends.
+    const chosen = LANDING_PLAN_GROUPS[mode].find((p) => p.key === params.get("plan"));
+    try {
+      if (chosen) localStorage.setItem(CHOSEN_PLAN_KEY, chosen.key);
+      else localStorage.removeItem(CHOSEN_PLAN_KEY);
+    } catch { /* storage blocked: no preselection */ }
 
     if (mode === "business") {
       // Save pending registration (this tab only) and continue to onboarding

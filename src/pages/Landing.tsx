@@ -3,7 +3,7 @@ import { Link } from "react-router";
 import {
   ArrowRight, Check, ShieldCheck, Lock, Languages, PiggyBank, Rocket, TrendingUp, type LucideIcon, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
   ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User, Store,
-  Sparkles, LayoutDashboard,
+  Sparkles, LayoutDashboard, FileText,
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { MarketingNav } from "@/components/marketing/MarketingNav";
@@ -278,8 +278,8 @@ function Security({ c }: { c: C["security"] }) {
 // ── Pricing ──
 // Each plan's icon turns into the next one in its set, smoothly (still when motion is off).
 const PLAN_ICON_SETS = {
-  personal: [User, Wallet, PiggyBank],
-  personalPro: [Sparkles, Receipt, ShieldCheck],
+  personal: [Receipt, FileText, ShieldCheck],
+  personalPro: [Wallet, PiggyBank, Sparkles],
   basic: [Store, ShoppingCart, Receipt],
   business: [Building2, TrendingUp, Users],
   pro: [Layers, Rocket, Users],
@@ -373,9 +373,6 @@ function Pricing({ c }: { c: C["pricing"] }) {
                   {featured && (
                     <span className="absolute -top-3 right-7 rounded-full bg-blue-600 px-3 py-1 text-xs font-semibold text-white shadow-md">{c.featured}</span>
                   )}
-                  {!plan.available && (
-                    <span className="absolute -top-3 right-7 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">{c.soonBadge}</span>
-                  )}
                   <div className="flex items-center gap-2.5">
                     <PlanIcon icons={icons} offset={i * 0.6} className={featured ? "text-blue-400" : "text-blue-600"} />
                     <h3 className="text-lg font-semibold">{p.name}</h3>
@@ -383,31 +380,28 @@ function Pricing({ c }: { c: C["pricing"] }) {
                   <p className={`mt-2 min-h-10 text-sm ${featured ? "text-slate-400" : "text-slate-600"}`}>{p.tagline}</p>
 
                   <div className="mt-6 flex items-baseline gap-1.5">
-                    <span className="text-5xl font-bold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
-                    <span className={featured ? "text-slate-400" : "text-slate-500"}>{billing === "monthly" ? c.perMonth : c.perYear}</span>
+                    {plan.free ? (
+                      <span className="text-5xl font-bold tracking-tight">{c.free}</span>
+                    ) : (
+                      <>
+                        <span className="text-5xl font-bold tracking-tight tabular-nums">${price.toLocaleString("en-US")}</span>
+                        <span className={featured ? "text-slate-400" : "text-slate-500"}>{billing === "monthly" ? c.perMonth : c.perYear}</span>
+                      </>
+                    )}
                   </div>
                   <p className={`mt-2 min-h-5 text-sm ${featured ? "text-emerald-300" : "text-emerald-700"}`}>
-                    {billing === "annual" ? c.equivalent(annualPerMonth(plan.annual)) : c.orAnnual(plan.annual)}
+                    {plan.free ? c.freeNote : billing === "annual" ? c.equivalent(annualPerMonth(plan.annual)) : c.orAnnual(plan.annual)}
                   </p>
 
-                  {plan.available ? (
-                    <Link
-                      to={`/register?mode=${plan.mode}&plan=${plan.key}`}
-                      className={`group mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
-                        featured ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-900 text-white hover:bg-slate-800"
-                      }`}
-                    >
-                      {c.cta(TRIAL_DAYS)}
-                      <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
-                    </Link>
-                  ) : (
-                    <div className="mt-6 grid gap-2">
-                      <span className="inline-flex h-12 items-center justify-center rounded-xl border border-dashed border-slate-300 text-[15px] font-semibold text-slate-500">{c.soonCta}</span>
-                      <Link to={`/register?mode=${plan.mode}`} className="rounded text-center text-sm font-medium text-blue-600 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                        {group === "personal" ? c.soonAltPersonal : c.soonAlt}
-                      </Link>
-                    </div>
-                  )}
+                  <Link
+                    to={`/register?mode=${plan.mode}&plan=${plan.key}`}
+                    className={`group mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
+                      featured ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-900 text-white hover:bg-slate-800"
+                    }`}
+                  >
+                    {plan.free ? c.freeCta : c.cta(TRIAL_DAYS)}
+                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                  </Link>
 
                   {p.lead && <p className={`mt-7 text-sm font-semibold ${featured ? "text-white" : "text-slate-900"}`}>{p.lead}</p>}
                   <ul className={`${p.lead ? "mt-3" : "mt-7"} space-y-3 text-sm`}>

@@ -4,13 +4,15 @@ import { useAuth } from "@/hooks/useAuth";
 import { useSearchParams } from "react-router";
 import { useSubscriptionAgent } from "@/hooks/useSubscriptionAgent";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 import { toast } from "sonner";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { appCopy } from "@/i18n/copy/app";
 import { billingCopy } from "@/i18n/copy/billing";
+import { marketingCopy } from "@/i18n/copy/marketing";
+import { PlanPicker } from "@/components/billing/PlanPicker";
+import { findPlan } from "@/components/marketing/content";
 import { intlLocale } from "@/i18n/lang";
 import { Crown, Loader2, Check, CheckCircle, AlertTriangle, Receipt, ExternalLink, Zap, ChevronDown, RefreshCw } from "lucide-react";
 
@@ -85,10 +87,24 @@ export default function SubscriptionSettings() {
   const { user } = useAuth();
   const isPersonal = user?.modePreference === "personal";
 
+  const mode = isPersonal ? "personal" : "business";
+  const pricing = useCopy(marketingCopy).pricing;
+  const { data: tierData } = trpc.subscription.currentTier.useQuery();
+  // Before tiers, everyone paid Negocio (business) or Pro (personal).
+  const tierPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, isPersonal ? "pro" : "standard")!;
+  const tierCopy = pricing.plans[tierPlan.key];
+
   const planText = isPersonal ? s.personal : s.business;
   const annualBase = isPersonal ? PERSONAL_ANNUAL : BUSINESS_ANNUAL;
-  const PLAN_MONTHLY = { ...(isPersonal ? PERSONAL_MONTHLY : BUSINESS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...planText.monthly };
-  const PLAN_ANNUAL = { ...annualBase, name: t.plans.annual, period: t.plans.perYear, ...planText.annual, savings: t.plans.savings(annualBase.savings) };
+  const PLAN_MONTHLY = {
+    ...(isPersonal ? PERSONAL_MONTHLY : BUSINESS_MONTHLY), name: t.plans.monthly, period: t.plans.perMonth, ...planText.monthly,
+    price: `$${tierPlan.monthly}`, fullPrice: tierPlan.monthly, features: tierCopy.features,
+  };
+  const PLAN_ANNUAL = {
+    ...annualBase, name: t.plans.annual, period: t.plans.perYear, ...planText.annual,
+    price: `$${tierPlan.annual.toLocaleString("en-US")}`, fullPrice: tierPlan.annual, features: tierCopy.features,
+    savings: t.plans.savings(`$${tierPlan.monthly * 2}`),
+  };
 
   const utils = trpc.useUtils();
   const [searchParams] = useSearchParams();
@@ -136,19 +152,14 @@ export default function SubscriptionSettings() {
     }
   }, []);
 
-  const [selectedPlan, setSelectedPlan] = useState<string | null>(renewParam);
-
   // Pre-select plan from URL ?renew= parameter (from expired overlay)
   useEffect(() => {
-    if (renewParam) {
-      setSelectedPlan(renewParam);
-    }
     // Clean URL param from Stripe redirect
     const params = new URLSearchParams(window.location.search);
     if (params.get("subscription") === "success") {
       window.history.replaceState({}, "", window.location.pathname);
     }
-  }, [renewParam]);
+  }, []);
 
   const createCheckout = trpc.subscription.createCheckoutSession.useMutation({
     onSuccess: (data) => {
@@ -285,11 +296,10 @@ export default function SubscriptionSettings() {
 
           {/* Plan name as main title */}
           <div className="mt-2">
-            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{isMonthly ? t.plans.premium : t.plans.elite}</p>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{tierCopy.name}</p>
             <h3 className="text-xl font-semibold text-black">{currentPlan.name}</h3>
             <div className="flex items-baseline gap-2 mt-1">
               <span className="text-3xl font-medium text-black">{currentPlan.price}</span>
-              <span className="text-xs text-neutral-400 line-through">{currentPlan.originalPrice}</span>
               <span className="text-xs text-neutral-400">{currentPlan.period}</span>
             </div>
             {currentPlan.savings && (
@@ -385,7 +395,6 @@ export default function SubscriptionSettings() {
                   <h3 className="text-xl font-semibold text-black">{t.plans.annual}</h3>
                   <div className="flex items-baseline gap-2 mt-1">
                     <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
-                    <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
                     <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
                   </div>
                   <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
@@ -497,113 +506,12 @@ export default function SubscriptionSettings() {
           </p>
         )}
 
-        <div className="flex flex-col md:flex-row gap-3 justify-center items-stretch">
-          {/* Monthly — Premium */}
-          <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-            {PLAN_MONTHLY.badge && (
-              <div className="absolute -top-2.5 right-3">
-                <Badge className="bg-emerald-600 text-white text-[10px] px-2 py-0.5">{PLAN_MONTHLY.badge}</Badge>
-              </div>
-            )}
-            {/* Silver crown */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-gray-400 flex items-center justify-center bg-transparent">
-                <Crown className="w-4 h-4 text-gray-400" />
-              </div>
-            </div>
-            <div className="mt-2">
-              {/* Subtitle */}
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.premium}</p>
-              {/* Plan name as main title */}
-              <h3 className="text-xl font-semibold text-black">{PLAN_MONTHLY.name}</h3>
-              {/* Price */}
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-medium text-black">{PLAN_MONTHLY.price}</span>
-                <span className="text-xs text-neutral-400 line-through">{PLAN_MONTHLY.originalPrice}</span>
-                <span className="text-xs text-neutral-400">{PLAN_MONTHLY.period}</span>
-              </div>
-              {/* Description */}
-              <p className="text-[11px] text-neutral-500 mt-1">{PLAN_MONTHLY.description}</p>
-            </div>
-            {/* Features */}
-            <ul className="space-y-0.5 mt-2 flex-1">
-              {PLAN_MONTHLY.features.map((f) => (
-                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                  <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            {/* Spacer + Button */}
-            <div className="mt-6" />
-            <Button
-              onClick={() => createCheckout.mutate({ plan: "monthly" })}
-              disabled={createCheckout.isPending}
-              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
-            >
-              {createCheckout.isPending && createCheckout.variables?.plan === "monthly" ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t.plans.processing}</>
-              ) : (
-                <><Crown className="w-3.5 h-3.5 text-gray-300" /> {t.plans.subscribeMonthly}</>
-              )}
-            </Button>
-          </div>
-
-          {/* Annual — Elite */}
-          <div className="border rounded-xl p-6 bg-white relative md:w-[400px] flex-shrink-0 flex flex-col">
-            {PLAN_ANNUAL.badge && (
-              <div className="absolute -top-2.5 right-3">
-                <Badge className="bg-yellow-400 text-black text-[10px] px-2 py-0.5 font-medium">{PLAN_ANNUAL.badge}</Badge>
-              </div>
-            )}
-            {/* Black crown */}
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full border-2 border-black flex items-center justify-center bg-neutral-100 shadow-sm">
-                <Crown className="w-4 h-4 text-black drop-shadow-sm" />
-              </div>
-            </div>
-            <div className="mt-2">
-              {/* Subtitle */}
-              <p className="text-[11px] font-bold uppercase tracking-wide text-neutral-400">{t.plans.elite}</p>
-              {/* Plan name as main title */}
-              <h3 className="text-xl font-semibold text-black">{PLAN_ANNUAL.name}</h3>
-              {/* Price */}
-              <div className="flex items-baseline gap-2 mt-1">
-                <span className="text-3xl font-medium text-black">{PLAN_ANNUAL.price}</span>
-                <span className="text-xs text-neutral-400 line-through">{PLAN_ANNUAL.originalPrice}</span>
-                <span className="text-xs text-neutral-400">{PLAN_ANNUAL.period}</span>
-              </div>
-              {/* Savings */}
-              {PLAN_ANNUAL.savings && (
-                <p className="text-[11px] text-emerald-700 font-medium mt-1 bg-emerald-50 px-2 py-0.5 rounded inline-block">{PLAN_ANNUAL.savings}</p>
-              )}
-              {/* Description */}
-              <p className="text-[11px] text-neutral-500 mt-1">{PLAN_ANNUAL.description}</p>
-            </div>
-            {/* Features */}
-            <ul className="space-y-0.5 mt-2 flex-1">
-              {PLAN_ANNUAL.features.map((f) => (
-                <li key={f} className="flex items-start gap-1.5 text-[11px] text-neutral-600 leading-tight">
-                  <CheckCircle className="w-3 h-3 text-emerald-500 mt-0.5 shrink-0" />
-                  {f}
-                </li>
-              ))}
-            </ul>
-            {/* Spacer + Button */}
-            <div className="mt-6" />
-            <Button
-              onClick={() => createCheckout.mutate({ plan: "annual" })}
-              disabled={createCheckout.isPending}
-              className="w-full h-9 bg-black hover:bg-neutral-800 text-white text-xs font-medium flex items-center justify-center gap-2"
-            >
-              {createCheckout.isPending && createCheckout.variables?.plan === "annual" ? (
-                <><Loader2 className="w-3.5 h-3.5 animate-spin" /> {t.plans.processing}</>
-              ) : (
-                <><Crown className="w-3.5 h-3.5 text-yellow-500" /> {t.plans.subscribeAnnual}</>
-              )}
-            </Button>
-          </div>
-        </div>
+        <PlanPicker
+          mode={mode}
+          initialBilling={renewParam === "annual" ? "annual" : "monthly"}
+          pendingTier={createCheckout.isPending ? createCheckout.variables?.tier ?? null : null}
+          onPick={(plan, tier) => createCheckout.mutate({ plan, tier })}
+        />
       </div>
     </>
   );

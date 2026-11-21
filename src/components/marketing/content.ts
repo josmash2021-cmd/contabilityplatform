@@ -4,32 +4,36 @@
 export const TRIAL_DAYS = 7;
 
 export type PlanKey = "personal" | "business";
-
-export const PLAN_PRICES: Record<PlanKey, { monthly: number; annual: number }> = {
-  personal: { monthly: 40, annual: 400 },
-  business: { monthly: 80, annual: 800 },
-};
+/** Same tiers as api/lib/plans.ts: basic, standard (Negocio) and pro. */
+export type PlanTier = "basic" | "standard" | "pro";
 
 /**
- * Plans shown on the landing page, in two groups: for you (personal) and for your
- * business. Only "personal" (Basic for you) and "business" (Business) are sold today
- * (api/lib/plans.ts and Stripe). The others are announced as "coming soon": their
- * button doesn't open the sign-up for that plan.
+ * Plans shown on the landing page and in the in-app plan picker, in two groups:
+ * for you (personal) and for your business. Prices must match api/lib/plans.ts.
+ * Personal Básico is free (taxes); personal Pro unlocks the accounting.
  */
 export type LandingPlanKey = "personal" | "personalPro" | "basic" | "business" | "pro";
 export type LandingGroup = "personal" | "business";
-type LandingPlan = { key: LandingPlanKey; mode: PlanKey; monthly: number; annual: number; available: boolean; featured?: boolean };
+export type LandingPlan = { key: LandingPlanKey; mode: PlanKey; tier: PlanTier; monthly: number; annual: number; free?: boolean; featured?: boolean };
 export const LANDING_PLAN_GROUPS: Record<LandingGroup, LandingPlan[]> = {
   personal: [
-    { key: "personal", mode: "personal", ...PLAN_PRICES.personal, available: true },
-    { key: "personalPro", mode: "personal", monthly: 70, annual: 700, available: false },
+    { key: "personal", mode: "personal", tier: "basic", monthly: 0, annual: 0, free: true },
+    { key: "personalPro", mode: "personal", tier: "pro", monthly: 40, annual: 400, featured: true },
   ],
   business: [
-    { key: "basic", mode: "business", monthly: 40, annual: 400, available: false },
-    { key: "business", mode: "business", ...PLAN_PRICES.business, available: true, featured: true },
-    { key: "pro", mode: "business", monthly: 150, annual: 1500, available: false },
+    { key: "basic", mode: "business", tier: "basic", monthly: 40, annual: 400 },
+    { key: "business", mode: "business", tier: "standard", monthly: 80, annual: 800, featured: true },
+    { key: "pro", mode: "business", tier: "pro", monthly: 150, annual: 1500 },
   ],
 };
+
+/** The plan for this mode and tier, as sold on the landing page. */
+export function findPlan(mode: PlanKey, tier: PlanTier | null | undefined): LandingPlan | undefined {
+  return tier ? LANDING_PLAN_GROUPS[mode].find((p) => p.tier === tier) : undefined;
+}
+
+/** The plan picked on the landing page, kept from sign-up until the trial ends. */
+export const CHOSEN_PLAN_KEY = "pbs_plan";
 
 /** Whole-dollar monthly equivalent of the annual price, e.g. 800 -> "$67". */
 export function annualPerMonth(annual: number): string {
