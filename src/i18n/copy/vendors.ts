@@ -163,6 +163,10 @@ const es = {
     call: (phone: string) => `Llamar a ${phone}`,
     mail: (email: string) => `Escribir a ${email}`,
   },
+  // 2.0 screen
+  ui: {
+    readOnly: "Puedes ver las facturas y los proveedores, pero tu acceso no permite cambiarlos.",
+  },
 };
 
 export type VendorsCopy = typeof es;
@@ -176,8 +180,8 @@ const en: VendorsCopy = {
   retry: "Try again",
   error: "Something went wrong. Please try again.",
   locked: {
-    title: "Vendors is in Pro and Negocio",
-    text: "With Pro or Negocio you keep track of the bills you owe your vendors, see what's due this week, and every payment is recorded as an expense in your books.",
+    title: "Vendors is in Pro and Business",
+    text: "With Pro or Business you keep track of the bills you owe your vendors, see what's due this week, and every payment is recorded as an expense in your books.",
     cta: "Change plan",
   },
   noAccess: {
@@ -325,6 +329,9 @@ const en: VendorsCopy = {
     archivedNote: "This vendor is archived.",
     call: (phone: string) => `Call ${phone}`,
     mail: (email: string) => `Email ${email}`,
+  },
+  ui: {
+    readOnly: "You can see the bills and vendors, but your access doesn't let you change them.",
   },
 };
 

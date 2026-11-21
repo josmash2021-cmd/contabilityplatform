@@ -109,6 +109,15 @@ const es = {
     type: "Sube una foto (JPG, PNG, HEIC) o un PDF.",
     tooBig: "El archivo pesa más de 10 MB.",
   },
+  // 2.0 screen
+  ui: {
+    ctaShort: "Tomar foto",
+    encrypted: "Se guardan cifradas: solo tú y tu equipo pueden verlas.",
+    readOnly: "Puedes ver los recibos, pero tu acceso no permite agregarlos ni cambiarlos.",
+    ownerOnly: "Solo el dueño de la cuenta puede editar o borrar recibos.",
+    spent: "Gastado en el mes",
+    emptyPast: "En este mes no guardaste recibos.",
+  },
   payment: { cash: "Efectivo", zelle: "Zelle", card: "Tarjeta" } satisfies Record<ReceiptPaymentMethod, string>,
   categories: {
     supplies: "Materiales y suministros",
@@ -170,7 +179,7 @@ const en: ReceiptsCopy = {
     text: "Snap your next receipt and it will show up here with its expense.",
   },
   list: {
-    title: "This month's receipts",
+    title: "Receipts for the month",
     open: (merchant, amount, date, category) => `Open receipt from ${merchant}, ${amount}, ${date}, ${category}`,
     pdf: "PDF",
   },
@@ -237,6 +246,14 @@ const en: ReceiptsCopy = {
   fileErrors: {
     type: "Upload a photo (JPG, PNG, HEIC) or a PDF.",
     tooBig: "The file is larger than 10 MB.",
+  },
+  ui: {
+    ctaShort: "Take a photo",
+    encrypted: "Stored encrypted: only you and your team can see them.",
+    readOnly: "You can see the receipts, but your access doesn't let you add or change them.",
+    ownerOnly: "Only the account owner can edit or delete receipts.",
+    spent: "Spent this month",
+    emptyPast: "You didn't save any receipts this month.",
   },
   payment: { cash: "Cash", zelle: "Zelle", card: "Card" },
   categories: {

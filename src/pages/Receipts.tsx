@@ -1,15 +1,16 @@
 // ── Recibos: receipt photos for business expenses ──
 // Snap or upload a receipt, fill in a short form, and it's saved (encrypted) with a
 // matching business expense. Business Básico: 20 photos a month; Pro and Negocio: no cap.
+// Team (api/lib/team.ts): staff can add receipts but not change them; the accountant only reads.
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import { keepPreviousData } from "@tanstack/react-query";
-import { AlertTriangle, Camera, ChevronLeft, ChevronRight, FileText, ImageIcon, Loader2, Lock, Receipt as ReceiptIcon } from "lucide-react";
+import {
+  AlertCircle, AlertTriangle, Camera, ChevronLeft, ChevronRight, FileText, ImageIcon, Info, Loader2, Lock, Receipt as ReceiptIcon, ShieldCheck,
+} from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { AnimatedPage } from "@/components/AnimatedPage";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -20,6 +21,7 @@ import { receiptsCopy, receiptCategoryLabel, type ReceiptsCopy } from "@/i18n/co
 import { ReceiptFormDialog, type ReceiptFormValues } from "@/components/receipts/ReceiptFormDialog";
 import { ReceiptViewer, type ReceiptItem } from "@/components/receipts/ReceiptViewer";
 import { formatIsoDate, makeReceiptThumb } from "@/components/receipts/receiptFiles";
+import { BTN, CARD } from "@/components/receipts/ui";
 import {
   FIRST_RECEIPT_YEAR, compareMonths, isoDateOf, monthRange, shiftMonth, type ReceiptTotals, type ReceiptUsage, type YearMonth,
 } from "../../api/lib/receipts";
@@ -45,10 +47,11 @@ function monthOf(isoDate: string): YearMonth {
   return { year, month };
 }
 
-function monthLabel(m: YearMonth, locale: string): string {
-  const s = new Date(m.year, m.month - 1, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
-  return s.charAt(0).toUpperCase() + s.slice(1);
+function monthName(m: YearMonth, locale: string): string {
+  return new Date(m.year, m.month - 1, 1).toLocaleDateString(locale, { month: "long", year: "numeric" });
 }
+
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 export default function Receipts() {
   const t = useCopy(receiptsCopy);
@@ -67,6 +70,12 @@ export default function Receipts() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [viewing, setViewing] = useState<ReceiptItem | null>(null);
   const [editing, setEditing] = useState<ReceiptItem | null>(null);
+
+  // ── Who can do what (the server enforces it: api/lib/team.ts) ──
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const role = membership?.role ?? null;
+  const canUpload = role !== "accountant";
+  const canChange = membership === null; // only the owner edits and deletes
 
   // The photo preview lives only while the form is open.
   const previewUrl = draft?.previewUrl ?? null;
@@ -154,15 +163,13 @@ export default function Receipts() {
 
   if (locked) {
     return (
-      <AnimatedPage className="p-4 lg:p-6">
-        <div className="mx-auto mt-6 max-w-md rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
-          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-neutral-100"><Lock className="h-5 w-5 text-neutral-500" aria-hidden="true" /></span>
-          <h1 className="mt-4 text-lg font-semibold text-black">{t.locked.title}</h1>
-          <p className="mt-2 text-sm text-neutral-600">{t.locked.text}</p>
-          <Button asChild className="mt-5 w-full bg-black text-white hover:bg-neutral-800">
-            <Link to="/settings">{t.locked.cta}</Link>
-          </Button>
-        </div>
+      <AnimatedPage className="p-4 lg:p-8">
+        <section className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center sm:p-8">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Lock className="h-6 w-6" aria-hidden="true" /></span>
+          <h1 className="mt-4 text-xl font-bold tracking-tight text-slate-900">{t.locked.title}</h1>
+          <p className="mt-2 text-sm text-slate-600">{t.locked.text}</p>
+          <Link to="/settings" className={cn(BTN.primary, "mt-6 w-full")}>{t.locked.cta}</Link>
+        </section>
       </AnimatedPage>
     );
   }
@@ -170,134 +177,134 @@ export default function Receipts() {
   const u = usage.data;
   const blocked = u ? !u.canUpload : false;
   const renewsOn = formatIsoDate(monthRange(today.month.year, today.month.month).end, locale, { day: "numeric", month: "long" });
+  const openPicker = () => fileRef.current?.click();
+  const uploadLabel = preparing ? t.upload.preparing : blocked ? t.upload.blocked : t.upload.cta;
+  const UploadIcon = preparing ? Loader2 : Camera;
 
   return (
-    <AnimatedPage className="p-4 lg:p-6">
-      <div className="mx-auto max-w-5xl space-y-5">
-        <header className="min-w-0">
-          <h1 className="text-lg font-semibold text-black">{t.title}</h1>
-          <p className="text-xs text-neutral-500">{t.subtitle}</p>
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
+          </div>
+          {canUpload && (
+            <button type="button" onClick={openPicker} disabled={preparing || blocked} className={cn(BTN.primary, "hidden sm:inline-flex")}>
+              <UploadIcon className={cn("h-4 w-4", preparing && "animate-spin")} aria-hidden="true" />{uploadLabel}
+            </button>
+          )}
         </header>
 
-        {/* Upload */}
-        <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-          <CardContent className="space-y-3 p-4">
-            <input
-              ref={fileRef}
-              type="file"
-              name="receipt-file"
-              accept={TAX_ACCEPT}
-              className="sr-only"
-              tabIndex={-1}
-              aria-hidden="true"
-              onChange={(e) => void pick(e.target.files?.[0])}
-            />
-            <Button
-              className="h-14 w-full bg-black text-base text-white hover:bg-neutral-800"
-              disabled={preparing || blocked}
-              onClick={() => fileRef.current?.click()}
-            >
-              {preparing ? <Loader2 className="size-5 animate-spin" aria-hidden="true" /> : <Camera className="size-5" aria-hidden="true" />}
-              <span className="truncate">{preparing ? t.upload.preparing : blocked ? t.upload.blocked : t.upload.cta}</span>
-            </Button>
-            <p className="text-center text-[11px] text-neutral-500">{t.upload.hint}</p>
+        <input
+          ref={fileRef}
+          type="file"
+          name="receipt-file"
+          accept={TAX_ACCEPT}
+          className="sr-only"
+          tabIndex={-1}
+          aria-hidden="true"
+          onChange={(e) => void pick(e.target.files?.[0])}
+        />
+
+        {canUpload ? (
+          <div className="space-y-3">
+            {/* Phone: one big button, easy to hit with a thumb. */}
+            <button type="button" onClick={openPicker} disabled={preparing || blocked} className={cn(BTN.primary, "h-14 w-full text-base sm:hidden")}>
+              <UploadIcon className={cn("h-5 w-5", preparing && "animate-spin")} aria-hidden="true" />
+              <span className="truncate">{uploadLabel}</span>
+            </button>
+            <p className="flex items-start gap-2 text-xs text-slate-500">
+              <ShieldCheck className="mt-px h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />
+              <span>{t.upload.hint} {t.ui.encrypted}</span>
+            </p>
             {u && u.cap !== null && <UsageMeter t={t} usage={u} cap={u.cap} renewsOn={renewsOn} />}
-          </CardContent>
-        </Card>
-
-        {/* Month */}
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-black">{t.list.title}</h2>
-          <div className="flex flex-wrap items-center justify-end gap-1" role="group" aria-label={t.month.label}>
-            <Button
-              variant="outline" size="icon" className="h-9 w-9 shrink-0 border-neutral-200"
-              aria-label={t.month.prev} disabled={compareMonths(selected, FIRST_MONTH) <= 0}
-              onClick={() => setSelected(shiftMonth(selected, -1))}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <p className="min-w-[8.5rem] text-center text-sm font-medium text-black" aria-live="polite">{monthLabel(selected, locale)}</p>
-            <Button
-              variant="outline" size="icon" className="h-9 w-9 shrink-0 border-neutral-200"
-              aria-label={t.month.next} disabled={isCurrentMonth}
-              onClick={() => setSelected(shiftMonth(selected, 1))}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-            {!isCurrentMonth && (
-              <Button variant="ghost" size="sm" className="h-9 text-xs text-neutral-600" onClick={() => setSelected(today.month)}>{t.month.current}</Button>
-            )}
           </div>
-        </div>
-
-        {list.isLoading ? (
-          <div className="space-y-3" role="status" aria-label={t.loading}>
-            <Skeleton className="h-24 rounded-xl" />
-            <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-              {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-48 rounded-xl" />)}
-            </div>
-          </div>
-        ) : list.isError || !list.data ? (
-          <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-            <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-              <p className="text-sm text-neutral-600" role="alert">{t.error}</p>
-              <Button variant="outline" size="sm" onClick={() => void list.refetch()}>{t.retry}</Button>
-            </CardContent>
-          </Card>
         ) : (
-          <div className={cn("grid grid-cols-1 gap-4 lg:grid-cols-3 lg:items-start", list.isPlaceholderData && "opacity-60 transition-opacity")} aria-busy={list.isPlaceholderData}>
-            <MonthTotals t={t} totals={list.data.totals} />
+          <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />{t.ui.readOnly}
+          </p>
+        )}
 
-            <div className="lg:order-1 lg:col-span-2">
-              {items.length === 0 ? (
-                <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-                  <CardContent className="flex flex-col items-center gap-2 p-8 text-center">
-                    <span className="grid h-11 w-11 place-items-center rounded-full bg-neutral-100" aria-hidden="true"><ReceiptIcon className="h-5 w-5 text-neutral-500" /></span>
-                    <p className="text-sm font-medium text-black">{t.empty.title}</p>
-                    <p className="max-w-xs text-xs text-neutral-500">{t.empty.text}</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                  {items.map((r) => {
-                    const amount = formatCurrency(r.amount);
-                    const date = formatIsoDate(r.date, locale, { day: "numeric", month: "short" });
-                    const category = receiptCategoryLabel(t, r.category);
-                    const thumb = thumbById.get(r.id);
-                    return (
-                      <li key={r.id} className="min-w-0">
-                        <button
-                          type="button"
-                          onClick={() => setViewing(r)}
-                          aria-label={t.list.open(r.merchant, amount, date, category)}
-                          className="flex w-full flex-col overflow-hidden rounded-xl border border-neutral-200 bg-white text-left transition-colors hover:border-neutral-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 focus-visible:ring-offset-1"
-                        >
-                          <span className="grid aspect-[4/3] w-full place-items-center overflow-hidden bg-neutral-100">
-                            {thumb ? (
-                              <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
-                            ) : r.mimeType === "application/pdf" ? (
-                              <span className="flex flex-col items-center gap-1 text-neutral-500">
-                                <FileText className="h-7 w-7" aria-hidden="true" />
-                                <span className="text-[11px] font-medium">{t.list.pdf}</span>
-                              </span>
-                            ) : (
-                              <ImageIcon className="h-7 w-7 text-neutral-400" aria-hidden="true" />
-                            )}
-                          </span>
-                          <span className="block w-full p-2.5">
-                            <span className="block truncate text-sm font-medium text-black">{r.merchant}</span>
-                            <span className="block text-sm font-semibold tabular-nums text-black">{amount}</span>
-                            <span className="block truncate text-[11px] text-neutral-500">{date} · {category}</span>
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+        <section aria-labelledby="receipts-month" className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <h2 id="receipts-month" className="font-semibold text-slate-900">{t.list.title}</h2>
+            <div className="flex w-full items-center gap-1 sm:w-auto" role="group" aria-label={t.month.label}>
+              <button
+                type="button" aria-label={t.month.prev} disabled={compareMonths(selected, FIRST_MONTH) <= 0}
+                onClick={() => setSelected(shiftMonth(selected, -1))}
+                className={cn(BTN.secondary, "w-11 shrink-0 px-0 sm:w-10")}
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+              </button>
+              <p className="min-w-0 flex-1 truncate text-center text-sm font-semibold text-slate-900 sm:w-40 sm:flex-none" aria-live="polite">
+                {upperFirst(monthName(selected, locale))}
+              </p>
+              <button
+                type="button" aria-label={t.month.next} disabled={isCurrentMonth}
+                onClick={() => setSelected(shiftMonth(selected, 1))}
+                className={cn(BTN.secondary, "w-11 shrink-0 px-0 sm:w-10")}
+              >
+                <ChevronRight className="h-4 w-4" aria-hidden="true" />
+              </button>
+              {!isCurrentMonth && (
+                <button type="button" onClick={() => setSelected(today.month)} className={cn(BTN.ghost, "shrink-0 text-blue-700")}>{t.month.current}</button>
               )}
             </div>
           </div>
-        )}
+
+          {list.isLoading ? (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px]" role="status" aria-label={t.loading}>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-52 rounded-2xl" />)}
+              </div>
+              <Skeleton className="hidden h-56 rounded-2xl lg:block" />
+            </div>
+          ) : list.isError || !list.data ? (
+            <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+              <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden="true" />
+              <p className="mt-2 text-sm font-medium text-slate-900" role="alert">{t.error}</p>
+              <button type="button" onClick={() => void list.refetch()} className={cn(BTN.secondary, "mt-3")}>{t.retry}</button>
+            </section>
+          ) : (
+            <div
+              className={cn("grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_300px] lg:items-start", list.isPlaceholderData && "opacity-60 transition-opacity")}
+              aria-busy={list.isPlaceholderData}
+            >
+              {/* Phone and tablet: the total in one line first, the photos, then the split by category. */}
+              {items.length > 0 && (
+                <p className="flex items-baseline justify-between gap-3 rounded-xl bg-white px-4 py-3 ring-1 ring-slate-200 lg:hidden">
+                  <span className="text-sm text-slate-600">{t.ui.spent} · {t.totals.count(list.data.totals.count)}</span>
+                  <span className="text-lg font-bold tabular-nums text-slate-900">{formatCurrency(list.data.totals.total)}</span>
+                </p>
+              )}
+              <MonthTotals t={t} totals={list.data.totals} className="order-last lg:sticky lg:top-4 lg:order-2" />
+
+              <div className="min-w-0 lg:order-1">
+                {items.length === 0 ? (
+                  <div className={cn(CARD, "px-5 py-10 text-center sm:py-12")}>
+                    <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true"><ReceiptIcon className="h-7 w-7" /></span>
+                    <p className="mt-4 text-lg font-bold tracking-tight text-slate-900">{t.empty.title}</p>
+                    <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">{isCurrentMonth && canUpload ? t.empty.text : t.ui.emptyPast}</p>
+                    {isCurrentMonth && canUpload && !blocked && (
+                      <button type="button" onClick={openPicker} disabled={preparing} className={cn(BTN.primary, "mt-5")}>
+                        <Camera className="h-4 w-4" aria-hidden="true" />{t.ui.ctaShort}
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+                    {items.map((r) => (
+                      <li key={r.id} className="min-w-0">
+                        <ReceiptCard t={t} r={r} locale={locale} thumb={thumbById.get(r.id)} onOpen={() => setViewing(r)} />
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+          )}
+        </section>
       </div>
 
       {draft && (
@@ -329,6 +336,7 @@ export default function Receipts() {
         <ReceiptViewer
           key={viewing.id}
           receipt={viewing}
+          canChange={canChange}
           deleting={remove.isPending}
           onClose={() => setViewing(null)}
           onEdit={(r) => { setViewing(null); setEditing(r); }}
@@ -339,72 +347,104 @@ export default function Receipts() {
   );
 }
 
+/** One receipt in the month's grid: the photo, who, how much, when and what for. */
+function ReceiptCard({ t, r, locale, thumb, onOpen }: { t: ReceiptsCopy; r: ReceiptItem; locale: string; thumb: string | undefined; onOpen: () => void }) {
+  const amount = formatCurrency(r.amount);
+  const date = formatIsoDate(r.date, locale, { day: "numeric", month: "short" });
+  const category = receiptCategoryLabel(t, r.category);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label={t.list.open(r.merchant, amount, date, category)}
+      className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+      <span className="grid aspect-[4/3] w-full place-items-center overflow-hidden bg-slate-100">
+        {thumb ? (
+          <img src={thumb} alt="" className="h-full w-full object-cover" loading="lazy" />
+        ) : r.mimeType === "application/pdf" ? (
+          <span className="flex flex-col items-center gap-1 text-slate-500">
+            <FileText className="h-7 w-7" aria-hidden="true" />
+            <span className="text-[11px] font-semibold">{t.list.pdf}</span>
+          </span>
+        ) : (
+          <ImageIcon className="h-7 w-7 text-slate-400" aria-hidden="true" />
+        )}
+      </span>
+      <span className="block w-full p-3">
+        <span className="block truncate text-sm font-semibold text-slate-900">{r.merchant}</span>
+        <span className="mt-0.5 block text-base font-bold tabular-nums tracking-tight text-slate-900">{amount}</span>
+        <span className="mt-0.5 block truncate text-xs text-slate-500">{date} · {category}</span>
+      </span>
+    </button>
+  );
+}
+
 /** Básico only: how many photos are left this month, and the way out when there are none. */
 function UsageMeter({ t, usage, cap, renewsOn }: { t: ReceiptsCopy; usage: ReceiptUsage; cap: number; renewsOn: string }) {
   const full = !usage.canUpload;
   const left = usage.remaining ?? 0;
+  const low = !full && left <= 5;
   const pct = Math.min(100, Math.round((usage.used / cap) * 100));
   const usedText = t.usage.used(Math.min(usage.used, cap), cap);
   return (
-    <div className={cn("rounded-lg border p-3", full ? "border-amber-300 bg-amber-50" : "border-neutral-200 bg-neutral-50")}>
-      <div className="flex items-start gap-2.5">
-        {full
-          ? <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-700" aria-hidden="true" />
-          : <Camera className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" aria-hidden="true" />}
+    <section className={cn("rounded-2xl border p-4", full ? "border-amber-300 bg-amber-50" : low ? "border-amber-200 bg-white" : "border-slate-200 bg-white")}>
+      <div className="flex items-start gap-3">
+        <span className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full", full || low ? "bg-amber-100 text-amber-700" : "bg-blue-50 text-blue-600")} aria-hidden="true">
+          {full ? <AlertTriangle className="h-[18px] w-[18px]" /> : <Camera className="h-[18px] w-[18px]" />}
+        </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-black">{full ? t.usage.full(cap) : t.usage.left(left, cap)}</p>
+          <p className="text-sm font-semibold text-slate-900">{full ? t.usage.full(cap) : t.usage.left(left, cap)}</p>
           <Progress
             value={pct}
             aria-label={t.usage.progress}
             getValueLabel={() => usedText}
-            className="mt-2 h-1.5 bg-neutral-200"
+            className={cn("mt-2 h-2 bg-slate-100", full || low ? "[&>[data-slot=progress-indicator]]:bg-amber-500" : "[&>[data-slot=progress-indicator]]:bg-blue-600")}
           />
-          <p className="mt-1.5 text-xs text-neutral-600">{usedText} · {t.usage.renews(renewsOn)}</p>
-          {(full || left <= 5) && (
-            <p className="mt-1 text-xs text-neutral-600">
+          <p className="mt-1.5 text-xs text-slate-600">{usedText} · {t.usage.renews(renewsOn)}</p>
+          {(full || low) && (
+            <p className="mt-1 text-xs text-slate-600">
               {t.usage.upgradeHint}{" "}
-              <Link to="/settings" className="font-medium text-black underline underline-offset-2 hover:text-neutral-700">{t.usage.upgrade}</Link>
+              <Link to="/settings" className="font-semibold text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{t.usage.upgrade}</Link>
             </p>
           )}
         </div>
       </div>
-    </div>
+    </section>
   );
 }
 
 /** The month's total and how it splits by category (amount and share as text; the bar only repeats it). */
-function MonthTotals({ t, totals }: { t: ReceiptsCopy; totals: ReceiptTotals }) {
+function MonthTotals({ t, totals, className }: { t: ReceiptsCopy; totals: ReceiptTotals; className?: string }) {
   return (
-    <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none lg:order-2">
-      <CardContent className="p-4">
-        <p className="text-xs text-neutral-500">{t.totals.title}</p>
-        <p className="text-2xl font-semibold tabular-nums text-black">{formatCurrency(totals.total)}</p>
-        <p className="text-xs text-neutral-500">{t.totals.count(totals.count)}</p>
-        {totals.byCategory.length > 0 && (
-          <>
-            <h3 className="mt-4 text-xs font-medium text-neutral-500">{t.totals.byCategory}</h3>
-            <ul className="mt-2 space-y-2.5">
-              {totals.byCategory.map((c) => {
-                const pct = totals.total > 0 ? Math.round((c.total / totals.total) * 100) : 0;
-                return (
-                  <li key={c.category} className="min-w-0">
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <span className="truncate text-neutral-700">{receiptCategoryLabel(t, c.category)}</span>
-                      <span className="shrink-0 font-medium tabular-nums text-black">{formatCurrency(c.total)}</span>
+    <section className={cn(CARD, className)} aria-labelledby="receipts-total">
+      <p id="receipts-total" className="text-xs font-medium text-slate-500">{t.ui.spent}</p>
+      <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-slate-900">{formatCurrency(totals.total)}</p>
+      <p className="mt-0.5 text-xs text-slate-500">{t.totals.count(totals.count)}</p>
+      {totals.byCategory.length > 0 && (
+        <>
+          <h3 className="mt-4 text-xs font-medium text-slate-500">{t.totals.byCategory}</h3>
+          <ul className="mt-2 space-y-2.5">
+            {totals.byCategory.map((c) => {
+              const pct = totals.total > 0 ? Math.round((c.total / totals.total) * 100) : 0;
+              return (
+                <li key={c.category} className="min-w-0">
+                  <div className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="truncate text-slate-700">{receiptCategoryLabel(t, c.category)}</span>
+                    <span className="shrink-0 font-semibold tabular-nums text-slate-900">{formatCurrency(c.total)}</span>
+                  </div>
+                  <div className="mt-1 flex items-center gap-2">
+                    <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
+                      <div className="h-full rounded-full bg-blue-600" style={{ width: `${pct}%` }} />
                     </div>
-                    <div className="mt-1 flex items-center gap-2">
-                      <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-neutral-100" aria-hidden="true">
-                        <div className="h-full rounded-full bg-neutral-800" style={{ width: `${pct}%` }} />
-                      </div>
-                      <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-neutral-500">{t.totals.share(pct)}</span>
-                    </div>
-                  </li>
-                );
-              })}
-            </ul>
-          </>
-        )}
-      </CardContent>
-    </Card>
+                    <span className="w-9 shrink-0 text-right text-[11px] tabular-nums text-slate-500">{t.totals.share(pct)}</span>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        </>
+      )}
+    </section>
   );
 }

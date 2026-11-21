@@ -19,15 +19,15 @@ type Props = {
 export function ConfirmDialog({ title, text, confirm, cancel, pending, destructive, onConfirm, onClose }: Props) {
   return (
     <AlertDialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
-      <AlertDialogContent className="bg-white sm:max-w-md">
+      <AlertDialogContent className="bg-white sm:max-w-md sm:rounded-2xl">
         <AlertDialogHeader>
-          <AlertDialogTitle className="text-base font-semibold text-black">{title}</AlertDialogTitle>
-          <AlertDialogDescription className="text-sm text-neutral-600">{text}</AlertDialogDescription>
+          <AlertDialogTitle className="text-lg font-bold tracking-tight text-slate-900">{title}</AlertDialogTitle>
+          <AlertDialogDescription className="text-sm text-slate-600">{text}</AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter className="gap-2">
-          <AlertDialogCancel className="border-neutral-200" disabled={pending}>{cancel}</AlertDialogCancel>
+          <AlertDialogCancel className="h-11 border-slate-200 sm:h-10" disabled={pending}>{cancel}</AlertDialogCancel>
           <Button
-            className={cn("text-white", destructive ? "bg-red-600 hover:bg-red-700" : "bg-black hover:bg-neutral-800")}
+            className={cn("h-11 rounded-[10px] px-4 font-semibold text-white sm:h-10", destructive ? "bg-red-600 hover:bg-red-700" : "bg-blue-600 hover:bg-blue-500")}
             disabled={pending} aria-busy={pending} onClick={onConfirm}
           >
             {confirm}

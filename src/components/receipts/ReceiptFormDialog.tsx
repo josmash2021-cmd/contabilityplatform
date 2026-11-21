@@ -1,7 +1,6 @@
 import { useId, useState, type FormEvent } from "react";
 import { Check, FileText, ImageOff, Loader2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { receiptsCopy } from "@/i18n/copy/receipts";
+import { BTN, FIELD, LABEL } from "./ui";
 import {
   MAX_MERCHANT_LENGTH, MAX_NOTES_LENGTH, RECEIPT_CATEGORIES, RECEIPT_PAYMENT_METHODS, isIsoDate, isReceiptCategory, parseAmount,
   type ReceiptCategory, type ReceiptPaymentMethod,
@@ -96,24 +96,24 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !saving) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 overflow-y-auto p-0 sm:max-h-[92vh] sm:max-w-lg">
-        <DialogHeader className="border-b border-neutral-100 px-5 py-4 pr-12 text-left">
-          <DialogTitle className="text-base">{mode === "new" ? f.newTitle : f.editTitle}</DialogTitle>
-          <DialogDescription className="text-xs">{mode === "new" ? f.newText : f.editText}</DialogDescription>
+      <DialogContent className="flex flex-col gap-0 overflow-y-auto bg-white p-0 sm:max-h-[92vh] sm:max-w-lg sm:rounded-2xl">
+        <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{mode === "new" ? f.newTitle : f.editTitle}</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">{mode === "new" ? f.newText : f.editText}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} noValidate className="flex flex-1 flex-col">
-          <div className="space-y-4 px-5 py-4">
+          <div className="space-y-4 px-4 py-4 sm:px-6">
             {preview && (
-              <figure className="overflow-hidden rounded-lg border border-neutral-200 bg-neutral-50">
+              <figure className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
                 {preview.isPdf || !preview.url || previewBroken ? (
                   <div className="flex items-center gap-3 p-3">
                     <span className="grid h-12 w-12 shrink-0 place-items-center rounded-md bg-white" aria-hidden="true">
-                      {preview.isPdf ? <FileText className="h-5 w-5 text-neutral-500" /> : <ImageOff className="h-5 w-5 text-neutral-400" />}
+                      {preview.isPdf ? <FileText className="h-5 w-5 text-slate-500" /> : <ImageOff className="h-5 w-5 text-slate-400" />}
                     </span>
                     <figcaption className="min-w-0">
-                      <span className="block truncate text-sm text-black">{preview.fileName}</span>
-                      {!preview.isPdf && <span className="block text-xs text-neutral-500">{f.noPreview}</span>}
+                      <span className="block truncate text-sm text-slate-900">{preview.fileName}</span>
+                      {!preview.isPdf && <span className="block text-xs text-slate-500">{f.noPreview}</span>}
                     </figcaption>
                   </div>
                 ) : (
@@ -128,7 +128,7 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
             )}
 
             <div className="space-y-1.5">
-              <Label htmlFor={fieldId("merchant")}>{f.merchant}</Label>
+              <Label htmlFor={fieldId("merchant")} className={LABEL}>{f.merchant}</Label>
               <Input
                 id={fieldId("merchant")}
                 value={merchant}
@@ -139,16 +139,16 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
                 enterKeyHint="next"
                 aria-invalid={!!errors.merchant}
                 aria-describedby={describedBy("merchant")}
-                className="h-10"
+                className={FIELD}
               />
               {errorText("merchant")}
             </div>
 
             <div className="grid grid-cols-1 gap-4 min-[380px]:grid-cols-2">
               <div className="space-y-1.5">
-                <Label htmlFor={fieldId("amount")}>{f.amount}</Label>
+                <Label htmlFor={fieldId("amount")} className={LABEL}>{f.amount}</Label>
                 <div className="relative">
-                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-neutral-500" aria-hidden="true">$</span>
+                  <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-sm text-slate-500" aria-hidden="true">$</span>
                   <Input
                     id={fieldId("amount")}
                     value={amount}
@@ -159,13 +159,13 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
                     enterKeyHint="next"
                     aria-invalid={!!errors.amount}
                     aria-describedby={describedBy("amount")}
-                    className="h-10 pl-7 tabular-nums"
+                    className={cn(FIELD, "pl-7 tabular-nums")}
                   />
                 </div>
                 {errorText("amount")}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={fieldId("date")}>{f.date}</Label>
+                <Label htmlFor={fieldId("date")} className={LABEL}>{f.date}</Label>
                 <Input
                   id={fieldId("date")}
                   type="date"
@@ -174,18 +174,18 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
                   onChange={(e) => setDate(e.target.value)}
                   aria-invalid={!!errors.date}
                   aria-describedby={describedBy("date")}
-                  className="h-10"
+                  className={FIELD}
                 />
                 {errorText("date")}
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <Label htmlFor={fieldId("category")}>{f.category}</Label>
+              <Label htmlFor={fieldId("category")} className={LABEL}>{f.category}</Label>
               <Select value={category} onValueChange={(v) => { if (isReceiptCategory(v)) setCategory(v); }}>
                 <SelectTrigger
                   id={fieldId("category")}
-                  className="h-10 w-full"
+                  className={cn(FIELD, "w-full data-[size=default]:h-11 sm:data-[size=default]:h-10")}
                   aria-invalid={!!errors.category}
                   aria-describedby={describedBy("category")}
                 >
@@ -201,7 +201,7 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
             </div>
 
             <fieldset className="space-y-1.5">
-              <legend className="mb-1.5 text-sm font-medium leading-none">{f.payment}</legend>
+              <legend className="mb-1.5 text-sm font-medium leading-none text-slate-700">{f.payment}</legend>
               <div className="grid grid-cols-3 gap-2">
                 {RECEIPT_PAYMENT_METHODS.map((p) => {
                   const on = payment === p;
@@ -209,8 +209,8 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
                     <label
                       key={p}
                       className={cn(
-                        "flex h-10 cursor-pointer items-center justify-center gap-1.5 rounded-md border px-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-neutral-400 has-[:focus-visible]:ring-offset-1",
-                        on ? "border-black bg-black font-medium text-white" : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                        "flex h-11 cursor-pointer items-center justify-center gap-1.5 rounded-[10px] border px-2 text-sm transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 has-[:focus-visible]:ring-offset-1 sm:h-10",
+                        on ? "border-blue-600 bg-blue-50 font-semibold text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
                       )}
                     >
                       <input
@@ -230,8 +230,8 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
             </fieldset>
 
             <div className="space-y-1.5">
-              <Label htmlFor={fieldId("notes")}>
-                {f.notes} <span className="font-normal text-neutral-500">{f.optional}</span>
+              <Label htmlFor={fieldId("notes")} className={LABEL}>
+                {f.notes} <span className="font-normal text-slate-500">{f.optional}</span>
               </Label>
               <Textarea
                 id={fieldId("notes")}
@@ -240,19 +240,19 @@ export function ReceiptFormDialog({ mode, initial, maxDate, preview, saving, onS
                 placeholder={f.notesPlaceholder}
                 maxLength={MAX_NOTES_LENGTH}
                 rows={2}
-                className="min-h-[4.5rem]"
+                className={cn(FIELD, "min-h-[4.5rem] py-2 sm:h-auto")}
               />
             </div>
           </div>
 
-          <DialogFooter className="sticky bottom-0 mt-auto gap-2 border-t border-neutral-100 bg-white px-5 py-3">
-            <Button type="button" variant="outline" className="h-10 border-neutral-200" onClick={onClose} disabled={saving}>
+          <DialogFooter className="sticky bottom-0 mt-auto gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
+            <button type="button" className={BTN.secondary} onClick={onClose} disabled={saving}>
               {f.cancel}
-            </Button>
-            <Button type="submit" className="h-10 bg-black text-white hover:bg-neutral-800" disabled={saving}>
-              {saving && <Loader2 className="animate-spin" aria-hidden="true" />}
+            </button>
+            <button type="submit" className={BTN.primary} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}
               {saving ? f.saving : mode === "new" ? f.save : f.saveChanges}
-            </Button>
+            </button>
           </DialogFooter>
         </form>
       </DialogContent>

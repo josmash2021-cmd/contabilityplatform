@@ -1,9 +1,8 @@
 import { useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { CalendarX2, Pause, Pencil, Play, Plus, Repeat, Trash2 } from "lucide-react";
+import { AlertCircle, CalendarX2, Pause, Pencil, Play, Plus, Repeat, Trash2 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -14,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { quotesCopy, type QuotesCopy } from "@/i18n/copy/quotes";
@@ -26,16 +25,23 @@ import {
   blankLine, draftTotals, formatDay, money, parseLines, toDraftLines, useRefreshQuotes,
   type CustomerOption, type CustomerValue, type DraftLine, type RecurringInvoice, type ServiceOption,
 } from "./shared";
+import { BTN, CARD, FIELD, LABEL } from "./ui";
 
-type FormState = { mode: "create" } | { mode: "edit"; item: RecurringInvoice };
+export type RecurringFormState = { mode: "create" } | { mode: "edit"; item: RecurringInvoice };
 
-/** The "Recurrentes" tab: the list with pause / resume, and the form to create or edit one. */
-export function RecurringTab({ services, customers }: { services: readonly ServiceOption[]; customers: readonly CustomerOption[] }) {
+/** The "Recurrentes" tab: the list with pause / resume, and the form to create or edit one (opened from here or the page header). */
+export function RecurringTab({ services, customers, canChange, form, onForm: setForm }: {
+  services: readonly ServiceOption[];
+  customers: readonly CustomerOption[];
+  /** False for a read-only team member (the accountant). */
+  canChange: boolean;
+  form: RecurringFormState | null;
+  onForm: (f: RecurringFormState | null) => void;
+}) {
   const t = useCopy(quotesCopy);
   const { lang } = useLang();
   const locale = intlLocale(lang);
   const refresh = useRefreshQuotes();
-  const [form, setForm] = useState<FormState | null>(null);
   const [toDelete, setToDelete] = useState<RecurringInvoice | null>(null);
   const list = trpc.quotes.recurring.list.useQuery(undefined, { retry: (count, err) => err.data?.code !== "FORBIDDEN" && count < 1 });
 
@@ -57,37 +63,31 @@ export function RecurringTab({ services, customers }: { services: readonly Servi
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-        <p className="max-w-xl text-xs text-neutral-500">{t.recurring.intro}</p>
-        <Button className="h-9 shrink-0 bg-black text-white hover:bg-neutral-800" onClick={() => setForm({ mode: "create" })}>
-          <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.recurring.new}
-        </Button>
-      </div>
+      <p className="max-w-2xl text-sm text-slate-500">{t.recurring.intro}</p>
 
       {list.isLoading ? (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" role="status" aria-label={t.loading}>
-          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-36 rounded-xl" />)}
+          {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
         </div>
       ) : list.isError ? (
-        <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="text-sm text-neutral-600" role="alert">{list.error.message || t.error}</p>
-            <Button variant="outline" size="sm" onClick={() => void list.refetch()}>{t.retry}</Button>
-          </CardContent>
-        </Card>
+        <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+          <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden="true" />
+          <p className="mt-2 text-sm font-medium text-slate-900" role="alert">{list.error.message || t.error}</p>
+          <button type="button" className={cn(BTN.secondary, "mt-3")} onClick={() => void list.refetch()}>{t.retry}</button>
+        </section>
       ) : items.length === 0 ? (
-        <Card className="gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-          <CardContent className="flex flex-col items-center gap-3 p-8 text-center">
-            <span className="grid h-12 w-12 place-items-center rounded-full bg-neutral-100" aria-hidden="true">
-              <Repeat className="h-5 w-5 text-neutral-500" />
-            </span>
-            <h2 className="text-sm font-semibold text-black">{t.recurring.emptyTitle}</h2>
-            <p className="max-w-sm text-xs text-neutral-500">{t.recurring.emptyText}</p>
-            <Button className="mt-1 bg-black text-white hover:bg-neutral-800" onClick={() => setForm({ mode: "create" })}>
-              <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.recurring.new}
-            </Button>
-          </CardContent>
-        </Card>
+        <section className={cn(CARD, "px-5 py-10 text-center")}>
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true">
+            <Repeat className="h-7 w-7" />
+          </span>
+          <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{t.recurring.emptyTitle}</h2>
+          <p className="mx-auto mt-1.5 max-w-sm text-sm text-slate-500">{t.recurring.emptyText}</p>
+          {canChange && (
+            <button type="button" className={cn(BTN.primary, "mt-5")} onClick={() => setForm({ mode: "create" })}>
+              <Plus className="h-4 w-4" aria-hidden="true" /> {t.recurring.new}
+            </button>
+          )}
+        </section>
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {items.map((r) => {
@@ -95,49 +95,52 @@ export function RecurringTab({ services, customers }: { services: readonly Servi
             const state = r.finished ? "finished" : r.active ? "active" : "paused";
             return (
               <li key={r.id} className="min-w-0">
-                <Card className="h-full gap-0 rounded-xl border-neutral-200 py-0 shadow-none">
-                  <CardContent className="p-4">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <h3 className="truncate text-sm font-medium text-black">{name}</h3>
-                        <p className="truncate text-[11px] text-neutral-500">{r.items.map((i) => i.description).join(", ")}</p>
-                      </div>
-                      <p className="shrink-0 text-right text-base font-semibold text-black">
-                        {formatCurrency(r.total)}
-                        <span className="block text-[11px] font-normal text-neutral-500">{t.recurring.frequency[r.frequency]}</span>
-                      </p>
+                <article className={cn(CARD, "flex h-full flex-col p-4 sm:p-4", state === "paused" && "border-amber-200")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <h3 className="truncate font-semibold text-slate-900">{name}</h3>
+                      <p className="truncate text-xs text-slate-500">{r.items.map((i) => i.description).join(", ")}</p>
                     </div>
-                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                      {state === "active" && <Chip icon={Repeat} label={t.recurring.state.active} className="bg-emerald-50 text-emerald-700" />}
-                      {state === "paused" && <Chip icon={Pause} label={t.recurring.state.paused} className="bg-amber-50 text-amber-800" />}
-                      {state === "finished" && <Chip icon={CalendarX2} label={t.recurring.state.finished} className="bg-neutral-100 text-neutral-700" />}
-                    </div>
-                    <p className="mt-2 text-[11px] text-neutral-500">
-                      {state !== "finished" && `${t.recurring.next(formatDay(r.nextDate, locale))} · `}
-                      {r.endDate ? t.recurring.ends(formatDay(r.endDate, locale)) : t.recurring.noEnd}
-                      {r.invoiced > 0 && ` · ${t.recurring.invoiced(r.invoiced)}`}
+                    <p className="shrink-0 text-right text-lg font-bold tabular-nums tracking-tight text-slate-900">
+                      {formatCurrency(r.total)}
+                      <span className="block text-xs font-medium tracking-normal text-slate-500">{t.recurring.frequency[r.frequency]}</span>
                     </p>
-                    {state === "paused" && <p className="mt-1 text-[11px] text-amber-800">{t.recurring.resumeNote}</p>}
-                    <div className="mt-3 flex flex-wrap items-center justify-end gap-1 border-t border-neutral-100 pt-2" role="group" aria-label={t.recurring.actionsAria(name)}>
+                  </div>
+                  <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                    {state === "active" && <Chip icon={Repeat} label={t.recurring.state.active} className="bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" />}
+                    {state === "paused" && <Chip icon={Pause} label={t.recurring.state.paused} className="bg-amber-50 text-amber-800 ring-1 ring-amber-200" />}
+                    {state === "finished" && <Chip icon={CalendarX2} label={t.recurring.state.finished} className="bg-slate-100 text-slate-700" />}
+                  </div>
+                  <p className="mt-2 text-xs text-slate-600">
+                    {state !== "finished" && <span className="font-semibold text-slate-900">{t.recurring.next(formatDay(r.nextDate, locale))}</span>}
+                    {state !== "finished" && " · "}
+                    {r.endDate ? t.recurring.ends(formatDay(r.endDate, locale)) : t.recurring.noEnd}
+                    {r.invoiced > 0 && ` · ${t.recurring.invoiced(r.invoiced)}`}
+                  </p>
+                  {state === "paused" && <p className="mt-1 text-xs text-amber-800">{t.recurring.resumeNote}</p>}
+                  {canChange && (
+                    <div className="mt-auto pt-3">
+                    <div className="grid grid-cols-3 gap-1 border-t border-slate-100 pt-2 sm:flex sm:justify-end" role="group" aria-label={t.recurring.actionsAria(name)}>
                       {state === "active" && (
-                        <Button variant="ghost" size="sm" className="h-8 text-xs text-neutral-600 hover:text-black" disabled={busy} onClick={() => pause.mutate({ id: r.id })}>
-                          <Pause className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> {t.recurring.pause}
-                        </Button>
+                        <button type="button" className={cn(BTN.ghost, "px-2")} disabled={busy} onClick={() => pause.mutate({ id: r.id })}>
+                          <Pause className="h-4 w-4" aria-hidden="true" /> {t.recurring.pause}
+                        </button>
                       )}
                       {state === "paused" && (
-                        <Button variant="ghost" size="sm" className="h-8 text-xs text-neutral-600 hover:text-black" disabled={busy} onClick={() => resume.mutate({ id: r.id })}>
-                          <Play className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> {t.recurring.resume}
-                        </Button>
+                        <button type="button" className={cn(BTN.ghost, "px-2 text-blue-700")} disabled={busy} onClick={() => resume.mutate({ id: r.id })}>
+                          <Play className="h-4 w-4" aria-hidden="true" /> {t.recurring.resume}
+                        </button>
                       )}
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-neutral-600 hover:text-black" onClick={() => setForm({ mode: "edit", item: r })}>
-                        <Pencil className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> {t.recurring.edit}
-                      </Button>
-                      <Button variant="ghost" size="sm" className="h-8 text-xs text-neutral-500 hover:text-red-600" disabled={busy} onClick={() => setToDelete(r)}>
-                        <Trash2 className="mr-1 h-3.5 w-3.5" aria-hidden="true" /> {t.recurring.delete}
-                      </Button>
+                      <button type="button" className={cn(BTN.ghost, "px-2", state === "finished" && "col-start-2")} onClick={() => setForm({ mode: "edit", item: r })}>
+                        <Pencil className="h-4 w-4" aria-hidden="true" /> {t.recurring.edit}
+                      </button>
+                      <button type="button" className={cn(BTN.ghost, "px-2 hover:bg-red-50 hover:text-red-700")} disabled={busy} onClick={() => setToDelete(r)}>
+                        <Trash2 className="h-4 w-4" aria-hidden="true" /> {t.recurring.delete}
+                      </button>
                     </div>
-                  </CardContent>
-                </Card>
+                    </div>
+                  )}
+                </article>
               </li>
             );
           })}
@@ -145,10 +148,10 @@ export function RecurringTab({ services, customers }: { services: readonly Servi
       )}
 
       <Dialog open={form !== null} onOpenChange={(o) => { if (!o) setForm(null); }}>
-        <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-2xl">
-          <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-            <DialogTitle className="text-base">{form?.mode === "edit" ? t.recurring.form.editTitle : t.recurring.form.createTitle}</DialogTitle>
-            <DialogDescription className="text-xs">{t.recurring.form.intro}</DialogDescription>
+        <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
+          <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+            <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{form?.mode === "edit" ? t.recurring.form.editTitle : t.recurring.form.createTitle}</DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">{t.recurring.form.intro}</DialogDescription>
           </DialogHeader>
           {form && (
             <RecurringForm
@@ -165,14 +168,14 @@ export function RecurringTab({ services, customers }: { services: readonly Servi
       </Dialog>
 
       <AlertDialog open={toDelete !== null} onOpenChange={(o) => { if (!o) setToDelete(null); }}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-white sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>{t.recurring.deleteTitle}</AlertDialogTitle>
-            <AlertDialogDescription>{t.recurring.deleteText}</AlertDialogDescription>
+            <AlertDialogTitle className="text-slate-900">{t.recurring.deleteTitle}</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600">{t.recurring.deleteText}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t.recurring.cancel}</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={() => { if (toDelete) remove.mutate({ id: toDelete.id }); }}>
+            <AlertDialogCancel className="h-11 sm:h-10">{t.recurring.cancel}</AlertDialogCancel>
+            <AlertDialogAction className="h-11 bg-red-600 text-white hover:bg-red-700 sm:h-10" onClick={() => { if (toDelete) remove.mutate({ id: toDelete.id }); }}>
               {t.recurring.delete}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -267,16 +270,16 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-freq`} className="text-xs text-neutral-600">{f.frequency}</Label>
+            <Label htmlFor={`${id}-freq`} className={LABEL}>{f.frequency}</Label>
             <Select value={frequency} onValueChange={(v) => { setFrequency(v as Frequency); setError(null); }}>
-              <SelectTrigger id={`${id}-freq`} className="h-10 w-full"><SelectValue /></SelectTrigger>
+              <SelectTrigger id={`${id}-freq`} className={cn(FIELD, "w-full data-[size=default]:h-11 sm:data-[size=default]:h-10")}><SelectValue /></SelectTrigger>
               <SelectContent>
                 {FREQUENCIES.map((fr) => <SelectItem key={fr} value={fr}>{t.recurring.frequency[fr]}</SelectItem>)}
               </SelectContent>
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-date`} className="text-xs text-neutral-600">{initial ? f.nextDate : f.startDate}</Label>
+            <Label htmlFor={`${id}-date`} className={LABEL}>{initial ? f.nextDate : f.startDate}</Label>
             <Input
               id={`${id}-date`}
               type="date"
@@ -284,11 +287,11 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
               min={rescheduled ? today : undefined}
               onChange={(e) => { setDate(e.target.value); setError(null); }}
               aria-describedby={initial ? `${id}-date-hint` : undefined}
-              className="h-10 text-sm"
+              className={FIELD}
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-end`} className="text-xs text-neutral-600">{f.endDate}</Label>
+            <Label htmlFor={`${id}-end`} className={LABEL}>{f.endDate}</Label>
             <Input
               id={`${id}-end`}
               type="date"
@@ -296,21 +299,21 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
               min={dateOk ? date : undefined}
               onChange={(e) => { setEndDate(e.target.value); setError(null); }}
               aria-describedby={`${id}-end-hint`}
-              className="h-10 text-sm"
+              className={FIELD}
             />
           </div>
         </div>
-        <div className="-mt-2 space-y-1 text-[11px] text-neutral-500">
+        <div className="-mt-2 space-y-1 text-xs text-slate-500">
           {initial && <p id={`${id}-date-hint`}>{f.nextDateHint}</p>}
           <p id={`${id}-end-hint`}>{f.endHint}</p>
           {preview.length > 0 && (
-            <p className="text-neutral-700" aria-live="polite">{f.preview(preview.map((d) => formatDay(d, locale)).join(" · "))}</p>
+            <p className="text-slate-700" aria-live="polite">{f.preview(preview.map((d) => formatDay(d, locale)).join(" · "))}</p>
           )}
           {longMonthAnchor && <p>{f.monthEnd}</p>}
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-notes`} className="text-xs text-neutral-600">{f.notes}</Label>
+          <Label htmlFor={`${id}-notes`} className={LABEL}>{f.notes}</Label>
           <Textarea
             id={`${id}-notes`}
             value={notes}
@@ -318,20 +321,20 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
             rows={2}
             placeholder={f.notesPlaceholder}
             onChange={(e) => setNotes(e.target.value)}
-            className="text-sm"
+            className={cn(FIELD, "min-h-[4.5rem] py-2")}
           />
         </div>
       </div>
 
-      <div className="space-y-3 border-t border-neutral-100 bg-white px-4 py-3 sm:px-6">
-        <div className="flex items-baseline justify-between text-base font-semibold text-black">
+      <div className="space-y-3 border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
+        <div className="flex items-baseline justify-between text-lg font-bold tabular-nums text-slate-900">
           <span>{t.form.total}</span>
-          <span aria-live="polite">{money(totals.totalCents)} <span className="text-xs font-normal text-neutral-500">· {t.recurring.frequency[frequency]}</span></span>
+          <span aria-live="polite" className="tabular-nums">{money(totals.totalCents)} <span className="text-xs font-normal text-slate-500">· {t.recurring.frequency[frequency]}</span></span>
         </div>
         {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onDone} className="text-neutral-600">{f.cancel}</Button>
-          <Button type="submit" disabled={pending} className="bg-black text-white hover:bg-neutral-800">{pending ? f.saving : f.save}</Button>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={onDone} className={BTN.ghost}>{f.cancel}</Button>
+          <Button type="submit" disabled={pending} className={BTN.primary}>{pending ? f.saving : f.save}</Button>
         </div>
       </div>
     </form>

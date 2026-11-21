@@ -4,7 +4,6 @@ import {
   ArrowLeft, CalendarX2, CircleCheck, CircleX, Copy, Pencil, Printer, Receipt, RotateCcw, Send, Trash2, type LucideIcon,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
@@ -22,29 +21,33 @@ import { Chip, QuoteStatusChip } from "./StatusChip";
 import { PaymentChoice } from "./PaymentChoice";
 import { PrintPortal, QuoteDocument } from "./QuoteDocument";
 import { copyText, formatDate, formatDay, quoteShareText, useRefreshQuotes, type CompanyInfo, type QuoteDetail } from "./shared";
+import { BTN } from "./ui";
 
 type View = "detail" | "convert" | "print";
 type Action = { key: string; label: string; icon: LucideIcon; onClick: () => void; danger?: boolean };
 
 /** A quote with everything that can be done with it: send, answer, convert, print, share. */
-export function QuoteDetailDialog({ quoteId, company, onClose, onEdit }: {
+export function QuoteDetailDialog({ quoteId, company, canChange, onClose, onEdit }: {
   quoteId: number | null;
   company: CompanyInfo;
+  /** False for a read-only team member (the accountant): only print and copy. */
+  canChange: boolean;
   onClose: () => void;
   onEdit: (id: number) => void;
 }) {
   return (
     <Dialog open={quoteId !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-2xl">
-        {quoteId !== null && <DetailBody key={quoteId} quoteId={quoteId} company={company} onClose={onClose} onEdit={onEdit} />}
+      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
+        {quoteId !== null && <DetailBody key={quoteId} quoteId={quoteId} company={company} canChange={canChange} onClose={onClose} onEdit={onEdit} />}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DetailBody({ quoteId, company, onClose, onEdit }: {
+function DetailBody({ quoteId, company, canChange, onClose, onEdit }: {
   quoteId: number;
   company: CompanyInfo;
+  canChange: boolean;
   onClose: () => void;
   onEdit: (id: number) => void;
 }) {
@@ -67,20 +70,20 @@ function DetailBody({ quoteId, company, onClose, onEdit }: {
   if (!q) {
     return (
       <>
-        <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-          <DialogTitle className="text-base">{t.detail.loading}</DialogTitle>
+        <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.detail.loading}</DialogTitle>
           <DialogDescription className="sr-only">{t.detail.loading}</DialogDescription>
         </DialogHeader>
         {query.isError ? (
           <div className="flex flex-col items-center gap-3 p-8 text-center">
-            <p className="text-sm text-neutral-600" role="alert">{query.error.message || t.error}</p>
-            <Button variant="outline" size="sm" onClick={() => void query.refetch()}>{t.retry}</Button>
+            <p className="text-sm text-slate-700" role="alert">{query.error.message || t.error}</p>
+            <button type="button" className={BTN.secondary} onClick={() => void query.refetch()}>{t.retry}</button>
           </div>
         ) : (
           <div className="space-y-3 p-6" role="status" aria-label={t.detail.loading}>
             <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-24 rounded-lg" />
-            <Skeleton className="h-10 rounded-lg" />
+            <Skeleton className="h-24 rounded-xl" />
+            <Skeleton className="h-11 rounded-xl" />
           </div>
         )}
       </>
@@ -112,8 +115,8 @@ function DetailBody({ quoteId, company, onClose, onEdit }: {
     delete: { key: "delete", label: t.detail.delete, icon: Trash2, onClick: () => setConfirmDelete(true), danger: true },
   };
   const primaryByStatus = { draft: a.send, sent: a.accept, accepted: a.convert, rejected: a.reopen, converted: a.print };
-  const primary = primaryByStatus[q.status];
-  const secondary = [
+  const primary = canChange ? primaryByStatus[q.status] : a.print;
+  const secondary = !canChange ? [a.copy] : [
     q.status === "draft" && a.accept,
     (q.status === "draft" || q.status === "sent" || q.status === "accepted") && a.reject,
     canConvertQuote(q.status) && primary !== a.convert && a.convert,
@@ -131,12 +134,12 @@ function DetailBody({ quoteId, company, onClose, onEdit }: {
 
   return (
     <>
-      <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-base">{t.detail.title(q.number)}</DialogTitle>
+      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.detail.title(q.number)}</DialogTitle>
         <DialogDescription asChild>
-          <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
             <QuoteStatusChip status={q.status} label={t.status[q.status]} />
-            {expired && <Chip icon={CalendarX2} label={t.expired} className="bg-amber-50 text-amber-800" />}
+            {expired && <Chip icon={CalendarX2} label={t.expired} className="bg-amber-50 text-amber-800 ring-1 ring-amber-200" />}
           </div>
         </DialogDescription>
       </DialogHeader>
@@ -144,87 +147,87 @@ function DetailBody({ quoteId, company, onClose, onEdit }: {
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
         <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
           <div className="col-span-2 min-w-0 sm:col-span-1">
-            <dt className="text-[11px] text-neutral-500">{t.detail.customer}</dt>
-            <dd className="truncate text-black">{q.customerName || t.quotes.noCustomer}</dd>
+            <dt className="text-xs text-slate-500">{t.detail.customer}</dt>
+            <dd className="truncate font-medium text-slate-900">{q.customerName || t.quotes.noCustomer}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-neutral-500">{t.detail.created}</dt>
-            <dd className="text-black">{formatDate(q.createdAt, locale)}</dd>
+            <dt className="text-xs text-slate-500">{t.detail.created}</dt>
+            <dd className="text-slate-900">{formatDate(q.createdAt, locale)}</dd>
           </div>
           <div>
-            <dt className="text-[11px] text-neutral-500">{t.detail.validUntil}</dt>
-            <dd className="text-black">{q.validUntil ? formatDay(q.validUntil, locale) : t.detail.noDate}</dd>
+            <dt className="text-xs text-slate-500">{t.detail.validUntil}</dt>
+            <dd className="text-slate-900">{q.validUntil ? formatDay(q.validUntil, locale) : t.detail.noDate}</dd>
           </div>
         </dl>
 
-        {expired && q.validUntil && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-900">{t.detail.expiredNote(formatDay(q.validUntil, locale))}</p>}
+        {expired && q.validUntil && <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900">{t.detail.expiredNote(formatDay(q.validUntil, locale))}</p>}
         {q.status === "converted" && q.invoiceNumber && (
-          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-700">
+          <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
             {t.detail.convertedTo(q.invoiceNumber, q.saleStatus ? t.detail.saleStatus[q.saleStatus] : "")}
           </p>
         )}
 
         <section aria-labelledby={`quote-${q.id}-items`}>
-          <h3 id={`quote-${q.id}-items`} className="mb-1 text-xs font-medium text-neutral-600">{t.detail.items}</h3>
-          <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+          <h3 id={`quote-${q.id}-items`} className="mb-1.5 text-sm font-semibold text-slate-900">{t.detail.items}</h3>
+          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
             {q.items.map((it) => (
               <li key={it.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
                 <div className="min-w-0">
-                  <p className="break-words text-sm text-black">{it.description}</p>
-                  <p className="text-[11px] text-neutral-500">{it.quantity} × {formatCurrency(it.unitPrice)}</p>
+                  <p className="break-words text-sm text-slate-900">{it.description}</p>
+                  <p className="text-xs tabular-nums text-slate-500">{it.quantity} × {formatCurrency(it.unitPrice)}</p>
                 </div>
-                <p className="shrink-0 text-sm font-medium text-black">{formatCurrency(it.lineTotal)}</p>
+                <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(it.lineTotal)}</p>
               </li>
             ))}
           </ul>
-          <dl className="ml-auto mt-2 max-w-[16rem] space-y-0.5 text-sm">
+          <dl className="ml-auto mt-3 max-w-[18rem] space-y-1 text-sm tabular-nums">
             {q.discount > 0 && (
               <>
-                <div className="flex justify-between text-neutral-600"><dt>{t.form.subtotal}</dt><dd>{formatCurrency(q.subtotal)}</dd></div>
-                <div className="flex justify-between text-neutral-600"><dt>{t.form.discountLine}</dt><dd>-{formatCurrency(q.discount)}</dd></div>
+                <div className="flex justify-between text-slate-600"><dt>{t.form.subtotal}</dt><dd>{formatCurrency(q.subtotal)}</dd></div>
+                <div className="flex justify-between text-slate-600"><dt>{t.form.discountLine}</dt><dd>−{formatCurrency(q.discount)}</dd></div>
               </>
             )}
-            <div className="flex justify-between text-base font-semibold text-black"><dt>{t.form.total}</dt><dd>{formatCurrency(q.total)}</dd></div>
+            <div className="flex justify-between border-t border-slate-200 pt-1.5 text-lg font-bold text-slate-900"><dt>{t.form.total}</dt><dd>{formatCurrency(q.total)}</dd></div>
           </dl>
         </section>
 
         {q.notes && (
           <section>
-            <h3 className="mb-1 text-xs font-medium text-neutral-600">{t.detail.notes}</h3>
-            <p className="whitespace-pre-wrap break-words text-sm text-neutral-700">{q.notes}</p>
+            <h3 className="mb-1 text-sm font-semibold text-slate-900">{t.detail.notes}</h3>
+            <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{q.notes}</p>
           </section>
         )}
       </div>
 
-      <div className="space-y-2 border-t border-neutral-100 bg-white px-4 py-3 sm:px-6" role="group" aria-label={t.detail.actionsLabel}>
-        <Button className="h-10 w-full bg-black text-white hover:bg-neutral-800" disabled={busy} onClick={primary.onClick}>
-          <primary.icon className="mr-1.5 h-4 w-4" aria-hidden="true" /> {primary.label}
-        </Button>
-        {primary === a.send && <p className="text-center text-[11px] text-neutral-500">{t.detail.sendHint}</p>}
+      <div className="space-y-2 border-t border-slate-100 bg-white px-4 py-3 sm:px-6" role="group" aria-label={t.detail.actionsLabel}>
+        <button type="button" className={cn(BTN.primary, "h-12 w-full text-base sm:h-11")} disabled={busy} onClick={primary.onClick}>
+          <primary.icon className="h-5 w-5" aria-hidden="true" /> {primary.label}
+        </button>
+        {primary === a.send && <p className="text-center text-xs text-slate-500">{t.detail.sendHint}</p>}
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {secondary.map((x) => (
-            <Button
+            <button
               key={x.key}
-              variant="outline"
+              type="button"
               disabled={busy}
               onClick={x.onClick}
-              className={cn("h-9 min-w-0 border-neutral-200 text-xs", x.danger && "text-red-600 hover:bg-red-50 hover:text-red-700")}
+              className={cn(x.danger ? BTN.dangerOutline : BTN.secondary, "min-w-0 px-3")}
             >
-              <x.icon className="mr-1 h-3.5 w-3.5 shrink-0" aria-hidden="true" /> <span className="truncate">{x.label}</span>
-            </Button>
+              <x.icon className="h-4 w-4 shrink-0" aria-hidden="true" /> <span className="truncate">{x.label}</span>
+            </button>
           ))}
         </div>
       </div>
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
-        <AlertDialogContent>
+        <AlertDialogContent className="bg-white sm:rounded-2xl">
           <AlertDialogHeader>
-            <AlertDialogTitle>{t.deleteQuote.title(q.number)}</AlertDialogTitle>
-            <AlertDialogDescription>{t.deleteQuote.text}</AlertDialogDescription>
+            <AlertDialogTitle className="text-slate-900">{t.deleteQuote.title(q.number)}</AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-600">{t.deleteQuote.text}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>{t.deleteQuote.cancel}</AlertDialogCancel>
-            <AlertDialogAction className="bg-red-600 text-white hover:bg-red-700" onClick={() => remove.mutate({ id: q.id })}>
+            <AlertDialogCancel className="h-11 sm:h-10">{t.deleteQuote.cancel}</AlertDialogCancel>
+            <AlertDialogAction className="h-11 bg-red-600 text-white hover:bg-red-700 sm:h-10" onClick={() => remove.mutate({ id: q.id })}>
               {t.deleteQuote.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
@@ -256,29 +259,30 @@ function ConvertView({ q, t, onBack }: { q: QuoteDetail; t: QuotesCopy; onBack: 
 
   return (
     <>
-      <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-base">{t.convert.title(q.number)}</DialogTitle>
-        <DialogDescription className="text-xs">{t.convert.text}</DialogDescription>
+      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.convert.title(q.number)}</DialogTitle>
+        <DialogDescription className="text-sm text-slate-500">{t.convert.text}</DialogDescription>
       </DialogHeader>
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-        <div className="flex items-baseline justify-between gap-3 rounded-lg bg-neutral-50 px-3 py-2.5">
-          <p className="min-w-0 truncate text-sm text-neutral-700">{q.customerName || t.quotes.noCustomer}</p>
-          <p className="shrink-0 text-lg font-semibold text-black">{formatCurrency(q.total)}</p>
+        <div className="flex items-baseline justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
+          <p className="min-w-0 truncate text-sm text-slate-700">{q.customerName || t.quotes.noCustomer}</p>
+          <p className="shrink-0 text-xl font-bold tabular-nums text-slate-900">{formatCurrency(q.total)}</p>
         </div>
         <PaymentChoice legend={t.convert.question} options={options} value={choice} onChange={setChoice} />
-        <p className="text-xs text-neutral-600" aria-live="polite">{choice === "pending" ? t.convert.pendingHint : t.convert.paidHint}</p>
+        <p className="rounded-xl bg-blue-50 px-3 py-2.5 text-sm text-blue-900" aria-live="polite">{choice === "pending" ? t.convert.pendingHint : t.convert.paidHint}</p>
       </div>
-      <div className="flex justify-end gap-2 border-t border-neutral-100 bg-white px-4 py-3 sm:px-6">
-        <Button variant="ghost" onClick={onBack} className="text-neutral-600">
-          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" /> {t.convert.back}
-        </Button>
-        <Button
-          className="bg-black text-white hover:bg-neutral-800"
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
+        <button type="button" onClick={onBack} className={BTN.ghost}>
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t.convert.back}
+        </button>
+        <button
+          type="button"
+          className={BTN.primary}
           disabled={convert.isPending}
           onClick={() => convert.mutate({ id: q.id, payment: choice })}
         >
           {convert.isPending ? t.convert.working : t.convert.confirm(formatCurrency(q.total))}
-        </Button>
+        </button>
       </div>
     </>
   );
@@ -287,22 +291,22 @@ function ConvertView({ q, t, onBack }: { q: QuoteDetail; t: QuotesCopy; onBack: 
 function PrintView({ q, t, company, locale, onBack }: { q: QuoteDetail; t: QuotesCopy; company: CompanyInfo; locale: string; onBack: () => void }) {
   return (
     <>
-      <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-base">{t.print.title}</DialogTitle>
-        <DialogDescription className="text-xs">{t.print.hint}</DialogDescription>
+      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.print.title}</DialogTitle>
+        <DialogDescription className="text-sm text-slate-500">{t.print.hint}</DialogDescription>
       </DialogHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-50 px-3 py-4 sm:px-6">
-        <div className="mx-auto max-w-[44rem] rounded-lg border border-neutral-200 bg-white p-4 shadow-sm sm:p-8">
+      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-6">
+        <div className="mx-auto max-w-[44rem] rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
           <QuoteDocument q={q} company={company} t={t} locale={locale} />
         </div>
       </div>
-      <div className="flex justify-end gap-2 border-t border-neutral-100 bg-white px-4 py-3 sm:px-6">
-        <Button variant="ghost" onClick={onBack} className="text-neutral-600">
-          <ArrowLeft className="mr-1 h-4 w-4" aria-hidden="true" /> {t.print.back}
-        </Button>
-        <Button className="bg-black text-white hover:bg-neutral-800" onClick={() => window.print()}>
-          <Printer className="mr-1.5 h-4 w-4" aria-hidden="true" /> {t.print.print}
-        </Button>
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
+        <button type="button" onClick={onBack} className={BTN.ghost}>
+          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t.print.back}
+        </button>
+        <button type="button" className={BTN.primary} onClick={() => window.print()}>
+          <Printer className="h-4 w-4" aria-hidden="true" /> {t.print.print}
+        </button>
       </div>
       <PrintPortal>
         <QuoteDocument q={q} company={company} t={t} locale={locale} />

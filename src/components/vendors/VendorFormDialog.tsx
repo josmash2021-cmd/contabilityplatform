@@ -6,9 +6,11 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { vendorsCopy } from "@/i18n/copy/vendors";
 import { errorText, type VendorItem } from "./shared";
+import { BTN, FIELD, LABEL } from "./ui";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -52,14 +54,15 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
-      <DialogContent className="max-h-[100dvh] overflow-y-auto bg-white sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base font-semibold text-black">{vendor ? t.titleEdit : t.titleNew}</DialogTitle>
+      <DialogContent className="max-h-[100dvh] grid-cols-1 content-start overflow-y-auto bg-white sm:max-w-md sm:rounded-2xl">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{vendor ? t.titleEdit : t.titleNew}</DialogTitle>
         </DialogHeader>
         <form onSubmit={submit} noValidate className="space-y-4">
           <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-name`} className="text-xs text-neutral-600">{t.name}</Label>
+            <Label htmlFor={`${uid}-name`} className={LABEL}>{t.name}</Label>
             <Input
+              className={FIELD}
               id={`${uid}-name`} value={name} maxLength={120} autoComplete="organization" placeholder={t.namePlaceholder}
               onChange={(e) => setName(e.target.value)} {...invalid("name")}
             />
@@ -67,12 +70,13 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
           </div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`${uid}-phone`} className="text-xs text-neutral-600">{t.phone}</Label>
-              <Input id={`${uid}-phone`} type="tel" value={phone} maxLength={40} autoComplete="tel" onChange={(e) => setPhone(e.target.value)} />
+              <Label htmlFor={`${uid}-phone`} className={LABEL}>{t.phone}</Label>
+              <Input className={FIELD} id={`${uid}-phone`} type="tel" value={phone} maxLength={40} autoComplete="tel" onChange={(e) => setPhone(e.target.value)} />
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={`${uid}-email`} className="text-xs text-neutral-600">{t.email}</Label>
+              <Label htmlFor={`${uid}-email`} className={LABEL}>{t.email}</Label>
               <Input
+                className={FIELD}
                 id={`${uid}-email`} type="email" value={email} maxLength={320} autoComplete="email"
                 onChange={(e) => setEmail(e.target.value)} {...invalid("email")}
               />
@@ -80,12 +84,12 @@ export function VendorFormDialog({ vendor, onClose }: Props) {
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${uid}-notes`} className="text-xs text-neutral-600">{t.notes}</Label>
-            <Textarea id={`${uid}-notes`} value={notes} maxLength={1000} rows={2} placeholder={t.notesPlaceholder} onChange={(e) => setNotes(e.target.value)} />
+            <Label htmlFor={`${uid}-notes`} className={LABEL}>{t.notes}</Label>
+            <Textarea className={cn(FIELD, "min-h-[4.5rem] py-2")} id={`${uid}-notes`} value={notes} maxLength={1000} rows={2} placeholder={t.notesPlaceholder} onChange={(e) => setNotes(e.target.value)} />
           </div>
           <DialogFooter className="gap-2 pt-1">
-            <Button type="button" variant="outline" className="border-neutral-200" disabled={pending} onClick={onClose}>{t.cancel}</Button>
-            <Button type="submit" className="bg-black text-white hover:bg-neutral-800" disabled={pending}>{pending ? t.saving : t.save}</Button>
+            <Button type="button" variant="outline" className={BTN.secondary} disabled={pending} onClick={onClose}>{t.cancel}</Button>
+            <Button type="submit" className={BTN.primary} disabled={pending}>{pending ? t.saving : t.save}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

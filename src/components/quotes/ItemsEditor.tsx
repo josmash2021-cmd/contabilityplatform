@@ -1,12 +1,12 @@
 import { useId } from "react";
 import { Plus, Trash2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { QuotesCopy } from "@/i18n/copy/quotes";
 import { blankLine, money, newKey, parseMoney, priceInput, type DraftLine, type ServiceOption } from "./shared";
+import { BTN, FIELD } from "./ui";
 
 /** The lines of a quote or recurring invoice: from the services catalog or free text. */
 export function ItemsEditor({ lines, onChange, services, t }: {
@@ -24,7 +24,7 @@ export function ItemsEditor({ lines, onChange, services, t }: {
 
   return (
     <fieldset className="min-w-0 space-y-2">
-      <legend className="mb-1.5 text-xs font-medium text-neutral-600">{t.lines}</legend>
+      <legend className="mb-1.5 text-sm font-medium text-slate-700">{t.lines}</legend>
       {lines.length > 0 && (
         <ol className="space-y-2">
           {lines.map((l, i) => (
@@ -36,7 +36,7 @@ export function ItemsEditor({ lines, onChange, services, t }: {
       )}
       <div className="flex flex-col gap-2 sm:flex-row">
         <Select value="" onValueChange={addService} disabled={services.length === 0}>
-          <SelectTrigger aria-label={t.addService} className="h-10 w-full min-w-0 sm:flex-1">
+          <SelectTrigger aria-label={t.addService} className={cn(FIELD, "w-full min-w-0 data-[size=default]:h-11 sm:flex-1 sm:data-[size=default]:h-10")}>
             <SelectValue placeholder={services.length > 0 ? t.addService : t.noServices} />
           </SelectTrigger>
           <SelectContent>
@@ -47,9 +47,9 @@ export function ItemsEditor({ lines, onChange, services, t }: {
             ))}
           </SelectContent>
         </Select>
-        <Button type="button" variant="outline" className="h-10 shrink-0 border-neutral-200" onClick={() => onChange([...lines, blankLine()])}>
-          <Plus className="mr-1 h-4 w-4" aria-hidden="true" /> {t.addLine}
-        </Button>
+        <button type="button" className={cn(BTN.secondary, "shrink-0")} onClick={() => onChange([...lines, blankLine()])}>
+          <Plus className="h-4 w-4" aria-hidden="true" /> {t.addLine}
+        </button>
       </div>
     </fieldset>
   );
@@ -68,10 +68,10 @@ function LineRow({ line, n, t, onChange, onRemove }: {
   const lineCents = Number.isInteger(qty) && qty > 0 ? Math.round(price * 100) * qty : 0;
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-3">
+    <div className="rounded-xl border border-slate-200 bg-white p-3">
       <div className="flex items-end gap-2">
         <div className="min-w-0 flex-1 space-y-1">
-          <Label htmlFor={`${id}-desc`} className="text-[11px] text-neutral-500">
+          <Label htmlFor={`${id}-desc`} className="text-xs font-medium text-slate-600">
             <span className="sr-only">{t.line(n)}: </span>{t.lineDescription}
           </Label>
           <Input
@@ -80,19 +80,19 @@ function LineRow({ line, n, t, onChange, onRemove }: {
             maxLength={255}
             placeholder={t.linePlaceholder}
             onChange={(e) => onChange({ description: e.target.value })}
-            className="h-9 text-sm"
+            className={FIELD}
           />
         </div>
-        <Button
-          type="button" variant="ghost" size="icon" aria-label={t.removeLine(n)} onClick={onRemove}
-          className="h-9 w-9 shrink-0 text-neutral-500 hover:text-red-600"
+        <button
+          type="button" aria-label={t.removeLine(n)} onClick={onRemove}
+          className={cn(BTN.ghost, "w-11 shrink-0 px-0 hover:bg-red-50 hover:text-red-700 sm:w-10")}
         >
           <Trash2 className="h-4 w-4" aria-hidden="true" />
-        </Button>
+        </button>
       </div>
       <div className="mt-2 grid grid-cols-[minmax(0,4.5rem)_minmax(0,1fr)_minmax(0,1fr)] gap-2">
         <div className="min-w-0 space-y-1">
-          <Label htmlFor={`${id}-qty`} className="text-[11px] text-neutral-500">{t.quantity}</Label>
+          <Label htmlFor={`${id}-qty`} className="text-xs font-medium text-slate-600">{t.quantity}</Label>
           <Input
             id={`${id}-qty`}
             type="number"
@@ -101,13 +101,13 @@ function LineRow({ line, n, t, onChange, onRemove }: {
             step={1}
             value={line.quantity}
             onChange={(e) => onChange({ quantity: e.target.value })}
-            className="h-9 px-2 text-sm"
+            className={cn(FIELD, "px-2")}
           />
         </div>
         <div className="min-w-0 space-y-1">
-          <Label htmlFor={`${id}-price`} className="text-[11px] text-neutral-500">{t.unitPrice}</Label>
+          <Label htmlFor={`${id}-price`} className="text-xs font-medium text-slate-600">{t.unitPrice}</Label>
           <div className="relative">
-            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-neutral-400" aria-hidden="true">$</span>
+            <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-500" aria-hidden="true">$</span>
             <Input
               id={`${id}-price`}
               inputMode="decimal"
@@ -115,13 +115,13 @@ function LineRow({ line, n, t, onChange, onRemove }: {
               value={line.unitPrice}
               placeholder="0.00"
               onChange={(e) => onChange({ unitPrice: e.target.value })}
-              className="h-9 pl-6 text-sm"
+              className={cn(FIELD, "pl-6")}
             />
           </div>
         </div>
         <div className="min-w-0 space-y-1 text-right">
-          <p className="text-[11px] text-neutral-500">{t.amount}</p>
-          <p className="flex h-9 items-center justify-end truncate text-sm font-medium text-black">{money(lineCents)}</p>
+          <p className="text-xs font-medium text-slate-600">{t.amount}</p>
+          <p className="flex h-11 items-center justify-end truncate text-sm font-semibold tabular-nums text-slate-900 sm:h-10">{money(lineCents)}</p>
         </div>
       </div>
     </div>

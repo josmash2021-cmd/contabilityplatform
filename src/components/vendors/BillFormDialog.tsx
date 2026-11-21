@@ -7,9 +7,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { vendorsCopy } from "@/i18n/copy/vendors";
 import { MAX_BILL_AMOUNT, amountInput, errorText, parseAmount, type BillItem, type VendorItem } from "./shared";
+import { BTN, FIELD, LABEL } from "./ui";
 
 const NEW_VENDOR = "__new__";
 type Field = "vendor" | "description" | "amount" | "due";
@@ -88,34 +90,35 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
 
   return (
     <Dialog open onOpenChange={(open) => { if (!open && !pending) onClose(); }}>
-      <DialogContent className="max-h-[100dvh] overflow-y-auto bg-white sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-base font-semibold text-black">{bill ? t.titleEdit : t.titleNew}</DialogTitle>
-          <DialogDescription className="text-xs text-neutral-500">{t.text}</DialogDescription>
+      <DialogContent className="max-h-[100dvh] grid-cols-1 content-start overflow-y-auto bg-white sm:max-w-md sm:rounded-2xl">
+        <DialogHeader className="pr-8 text-left">
+          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{bill ? t.titleEdit : t.titleNew}</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">{t.text}</DialogDescription>
         </DialogHeader>
 
         <form onSubmit={submit} noValidate className="space-y-4">
           <div className="space-y-1.5">
             {vendor === NEW_VENDOR ? (
               <>
-                <Label htmlFor={ids.newVendor} className="text-xs text-neutral-600">{t.newVendorName}</Label>
+                <Label htmlFor={ids.newVendor} className={LABEL}>{t.newVendorName}</Label>
                 <Input
+                  className={FIELD}
                   id={ids.newVendor} value={newVendorName} maxLength={120} autoComplete="organization"
                   placeholder={t.newVendorPlaceholder} onChange={(e) => setNewVendorName(e.target.value)}
                   {...errorProps("vendor", ids.newVendor)}
                 />
                 {errorLine("vendor", ids.newVendor)}
                 {options.length > 0 && (
-                  <button type="button" className="text-xs text-neutral-600 underline underline-offset-2 hover:text-black" onClick={() => setVendor("")}>
+                  <button type="button" className="min-h-[32px] text-sm font-medium text-blue-700 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => setVendor("")}>
                     {t.pickExisting}
                   </button>
                 )}
               </>
             ) : (
               <>
-                <Label htmlFor={ids.vendor} className="text-xs text-neutral-600">{t.vendor}</Label>
+                <Label htmlFor={ids.vendor} className={LABEL}>{t.vendor}</Label>
                 <Select value={vendor} onValueChange={setVendor}>
-                  <SelectTrigger id={ids.vendor} className="w-full" {...errorProps("vendor", ids.vendor)}>
+                  <SelectTrigger id={ids.vendor} className={cn(FIELD, "w-full data-[size=default]:h-11 sm:data-[size=default]:h-10")} {...errorProps("vendor", ids.vendor)}>
                     <SelectValue placeholder={t.vendorPlaceholder} />
                   </SelectTrigger>
                   <SelectContent className="bg-white" position="popper">
@@ -130,8 +133,9 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={ids.description} className="text-xs text-neutral-600">{t.description}</Label>
+            <Label htmlFor={ids.description} className={LABEL}>{t.description}</Label>
             <Input
+              className={FIELD}
               id={ids.description} value={description} maxLength={255} placeholder={t.descriptionPlaceholder}
               onChange={(e) => setDescription(e.target.value)} {...errorProps("description", ids.description)}
             />
@@ -140,31 +144,31 @@ export function BillFormDialog({ bill, vendorId, vendors, today, onClose }: Prop
 
           <div className="grid grid-cols-2 gap-3">
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={ids.amount} className="text-xs text-neutral-600">{t.amount}</Label>
+              <Label htmlFor={ids.amount} className={LABEL}>{t.amount}</Label>
               <div className="relative">
-                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400" aria-hidden="true">$</span>
+                <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">$</span>
                 <Input
-                  id={ids.amount} value={amount} inputMode="decimal" autoComplete="off" placeholder="0.00" className="pl-6 tabular-nums"
+                  id={ids.amount} value={amount} inputMode="decimal" autoComplete="off" placeholder="0.00" className={cn(FIELD, "pl-7 tabular-nums")}
                   onChange={(e) => setAmount(e.target.value)} {...errorProps("amount", ids.amount)}
                 />
               </div>
               {errorLine("amount", ids.amount)}
             </div>
             <div className="min-w-0 space-y-1.5">
-              <Label htmlFor={ids.due} className="text-xs text-neutral-600">{t.due}</Label>
-              <Input id={ids.due} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} {...errorProps("due", ids.due)} />
+              <Label htmlFor={ids.due} className={LABEL}>{t.due}</Label>
+              <Input className={FIELD} id={ids.due} type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} {...errorProps("due", ids.due)} />
               {errorLine("due", ids.due)}
             </div>
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor={ids.notes} className="text-xs text-neutral-600">{t.notes}</Label>
-            <Textarea id={ids.notes} value={notes} maxLength={1000} rows={2} placeholder={t.notesPlaceholder} onChange={(e) => setNotes(e.target.value)} />
+            <Label htmlFor={ids.notes} className={LABEL}>{t.notes}</Label>
+            <Textarea className={cn(FIELD, "min-h-[4.5rem] py-2")} id={ids.notes} value={notes} maxLength={1000} rows={2} placeholder={t.notesPlaceholder} onChange={(e) => setNotes(e.target.value)} />
           </div>
 
           <DialogFooter className="gap-2 pt-1">
-            <Button type="button" variant="outline" className="border-neutral-200" disabled={pending} onClick={onClose}>{t.cancel}</Button>
-            <Button type="submit" className="bg-black text-white hover:bg-neutral-800" disabled={pending}>{pending ? t.saving : t.save}</Button>
+            <Button type="button" variant="outline" className={BTN.secondary} disabled={pending} onClick={onClose}>{t.cancel}</Button>
+            <Button type="submit" className={BTN.primary} disabled={pending}>{pending ? t.saving : t.save}</Button>
           </DialogFooter>
         </form>
       </DialogContent>

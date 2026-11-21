@@ -1,22 +1,23 @@
 // "Para tu contador" (business Pro and Negocio): the period's books in one page, as
 // Excel (built in the browser) and as a printable PDF. Data: accountant.period
 // (api/accountant-router.ts); rules and workbook shape: api/lib/accountant.ts.
+// Team: the accountant role reads it like the owner (it's all queries).
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { keepPreviousData } from "@tanstack/react-query";
 import { toast } from "sonner";
 import {
-  AlertTriangle, DollarSign, FileSpreadsheet, Info, Landmark, Loader2, Lock, Printer, Receipt, TrendingDown, type LucideIcon,
+  AlertCircle, ArrowDownLeft, FileSpreadsheet, Info, Landmark, Loader2, Lock, Printer, TrendingDown, TrendingUp, type LucideIcon,
 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { cn, formatCurrency } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
+import { cn } from "@/lib/utils";
+import { Skeleton } from "@/components/ui/skeleton";
+import { AnimatedPage } from "@/components/AnimatedPage";
 import { PeriodPicker } from "@/components/accountant/PeriodPicker";
 import { IncomeStatementCard } from "@/components/accountant/IncomeStatementCard";
 import { DetailSections } from "@/components/accountant/DetailSections";
 import { AccountantPrint } from "@/components/accountant/AccountantPrint";
+import { BTN, money } from "@/components/accountant/ui";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { accountantCopy } from "@/i18n/copy/accountant";
@@ -26,24 +27,23 @@ import {
 } from "../../api/lib/accountant";
 import "@/styles/print.css";
 
-const CARD = "border-neutral-200 rounded-xl shadow-none";
-
 /** FORBIDDEN means the plan lacks the feature: show the lock right away instead of retrying. */
 const retryUnlessForbidden = (failureCount: number, error: { data?: { code?: string } | null }) =>
   error.data?.code !== "FORBIDDEN" && failureCount < 1;
 
-function StatTile({ label, value, detail, icon: Icon, color }: { label: string; value: string; detail?: string; icon: LucideIcon; color: string }) {
+type Tone = "good" | "bad" | "neutral";
+
+/** One number of the period: what it is, the amount (signed when it can go below zero), and a line of context. */
+function Kpi({ label, value, sub, icon: Icon, tone, iconTone }: { label: string; value: string; sub?: string; icon: LucideIcon; tone: Tone; iconTone: string }) {
   return (
-    <Card className={cn(CARD, "h-full")}>
-      <CardContent className="flex h-full items-center gap-2.5 p-3">
-        <div className={cn("shrink-0 rounded-lg p-2", color)}><Icon className="h-4 w-4" aria-hidden="true" /></div>
-        <div className="min-w-0 flex-1">
-          <p className="truncate text-[11px] text-neutral-400">{label}</p>
-          <p className="truncate text-base font-semibold tabular-nums text-black">{value}</p>
-          {detail && <p className="truncate text-[10px] text-neutral-400">{detail}</p>}
-        </div>
-      </CardContent>
-    </Card>
+    <div className="h-full min-w-0 rounded-2xl border border-slate-200 bg-white p-4">
+      <p className="flex items-center gap-2 text-xs font-medium text-slate-500">
+        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-full", iconTone)} aria-hidden="true"><Icon className="h-3.5 w-3.5" /></span>
+        <span className="truncate">{label}</span>
+      </p>
+      <p className={cn("mt-2 truncate text-xl font-bold tabular-nums tracking-tight sm:text-2xl", tone === "good" ? "text-emerald-700" : tone === "bad" ? "text-red-700" : "text-slate-900")}>{value}</p>
+      {sub && <p className="mt-0.5 line-clamp-2 text-xs text-slate-500">{sub}</p>}
+    </div>
   );
 }
 
@@ -88,15 +88,13 @@ export default function Accountant() {
   const locked = lacksFeature || periodQuery.error?.data?.code === "FORBIDDEN";
   if (locked) {
     return (
-      <AnimatedPage className="p-4 lg:p-6">
-        <div className="mx-auto mt-6 max-w-md rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
-          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-neutral-100"><Lock className="h-5 w-5 text-neutral-500" aria-hidden="true" /></span>
-          <h1 className="mt-4 text-lg font-semibold text-black">{c.locked.title}</h1>
-          <p className="mt-2 text-sm text-neutral-600">{c.locked.text}</p>
-          <Button asChild className="mt-5 w-full bg-black text-white hover:bg-neutral-800">
-            <Link to="/settings">{c.locked.cta}</Link>
-          </Button>
-        </div>
+      <AnimatedPage className="p-4 lg:p-8">
+        <section className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center sm:p-8">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Lock className="h-6 w-6" aria-hidden="true" /></span>
+          <h1 className="mt-4 text-xl font-bold tracking-tight text-slate-900">{c.locked.title}</h1>
+          <p className="mt-2 text-sm text-slate-600">{c.locked.text}</p>
+          <Link to="/settings" className={cn(BTN.primary, "mt-6 w-full")}>{c.locked.cta}</Link>
+        </section>
       </AnimatedPage>
     );
   }
@@ -129,101 +127,93 @@ export default function Accountant() {
   let body: ReactNode = null;
   if (data) {
     const s = data.incomeStatement;
+    const bank = data.bank;
     body = (
       <div className={cn("space-y-5 transition-opacity", stale && "opacity-60")} aria-busy={periodQuery.isFetching}>
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-          {[
-            { label: c.stats.income, value: formatCurrency(s.income), icon: Receipt, color: "bg-green-50 text-green-600" },
-            { label: c.stats.expenses, value: formatCurrency(s.totalExpenses), icon: TrendingDown, color: "bg-red-50 text-red-500" },
-            {
-              label: c.stats.profit,
-              value: formatCurrency(s.profit),
-              detail: s.margin !== null ? c.stats.margin(formatPercent(s.margin, locale)) : undefined,
-              icon: DollarSign,
-              color: s.profit >= 0 ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500",
-            },
-            { label: c.stats.bank, value: formatCurrency(data.bank.net), icon: Landmark, color: "bg-neutral-100 text-neutral-600" },
-          ].map((tile, i) => (
-            <AnimatedCard key={tile.label} delay={i * 60}>
-              <StatTile {...tile} />
-            </AnimatedCard>
-          ))}
-        </div>
-        <IncomeStatementCard statement={s} bank={data.bank} periodLabel={periodLabel} />
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={c.statement.title}>
+          <Kpi label={c.stats.income} value={money(s.income)} sub={c.ui.salesCount(s.salesCount)} icon={ArrowDownLeft} tone="neutral" iconTone="bg-emerald-50 text-emerald-600" />
+          <Kpi label={c.stats.expenses} value={money(s.totalExpenses)} sub={c.ui.expenseCount(s.expensesCount)} icon={TrendingDown} tone="neutral" iconTone="bg-red-50 text-red-600" />
+          <Kpi
+            label={s.profit >= 0 ? c.stats.profit : c.ui.loss}
+            value={money(s.profit)}
+            sub={s.margin !== null ? c.stats.margin(formatPercent(s.margin, locale)) : c.ui.noMargin}
+            icon={s.profit >= 0 ? TrendingUp : TrendingDown}
+            tone={s.profit >= 0 ? "good" : "bad"}
+            iconTone={s.profit >= 0 ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600"}
+          />
+          <Kpi
+            label={c.stats.bank}
+            value={bank.net > 0 ? `+${money(bank.net)}` : money(bank.net)}
+            sub={c.ui.bankSub(money(bank.moneyIn), money(bank.moneyOut))}
+            icon={Landmark}
+            tone="neutral"
+            iconTone="bg-blue-50 text-blue-600"
+          />
+        </section>
+        <IncomeStatementCard statement={s} bank={bank} periodLabel={periodLabel} />
         <DetailSections data={data} />
         <AccountantPrint data={data} company={company} periodLabel={periodLabel} dataAsOf={dataAsOf} />
       </div>
     );
   } else if (periodQuery.error) {
     body = (
-      <Card className={CARD}>
-        <CardContent className="py-10 text-center">
-          <AlertTriangle className="mx-auto mb-3 h-10 w-10 text-red-400" aria-hidden="true" />
-          <p className="text-sm font-medium text-black">{c.error}</p>
-          <Button variant="outline" className="mt-4 rounded-xl text-xs" onClick={() => void periodQuery.refetch()}>{c.retry}</Button>
-        </CardContent>
-      </Card>
+      <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+        <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden="true" />
+        <p className="mt-2 text-sm font-medium text-slate-900" role="alert">{c.error}</p>
+        <button type="button" className={cn(BTN.secondary, "mt-3")} onClick={() => void periodQuery.refetch()}>{c.retry}</button>
+      </section>
     );
   } else if (range) {
     body = (
-      <Card className={CARD}>
-        <CardContent className="flex items-center justify-center gap-2 py-12 text-sm text-neutral-500" role="status">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-          {c.loading}
-        </CardContent>
-      </Card>
+      <div className="space-y-5" role="status" aria-label={c.loading}>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+        </div>
+        <div className="grid gap-4 lg:grid-cols-3"><Skeleton className="h-72 rounded-2xl lg:col-span-2" /><Skeleton className="h-48 rounded-2xl" /></div>
+      </div>
     );
   }
 
   return (
-    <AnimatedPage className="mx-auto max-w-7xl space-y-5 p-4 lg:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-semibold text-black">{c.title}</h1>
-          <p className="mt-1 text-sm text-neutral-500">{c.subtitle}</p>
-        </div>
-        <div className="flex flex-col gap-2 sm:flex-row sm:shrink-0">
-          <Button
-            type="button"
-            onClick={() => void downloadExcel()}
-            disabled={!canExport || exporting}
-            className="h-10 rounded-xl bg-black text-white hover:bg-neutral-800"
-          >
-            {exporting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />}
-            {exporting ? c.excelBusy : c.excel}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => window.print()}
-            disabled={!canExport}
-            className="h-10 rounded-xl border-neutral-200"
-          >
-            <Printer className="h-4 w-4" aria-hidden="true" />
-            {c.pdf}
-          </Button>
-        </div>
-      </div>
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{c.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{c.subtitle}</p>
+          </div>
+          <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto">
+            <button type="button" onClick={() => window.print()} disabled={!canExport} className={BTN.secondary}>
+              <Printer className="h-4 w-4" aria-hidden="true" />
+              {c.pdf}
+            </button>
+            <button type="button" onClick={() => void downloadExcel()} disabled={!canExport || exporting} className={BTN.primary}>
+              {exporting ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <FileSpreadsheet className="h-4 w-4" aria-hidden="true" />}
+              {exporting ? c.excelBusy : c.excel}
+            </button>
+          </div>
+        </header>
 
-      <div className="space-y-2">
-        <PeriodPicker preset={preset} onPreset={pickPreset} custom={custom} onCustom={setCustom} problem={problem} />
-        {pickedLabel && (
-          <p className="text-xs text-neutral-500">
-            <span className="font-medium text-black">{pickedLabel}</span>
-            {dataAsOf && !stale && <span> · {c.dataAsOf(dataAsOf)}</span>}
-          </p>
-        )}
-      </div>
+        <section className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-label={c.periodLabel}>
+          <PeriodPicker preset={preset} onPreset={pickPreset} custom={custom} onCustom={setCustom} problem={problem} />
+          {pickedLabel && (
+            <p className="text-sm text-slate-500">
+              <span className="font-semibold text-slate-900">{pickedLabel}</span>
+              {dataAsOf && !stale && <span> · {c.dataAsOf(dataAsOf)}</span>}
+            </p>
+          )}
+        </section>
 
-      <div className="flex gap-3 rounded-xl border border-neutral-200 bg-neutral-50 p-4">
-        <Info className="mt-0.5 h-4 w-4 shrink-0 text-neutral-500" aria-hidden="true" />
-        <div className="space-y-1 text-sm text-neutral-600">
-          <p>{c.share}</p>
-          <p className="text-xs text-neutral-400">{c.pdfHint}</p>
+        <div className="flex gap-3 rounded-xl bg-blue-50 px-4 py-3 text-sm text-blue-900">
+          <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />
+          <div className="space-y-1">
+            <p>{c.share}</p>
+            <p className="text-xs text-blue-800">{c.pdfHint}</p>
+          </div>
         </div>
-      </div>
 
-      {body}
+        {body}
+      </div>
     </AnimatedPage>
   );
 }

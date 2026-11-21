@@ -144,6 +144,17 @@ const es = {
       bankNet: "Neto",
     },
   },
+  // 2.0 screen
+  ui: {
+    loss: "Pérdida",
+    lossNet: "Pérdida neta",
+    salesCount: (n: number) => (n === 1 ? "1 venta cobrada" : `${n} ventas cobradas`),
+    expenseCount: (n: number) => (n === 1 ? "1 gasto" : `${n} gastos`),
+    bankSub: (moneyIn: string, moneyOut: string) => `Entró ${moneyIn} · salió ${moneyOut}`,
+    noMargin: "Sin ventas en el periodo",
+    /** Expense category "vendors": paid bills (api/lib/vendors.ts). */
+    vendorsCategory: "Pagos a proveedores",
+  },
 };
 
 export type AccountantCopy = typeof es;
@@ -179,8 +190,8 @@ const en: AccountantCopy = {
   error: "We couldn't load the period's data.",
   retry: "Try again",
   locked: {
-    title: "The accountant view is in Pro and Negocio",
-    text: "With Pro or Negocio you download the period's summary, sales, expenses and bank as Excel and PDF, ready for your accountant.",
+    title: "The accountant view is in Pro and Business",
+    text: "With Pro or Business you download the period's summary, sales, expenses and bank as Excel and PDF, ready for your accountant.",
     cta: "Change plan",
   },
   stats: {
@@ -286,6 +297,15 @@ const en: AccountantCopy = {
       bankOut: "Money out",
       bankNet: "Net",
     },
+  },
+  ui: {
+    loss: "Loss",
+    lossNet: "Net loss",
+    salesCount: (n) => (n === 1 ? "1 paid sale" : `${n} paid sales`),
+    expenseCount: (n) => (n === 1 ? "1 expense" : `${n} expenses`),
+    bankSub: (moneyIn, moneyOut) => `In ${moneyIn} · out ${moneyOut}`,
+    noMargin: "No sales in this period",
+    vendorsCategory: "Vendor payments",
   },
 };
 

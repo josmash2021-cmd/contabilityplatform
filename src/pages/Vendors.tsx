@@ -1,14 +1,13 @@
 // Proveedores y facturas por pagar (business Pro and Negocio): what you owe, what's late,
 // what's due this week. Paying a bill records the expense (server: api/vendors-router.ts).
+// Team (api/lib/team.ts): staff never reach this page (AppLayout); the accountant only reads.
 import { useState, type ReactNode } from "react";
 import { useNavigate } from "react-router";
 import { toast } from "sonner";
 import { keepPreviousData } from "@tanstack/react-query";
-import { AlertTriangle, CalendarClock, ChevronRight, Lock, Plus, Receipt, Truck, Wallet, type LucideIcon } from "lucide-react";
+import { AlertCircle, AlertTriangle, CalendarClock, ChevronRight, Info, Lock, Plus, Receipt, Truck, Wallet, type LucideIcon } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { AnimatedPage } from "@/components/AnimatedPage";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -21,6 +20,7 @@ import { PayBillDialog } from "@/components/vendors/PayBillDialog";
 import { VendorDetailDialog } from "@/components/vendors/VendorDetailDialog";
 import { VendorFormDialog } from "@/components/vendors/VendorFormDialog";
 import { errorText, localToday, type BillItem, type VendorItem } from "@/components/vendors/shared";
+import { BTN, TABS } from "@/components/vendors/ui";
 
 type Tab = "unpaid" | "paid" | "vendors";
 type UnpaidFilter = "unpaid" | "overdue" | "week";
@@ -30,12 +30,13 @@ const PAID_PAGE = 50;
 /** A fresh key each time the bill form opens, so it starts from that bill's values. */
 let formSeq = 0;
 const nextFormKey = () => ++formSeq;
-const TONE: Record<Tone, { ring: string; icon: string; sub: string }> = {
-  neutral: { ring: "border-neutral-200", icon: "bg-neutral-100 text-neutral-600", sub: "text-neutral-500" },
-  red: { ring: "border-red-200", icon: "bg-red-50 text-red-700", sub: "text-red-700" },
-  amber: { ring: "border-amber-200", icon: "bg-amber-50 text-amber-800", sub: "text-amber-800" },
+const TONE: Record<Tone, { border: string; icon: string; amount: string; sub: string }> = {
+  neutral: { border: "border-slate-200", icon: "bg-blue-50 text-blue-600", amount: "text-slate-900", sub: "text-slate-500" },
+  red: { border: "border-red-200", icon: "bg-red-50 text-red-600", amount: "text-red-700", sub: "font-medium text-red-700" },
+  amber: { border: "border-amber-200", icon: "bg-amber-50 text-amber-600", amount: "text-slate-900", sub: "font-medium text-amber-800" },
 };
 
+/** A total that also filters the list below (pressed = showing it). */
 function SummaryCard({ label, amount, sub, icon: Icon, tone, active, loading, className, onClick }: {
   label: string; amount: number; sub: string; icon: LucideIcon; tone: Tone; active: boolean; loading: boolean; className?: string; onClick: () => void;
 }) {
@@ -44,20 +45,20 @@ function SummaryCard({ label, amount, sub, icon: Icon, tone, active, loading, cl
     <button
       type="button" aria-pressed={active} onClick={onClick}
       className={cn(
-        "min-w-0 rounded-xl border bg-white p-3 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 sm:p-4",
-        s.ring, active && "ring-2 ring-black/80", className,
+        "min-w-0 rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+        s.border, active && "ring-2 ring-blue-600 ring-offset-1", className,
       )}
     >
       <span className="flex items-center gap-2">
-        <span className={cn("grid h-7 w-7 shrink-0 place-items-center rounded-lg", s.icon)} aria-hidden="true"><Icon className="h-3.5 w-3.5" /></span>
-        <span className="truncate text-xs font-medium text-neutral-600">{label}</span>
+        <span className={cn("grid h-8 w-8 shrink-0 place-items-center rounded-full", s.icon)} aria-hidden="true"><Icon className="h-4 w-4" /></span>
+        <span className="truncate text-xs font-medium text-slate-500">{label}</span>
       </span>
       {loading ? (
-        <Skeleton className="mt-2 h-6 w-24" />
+        <Skeleton className="mt-2 h-8 w-28" />
       ) : (
         <>
-          <span className="mt-2 block truncate text-lg font-semibold tabular-nums text-black sm:text-xl">{formatCurrency(amount)}</span>
-          <span className={cn("block truncate text-[11px]", s.sub)}>{sub}</span>
+          <span className={cn("mt-2 block truncate text-xl font-bold tabular-nums tracking-tight sm:text-2xl", s.amount)}>{formatCurrency(amount)}</span>
+          <span className={cn("mt-0.5 block truncate text-xs", s.sub)}>{sub}</span>
         </>
       )}
     </button>
@@ -68,7 +69,7 @@ function ListSkeleton() {
   const c = useCopy(vendorsCopy);
   return (
     <div className="space-y-2" role="status" aria-label={c.loading}>
-      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />)}
+      {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
     </div>
   );
 }
@@ -76,23 +77,22 @@ function ListSkeleton() {
 function ErrorCard({ onRetry }: { onRetry: () => void }) {
   const c = useCopy(vendorsCopy);
   return (
-    <Card className="rounded-xl border-neutral-200 shadow-none">
-      <CardContent className="flex flex-col items-center gap-3 p-6 text-center">
-        <p className="text-sm text-neutral-600" role="alert">{c.loadError}</p>
-        <Button variant="outline" size="sm" onClick={onRetry}>{c.retry}</Button>
-      </CardContent>
-    </Card>
+    <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
+      <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden="true" />
+      <p className="mt-2 text-sm font-medium text-slate-900" role="alert">{c.loadError}</p>
+      <button type="button" className={cn(BTN.secondary, "mt-3")} onClick={onRetry}>{c.retry}</button>
+    </section>
   );
 }
 
 function EmptyCard({ icon: Icon, title, text, action }: { icon: LucideIcon; title?: string; text: string; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-neutral-200 px-4 py-8 text-center">
-      <span className="grid h-10 w-10 place-items-center rounded-full bg-neutral-100" aria-hidden="true"><Icon className="h-5 w-5 text-neutral-500" /></span>
-      {title && <p className="text-sm font-semibold text-black">{title}</p>}
-      <p className="max-w-sm text-xs text-neutral-500">{text}</p>
+    <section className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center">
+      <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true"><Icon className="h-7 w-7" /></span>
+      {title && <p className="mt-4 text-lg font-bold tracking-tight text-slate-900">{title}</p>}
+      <p className={cn("mx-auto max-w-sm text-sm text-slate-500", title ? "mt-1.5" : "mt-4")}>{text}</p>
       {action}
-    </div>
+    </section>
   );
 }
 
@@ -116,6 +116,9 @@ export default function Vendors() {
 
   const plan = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
   const planLacks = plan.data ? !plan.data.features.includes("vendors") : false;
+  // The accountant reads the books but changes nothing (the server refuses it too).
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const canChange = membership?.role !== "accountant";
   const opts = { enabled: !planLacks, staleTime: 60_000, retry: (n: number, err: { data?: { code?: string } | null }) => err.data?.code !== "FORBIDDEN" && n < 1 };
 
   const summary = trpc.vendors.bills.summary.useQuery({ today }, opts);
@@ -152,15 +155,15 @@ export default function Vendors() {
     // The plan includes it but the server still says no: a team member whose role doesn't cover it.
     const teamBlocked = !!plan.data && !planLacks;
     return (
-      <AnimatedPage className="p-4 lg:p-6">
-        <div className="mx-auto mt-6 max-w-md rounded-2xl border border-neutral-200 bg-white p-6 text-center shadow-sm">
-          <span className="mx-auto grid h-12 w-12 place-items-center rounded-full bg-neutral-100"><Lock className="h-5 w-5 text-neutral-500" aria-hidden="true" /></span>
-          <h1 className="mt-4 text-lg font-semibold text-black">{teamBlocked ? c.noAccess.title : c.locked.title}</h1>
-          <p className="mt-2 text-sm text-neutral-600">{teamBlocked ? c.noAccess.text : c.locked.text}</p>
+      <AnimatedPage className="p-4 lg:p-8">
+        <section className="mx-auto mt-6 max-w-md rounded-2xl border border-slate-200 bg-white p-6 text-center sm:p-8">
+          <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Lock className="h-6 w-6" aria-hidden="true" /></span>
+          <h1 className="mt-4 text-xl font-bold tracking-tight text-slate-900">{teamBlocked ? c.noAccess.title : c.locked.title}</h1>
+          <p className="mt-2 text-sm text-slate-600">{teamBlocked ? c.noAccess.text : c.locked.text}</p>
           {!teamBlocked && (
-            <Button className="mt-5 w-full bg-black text-white hover:bg-neutral-800" onClick={() => navigate("/settings")}>{c.locked.cta}</Button>
+            <button type="button" className={cn(BTN.primary, "mt-6 w-full")} onClick={() => navigate("/settings")}>{c.locked.cta}</button>
           )}
-        </div>
+        </section>
       </AnimatedPage>
     );
   }
@@ -181,76 +184,91 @@ export default function Vendors() {
 
   const filterLabels: Record<UnpaidFilter, string> = { unpaid: c.filters.all, overdue: c.filters.overdue, week: c.filters.week };
   const emptyUnpaidText = filter === "overdue" ? c.empty.overdue : filter === "week" ? c.empty.week : c.empty.unpaidText;
+  const overdueCount = s?.overdueCount ?? 0;
+  const weekCount = s?.dueSoonCount ?? 0;
 
   return (
-    <AnimatedPage className="p-4 lg:p-6">
-      <div className="mx-auto w-full max-w-4xl space-y-5">
-        {/* Header */}
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold text-black">{c.title}</h1>
-            <p className="text-xs text-neutral-500">{c.subtitle}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{c.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{c.subtitle}</p>
           </div>
-          <Button className="w-full bg-black text-white hover:bg-neutral-800 sm:w-auto" onClick={() => openNewBill()}>
-            <Plus className="h-4 w-4" aria-hidden="true" />{c.newBill}
-          </Button>
-        </div>
+          {canChange && (
+            <button type="button" className={cn(BTN.primary, "w-full sm:w-auto")} onClick={() => openNewBill()}>
+              <Plus className="h-4 w-4" aria-hidden="true" />{c.newBill}
+            </button>
+          )}
+        </header>
 
-        {/* Summary */}
-        <section aria-label={c.summary.label} className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-          <SummaryCard
-            className="col-span-2 sm:col-span-1" label={c.summary.unpaid} icon={Wallet} tone="neutral" loading={summary.isLoading}
-            amount={s?.unpaidTotal ?? 0} sub={c.summary.unpaidSub(s?.unpaidCount ?? 0)}
-            active={tab === "unpaid" && filter === "unpaid"} onClick={() => showUnpaid("unpaid")}
-          />
-          <SummaryCard
-            label={c.summary.overdue} icon={AlertTriangle} tone={(s?.overdueCount ?? 0) > 0 ? "red" : "neutral"} loading={summary.isLoading}
-            amount={s?.overdueTotal ?? 0} sub={c.summary.overdueSub(s?.overdueCount ?? 0)}
-            active={tab === "unpaid" && filter === "overdue"} onClick={() => showUnpaid("overdue")}
-          />
-          <SummaryCard
-            label={c.summary.week} icon={CalendarClock} tone={(s?.dueSoonCount ?? 0) > 0 ? "amber" : "neutral"} loading={summary.isLoading}
-            amount={s?.dueSoonTotal ?? 0} sub={c.summary.weekSub(s?.dueSoonCount ?? 0)}
-            active={tab === "unpaid" && filter === "week"} onClick={() => showUnpaid("week")}
-          />
-        </section>
+        {!canChange && (
+          <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">
+            <Info className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden="true" />{c.ui.readOnly}
+          </p>
+        )}
+
+        {summary.isError && !summary.data ? (
+          <ErrorCard onRetry={() => void summary.refetch()} />
+        ) : (
+          <section aria-label={c.summary.label} className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+            <SummaryCard
+              className="col-span-2 sm:col-span-1" label={c.summary.unpaid} icon={Wallet} tone="neutral" loading={summary.isLoading}
+              amount={s?.unpaidTotal ?? 0} sub={c.summary.unpaidSub(s?.unpaidCount ?? 0)}
+              active={tab === "unpaid" && filter === "unpaid"} onClick={() => showUnpaid("unpaid")}
+            />
+            <SummaryCard
+              label={c.summary.overdue} icon={AlertTriangle} tone={overdueCount > 0 ? "red" : "neutral"} loading={summary.isLoading}
+              amount={s?.overdueTotal ?? 0} sub={c.summary.overdueSub(overdueCount)}
+              active={tab === "unpaid" && filter === "overdue"} onClick={() => showUnpaid("overdue")}
+            />
+            <SummaryCard
+              label={c.summary.week} icon={CalendarClock} tone={weekCount > 0 ? "amber" : "neutral"} loading={summary.isLoading}
+              amount={s?.dueSoonTotal ?? 0} sub={c.summary.weekSub(weekCount)}
+              active={tab === "unpaid" && filter === "week"} onClick={() => showUnpaid("week")}
+            />
+          </section>
+        )}
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as Tab)} className="gap-4">
-          <TabsList className="w-full sm:w-auto" aria-label={c.tabs.label}>
-            <TabsTrigger value="unpaid" className="px-2 text-xs sm:px-3 sm:text-sm">
+          <TabsList className={TABS.list} aria-label={c.tabs.label}>
+            <TabsTrigger value="unpaid" className={TABS.trigger}>
               {c.tabs.unpaid}
               {s && s.unpaidCount > 0 && (
-                <span className="rounded-full bg-neutral-200 px-1.5 text-[10px] font-semibold tabular-nums text-neutral-700">{s.unpaidCount}</span>
+                <span className="rounded-full bg-slate-200 px-1.5 text-[11px] font-semibold tabular-nums text-slate-700">{s.unpaidCount}</span>
               )}
             </TabsTrigger>
-            <TabsTrigger value="paid" className="px-2 text-xs sm:px-3 sm:text-sm">{c.tabs.paid}</TabsTrigger>
-            <TabsTrigger value="vendors" className="px-2 text-xs sm:px-3 sm:text-sm">{c.tabs.vendors}</TabsTrigger>
+            <TabsTrigger value="paid" className={TABS.trigger}>{c.tabs.paid}</TabsTrigger>
+            <TabsTrigger value="vendors" className={TABS.trigger}>{c.tabs.vendors}</TabsTrigger>
           </TabsList>
 
           {/* Por pagar */}
           <TabsContent value="unpaid" className="space-y-3">
             <div className="flex flex-wrap gap-2" role="group" aria-label={c.filters.label}>
               {(["unpaid", "overdue", "week"] as const).map((f) => (
-                <Button
-                  key={f} size="sm" variant="outline" aria-pressed={filter === f} onClick={() => setFilter(f)}
-                  className={cn("h-8 rounded-full border-neutral-200 text-xs", filter === f && "border-black bg-black text-white hover:bg-neutral-800 hover:text-white")}
+                <button
+                  key={f} type="button" aria-pressed={filter === f} onClick={() => setFilter(f)}
+                  className={cn(
+                    "inline-flex h-11 items-center rounded-full border px-4 text-sm font-medium transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-9",
+                    filter === f ? "border-blue-600 bg-blue-600 text-white" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
+                  )}
                 >
                   {filterLabels[f]}
-                </Button>
+                </button>
               ))}
             </div>
             {unpaid.isLoading ? <ListSkeleton /> : unpaid.isError ? <ErrorCard onRetry={() => void unpaid.refetch()} /> : (unpaid.data?.items.length ?? 0) === 0 ? (
               <EmptyCard
                 icon={Receipt} title={filter === "unpaid" ? c.empty.unpaidTitle : undefined} text={emptyUnpaidText}
-                action={filter === "unpaid" && (
-                  <Button size="sm" className="mt-2 bg-black text-white hover:bg-neutral-800" onClick={() => openNewBill()}>
-                    <Plus className="h-3.5 w-3.5" aria-hidden="true" />{c.newBill}
-                  </Button>
+                action={filter === "unpaid" && canChange && (
+                  <button type="button" className={cn(BTN.primary, "mt-5")} onClick={() => openNewBill()}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />{c.newBill}
+                  </button>
                 )}
               />
             ) : (
-              <ul className={cn("space-y-2", unpaid.isPlaceholderData && "opacity-60")} aria-busy={unpaid.isFetching}>
-                {unpaid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} {...billHandlers} />)}
+              <ul className={cn("grid grid-cols-1 gap-3 lg:grid-cols-2", unpaid.isPlaceholderData && "opacity-60")} aria-busy={unpaid.isFetching}>
+                {unpaid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} canChange={canChange} {...billHandlers} />)}
               </ul>
             )}
           </TabsContent>
@@ -261,14 +279,14 @@ export default function Vendors() {
               <EmptyCard icon={Receipt} text={c.empty.paid} />
             ) : (
               <>
-                <ul className="space-y-2" aria-busy={paid.isFetching}>
-                  {paid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} {...billHandlers} />)}
+                <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2" aria-busy={paid.isFetching}>
+                  {paid.data?.items.map((b) => <BillCard key={b.id} bill={b} today={today} busy={busy} canChange={canChange} {...billHandlers} />)}
                 </ul>
                 {paid.data?.hasMore && (
                   <div className="flex justify-center">
-                    <Button variant="outline" size="sm" className="border-neutral-200" disabled={paid.isFetching} onClick={() => setPaidLimit((n) => Math.min(n + PAID_PAGE, 500))}>
+                    <button type="button" className={cn(BTN.secondary, "w-full sm:w-auto")} disabled={paid.isFetching} onClick={() => setPaidLimit((n) => Math.min(n + PAID_PAGE, 500))}>
                       {c.loadMore}
-                    </Button>
+                    </button>
                   </div>
                 )}
               </>
@@ -278,53 +296,27 @@ export default function Vendors() {
           {/* Proveedores */}
           <TabsContent value="vendors" className="space-y-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <Button size="sm" variant="outline" className="border-neutral-200" onClick={() => setVendorForm({})}>
-                <Plus className="h-3.5 w-3.5" aria-hidden="true" />{c.vendors.new}
-              </Button>
-              <Button size="sm" variant="ghost" className="text-xs text-neutral-600" aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
+              {canChange ? (
+                <button type="button" className={BTN.secondary} onClick={() => setVendorForm({})}>
+                  <Plus className="h-4 w-4" aria-hidden="true" />{c.vendors.new}
+                </button>
+              ) : <span />}
+              <button type="button" className={cn(BTN.ghost, "text-blue-700")} aria-pressed={showArchived} onClick={() => setShowArchived((v) => !v)}>
                 {showArchived ? c.vendors.hideArchived : c.vendors.showArchived}
-              </Button>
+              </button>
             </div>
             {vendorList.isLoading ? <ListSkeleton /> : vendorList.isError ? <ErrorCard onRetry={() => void vendorList.refetch()} /> : vendors.length === 0 ? (
               <EmptyCard
                 icon={Truck} title={c.empty.vendorsTitle} text={c.empty.vendorsText}
-                action={<Button size="sm" className="mt-2 bg-black text-white hover:bg-neutral-800" onClick={() => setVendorForm({})}><Plus className="h-3.5 w-3.5" aria-hidden="true" />{c.vendors.new}</Button>}
+                action={canChange && (
+                  <button type="button" className={cn(BTN.primary, "mt-5")} onClick={() => setVendorForm({})}>
+                    <Plus className="h-4 w-4" aria-hidden="true" />{c.vendors.new}
+                  </button>
+                )}
               />
             ) : (
-              <ul className="grid grid-cols-1 gap-2 md:grid-cols-2">
-                {vendors.map((v) => (
-                  <li key={v.id}>
-                    <button
-                      type="button" onClick={() => setDetailId(v.id)}
-                      className={cn(
-                        "flex w-full items-center gap-3 rounded-xl border bg-white p-3 text-left transition-colors hover:bg-neutral-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-neutral-400 sm:p-4",
-                        v.overdueCount > 0 ? "border-red-200" : "border-neutral-200",
-                      )}
-                    >
-                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-neutral-100 text-sm font-semibold text-neutral-600" aria-hidden="true">
-                        {v.name.charAt(0).toUpperCase()}
-                      </span>
-                      <span className="min-w-0 flex-1">
-                        <span className="flex items-center gap-2">
-                          <span className="truncate text-sm font-medium text-black">{v.name}</span>
-                          {v.archived && <span className="shrink-0 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500">{c.vendors.archivedBadge}</span>}
-                        </span>
-                        <span className="block truncate text-xs">
-                          {v.unpaidTotal > 0 ? (
-                            <span className="font-medium text-black">{c.vendors.owes(formatCurrency(v.unpaidTotal))}</span>
-                          ) : (
-                            <span className="text-neutral-500">{c.vendors.upToDate}</span>
-                          )}
-                          {v.overdueCount > 0 && <span className="font-medium text-red-700"> · {c.vendors.overdueCount(v.overdueCount)}</span>}
-                        </span>
-                        <span className="block truncate text-[11px] text-neutral-400">
-                          {v.lastBill ? c.vendors.lastBill(v.lastBill.description, formatCurrency(v.lastBill.amount)) : c.vendors.noBills}
-                        </span>
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-neutral-400" aria-hidden="true" />
-                    </button>
-                  </li>
-                ))}
+              <ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                {vendors.map((v) => <VendorRow key={v.id} v={v} onOpen={() => setDetailId(v.id)} />)}
               </ul>
             )}
           </TabsContent>
@@ -334,7 +326,7 @@ export default function Vendors() {
       {/* Dialogs */}
       {detailVendor && (
         <VendorDetailDialog
-          vendor={detailVendor} today={today} busy={busy}
+          vendor={detailVendor} today={today} busy={busy} canChange={canChange}
           onClose={() => setDetailId(null)}
           onNewBill={(id) => openNewBill(id)}
           onEdit={(v) => setVendorForm({ vendor: v })}
@@ -370,5 +362,51 @@ export default function Vendors() {
         />
       )}
     </AnimatedPage>
+  );
+}
+
+/** A vendor in the list: what you owe them (overdue in words too) and their last bill. */
+function VendorRow({ v, onOpen }: { v: VendorItem; onOpen: () => void }) {
+  const c = useCopy(vendorsCopy);
+  const overdue = v.overdueCount > 0;
+  return (
+    <li>
+      <button
+        type="button" onClick={onOpen}
+        className={cn(
+          "flex min-h-[64px] w-full items-center gap-3 rounded-2xl border bg-white p-4 text-left transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+          overdue ? "border-red-200" : "border-slate-200",
+        )}
+      >
+        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700" aria-hidden="true">
+          {v.name.charAt(0).toUpperCase()}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="flex items-center gap-2">
+            <span className="truncate font-semibold text-slate-900">{v.name}</span>
+            {v.archived && <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{c.vendors.archivedBadge}</span>}
+          </span>
+          <span className="block truncate text-xs text-slate-500">
+            {v.lastBill ? c.vendors.lastBill(v.lastBill.description, formatCurrency(v.lastBill.amount)) : c.vendors.noBills}
+          </span>
+          {overdue && (
+            <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-semibold text-red-700">
+              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{c.vendors.overdueCount(v.overdueCount)}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-right">
+          {v.unpaidTotal > 0 ? (
+            <>
+              <span className="block text-[11px] text-slate-500">{c.vendorDetail.owes}</span>
+              <span className={cn("block font-bold tabular-nums", overdue ? "text-red-700" : "text-slate-900")}>{formatCurrency(v.unpaidTotal)}</span>
+            </>
+          ) : (
+            <span className="text-xs font-medium text-emerald-700">{c.vendors.upToDate}</span>
+          )}
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" aria-hidden="true" />
+      </button>
+    </li>
   );
 }

@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useCopy } from "@/i18n/useI18n";
 import { accountantCopy } from "@/i18n/copy/accountant";
+import { FIELD, LABEL } from "./ui";
 import { PERIOD_PRESETS, type DateRange, type PeriodPreset, type RangeProblem } from "../../../api/lib/accountant";
 
 /** Period buttons (este mes, mes pasado, trimestre, año, rango) and, for "rango", two dates. */
@@ -30,8 +31,7 @@ export function PeriodPicker({
       <div
         role="group"
         aria-label={c.periodLabel}
-        className="flex w-full gap-1 overflow-x-auto rounded-xl bg-neutral-100 p-1 sm:w-fit [&::-webkit-scrollbar]:hidden"
-        style={{ scrollbarWidth: "none" }}
+        className="grid w-full grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 min-[480px]:flex min-[480px]:flex-wrap sm:w-fit"
       >
         {PERIOD_PRESETS.map((p) => (
           <button
@@ -40,8 +40,8 @@ export function PeriodPicker({
             aria-pressed={preset === p}
             onClick={() => onPreset(p)}
             className={cn(
-              "shrink-0 rounded-full px-4 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-black/30",
-              preset === p ? "bg-white text-black shadow-sm" : "text-neutral-500 hover:text-neutral-700",
+              "h-11 shrink-0 rounded-lg px-2 text-sm font-semibold min-[480px]:px-4 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:h-9",
+              preset === p ? "bg-white text-slate-900 shadow-sm" : "text-slate-600 hover:text-slate-900",
             )}
           >
             {c.presets[p]}
@@ -53,7 +53,7 @@ export function PeriodPicker({
         <div className="space-y-2">
           <div className="grid grid-cols-2 gap-3 sm:flex sm:items-end">
             <div className="min-w-0 space-y-1">
-              <Label htmlFor={fromId} className="text-xs text-neutral-500">{c.from}</Label>
+              <Label htmlFor={fromId} className={LABEL}>{c.from}</Label>
               <Input
                 id={fromId}
                 type="date"
@@ -62,11 +62,11 @@ export function PeriodPicker({
                 onChange={(e) => onCustom({ ...custom, startDate: e.target.value })}
                 aria-invalid={problem !== null}
                 aria-describedby={problem ? errorId : undefined}
-                className="h-10 rounded-xl border-neutral-200 text-sm sm:w-44"
+                className={cn(FIELD, "sm:w-44")}
               />
             </div>
             <div className="min-w-0 space-y-1">
-              <Label htmlFor={toId} className="text-xs text-neutral-500">{c.to}</Label>
+              <Label htmlFor={toId} className={LABEL}>{c.to}</Label>
               <Input
                 id={toId}
                 type="date"
@@ -75,12 +75,12 @@ export function PeriodPicker({
                 onChange={(e) => onCustom({ ...custom, endDate: e.target.value })}
                 aria-invalid={problem !== null}
                 aria-describedby={problem ? errorId : undefined}
-                className="h-10 rounded-xl border-neutral-200 text-sm sm:w-44"
+                className={cn(FIELD, "sm:w-44")}
               />
             </div>
           </div>
           {problem && (
-            <p id={errorId} role="alert" className="text-xs text-red-600">{c.rangeErrors[problem]}</p>
+            <p id={errorId} role="alert" className="text-sm text-red-700">{c.rangeErrors[problem]}</p>
           )}
         </div>
       )}

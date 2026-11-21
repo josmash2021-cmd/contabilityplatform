@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { quotesCopy, type QuotesCopy } from "@/i18n/copy/quotes";
 import { addDays, isValidIsoDate, localIsoDate } from "../../../api/lib/quotes";
@@ -16,6 +17,7 @@ import {
   blankLine, draftTotals, money, parseLines, parseMoney, priceInput, toDraftLines, useRefreshQuotes,
   type CustomerOption, type CustomerValue, type DraftLine, type QuoteDetail, type ServiceOption,
 } from "./shared";
+import { BTN, FIELD, LABEL } from "./ui";
 
 export type BuilderState = { mode: "create" } | { mode: "edit"; id: number };
 
@@ -37,22 +39,22 @@ export function QuoteBuilderDialog({ state, onClose, onSaved, services, customer
 
   return (
     <Dialog open={state !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden p-0 sm:max-h-[90vh] sm:max-w-2xl">
-        <DialogHeader className="border-b border-neutral-100 px-4 py-3 pr-12 text-left sm:px-6">
-          <DialogTitle className="text-base">{editId !== null ? t.form.editTitle(initial?.number ?? "") : t.form.createTitle}</DialogTitle>
-          <DialogDescription className="text-xs">{t.form.intro}</DialogDescription>
+      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
+        <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
+          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{editId !== null ? t.form.editTitle(initial?.number ?? "") : t.form.createTitle}</DialogTitle>
+          <DialogDescription className="text-sm text-slate-500">{t.form.intro}</DialogDescription>
         </DialogHeader>
         {state === null ? null : editId !== null && !initial ? (
           existing.isError ? (
             <div className="flex flex-col items-center gap-3 p-8 text-center">
-              <p className="text-sm text-neutral-600" role="alert">{existing.error.message || t.error}</p>
-              <Button variant="outline" size="sm" onClick={() => void existing.refetch()}>{t.retry}</Button>
+              <p className="text-sm text-slate-600" role="alert">{existing.error.message || t.error}</p>
+              <Button variant="outline" className={BTN.secondary} onClick={() => void existing.refetch()}>{t.retry}</Button>
             </div>
           ) : (
             <div className="space-y-3 p-6" role="status" aria-label={t.detail.loading}>
-              <Skeleton className="h-10 rounded-lg" />
-              <Skeleton className="h-28 rounded-lg" />
-              <Skeleton className="h-10 rounded-lg" />
+              <Skeleton className="h-10 rounded-xl" />
+              <Skeleton className="h-28 rounded-xl" />
+              <Skeleton className="h-10 rounded-xl" />
             </div>
           )
         ) : (
@@ -127,9 +129,9 @@ function QuoteForm({ initial, services, customers, t, onCancel, onSaved }: {
         <ItemsEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={t.form} />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-discount`} className="text-xs text-neutral-600">{t.form.discount}</Label>
+            <Label htmlFor={`${id}-discount`} className={LABEL}>{t.form.discount}</Label>
             <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-neutral-400" aria-hidden="true">$</span>
+              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">$</span>
               <Input
                 id={`${id}-discount`}
                 inputMode="decimal"
@@ -137,23 +139,23 @@ function QuoteForm({ initial, services, customers, t, onCancel, onSaved }: {
                 placeholder="0.00"
                 value={discount}
                 onChange={(e) => { setDiscount(e.target.value); setError(null); }}
-                className="h-10 pl-6 text-sm"
+                className={cn(FIELD, "pl-7")}
               />
             </div>
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor={`${id}-valid`} className="text-xs text-neutral-600">{t.form.validUntil}</Label>
+            <Label htmlFor={`${id}-valid`} className={LABEL}>{t.form.validUntil}</Label>
             <Input
               id={`${id}-valid`}
               type="date"
               value={validUntil}
               onChange={(e) => { setValidUntil(e.target.value); setError(null); }}
-              className="h-10 text-sm"
+              className={FIELD}
             />
           </div>
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor={`${id}-notes`} className="text-xs text-neutral-600">{t.form.notes}</Label>
+          <Label htmlFor={`${id}-notes`} className={LABEL}>{t.form.notes}</Label>
           <Textarea
             id={`${id}-notes`}
             value={notes}
@@ -161,25 +163,25 @@ function QuoteForm({ initial, services, customers, t, onCancel, onSaved }: {
             rows={3}
             placeholder={t.form.notesPlaceholder}
             onChange={(e) => setNotes(e.target.value)}
-            className="text-sm"
+            className={cn(FIELD, "min-h-[4.5rem] py-2")}
           />
         </div>
       </div>
 
-      <div className="space-y-3 border-t border-neutral-100 bg-white px-4 py-3 sm:px-6">
+      <div className="space-y-3 border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
         <dl className="space-y-0.5 text-sm">
           {totals.discountCents > 0 && (
             <>
-              <div className="flex justify-between text-neutral-600"><dt>{t.form.subtotal}</dt><dd>{money(totals.subtotalCents)}</dd></div>
-              <div className="flex justify-between text-neutral-600"><dt>{t.form.discountLine}</dt><dd>-{money(totals.discountCents)}</dd></div>
+              <div className="flex justify-between text-slate-600"><dt>{t.form.subtotal}</dt><dd>{money(totals.subtotalCents)}</dd></div>
+              <div className="flex justify-between text-slate-600"><dt>{t.form.discountLine}</dt><dd>−{money(totals.discountCents)}</dd></div>
             </>
           )}
-          <div className="flex justify-between text-base font-semibold text-black"><dt>{t.form.total}</dt><dd aria-live="polite">{money(totals.totalCents)}</dd></div>
+          <div className="flex justify-between text-lg font-bold tabular-nums text-slate-900"><dt>{t.form.total}</dt><dd aria-live="polite">{money(totals.totalCents)}</dd></div>
         </dl>
         {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onCancel} className="text-neutral-600">{t.form.cancel}</Button>
-          <Button type="submit" disabled={pending} className="bg-black text-white hover:bg-neutral-800">
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <Button type="button" variant="ghost" onClick={onCancel} className={BTN.ghost}>{t.form.cancel}</Button>
+          <Button type="submit" disabled={pending} className={BTN.primary}>
             {pending ? t.form.saving : t.form.save}
           </Button>
         </div>

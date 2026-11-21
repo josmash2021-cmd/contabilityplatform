@@ -1,18 +1,17 @@
 import { useState, type ReactNode } from "react";
 import { ArrowDownLeft, ArrowUpRight, Landmark, Receipt, Wallet, type LucideIcon } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { accountantCopy } from "@/i18n/copy/accountant";
+import { receiptsCopy } from "@/i18n/copy/receipts";
 import { formatDay } from "@/lib/accountantExport";
 import type { AccountantPeriod, BankRow, ExpenseRow, SaleRow } from "../../../api/lib/accountant";
+import { BTN, CARD, TABS } from "./ui";
+import { expenseCategoryLabel } from "./labels";
 
-const CARD = "border-neutral-200 rounded-xl shadow-none";
 /** Rows drawn at first and per "show more", so long periods stay quick. */
 const PAGE = 100;
 
@@ -35,25 +34,22 @@ function Section<R extends { id: number }>(props: {
   const remaining = props.rows.length - visible.length;
 
   return (
-    <Card className={CARD}>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-semibold text-black">{props.caption}</CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-3 p-4 pt-0 sm:p-5 sm:pt-0">
+    <section className={cn(CARD, "space-y-3")} aria-label={props.caption}>
+      <h2 className="font-semibold text-slate-900">{props.caption}</h2>
         {props.rows.length === 0 ? (
           <div className="py-8 text-center">
-            <props.empty.icon className="mx-auto mb-3 h-10 w-10 text-neutral-300" aria-hidden="true" />
-            <p className="text-sm text-neutral-400">{props.empty.text}</p>
+            <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600" aria-hidden="true"><props.empty.icon className="h-6 w-6" /></span>
+            <p className="mt-3 text-sm text-slate-500">{props.empty.text}</p>
           </div>
         ) : (
           <>
-            <div className="hidden md:block">
+            <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
               <Table>
                 <TableCaption className="sr-only">{props.caption}</TableCaption>
                 <TableHeader>
-                  <TableRow className="hover:bg-transparent">
+                  <TableRow className="bg-slate-50 hover:bg-slate-50">
                     {props.columns.map((col) => (
-                      <TableHead key={col.key} scope="col" className={cn("text-xs text-neutral-500", col.numeric && "text-right", col.className)}>
+                      <TableHead key={col.key} scope="col" className={cn("text-xs text-slate-500", col.numeric && "text-right", col.className)}>
                         {col.label}
                       </TableHead>
                     ))}
@@ -85,15 +81,15 @@ function Section<R extends { id: number }>(props: {
             </div>
 
             <div className="md:hidden">
-              <ul aria-label={props.caption} className="divide-y divide-neutral-100">
+              <ul aria-label={props.caption} className="divide-y divide-slate-100">
                 {visible.map((r) => (
                   <li key={r.id} className="py-3">{props.card(r)}</li>
                 ))}
               </ul>
-              <dl className="mt-1 space-y-1 border-t border-neutral-200 pt-3">
+              <dl className="mt-1 space-y-1 border-t border-slate-200 pt-3">
                 {props.mobileTotals.map((t) => (
                   <div key={t.label} className="flex items-baseline justify-between gap-3 text-sm font-semibold">
-                    <dt className="min-w-0 text-black">{t.label}</dt>
+                    <dt className="min-w-0 text-slate-900">{t.label}</dt>
                     <dd className="shrink-0 tabular-nums">{t.value}</dd>
                   </div>
                 ))}
@@ -102,32 +98,29 @@ function Section<R extends { id: number }>(props: {
 
             {remaining > 0 && (
               <div className="flex flex-col items-center gap-2 pt-1 sm:flex-row sm:justify-between">
-                <p className="text-xs text-neutral-400">{c.shown(visible.length, props.rows.length)}</p>
-                <Button
+                <p className="text-xs text-slate-500">{c.shown(visible.length, props.rows.length)}</p>
+                <button
                   type="button"
-                  variant="outline"
-                  size="sm"
-                  className="w-full rounded-xl text-xs sm:w-auto"
+                  className={cn(BTN.secondary, "w-full sm:w-auto")}
                   onClick={() => setLimit((n) => n + PAGE * 2)}
                 >
                   {c.showMore(Math.min(remaining, PAGE * 2))}
-                </Button>
+                </button>
               </div>
             )}
           </>
         )}
         {props.notes.map((n) => (
-          <p key={n} className="text-[11px] text-neutral-400">{n}</p>
+          <p key={n} className="text-xs text-slate-500">{n}</p>
         ))}
-      </CardContent>
-    </Card>
+    </section>
   );
 }
 
 function statusClass(status: string) {
-  if (status === "completed") return "border-green-200 text-green-700";
-  if (status === "pending") return "border-amber-200 text-amber-700";
-  return "border-neutral-200 text-neutral-500";
+  if (status === "completed") return "bg-emerald-50 text-emerald-700";
+  if (status === "pending") return "bg-amber-50 text-amber-800";
+  return "bg-slate-100 text-slate-600";
 }
 
 function SalesSection({ data, locale }: { data: AccountantPeriod["sales"]; locale: string }) {
@@ -135,16 +128,16 @@ function SalesSection({ data, locale }: { data: AccountantPeriod["sales"]; local
   const t = c.sales;
   const method = (m: string) => c.methods[m] ?? m;
   const status = (r: SaleRow) => (
-    <Badge variant="outline" className={cn("text-[10px] font-medium", statusClass(r.status))}>{c.statuses[r.status] ?? r.status}</Badge>
+    <span className={cn("inline-flex rounded-full px-2 py-0.5 text-xs font-semibold", statusClass(r.status))}>{c.statuses[r.status] ?? r.status}</span>
   );
   const amount = (r: SaleRow) => (
-    <span className={r.status === "completed" ? "font-medium text-black" : "text-neutral-400 line-through"}>{formatCurrency(r.total)}</span>
+    <span className={r.status === "completed" ? "font-medium text-slate-900" : "text-slate-400 line-through"}>{formatCurrency(r.total)}</span>
   );
   const columns: Array<Column<SaleRow>> = [
     { key: "date", label: t.cols.date, className: "whitespace-nowrap", cell: (r) => formatDay(r.date, locale), foot: t.totalCompleted },
     { key: "invoice", label: t.cols.invoice, className: "whitespace-nowrap", cell: (r) => r.invoice },
-    { key: "client", label: t.cols.client, cell: (r) => r.client ?? <span className="text-neutral-400">{t.noClient}</span> },
-    { key: "items", label: t.cols.items, className: "max-w-[16rem]", cell: (r) => <span className="line-clamp-2 text-neutral-600">{r.items ?? "—"}</span> },
+    { key: "client", label: t.cols.client, cell: (r) => r.client ?? <span className="text-slate-400">{t.noClient}</span> },
+    { key: "items", label: t.cols.items, className: "max-w-[16rem]", cell: (r) => <span className="line-clamp-2 text-slate-600">{r.items ?? "—"}</span> },
     { key: "method", label: t.cols.method, cell: (r) => method(r.method) },
     { key: "status", label: t.cols.status, cell: status },
     { key: "total", label: t.cols.total, numeric: true, cell: amount, foot: formatCurrency(data.completedTotal) },
@@ -164,10 +157,10 @@ function SalesSection({ data, locale }: { data: AccountantPeriod["sales"]; local
       card={(r) => (
         <div className="space-y-1">
           <div className="flex items-start justify-between gap-3">
-            <p className="min-w-0 break-words text-sm font-medium text-black">{r.client ?? t.noClient}</p>
+            <p className="min-w-0 break-words text-sm font-medium text-slate-900">{r.client ?? t.noClient}</p>
             <span className="shrink-0 text-sm tabular-nums">{amount(r)}</span>
           </div>
-          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-neutral-500">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
             <span>{formatDay(r.date, locale)}</span>
             <span aria-hidden="true">·</span>
             <span>{r.invoice}</span>
@@ -175,7 +168,7 @@ function SalesSection({ data, locale }: { data: AccountantPeriod["sales"]; local
             <span>{method(r.method)}</span>
             {status(r)}
           </div>
-          {r.items && <p className="line-clamp-2 break-words text-xs text-neutral-500">{r.items}</p>}
+          {r.items && <p className="line-clamp-2 break-words text-xs text-slate-500">{r.items}</p>}
         </div>
       )}
     />
@@ -185,14 +178,15 @@ function SalesSection({ data, locale }: { data: AccountantPeriod["sales"]; local
 function ExpensesSection({ data, locale }: { data: AccountantPeriod["expenses"]; locale: string }) {
   const c = useCopy(accountantCopy);
   const t = c.expenses;
-  const category = (r: ExpenseRow) => r.category.trim() || c.uncategorized;
+  const rc = useCopy(receiptsCopy);
+  const category = (r: ExpenseRow) => expenseCategoryLabel(r.category, c, rc);
   const method = (m: string) => c.methods[m] ?? m;
   const columns: Array<Column<ExpenseRow>> = [
     { key: "date", label: t.cols.date, className: "whitespace-nowrap", cell: (r) => formatDay(r.date, locale), foot: t.total },
     { key: "description", label: t.cols.description, cell: (r) => <span className="break-words">{r.description}</span> },
     { key: "category", label: t.cols.category, cell: category },
     { key: "method", label: t.cols.method, cell: (r) => method(r.method) },
-    { key: "amount", label: t.cols.amount, numeric: true, cell: (r) => <span className="font-medium text-black">{formatCurrency(r.amount)}</span>, foot: formatCurrency(data.total) },
+    { key: "amount", label: t.cols.amount, numeric: true, cell: (r) => <span className="font-medium text-slate-900">{formatCurrency(r.amount)}</span>, foot: formatCurrency(data.total) },
   ];
   const notes = data.truncated ? [c.truncated(c.tabs.expenses, data.rows.length, data.count)] : [];
 
@@ -207,10 +201,10 @@ function ExpensesSection({ data, locale }: { data: AccountantPeriod["expenses"];
       card={(r) => (
         <div className="space-y-1">
           <div className="flex items-start justify-between gap-3">
-            <p className="min-w-0 break-words text-sm font-medium text-black">{r.description}</p>
-            <span className="shrink-0 text-sm font-medium tabular-nums text-black">{formatCurrency(r.amount)}</span>
+            <p className="min-w-0 break-words text-sm font-medium text-slate-900">{r.description}</p>
+            <span className="shrink-0 text-sm font-medium tabular-nums text-slate-900">{formatCurrency(r.amount)}</span>
           </div>
-          <p className="text-[11px] text-neutral-500">
+          <p className="text-xs text-slate-500">
             {formatDay(r.date, locale)} · {category(r)} · {method(r.method)}
           </p>
         </div>
@@ -228,8 +222,8 @@ function BankSection({ data, locale }: { data: AccountantPeriod["bank"]; locale:
     { key: "description", label: t.cols.description, cell: (r) => <span className="break-words">{r.description}</span> },
     { key: "category", label: t.cols.category, cell: category },
     { key: "account", label: t.cols.account, cell: (r) => r.account ?? "—" },
-    { key: "in", label: t.cols.moneyIn, numeric: true, cell: (r) => (r.type === "income" ? <span className="font-medium text-green-600">{formatCurrency(r.amount)}</span> : ""), foot: formatCurrency(data.moneyIn) },
-    { key: "out", label: t.cols.moneyOut, numeric: true, cell: (r) => (r.type === "expense" ? <span className="font-medium text-red-500">{formatCurrency(r.amount)}</span> : ""), foot: formatCurrency(data.moneyOut) },
+    { key: "in", label: t.cols.moneyIn, numeric: true, cell: (r) => (r.type === "income" ? <span className="font-semibold text-emerald-700">+{formatCurrency(r.amount)}</span> : ""), foot: formatCurrency(data.moneyIn) },
+    { key: "out", label: t.cols.moneyOut, numeric: true, cell: (r) => (r.type === "expense" ? <span className="font-semibold text-red-700">−{formatCurrency(r.amount)}</span> : ""), foot: formatCurrency(data.moneyOut) },
   ];
   const notes = [c.statement.bankNote];
   if (data.truncated) notes.push(c.truncated(c.tabs.bank, data.rows.length, data.count));
@@ -250,18 +244,18 @@ function BankSection({ data, locale }: { data: AccountantPeriod["bank"]; locale:
         const Icon = isIn ? ArrowDownLeft : ArrowUpRight;
         return (
           <div className="flex items-start gap-3">
-            <span className={cn("mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-full", isIn ? "bg-green-50 text-green-600" : "bg-red-50 text-red-500")}>
+            <span className={cn("mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-full", isIn ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-600")}>
               <Icon className="h-3.5 w-3.5" aria-hidden="true" />
             </span>
             <div className="min-w-0 flex-1 space-y-1">
               <div className="flex items-start justify-between gap-3">
-                <p className="min-w-0 break-words text-sm font-medium text-black">{r.description}</p>
-                <span className={cn("shrink-0 text-sm font-medium tabular-nums", isIn ? "text-green-600" : "text-red-500")}>
+                <p className="min-w-0 break-words text-sm font-medium text-slate-900">{r.description}</p>
+                <span className={cn("shrink-0 text-sm font-semibold tabular-nums", isIn ? "text-emerald-700" : "text-red-700")}>
                   <span className="sr-only">{isIn ? t.cols.moneyIn : t.cols.moneyOut}: </span>
                   {isIn ? "+" : "−"}{formatCurrency(r.amount)}
                 </span>
               </div>
-              <p className="text-[11px] text-neutral-500">
+              <p className="text-xs text-slate-500">
                 {formatDay(r.date, locale)} · {category(r)}{r.account ? ` · ${r.account}` : ""}
               </p>
             </div>
@@ -288,15 +282,15 @@ export function DetailSections({ data }: { data: AccountantPeriod }) {
 
   return (
     <Tabs value={tab} onValueChange={setTab} className="gap-4">
-      <TabsList aria-label={c.tabs.label} className="h-auto w-full rounded-xl border border-neutral-200 bg-neutral-50 p-1 sm:w-fit">
+      <TabsList aria-label={c.tabs.label} className={TABS.list}>
         {tabs.map((t) => (
           <TabsTrigger
             key={t.key}
             value={t.key}
-            className="rounded-lg px-3 py-2 text-xs text-neutral-600 data-[state=active]:bg-black data-[state=active]:text-white data-[state=active]:shadow-none sm:px-4"
+            className={TABS.trigger}
           >
             {t.label}
-            <span className="tabular-nums opacity-70">({t.count.toLocaleString(locale)})</span>
+            <span className="tabular-nums text-slate-500">{t.count.toLocaleString(locale)}</span>
           </TabsTrigger>
         ))}
       </TabsList>

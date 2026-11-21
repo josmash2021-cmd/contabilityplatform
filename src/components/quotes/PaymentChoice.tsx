@@ -14,7 +14,7 @@ export function PaymentChoice<T extends string>({ legend, options, value, onChan
   const name = useId();
   return (
     <fieldset className="min-w-0">
-      <legend className="mb-2 text-sm font-medium text-black">{legend}</legend>
+      <legend className="mb-2 text-sm font-medium text-slate-700">{legend}</legend>
       <div className="grid grid-cols-2 gap-2">
         {options.map((o) => {
           const Icon = ICONS[o.value] ?? Banknote;
@@ -23,9 +23,9 @@ export function PaymentChoice<T extends string>({ legend, options, value, onChan
             <label
               key={o.value}
               className={cn(
-                "flex h-11 cursor-pointer items-center justify-center gap-2 rounded-lg border px-2 text-sm transition-colors",
-                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-neutral-400 has-[:focus-visible]:ring-offset-1",
-                checked ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50",
+                "flex h-12 cursor-pointer items-center justify-center gap-2 rounded-xl border px-2 text-sm transition-colors",
+                "has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 has-[:focus-visible]:ring-offset-1",
+                checked ? "border-blue-600 bg-blue-50 font-semibold text-blue-700" : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50",
               )}
             >
               <input type="radio" name={name} value={o.value} checked={checked} onChange={() => onChange(o.value)} className="sr-only" />

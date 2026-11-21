@@ -257,6 +257,14 @@ const es = {
     more: (n: number) => `Ver ${n} más`,
     less: "Ver menos",
   },
+
+  // 2.0 screen
+  ui: {
+    readOnly: "Puedes ver las cotizaciones y lo que te deben, pero tu acceso no permite cambiarlas.",
+    owed: "Te deben",
+    salesCount: (n: number) => (n === 1 ? "1 venta por cobrar" : `${n} ventas por cobrar`),
+    receivablesEmpty: "Nadie te debe ahora mismo. Cuando conviertas una cotización en venta sin cobrarla, o se cree una venta recurrente, aparece aquí para marcarla cobrada.",
+  },
 };
 
 export type QuotesCopy = typeof es;
@@ -511,6 +519,13 @@ const en: QuotesCopy = {
     back: "Back",
     more: (n) => `Show ${n} more`,
     less: "Show less",
+  },
+
+  ui: {
+    readOnly: "You can see the quotes and what you're owed, but your access doesn't let you change them.",
+    owed: "You're owed",
+    salesCount: (n) => (n === 1 ? "1 sale to collect" : `${n} sales to collect`),
+    receivablesEmpty: "Nobody owes you right now. When you turn a quote into a sale without collecting it, or a recurring sale is created, it shows up here so you can mark it collected.",
   },
 };
 

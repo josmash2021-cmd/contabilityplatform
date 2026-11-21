@@ -4,8 +4,10 @@ import { formatCurrency } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { accountantCopy } from "@/i18n/copy/accountant";
+import { receiptsCopy } from "@/i18n/copy/receipts";
 import { formatDay, formatPercent } from "@/lib/accountantExport";
 import type { AccountantPeriod } from "../../../api/lib/accountant";
+import { expenseCategoryLabel } from "./labels";
 
 /**
  * The printable report behind "Descargar PDF". It lives in a portal straight under <body>,
@@ -19,6 +21,7 @@ function AccountantPrintView({ data, company, periodLabel, dataAsOf }: {
   dataAsOf: string;
 }) {
   const c = useCopy(accountantCopy);
+  const rc = useCopy(receiptsCopy);
   const { lang } = useLang();
   const locale = intlLocale(lang);
 
@@ -56,7 +59,7 @@ function AccountantPrintView({ data, company, periodLabel, dataAsOf }: {
               <tr><th scope="row" className="ap-muted">{c.statement.noExpenses}</th><td className="ap-num">{money(0)}</td></tr>
             )}
             {s.expenseLines.map((l) => (
-              <tr key={l.category}><th scope="row">{l.category || c.uncategorized}</th><td className="ap-num">{money(l.total)}</td></tr>
+              <tr key={l.category}><th scope="row">{expenseCategoryLabel(l.category, c, rc)}</th><td className="ap-num">{money(l.total)}</td></tr>
             ))}
             <tr className="ap-total"><th scope="row">{c.statement.totalExpenses}</th><td className="ap-num">{money(s.totalExpenses)}</td></tr>
             <tr className="ap-grand"><th scope="row">{c.statement.profit}</th><td className="ap-num">{money(s.profit)}</td></tr>
@@ -138,7 +141,7 @@ function AccountantPrintView({ data, company, periodLabel, dataAsOf }: {
                 <tr key={r.id}>
                   <td className="ap-nowrap">{day(r.date)}</td>
                   <td>{r.description}</td>
-                  <td>{r.category.trim() || c.uncategorized}</td>
+                  <td>{expenseCategoryLabel(r.category, c, rc)}</td>
                   <td>{method(r.method)}</td>
                   <td className="ap-num">{money(r.amount)}</td>
                 </tr>
