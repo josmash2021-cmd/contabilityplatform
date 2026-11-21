@@ -54,6 +54,10 @@ function ensureAssistantTables(db: Db): Promise<void> {
     .then(() => (db.execute(sql`ALTER TABLE assistantMessages ADD COLUMN sources TEXT NULL`) as Promise<unknown>).catch((e: unknown) => {
       if (!isDuplicateColumn(e)) throw e;
     }))
+    // Files a question came with: their names and types only (the files themselves are never kept).
+    .then(() => (db.execute(sql`ALTER TABLE assistantMessages ADD COLUMN attachments TEXT NULL`) as Promise<unknown>).catch((e: unknown) => {
+      if (!isDuplicateColumn(e)) throw e;
+    }))
     // Saved conversations: each message belongs to a chat (NULL: the conversation from before chats existed).
     .then(() => (db.execute(sql`ALTER TABLE assistantMessages ADD COLUMN chatId BIGINT UNSIGNED NULL`) as Promise<unknown>).catch((e: unknown) => {
       if (!isDuplicateColumn(e)) throw e;
@@ -92,7 +96,28 @@ function isDuplicateColumn(e: unknown): boolean {
   return false;
 }
 
-type MessageRow = { id: number; role: "user" | "assistant"; content: string; sources: string | null; createdAt: Date };
+type MessageRow = { id: number; role: "user" | "assistant"; content: string; sources: string | null; attachments: string | null; createdAt: Date };
+export type AttachmentInfo = { name: string; mime: string };
+
+/** The names and types a stored question came with (bad or missing JSON: none). */
+function parseAttachments(raw: string | null): AttachmentInfo[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw) as unknown;
+    return Array.isArray(v) ? v.filter((x): x is AttachmentInfo => !!x && typeof x.name === "string" && typeof x.mime === "string").slice(0, 3) : [];
+  } catch { return []; }
+}
+
+/** Photos and PDFs a question can carry, and how big each may be (bytes, decoded). */
+export const ATTACH_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"] as const;
+export const ATTACH_MAX_IMAGE = 5 * 1024 * 1024;
+export const ATTACH_MAX_PDF = 10 * 1024 * 1024;
+export const ATTACH_MAX_FILES = 3;
+const attachment = z.object({
+  name: z.string().trim().min(1).max(200),
+  mime: z.enum(ATTACH_TYPES),
+  dataBase64: z.string().min(8).max(Math.ceil((ATTACH_MAX_PDF * 4) / 3) + 8),
+});
 /** Which chat: a saved one's id, or LEGACY_CHAT for the conversation from before chats existed. */
 const LEGACY_CHAT = 0;
 const inChat = (chatId: number) => (chatId === LEGACY_CHAT ? sql`chatId IS NULL` : sql`chatId = ${chatId}`);
@@ -100,10 +125,14 @@ const inChat = (chatId: number) => (chatId === LEGACY_CHAT ? sql`chatId IS NULL`
 /** One chat's visible messages, oldest first, with each answer's sources. */
 async function visibleMessages(db: Db, userId: number, limit: number, chatId: number) {
   const res = await db.execute(sql`
-    SELECT id, role, content, sources, createdAt FROM assistantMessages
+    SELECT id, role, content, sources, attachments, createdAt FROM assistantMessages
     WHERE userId = ${userId} AND hidden = FALSE AND ${inChat(chatId)} ORDER BY id DESC LIMIT ${limit}`);
   const rows = (res as unknown as [MessageRow[]])[0];
-  return rows.reverse().map((m) => ({ id: Number(m.id), role: m.role, content: m.content, createdAt: m.createdAt, sources: m.role === "assistant" ? parseSources(m.sources) : [] }));
+  return rows.reverse().map((m) => ({
+    id: Number(m.id), role: m.role, content: m.content, createdAt: m.createdAt,
+    sources: m.role === "assistant" ? parseSources(m.sources) : [],
+    attachments: m.role === "user" ? parseAttachments(m.attachments) : [],
+  }));
 }
 
 export type ChatSummary = { id: number; title: string; at: string };
@@ -163,6 +192,7 @@ How to answer:
 - You only read data. You can't change, delete or send anything, move money, or see other people's data. If asked to do something in the app, explain where in the app they can do it.
 - Plain text only: no markdown headings, tables or bold markers. For lists, use short lines starting with "• ".
 - Under your answer the app shows links to the screens and records your numbers came from (from the tools you called), so don't write links or paths yourself.
+- The person may attach photos or PDFs (a receipt, an invoice, a bank statement, a letter). Read them carefully and answer about them; compare with their data using the tools when it helps. You can't save a file into the app: to keep a receipt, tell them to use Gastos → Foto de recibo.
 
 Today is ${today} (the business's local date, US Central time).`;
 }
@@ -196,7 +226,11 @@ export const assistantRouter = createRouter({
 
   ask: authedQuery
     // chatId: a saved chat (0: the one from before chats existed); null: start a new chat; missing: the latest one.
-    .input(z.object({ question: z.string().trim().min(1).max(1000), chatId: z.number().int().min(0).nullable().optional() }))
+    .input(z.object({
+      question: z.string().trim().max(1000),
+      chatId: z.number().int().min(0).nullable().optional(),
+      attachments: z.array(attachment).max(ATTACH_MAX_FILES).optional(),
+    }).refine((x) => x.question.length > 0 || (x.attachments?.length ?? 0) > 0, { message: "question or attachment required" }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       await ensureAssistantTables(db);
@@ -211,7 +245,25 @@ export const assistantRouter = createRouter({
       const chats = await chatsOf(db, userId);
       let chatId: number | null = input.chatId === undefined ? chats[0]?.id ?? null : input.chatId;
       if (chatId !== null && !chats.some((c) => c.id === chatId)) chatId = null;
-      const history = chatId === null ? [] : (await visibleMessages(db, userId, HISTORY_MESSAGES, chatId)).map((m) => ({ role: m.role, content: m.content }));
+      // Earlier files aren't sent again; their names are, so a follow-up about them still makes sense.
+      const history = chatId === null ? [] : (await visibleMessages(db, userId, HISTORY_MESSAGES, chatId)).map((m) => ({
+        role: m.role,
+        content: m.attachments.length ? `${m.content}\n[Adjuntó: ${m.attachments.map((a) => a.name).join(", ")}]`.trim() : m.content,
+      }));
+      // The files for this question, checked: type and size (decoded).
+      const files = input.attachments ?? [];
+      const blocks: Array<
+        | { type: "image"; source: { type: "base64"; media_type: "image/jpeg" | "image/png" | "image/webp" | "image/gif"; data: string } }
+        | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } }
+      > = [];
+      for (const f of files) {
+        const bytes = Buffer.byteLength(f.dataBase64, "base64");
+        const max = f.mime === "application/pdf" ? ATTACH_MAX_PDF : ATTACH_MAX_IMAGE;
+        if (bytes > max) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "assistantFileTooBig") });
+        if (f.mime === "application/pdf") blocks.push({ type: "document", source: { type: "base64", media_type: "application/pdf", data: f.dataBase64 } });
+        else blocks.push({ type: "image", source: { type: "base64", media_type: f.mime, data: f.dataBase64 } });
+      }
+      const questionText = input.question || msg(ctx.lang, "assistantFileOnly");
       // The conversation must start with the person and alternate; drop a leading answer if the window cut its question.
       while (history.length && history[0].role !== "user") history.shift();
 
@@ -233,7 +285,10 @@ export const assistantRouter = createRouter({
           cache_control: { type: "ephemeral" },
           system: systemPrompt(plan.mode, today),
           tools: assistantTools(db, userId, plan.mode, today, (c) => calls.push(c)),
-          messages: [...history.map((m) => ({ role: m.role, content: m.content })), { role: "user", content: input.question }],
+          messages: [
+            ...history.map((m) => ({ role: m.role, content: m.content })),
+            { role: "user", content: blocks.length ? [...blocks, { type: "text" as const, text: questionText }] : questionText },
+          ],
         });
         if (final.stop_reason === "refusal") {
           answer = msg(ctx.lang, "assistantDeclined");
@@ -252,13 +307,14 @@ export const assistantRouter = createRouter({
       const sources: AssistantSource[] = sourcesFromCalls(calls, plan.mode);
       // A new chat is named after this question.
       if (chatId === null) {
-        const res = await db.execute(sql`INSERT INTO assistantChats (userId, title) VALUES (${userId}, ${chatTitle(input.question)})`);
+        const res = await db.execute(sql`INSERT INTO assistantChats (userId, title) VALUES (${userId}, ${chatTitle(input.question || files.map((f) => f.name).join(", "))})`);
         chatId = Number((res as unknown as [{ insertId: number }])[0].insertId);
       } else if (chatId !== LEGACY_CHAT) {
         await db.execute(sql`UPDATE assistantChats SET updatedAt = NOW() WHERE id = ${chatId} AND userId = ${userId}`);
       }
       const chatCol = chatId === LEGACY_CHAT ? null : chatId;
-      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId) VALUES (${userId}, 'user', ${input.question}, ${chatCol})`);
+      const attached = files.length ? JSON.stringify(files.map((f) => ({ name: f.name, mime: f.mime }))) : null;
+      await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId, attachments) VALUES (${userId}, 'user', ${input.question}, ${chatCol}, ${attached})`);
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources, chatId) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null}, ${chatCol})`);
       return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId };
     }),

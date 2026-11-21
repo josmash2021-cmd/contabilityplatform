@@ -35,6 +35,8 @@ const messages = {
     assistantNotReady: "El asistente se está activando. Inténtalo en unos minutos.",
     assistantError: "No pude contestar ahora. Inténtalo de nuevo en un momento.",
     assistantBusy: "Hay muchas preguntas en este momento. Inténtalo en un minuto.",
+    assistantFileTooBig: "Ese archivo es muy grande. Las fotos pueden pesar hasta 5 MB y los PDF hasta 10 MB.",
+    assistantFileOnly: "Revisa este archivo y dime lo importante.",
     assistantDeclined: "No puedo ayudar con eso. Pregúntame sobre tus ingresos, gastos, ventas o metas.",
   },
   en: {
@@ -62,6 +64,8 @@ const messages = {
     assistantNotReady: "The assistant is being set up. Please try again in a few minutes.",
     assistantError: "I couldn't answer right now. Please try again in a moment.",
     assistantBusy: "There are many questions right now. Please try again in a minute.",
+    assistantFileTooBig: "That file is too big. Photos can be up to 5 MB and PDFs up to 10 MB.",
+    assistantFileOnly: "Look at this file and tell me what matters.",
     assistantDeclined: "I can't help with that. Ask me about your income, spending, sales or goals.",
   },
 } as const;

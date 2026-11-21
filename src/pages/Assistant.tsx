@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
-  AlertTriangle, ArrowUp, Bell, CheckCircle2, Clock, FileText, History, Inbox, Link2, Loader2, Lock, PieChart, Plus, RefreshCw, Sparkles, SquarePen, Trash2, Users, type LucideIcon,
+  AlertTriangle, ArrowUp, Bell, CheckCircle2, Clock, FileText, History, Inbox, Link2, Loader2, Lock, Mic, Paperclip, PieChart, Plus, RefreshCw, Sparkles, Square, SquarePen, Trash2, Users, type LucideIcon,
 } from "lucide-react";
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../api/router";
@@ -10,6 +10,9 @@ import { AnimatedPage } from "@/components/AnimatedPage";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
+import { FileChip, Typewriter, TypingDots } from "@/components/assistant/chatKit";
+import { FileProblem, MAX_FILES, toAttachment } from "@/components/assistant/chatFiles";
+import { useDictation } from "@/components/assistant/useDictation";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -75,7 +78,14 @@ export default function Assistant() {
     { placeholderData: (prev) => prev },
   );
   const [question, setQuestion] = useState("");
-  const [pending, setPending] = useState<string | null>(null);
+  // The question on its way: its text and the names of the files it carries.
+  const [pending, setPending] = useState<{ text: string; files: Array<{ name: string; mime: string }> } | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
+  const [preparing, setPreparing] = useState(false);
+  // Answers newer than this message write themselves in (only the ones that arrive while the page is open).
+  const [typingFrom, setTypingFrom] = useState<number | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const sentFiles = useRef<File[]>([]);
   const [moreOpen, setMoreOpen] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
 
@@ -83,13 +93,14 @@ export default function Assistant() {
     onSuccess: async (res) => { setSelected(res.chatId); await utils.assistant.status.invalidate(); setPending(null); },
     onError: (e, vars) => {
       setPending(null);
-      // Give the question back so it can be sent again.
+      // Give the question (and its files) back so it can be sent again.
       setQuestion((q) => q || vars.question);
+      setFiles((f) => (f.length ? f : sentFiles.current));
       toast.error(e.message || t.error);
     },
   });
   const clear = trpc.assistant.clear.useMutation({ onSuccess: () => { setSelected(undefined); void utils.assistant.status.invalidate(); } });
-  const openChat = (id: number | null) => { setSelected(id); setPending(null); setPanelOpen(false); };
+  const openChat = (id: number | null) => { setSelected(id); setPending(null); setTypingFrom(null); setPanelOpen(false); };
   const removeChat = (id: number) => { if (window.confirm(t.chats.removeConfirm)) clear.mutate({ chatId: id }); };
 
   const messages = useMemo(() => data?.messages ?? [], [data]);
@@ -100,12 +111,49 @@ export default function Assistant() {
     endRef.current?.scrollIntoView({ block: "end", behavior: messages.length ? "smooth" : "auto" });
   }, [messages.length, pending]);
 
-  const send = (text: string) => {
+  const scrollEnd = () => endRef.current?.scrollIntoView({ block: "end" });
+
+  // Speaking instead of typing: what's heard goes into the box after what was already written.
+  const dictBase = useRef("");
+  const dict = useDictation(lang === "en" ? "en-US" : "es-US",
+    (settled, hearing) => setQuestion(`${dictBase.current}${dictBase.current && (settled || hearing) ? " " : ""}${settled}${hearing}`.slice(0, 1000)),
+    (code) => toast.error(code === "not-allowed" || code === "service-not-allowed" ? t.micDenied : t.micError));
+  const toggleMic = () => {
+    if (dict.listening) { dict.stop(); return; }
+    dictBase.current = question.trim();
+    dict.start();
+  };
+
+  const addFiles = (list: FileList | null) => {
+    if (!list?.length) return;
+    const chosen = Array.from(list);
+    if (files.length + chosen.length > MAX_FILES) toast.error(t.fileMax);
+    setFiles((f) => [...f, ...chosen].slice(0, MAX_FILES));
+    if (fileInput.current) fileInput.current.value = "";
+  };
+
+  const send = async (text: string) => {
     const q = text.trim();
-    if (!q || ask.isPending) return;
-    setPending(q);
+    if ((!q && files.length === 0) || ask.isPending || preparing) return;
+    if (dict.listening) dict.stop();
+    let attachments: Awaited<ReturnType<typeof toAttachment>>[] | undefined;
+    if (files.length) {
+      setPreparing(true);
+      try {
+        attachments = await Promise.all(files.map(toAttachment));
+      } catch (e) {
+        toast.error(e instanceof FileProblem && e.kind === "size" ? t.fileSize : t.fileType);
+        setPreparing(false);
+        return;
+      }
+      setPreparing(false);
+    }
+    sentFiles.current = files;
+    setPending({ text: q, files: (attachments ?? []).map((a) => ({ name: a.name, mime: a.mime })) });
+    setTypingFrom(messages.length ? messages[messages.length - 1].id : 0);
     setQuestion("");
-    ask.mutate({ question: q, chatId: data?.chatId ?? null });
+    setFiles([]);
+    ask.mutate({ question: q, chatId: data?.chatId ?? null, attachments });
   };
 
   if (isLoading) {
@@ -141,7 +189,7 @@ export default function Assistant() {
   const examples = t.suggestions[mode];
   const chatting = messages.length > 0 || !!pending;
   const chip = (q: string) => (
-    <button key={q} type="button" disabled={disabled || ask.isPending} onClick={() => send(q)}
+    <button key={q} type="button" disabled={disabled || ask.isPending} onClick={() => void send(q)}
       className={`max-w-full whitespace-normal rounded-full border border-slate-200 bg-white px-3.5 py-2 text-left text-[13px] font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50 disabled:opacity-60 ${FOCUS}`}>{q}</button>
   );
   const planNote = (outOfQuestions || limit === 0) && (
@@ -156,21 +204,43 @@ export default function Assistant() {
     <>
       <ChatList chats={data.chats} current={data.chatId} t={t} locale={locale} busy={clear.isPending} onOpen={openChat} onRemove={removeChat} />
       <ActivityCard t={t} locale={locale} />
-      <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => { setPanelOpen(false); send(t.week.askQuestion); }} />
+      <WeeklyCard t={t} locale={locale} canAsk={!disabled && !ask.isPending} onAsk={() => { setPanelOpen(false); void send(t.week.askQuestion); }} />
     </>
   );
+  const iconBtn = `grid h-10 w-10 shrink-0 place-items-center rounded-full transition disabled:cursor-not-allowed disabled:opacity-50 ${FOCUS}`;
   const composer = (
-    <form className="flex items-center gap-2 rounded-[26px] border border-slate-200 bg-white p-1.5 pl-5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.25)] transition focus-within:border-blue-500 focus-within:ring-[3px] focus-within:ring-blue-50"
-      onSubmit={(e) => { e.preventDefault(); send(question); }}>
-      <input
-        value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={1000} disabled={disabled}
-        placeholder={t.placeholder} aria-label={t.label} autoComplete="off"
-        className="min-h-11 min-w-0 flex-1 bg-transparent text-base text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed sm:text-[15px]"
-      />
-      <button type="submit" disabled={disabled || !question.trim() || ask.isPending} aria-label={ask.isPending ? t.sending : t.send}
-        className={`grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-600 text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-400 ${FOCUS}`}>
-        {ask.isPending ? <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden /> : <ArrowUp className="h-[18px] w-[18px]" aria-hidden />}
-      </button>
+    <form className="rounded-[26px] border border-slate-200 bg-white p-1.5 shadow-[0_8px_24px_-12px_rgba(15,23,42,0.25)] transition focus-within:border-blue-500 focus-within:ring-[3px] focus-within:ring-blue-50"
+      onSubmit={(e) => { e.preventDefault(); void send(question); }}>
+      {files.length > 0 && (
+        <div className="flex flex-wrap gap-1.5 px-2 pb-1 pt-1.5">
+          {files.map((f, i) => (
+            <FileChip key={`${f.name}-${i}`} name={f.name} mime={f.type === "application/pdf" ? "application/pdf" : "image/jpeg"}
+              removeLabel={t.removeFile(f.name)} onRemove={() => setFiles((list) => list.filter((_, k) => k !== i))} />
+          ))}
+        </div>
+      )}
+      <div className="flex items-center gap-1">
+        <input ref={fileInput} type="file" accept="image/*,application/pdf" multiple className="hidden" onChange={(e) => addFiles(e.target.files)} tabIndex={-1} aria-hidden="true" />
+        <button type="button" onClick={() => fileInput.current?.click()} disabled={disabled || files.length >= MAX_FILES} aria-label={t.attach} title={t.attach}
+          className={`${iconBtn} text-slate-500 hover:bg-slate-100 hover:text-slate-900`}>
+          <Paperclip className="h-[18px] w-[18px]" aria-hidden />
+        </button>
+        <input
+          value={question} onChange={(e) => setQuestion(e.target.value)} maxLength={1000} disabled={disabled}
+          placeholder={dict.listening ? t.listening : preparing ? t.filePrep : t.placeholder} aria-label={t.label} autoComplete="off"
+          className="min-h-11 min-w-0 flex-1 bg-transparent px-1 text-base text-slate-900 outline-none placeholder:text-slate-400 disabled:cursor-not-allowed sm:text-[15px]"
+        />
+        {dict.supported && (
+          <button type="button" onClick={toggleMic} disabled={disabled} aria-pressed={dict.listening} aria-label={dict.listening ? t.micStop : t.mic} title={dict.listening ? t.micStop : t.mic}
+            className={cn(iconBtn, dict.listening ? "animate-pulse bg-red-600 text-white hover:bg-red-700" : "text-slate-500 hover:bg-slate-100 hover:text-slate-900")}>
+            {dict.listening ? <Square className="h-3.5 w-3.5 fill-current" aria-hidden /> : <Mic className="h-[18px] w-[18px]" aria-hidden />}
+          </button>
+        )}
+        <button type="submit" disabled={disabled || (!question.trim() && files.length === 0) || ask.isPending || preparing} aria-label={ask.isPending ? t.sending : t.send}
+          className={`${iconBtn} bg-blue-600 text-white hover:brightness-110 disabled:bg-slate-200 disabled:text-slate-400 disabled:opacity-100`}>
+          {ask.isPending || preparing ? <Loader2 className="h-[18px] w-[18px] animate-spin" aria-hidden /> : <ArrowUp className="h-[18px] w-[18px]" aria-hidden />}
+        </button>
+      </div>
     </form>
   );
 
@@ -227,18 +297,31 @@ export default function Assistant() {
           /* The conversation, newest at the bottom, and the box fixed under it. */
           <>
             <section ref={chatRef} aria-live="polite" aria-label={t.chatLabel} className="flex flex-1 flex-col gap-5 py-6">
-              {messages.map((m) => (
-                <Bubble key={m.id} mine={m.role === "user"} label={m.role === "user" ? t.you : t.assistant}>
-                  {m.content}
-                  {m.role === "assistant" && m.sources.length > 0 && <Sources sources={m.sources} t={t} locale={locale} />}
-                </Bubble>
-              ))}
+              {messages.map((m) => {
+                const sources = m.role === "assistant" && m.sources.length > 0 ? <Sources sources={m.sources} t={t} locale={locale} /> : null;
+                const fresh = m.role === "assistant" && typingFrom !== null && m.id > typingFrom;
+                return (
+                  <Bubble key={m.id} mine={m.role === "user"} label={m.role === "user" ? t.you : t.assistant}>
+                    {m.attachments.length > 0 && (
+                      <span className={cn("flex flex-wrap gap-1.5", m.content && "mb-1.5")}>
+                        {m.attachments.map((a, i) => <FileChip key={`${a.name}-${i}`} name={a.name} mime={a.mime} light />)}
+                      </span>
+                    )}
+                    {fresh ? <Typewriter text={m.content} onTick={scrollEnd} after={sources} /> : <>{m.content}{sources}</>}
+                  </Bubble>
+                );
+              })}
               {pending && (
                 <>
-                  <Bubble mine label={t.you}>{pending}</Bubble>
-                  <Bubble mine={false} label={t.assistant}>
-                    <span className="inline-flex items-center gap-2 text-slate-500" role="status"><Loader2 className="h-4 w-4 animate-spin" />{t.thinking}</span>
+                  <Bubble mine label={t.you}>
+                    {pending.files.length > 0 && (
+                      <span className={cn("flex flex-wrap gap-1.5", pending.text && "mb-1.5")}>
+                        {pending.files.map((a, i) => <FileChip key={`${a.name}-${i}`} name={a.name} mime={a.mime} light />)}
+                      </span>
+                    )}
+                    {pending.text}
                   </Bubble>
+                  <Bubble mine={false} label={t.assistant}><TypingDots label={pending.files.length ? t.reading : t.writing} /></Bubble>
                 </>
               )}
               <div ref={endRef} />
