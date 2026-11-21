@@ -1,24 +1,53 @@
-import { useState, useMemo, memo, useEffect, Suspense } from "react";
+import { useEffect, useId, useMemo, useState, Suspense } from "react";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/Logo";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import { useCopy } from "@/i18n/useI18n";
-import { appCopy } from "@/i18n/copy/app";
+import { appCopy, type AppCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
+import type { Feature } from "@contracts/planFeatures";
 import {
-  LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
-  Landmark, BarChart3, Settings, Menu, LogOut,
-  Target, ArrowLeftRight, User, Tv, Shield,
-  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen, PiggyBank, UsersRound,
+  Home, ShoppingCart, ClipboardList, Users, Wrench, Camera, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
+  FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Search, Lock,
+  LogOut, Construction, Gift, Loader2, type LucideIcon,
 } from "lucide-react";
+
+type Item = { path: string; icon: LucideIcon; feature?: Feature };
+type Group = { title?: string; sep?: boolean; items: Item[] };
+
+// ── The 2.0 menu: grouped like accounting software, but shorter ──
+const BUSINESS_GROUPS: Group[] = [
+  { items: [{ path: "/", icon: Home }] },
+  { title: "sales", items: [{ path: "/pos", icon: ShoppingCart }, { path: "/quotes", icon: ClipboardList, feature: "quotes" }, { path: "/customers", icon: Users }, { path: "/services", icon: Wrench }] },
+  { title: "spend", items: [{ path: "/receipts", icon: Camera, feature: "receipts" }, { path: "/vendors", icon: Truck, feature: "vendors" }] },
+  { title: "money", items: [{ path: "/bank", icon: Landmark }, { path: "/transactions", icon: ArrowLeftRight }, { path: "/reports", icon: BarChart3 }, { path: "/accountant", icon: BookOpen, feature: "accountant" }, { path: "/taxes", icon: FileText, feature: "taxes" }] },
+  { title: "general", items: [{ path: "/assistant", icon: Sparkles }, { path: "/team", icon: UsersRound, feature: "team" }, { path: "/settings", icon: Settings }] },
+];
+const PERSONAL_GROUPS: Group[] = [
+  { title: "taxes", sep: true, items: [{ path: "/personal/taxes", icon: FileText }] },
+  { items: [{ path: "/personal", icon: Home }, { path: "/personal/transactions", icon: ArrowLeftRight }] },
+  { title: "plan", items: [{ path: "/personal/budgets", icon: PieChart, feature: "budgets" }, { path: "/personal/goals", icon: Target }, { path: "/personal/subscriptions", icon: Repeat }] },
+  { title: "account", items: [{ path: "/personal/bank", icon: Landmark }, { path: "/personal/assistant", icon: Sparkles }, { path: "/settings", icon: Settings }] },
+];
+/** The phone tab bar: two tabs, the "+" button, one tab, and "Más". */
+const TABS = { business: ["/", "/pos", "/customers"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
+
+/** An employee on a team: takes payments, serves clients, photographs receipts. */
+const STAFF_PATHS = new Set(["/pos", "/customers", "/receipts"]);
+/** The accountant reads the books; these are the owner's alone. */
+const ACCOUNTANT_HIDDEN = new Set(["/taxes", "/assistant", "/team", "/settings"]);
+
+function isOn(pathname: string, path: string) {
+  if (path === "/" || path === "/personal") return pathname === path;
+  return pathname === path || pathname.startsWith(path + "/");
+}
 
 /** Shown at the top of the app while the user is on the free trial. */
 function TrialBanner() {
@@ -30,51 +59,13 @@ function TrialBanner() {
   });
   const trial = status?.status === "trialing" ? status.trial : null;
   if (!trial?.active) return null;
-  const days = trial.daysLeft;
   return (
     <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-b border-emerald-200 bg-emerald-50 px-4 py-2 text-center text-xs text-emerald-900 sm:text-sm">
-      <span className="inline-flex items-center gap-1.5">
-        <Gift className="h-4 w-4 text-emerald-600" />
-        {t.trial.banner(days)}
-      </span>
+      <span className="inline-flex items-center gap-1.5"><Gift className="h-4 w-4 text-emerald-600" />{t.trial.banner(trial.daysLeft)}</span>
       <Link to="/settings" className="font-semibold underline-offset-2 hover:underline">{t.trial.choosePlan}</Link>
     </div>
   );
 }
-
-const businessNav = [
-  { path: "/", label: "Dashboard", icon: LayoutDashboard },
-  { path: "/pos", label: "Cobrar", icon: ShoppingCart },
-  { path: "/services", label: "Servicios", icon: WrenchIcon },
-  { path: "/customers", label: "Clientes", icon: Users },
-  { path: "/transactions", label: "Transacciones", icon: Receipt },
-  { path: "/bank", label: "Banco", icon: Landmark },
-  { path: "/reports", label: "Reportes", icon: BarChart3 },
-  { path: "/receipts", label: "Recibos", icon: Camera },
-  { path: "/vendors", label: "Proveedores", icon: Truck },
-  { path: "/quotes", label: "Cotizaciones", icon: ClipboardList },
-  { path: "/taxes", label: "Impuestos", icon: FileText },
-  { path: "/accountant", label: "Contador", icon: BookOpen },
-  { path: "/assistant", label: "Asistente", icon: Sparkles },
-  { path: "/team", label: "Equipo", icon: UsersRound },
-  { path: "/settings", label: "Ajustes", icon: Settings },
-];
-
-const personalNav = [
-  { path: "/personal", label: "Inicio", icon: LayoutDashboard },
-  { path: "/personal/transactions", label: "Transacciones", icon: ArrowLeftRight },
-  { path: "/personal/subscriptions", label: "Suscripciones", icon: Tv },
-  { path: "/personal/goals", label: "Metas", icon: Target },
-  { path: "/personal/budgets", label: "Presupuestos", icon: PiggyBank },
-  { path: "/personal/taxes", label: "Impuestos", icon: FileText },
-  { path: "/personal/assistant", label: "Asistente", icon: Sparkles },
-  { path: "/settings", label: "Perfil", icon: User },
-];
-
-/** An employee on a team: takes payments, serves clients, photographs receipts. */
-const STAFF_PATHS = new Set(["/pos", "/customers", "/receipts"]);
-/** The accountant reads the books; these are the owner's alone. */
-const ACCOUNTANT_HIDDEN = new Set(["/taxes", "/assistant", "/team", "/settings"]);
 
 /** Tells a team member whose team they're on, and lets them leave. */
 function TeamBanner() {
@@ -91,173 +82,304 @@ function TeamBanner() {
   );
 }
 
+type NavProps = { groups: Group[]; pathname: string; locked: (i: Item) => boolean; label: (path: string) => string; t: AppCopy; onGo: (path: string) => void };
+
+/** Desktop side menu: groups with small titles; the current page is a dark pill. */
+function SideNav({ groups, pathname, locked, label, t, onGo }: NavProps) {
+  return (
+    <nav aria-label={t.shell.searchLabel} className="flex-1 space-y-4 overflow-y-auto px-3 pb-4">
+      {groups.map((g, gi) => (
+        <div key={gi}>
+          {g.title && <p className="px-3.5 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{t.shell.groups[g.title]}</p>}
+          <ul className="space-y-0.5">
+            {g.items.map((item) => {
+              const on = isOn(pathname, item.path);
+              const lock = locked(item);
+              const Icon = item.icon;
+              return (
+                <li key={item.path}>
+                  <button
+                    onClick={() => onGo(item.path)}
+                    aria-current={on ? "page" : undefined}
+                    title={lock ? t.shell.locked : undefined}
+                    className={cn(
+                      "flex w-full items-center gap-3 rounded-[10px] px-3.5 py-2.5 text-left text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
+                      on ? "bg-slate-900 font-semibold text-white" : "font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900",
+                    )}
+                  >
+                    <Icon className="h-[18px] w-[18px] shrink-0" strokeWidth={on ? 2.2 : 1.8} aria-hidden />
+                    <span className="min-w-0 flex-1 truncate">{label(item.path)}</span>
+                    {lock && <Lock className={cn("h-3.5 w-3.5 shrink-0", on ? "text-white/70" : "text-slate-300")} aria-label={t.shell.locked} />}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+          {g.sep && <div className="mx-3.5 mt-4 border-t border-slate-200" role="separator" />}
+        </div>
+      ))}
+    </nav>
+  );
+}
+
+/** Jump to any section by typing its name (or what it's for). */
+function SectionSearch({ items, label, t, onGo }: { items: Item[]; label: (p: string) => string; t: AppCopy; onGo: (p: string) => void }) {
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const listId = useId();
+  const norm = (s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const hits = q.trim()
+    ? items.filter((i) => norm(`${label(i.path)} ${t.shell.desc[i.path] ?? ""}`).includes(norm(q.trim()))).slice(0, 6)
+    : [];
+  const go = (p: string) => { setQ(""); setOpen(false); onGo(p); };
+  return (
+    <div className="relative min-w-0 flex-1 max-w-md">
+      <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" aria-hidden />
+      <input
+        type="search" value={q} placeholder={t.shell.search} aria-label={t.shell.searchLabel}
+        role="combobox" aria-expanded={open && !!q.trim()} aria-controls={listId} aria-autocomplete="list"
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => setTimeout(() => setOpen(false), 120)}
+        onKeyDown={(e) => { if (e.key === "Enter" && hits[0]) go(hits[0].path); if (e.key === "Escape") { setQ(""); setOpen(false); } }}
+        className="h-10 w-full rounded-[10px] border border-slate-200 bg-slate-100 pl-9 pr-3 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-300 focus:bg-white focus:outline-none"
+      />
+      {open && q.trim() && (
+        <ul id={listId} role="listbox" className="absolute left-0 right-0 top-12 z-50 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">
+          {hits.length === 0 && <li className="px-3 py-2.5 text-sm text-slate-500">{t.shell.noResults}</li>}
+          {hits.map((h) => {
+            const Icon = h.icon;
+            return (
+              <li key={h.path} role="option" aria-selected={false}>
+                <button onMouseDown={(e) => e.preventDefault()} onClick={() => go(h.path)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-slate-50">
+                  <Icon className="h-4 w-4 shrink-0 text-slate-500" aria-hidden />
+                  <span className="min-w-0">
+                    <span className="block text-sm font-medium text-slate-900">{label(h.path)}</span>
+                    {t.shell.desc[h.path] && <span className="block truncate text-xs text-slate-500">{t.shell.desc[h.path]}</span>}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** "+ Nuevo": the things people create most, one tap away. */
+function NewMenu({ items, t, onGo, round }: { items: [string, string][]; t: AppCopy; onGo: (p: string) => void; round?: boolean }) {
+  if (items.length === 0) return null;
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        {round ? (
+          <button className="grid h-12 w-12 -translate-y-3 place-items-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" aria-label={t.shell.newTitle}>
+            <Plus className="h-6 w-6" />
+          </button>
+        ) : (
+          <button className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2">
+            <Plus className="h-4 w-4" />{t.shell.newBtn}
+          </button>
+        )}
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align={round ? "center" : "end"} side={round ? "top" : "bottom"} className="w-56">
+        <DropdownMenuLabel>{t.shell.newTitle}</DropdownMenuLabel>
+        {items.map(([path, label]) => (
+          <DropdownMenuItem key={path + label} onSelect={() => onGo(path)} className="py-2.5">{label}</DropdownMenuItem>
+        ))}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
+function AccountMenu({ name, email, initial, t, onGo, logout }: { name: string; email?: string | null; initial: string; t: AppCopy; onGo: (p: string) => void; logout: () => void }) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={t.shell.accountMenu}>
+          {initial}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="font-normal">
+          <span className="block truncate text-sm font-semibold text-slate-900">{name}</span>
+          {email && <span className="block truncate text-xs text-slate-500">{email}</span>}
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={() => onGo("/settings")} className="py-2.5"><Settings className="mr-2 h-4 w-4" />{t.shell.labels["/settings"]}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onGo("/privacy")} className="py-2.5"><Shield className="mr-2 h-4 w-4" />{t.shell.privacy}</DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={logout} className="py-2.5 text-red-600 focus:text-red-600"><LogOut className="mr-2 h-4 w-4" />{t.logout}</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 export function AppLayout() {
-  const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, logout, isAdmin } = useAuth();
   const t = useCopy(appCopy);
-  const userMode = user?.modePreference || "business";
+  const userMode: "business" | "personal" = user?.modePreference === "personal" ? "personal" : "business";
   useAutoRepair(); // Auto-repair accounting on login (silent)
-  const { data: settings } = trpc.settings.get.useQuery(undefined, {
-    staleTime: Infinity,
-    refetchOnMount: false,
-  });
-  const isActive = (path: string) => location.pathname === path;
+  const { data: settings } = trpc.settings.get.useQuery(undefined, { staleTime: Infinity, refetchOnMount: false });
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
+  const [moreOpen, setMoreOpen] = useState(false);
+  const pathname = location.pathname;
 
-  // Route guard: redirect users to their correct mode routes
+  // Route guard: keep people in their mode's routes.
   useEffect(() => {
     if (!user) return;
-    const currentPath = location.pathname;
-    const isPersonalRoute = currentPath.startsWith("/personal");
-    const isBusinessRoute = !isPersonalRoute && currentPath !== "/settings" && currentPath !== "/onboarding";
-
-    if (userMode === "personal" && isBusinessRoute) {
-      navigate("/personal", { replace: true });
-    } else if (userMode === "business" && isPersonalRoute) {
-      navigate("/", { replace: true });
-    }
-  }, [user, userMode, location.pathname, navigate]);
+    const isPersonalRoute = pathname.startsWith("/personal");
+    const isBusinessRoute = !isPersonalRoute && pathname !== "/settings" && pathname !== "/onboarding";
+    if (userMode === "personal" && isBusinessRoute) navigate("/personal", { replace: true });
+    else if (userMode === "business" && isPersonalRoute) navigate("/", { replace: true });
+  }, [user, userMode, pathname, navigate]);
 
   // Team members see only what their role allows (the server enforces it too: api/lib/team.ts).
   const { data: membership } = trpc.team.myMembership.useQuery(undefined, { enabled: !!user && userMode === "business", staleTime: 60_000 });
   const memberRole = membership?.role ?? null;
-  const navItems = userMode === "personal" ? personalNav
-    : memberRole === "staff" ? businessNav.filter((i) => STAFF_PATHS.has(i.path))
-    : memberRole === "accountant" ? businessNav.filter((i) => !ACCOUNTANT_HIDDEN.has(i.path))
-    : businessNav;
   useEffect(() => {
-    if (memberRole === "staff" && !STAFF_PATHS.has(location.pathname)) navigate("/pos", { replace: true });
-    if (memberRole === "accountant" && ACCOUNTANT_HIDDEN.has(location.pathname)) navigate("/", { replace: true });
-  }, [memberRole, location.pathname, navigate]);
-  const companyName = userMode === "personal" ? (user?.name || t.myAccount) : (settings?.companyName || t.myCompany);
-  const userInitial = useMemo(() => (user?.name || "C").charAt(0).toUpperCase(), [user?.name]);
-  const displayName = user?.name || t.myAccount;
+    if (memberRole === "staff" && !STAFF_PATHS.has(pathname)) navigate("/pos", { replace: true });
+    if (memberRole === "accountant" && ACCOUNTANT_HIDDEN.has(pathname)) navigate("/", { replace: true });
+  }, [memberRole, pathname, navigate]);
 
-  // ── Maintenance mode check ──
-  const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, {
-    refetchInterval: 10000,
-  });
+  const groups = useMemo(() => {
+    const base = userMode === "personal" ? PERSONAL_GROUPS : BUSINESS_GROUPS;
+    const keep = (i: Item) => memberRole === "staff" ? STAFF_PATHS.has(i.path) : memberRole === "accountant" ? !ACCOUNTANT_HIDDEN.has(i.path) : true;
+    const g = base.map((x) => ({ ...x, items: x.items.filter(keep) })).filter((x) => x.items.length);
+    if (isAdmin && !memberRole) g.push({ items: [{ path: "/admin", icon: Shield }] });
+    return g;
+  }, [userMode, memberRole, isAdmin]);
+  const allItems = groups.flatMap((g) => g.items);
+  const label = (path: string) => (path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : t.shell.labels[path] ?? path);
+  const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);
+  const go = (path: string) => { setMoreOpen(false); navigate(path); };
+
+  const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/receipts"] : TABS[userMode])
+    .map((p) => allItems.find((i) => i.path === p)).filter((i): i is Item => !!i);
+  const rest = allItems.filter((i) => !tabs.includes(i));
+  const newItems = memberRole === "accountant" ? [] : memberRole === "staff"
+    ? t.shell.newItems.business.filter(([p]) => STAFF_PATHS.has(p))
+    : t.shell.newItems[userMode];
+
+  const companyName = userMode === "personal" ? (user?.name || t.myAccount) : (settings?.companyName || t.myCompany);
+  const displayName = user?.name || t.myAccount;
+  const initial = (user?.name || "C").trim().charAt(0).toUpperCase();
+  const planLabel = !plan ? "" : plan.trial ? t.shell.plan.trial : plan.tier ? t.shell.plan[plan.tier] : t.shell.plan.none;
+
+  // ── Maintenance mode ──
+  const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, { refetchInterval: 10000 });
   const isMaintenance = maintenance?.enabled === true;
   const isOwner = user?.email?.toLowerCase() === "josmash2021@gmail.com".toLowerCase();
 
-  const NavContent = memo(({ onNavigate }: { onNavigate?: () => void }) => (
-    <div className="flex flex-col h-full">
-      <div className="px-6 pt-6 pb-4">
-        <div className="flex items-center gap-3">
-          <Logo className="w-7 h-7 shrink-0" />
-          <div className="min-w-0">
-            <h1 className="text-xs font-semibold text-black tracking-tight truncate">{companyName}</h1>
-            <p className="text-[9px] text-neutral-400 truncate">{userMode === "personal" ? t.personalFinance : "Personal & Business Solutions"}</p>
-          </div>
-        </div>
-      </div>
-      <nav className="flex-1 px-3 space-y-0.5">
-        {navItems.map((item) => {
-          const Icon = item.icon;
-          const active = isActive(item.path);
-          return (
-            <button key={item.path} onClick={() => { navigate(item.path); onNavigate?.(); }}
-              className={cn("flex items-center gap-3 w-full px-3 py-2 rounded-md transition-colors duration-150", active ? "bg-neutral-100 text-black font-medium" : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50")}>
-              <Icon className="w-4 h-4 shrink-0" strokeWidth={active ? 2 : 1.5} />
-              <span className="text-sm">{item.path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : (t.nav[item.path] ?? item.label)}</span>
-            </button>
-          );
-        })}
-        {isAdmin && (
-          <button
-            onClick={() => { navigate("/admin"); onNavigate?.(); }}
-            className={cn(
-              "flex items-center gap-3 w-full px-3 py-2 rounded-md transition-colors duration-150",
-              isActive("/admin")
-                ? "bg-neutral-100 text-black font-medium"
-                : "text-neutral-400 hover:text-neutral-600 hover:bg-neutral-50"
-            )}
-          >
-            <Shield className="w-4 h-4 shrink-0" strokeWidth={isActive("/admin") ? 2 : 1.5} />
-            <span className="text-sm">{t.nav.admin}</span>
-          </button>
-        )}
-      </nav>
-      <div className="p-3 mt-auto border-t border-neutral-100">
-        <div className="flex items-center gap-2.5 px-3 py-2">
-          <Avatar className="w-7 h-7">
-            <AvatarFallback className="bg-neutral-200 text-neutral-600 text-xs font-medium">{userInitial}</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-neutral-400">{userMode === "personal" ? t.profile : t.account}</p>
-            <p className="text-xs text-black truncate">{displayName}</p>
-            {userMode === "personal" && user?.email && (
-              <p className="text-[10px] text-neutral-400 truncate">{user.email}</p>
-            )}
-          </div>
-          <Button variant="ghost" size="icon" className="h-7 w-7 text-neutral-400 hover:text-red-500 hover:bg-red-50 transition-colors duration-150" onClick={logout} title={t.logout} aria-label={t.logout}>
-            <LogOut className="w-3.5 h-3.5" />
-          </Button>
-        </div>
-      </div>
-    </div>
-  ));
-
   return (
-    <div className="flex h-screen bg-white">
-      {/* ── Maintenance Mode Overlay ── */}
+    <div className="flex h-screen bg-slate-50">
       {isMaintenance && !isOwner && (
-        <div className="fixed inset-0 z-[100] bg-neutral-900 flex flex-col items-center justify-center p-6">
-          <Construction className="w-16 h-16 text-amber-400 mb-4 animate-pulse" />
-          <h2 className="text-xl font-semibold text-white mb-2 text-center">{t.maintenance.title}</h2>
-          <p className="text-sm text-neutral-400 text-center max-w-sm">
-            {maintenance?.message || t.maintenance.text}
-          </p>
-          <p className="text-xs text-neutral-600 mt-4">{t.maintenance.later}</p>
+        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-neutral-900 p-6">
+          <Construction className="mb-4 h-16 w-16 animate-pulse text-amber-400" />
+          <h2 className="mb-2 text-center text-xl font-semibold text-white">{t.maintenance.title}</h2>
+          <p className="max-w-sm text-center text-sm text-neutral-400">{maintenance?.message || t.maintenance.text}</p>
+          <p className="mt-4 text-xs text-neutral-600">{t.maintenance.later}</p>
         </div>
       )}
 
-      <aside className="hidden lg:flex flex-col w-56 border-r border-neutral-200 bg-white shrink-0">
-        <NavContent />
-        <div className="mt-auto px-4 py-3 border-t border-neutral-100">
-          <Link to="/privacy" className="text-[10px] text-neutral-400 hover:text-neutral-600 transition-colors">
-            Politica de Privacidad
-          </Link>
+      {/* ── Desktop side menu ── */}
+      <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
+        <div className="flex items-center gap-3 px-5 pb-5 pt-5">
+          <Logo className="h-9 w-9 shrink-0" />
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-slate-900">{companyName}</p>
+            <p className="truncate text-xs text-slate-500">{planLabel || "Personal & Business Solutions"}</p>
+          </div>
+        </div>
+        <SideNav groups={groups} pathname={pathname} locked={locked} label={label} t={t} onGo={go} />
+        <div className="border-t border-slate-100 px-5 py-3">
+          <Link to="/privacy" className="text-[11px] text-slate-400 hover:text-slate-600">{t.shell.privacy}</Link>
         </div>
       </aside>
 
-      {/* Mobile Header */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-40 bg-white border-b border-neutral-200">
-        <div className="flex items-center gap-3 px-4 h-14">
-          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
-            <SheetTrigger asChild>
-              <button className="p-2 -ml-2 rounded-md text-neutral-400 hover:text-black hover:bg-neutral-100 transition-colors duration-150">
-                <Menu className="w-5 h-5" />
-              </button>
-            </SheetTrigger>
-            <SheetContent side="left" className="w-72 sm:w-80 bg-white border-neutral-200 p-0">
-              <NavContent onNavigate={() => setMobileOpen(false)} />
-            </SheetContent>
-          </Sheet>
-          <div className="flex items-center gap-2">
-            <Logo className="w-6 h-6 shrink-0" />
+      <div className="flex min-w-0 flex-1 flex-col">
+        {/* ── Top bar: search, + Nuevo, account (phone: brand, + and account) ── */}
+        <header className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200 bg-white/95 px-4 backdrop-blur lg:px-6">
+          <div className="flex min-w-0 flex-1 items-center gap-2.5 lg:hidden">
+            <Logo className="h-8 w-8 shrink-0" />
             <div className="min-w-0">
-              <span className="text-sm font-semibold text-black truncate block">{companyName}</span>
-              <span className="text-[9px] text-neutral-400 truncate block">Personal & Business Solutions</span>
+              <p className="truncate text-sm font-bold text-slate-900">{companyName}</p>
+              {planLabel && <p className="truncate text-[11px] text-slate-500">{planLabel}</p>}
             </div>
           </div>
-        </div>
+          <div className="hidden min-w-0 flex-1 lg:flex">
+            <SectionSearch items={allItems} label={label} t={t} onGo={go} />
+          </div>
+          <div className="hidden lg:block"><NewMenu items={newItems} t={t} onGo={go} /></div>
+          <AccountMenu name={displayName} email={user?.email} initial={initial} t={t} onGo={go} logout={logout} />
+        </header>
+
+        <main className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
+          <TeamBanner />
+          <TrialBanner />
+          <SubscriptionPageGate>
+            {/* Pages are lazy-loaded; keep the menu while one loads */}
+            <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
+              <Outlet />
+            </Suspense>
+          </SubscriptionPageGate>
+        </main>
+
+        {/* ── Phone tab bar ── */}
+        <nav aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[calc(6px+env(safe-area-inset-bottom,0px))] pt-1.5 lg:hidden">
+          {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} /> : <span key="empty-l" />)}
+          <div className="grid place-items-center">{newItems.length ? <NewMenu items={newItems} t={t} onGo={go} round /> : null}</div>
+          {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} /> : <span />}
+          <button
+            onClick={() => setMoreOpen(true)}
+            aria-current={rest.some((i) => isOn(pathname, i.path)) ? "page" : undefined}
+            className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", rest.some((i) => isOn(pathname, i.path)) ? "text-blue-600" : "text-slate-500")}
+          >
+            <MoreHorizontal className="h-[22px] w-[22px]" aria-hidden />{t.shell.more}
+          </button>
+        </nav>
+        <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
+          <SheetContent side="bottom" className="max-h-[80vh] overflow-y-auto rounded-t-2xl p-0 lg:hidden">
+            <SheetHeader className="px-5 pb-1 pt-5 text-left"><SheetTitle>{t.shell.moreTitle}</SheetTitle></SheetHeader>
+            <ul className="grid gap-1 px-3 pb-6">
+              {rest.map((i) => {
+                const Icon = i.icon;
+                const on = isOn(pathname, i.path);
+                return (
+                  <li key={i.path}>
+                    <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined}
+                      className={cn("flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left", on ? "bg-slate-900 text-white" : "hover:bg-slate-50")}>
+                      <span className={cn("grid h-10 w-10 shrink-0 place-items-center rounded-xl", on ? "bg-white/10" : "bg-slate-100 text-slate-700")}><Icon className="h-5 w-5" aria-hidden /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold">{label(i.path)}</span>
+                        {t.shell.desc[i.path] && <span className={cn("block truncate text-xs", on ? "text-white/70" : "text-slate-500")}>{t.shell.desc[i.path]}</span>}
+                      </span>
+                      {locked(i) && <Lock className="h-4 w-4 shrink-0 text-slate-300" aria-label={t.shell.locked} />}
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </SheetContent>
+        </Sheet>
       </div>
 
-      <main className="flex-1 overflow-y-auto pt-14 lg:pt-0 relative">
-        <TeamBanner />
-        <TrialBanner />
-        <SubscriptionPageGate>
-          {/* Pages are lazy-loaded; keep the sidebar while one loads */}
-          <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-neutral-400" /></div>}>
-            <Outlet />
-          </Suspense>
-        </SubscriptionPageGate>
-      </main>
-
-      {/* Subscription expired overlay — shown on all pages when subscription expires */}
+      {/* Subscription expired overlay — shown on all pages when the subscription expires */}
       <SubscriptionExpiredOverlay />
     </div>
+  );
+}
+
+function TabButton({ item, on, label, onGo }: { item: Item; on: boolean; label: string; onGo: (p: string) => void }) {
+  const Icon = item.icon;
+  return (
+    <button onClick={() => onGo(item.path)} aria-current={on ? "page" : undefined}
+      className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", on ? "text-blue-600" : "text-slate-500")}>
+      <Icon className="h-[22px] w-[22px]" strokeWidth={on ? 2.2 : 1.8} aria-hidden />
+      <span className="max-w-full truncate">{label}</span>
+    </button>
   );
 }

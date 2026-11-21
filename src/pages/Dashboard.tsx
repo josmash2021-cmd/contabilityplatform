@@ -1,234 +1,256 @@
+import { useMemo } from "react";
+import { Link, useNavigate } from "react-router";
+import {
+  AlertCircle, ArrowRight, Bell, Camera, CheckCircle2, ClipboardList, FileText, Inbox, Landmark, Lock, ShoppingCart, Sparkles, TrendingDown, TrendingUp, Truck,
+  type LucideIcon,
+} from "lucide-react";
+import { AnimatedPage } from "@/components/AnimatedPage";
 import { trpc } from "@/providers/trpc";
-import { formatCurrency, getUserTimezoneShort } from "@/lib/utils";
-import { Link } from "react-router";
-import { Users, DollarSign, Receipt, ArrowUpRight, ArrowDownRight, TrendingUp, Clock } from "lucide-react";
-import { AnimatedPage, AnimatedCard } from "@/components/AnimatedPage";
-import { useState, useEffect } from "react";
+import { useAuth } from "@/hooks/useAuth";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
-import { businessCopy } from "@/i18n/copy/business";
+import { homeCopy, type HomeCopy } from "@/i18n/copy/home";
+import type { Feature } from "@contracts/planFeatures";
+import { DRAFT_STEP } from "@contracts/taxRules";
 
-// Hook to detect user's location for timezone verification
-function useUserLocation() {
-  const [location, setLocation] = useState<{ city?: string; region?: string; tz?: string } | null>(null);
-  const [permission, setPermission] = useState<"granted" | "denied" | "prompt">("prompt");
+const pad = (n: number) => String(n).padStart(2, "0");
+const ymd = (d: Date) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const fmt = (n: number, cents = false) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 })}`;
 
-  useEffect(() => {
-    // Try to get timezone info from browser (always available)
-    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    setLocation((prev) => ({ ...prev, tz }));
+type Tone = "info" | "bad" | "warn" | "good";
+type Task = { tone: Tone; icon: LucideIcon; title: string; text: string; to?: string };
 
-    // Optionally request geolocation for city/region
-    if ("geolocation" in navigator) {
-      navigator.permissions?.query({ name: "geolocation" as any }).then((result) => {
-        setPermission(result.state as "granted" | "denied" | "prompt");
-        if (result.state === "granted") {
-          navigator.geolocation.getCurrentPosition(
-            () => {}, // success - we mainly care about permission for timezone awareness
-            () => {},
-            { enableHighAccuracy: false, timeout: 5000 }
-          );
-        }
-      }).catch(() => {
-        // permissions API not supported, try direct request
-        navigator.geolocation.getCurrentPosition(() => {}, () => {}, { timeout: 5000 });
-      });
-    }
-  }, []);
-
-  return { location, permission };
-}
-
-// Short weekday for a local "YYYY-MM-DD" date (the server's dayName is always Spanish).
-function weekdayShort(date: string | undefined, locale: string): string | undefined {
-  const [yy, mm, dd] = (date ?? "").split("-").map(Number);
-  if (!yy || !mm || !dd) return undefined;
-  return new Date(yy, mm - 1, dd).toLocaleDateString(locale, { weekday: "short" });
-}
-
+/** The 2.0 business home: how the month is going, what's urgent, what's coming. */
 export default function Dashboard() {
-  const { dashboard: t, paymentMethods, common: { noProducts } } = useCopy(businessCopy);
-  const locale = intlLocale(useLang().lang);
-  // Build local date strings (YYYY-MM-DD) and timezone offset for backend
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const d = now.getDate();
-  const pad = (n: number) => String(n).padStart(2, "0");
+  const t = useCopy(homeCopy);
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
+  const navigate = useNavigate();
+  const { user } = useAuth();
 
-  const todayDate = `${y}-${pad(m + 1)}-${pad(d)}`;
-  // Calculate week start properly (handles month boundary, e.g. June 3 -> May 28)
-  const weekStart = new Date(y, m, d - 6);
-  const weekStartDate = `${weekStart.getFullYear()}-${pad(weekStart.getMonth() + 1)}-${pad(weekStart.getDate())}`;
-  const monthStartDate = `${y}-${pad(m + 1)}-01`;
-  const tzOffsetHours = now.getTimezoneOffset() / -60; // -4 for EDT, +1 for CET, etc.
+  // Local dates for the summary (same as before the redesign).
+  const dates = useMemo(() => {
+    const now = new Date();
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 6);
+    return {
+      todayDate: ymd(now),
+      weekStartDate: ymd(weekStart),
+      monthStartDate: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-01`,
+      tzOffsetHours: now.getTimezoneOffset() / -60,
+      in30: ymd(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30)),
+      long: upperFirst(now.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })),
+      month: now.toLocaleDateString(locale, { month: "long" }),
+    };
+  }, [locale]);
 
-  const { data, error } = trpc.dashboard.summary.useQuery({
-    todayDate,
-    weekStartDate,
-    monthStartDate,
-    tzOffsetHours,
+  const { data: s } = trpc.dashboard.summary.useQuery({
+    todayDate: dates.todayDate, weekStartDate: dates.weekStartDate, monthStartDate: dates.monthStartDate, tzOffsetHours: dates.tzOffsetHours,
   });
-  const { location } = useUserLocation();
-  const tzShort = getUserTimezoneShort();
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const has = (f: Feature) => !!plan?.features.includes(f);
+  const { data: bank } = trpc.bank.checkConnection.useQuery(undefined, { staleTime: 60_000 });
+  const { data: receivables } = trpc.quotes.receivables.useQuery(undefined, { enabled: has("quotes") });
+  const { data: bills } = trpc.vendors.bills.summary.useQuery({ today: dates.todayDate }, { enabled: has("vendors") });
+  const { data: upcoming } = trpc.vendors.bills.list.useQuery({ filter: "unpaid", today: dates.todayDate, limit: 500 }, { enabled: has("vendors") });
+  const { data: tax } = trpc.tax.current.useQuery(undefined, { enabled: has("taxes") && !membership });
+  const { data: receiptUse } = trpc.receipts.usage.useQuery(undefined, { enabled: has("receipts") });
 
-  const safeData = data || {
-    todaySales: { total: "0", count: 0 },
-    weekSales: { total: "0", count: 0 },
-    monthSales: { total: "0", count: 0 },
-    todayExpenses: "0",
-    weekExpenses: "0",
-    monthExpenses: "0",
-    paymentBreakdown: [],
-    dailySales: [],
-    recentSales: [],
-    bankBalance: "0",
-    accountBalances: [],
-  };
+  const num = (v: unknown) => Number(v ?? 0);
+  const monthSales = num(s?.monthSales.total);
+  const monthExp = num(s?.monthExpenses);
+  const profit = monthSales - monthExp;
+  const bankBalance = num(s?.bankBalance);
+  const hasBank = bank?.hasBank === true;
+  const owedList = receivables ?? [];
+  const owedTotal = owedList.reduce((a, r) => a + num(r.total), 0);
+  const billItems = (upcoming?.items ?? []).filter((b) => b.dueDate <= dates.in30);
+  const billsIn30 = billItems.reduce((a, b) => a + num(b.amount), 0);
+  const firstName = (user?.name || "").trim().split(/\s+/)[0] ?? "";
 
-  const netWeek = Number(safeData.weekSales.total ?? 0) - Number(safeData.weekExpenses ?? 0);
-  const netMonth = Number(safeData.monthSales.total ?? 0) - Number(safeData.monthExpenses ?? 0);
+  // ── Para hoy: only real things, most urgent first ──
+  const tasks: Task[] = [];
+  if (bank && !hasBank) tasks.push({ tone: "info", icon: Landmark, title: t.tasks.connectBank[0], text: t.tasks.connectBank[1], to: "/bank" });
+  if (bills && bills.overdueCount > 0) { const [a, b] = t.tasks.late(bills.overdueCount, bills.overdueTotal); tasks.push({ tone: "bad", icon: Bell, title: a, text: b, to: "/vendors" }); }
+  if (bills && bills.dueSoonCount > 0) { const [a, b] = t.tasks.soon(bills.dueSoonCount, bills.dueSoonTotal); tasks.push({ tone: "warn", icon: Truck, title: a, text: b, to: "/vendors" }); }
+  if (owedList.length > 0) { const [a, b] = t.tasks.collect(owedList.length, owedTotal); tasks.push({ tone: "info", icon: ClipboardList, title: a, text: b, to: "/quotes" }); }
+  const redo = tax?.docs.filter((d) => d.source === "client" && d.status === "redo").length ?? 0;
+  if (redo > 0) { const [a, b] = t.tasks.taxRedo(redo); tasks.push({ tone: "bad", icon: FileText, title: a, text: b, to: "/taxes" }); }
+  else if (tax?.access.allowed && (tax.ret?.step ?? DRAFT_STEP) === DRAFT_STEP && tax.missing && (tax.missing.docs.length > 0 || tax.missing.income)) tasks.push({ tone: "info", icon: FileText, title: t.tasks.taxDocs[0], text: t.tasks.taxDocs[1], to: "/taxes" });
+  if (receiptUse && receiptUse.cap !== null && receiptUse.remaining !== null && receiptUse.remaining <= 5) { const [a, b] = t.tasks.receipts(receiptUse.remaining); tasks.push({ tone: "warn", icon: Camera, title: a, text: b, to: "/receipts" }); }
+  if (tasks.length === 0) tasks.push({ tone: "good", icon: CheckCircle2, title: t.tasks.allDone[0], text: t.tasks.allDone[1] });
+
+  // Day names in the user's language (the server sends them in Spanish).
+  const week = (s?.dailySales ?? []).map((d) => {
+    const day = new Date(`${d.date}T12:00:00`);
+    return { day: day.toLocaleDateString(locale, { weekday: "short" }), long: day.toLocaleDateString(locale, { weekday: "long" }), total: num(d.total) };
+  });
+  const weekMax = Math.max(1, ...week.map((d) => d.total));
+  const weekTotal = week.reduce((a, d) => a + d.total, 0);
+  const best = week.reduce<WeekDay | null>((b, d) => (d.total > (b?.total ?? 0) ? d : b), null);
 
   return (
-    <div className="p-8 lg:p-10 space-y-8 bg-white min-h-screen">
-      {/* Header */}
-      <AnimatedPage>
-        <div className="flex items-start justify-between">
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        <header className="flex flex-wrap items-end justify-between gap-3">
           <div>
-            <h1 className="text-2xl font-medium text-black tracking-tight">{t.title}</h1>
-            <p className="text-neutral-400 text-sm mt-1">{t.subtitle}</p>
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.hello(firstName)}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{dates.long}</p>
           </div>
-          {/* Timezone indicator */}
-          <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-neutral-50 rounded-lg border border-neutral-100">
-            <Clock className="w-3.5 h-3.5 text-neutral-400" />
-            <span className="text-[10px] text-neutral-500 font-medium">{tzShort}</span>
-          </div>
-        </div>
-      </AnimatedPage>
+          <button onClick={() => navigate("/pos")} className="hidden h-10 items-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:inline-flex">
+            <ShoppingCart className="h-4 w-4" />{t.charge}
+          </button>
+        </header>
 
-      {error && (
-        <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-          <p className="text-red-600 text-sm">{t.error(error.message)}</p>
-        </div>
-      )}
+        <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
+          {profit >= 0 ? <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />}
+          <span>{monthSales > 0 || monthExp > 0 ? t.status(fmt(monthSales), fmt(Math.abs(profit)), profit >= 0) : t.statusEmpty}</span>
+        </p>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        {[
-          { label: t.today, value: formatCurrency(safeData.todaySales.total ?? 0), sub: t.salesCount(safeData.todaySales.count ?? 0), icon: DollarSign, iconColor: "text-emerald-600" },
-          { label: t.thisWeekKpi, value: formatCurrency(safeData.weekSales.total ?? 0), net: netWeek, icon: Receipt, iconColor: "text-blue-600" },
-          { label: t.thisMonthKpi, value: formatCurrency(safeData.monthSales.total ?? 0), net: netMonth, icon: TrendingUp, iconColor: "text-violet-600" },
-          { label: t.customers, value: String(safeData.customerCount ?? 0), sub: t.registered, icon: Users, iconColor: "text-amber-600" },
-        ].map((s, i) => (
-          <AnimatedCard key={s.label} delay={i * 80}>
-            <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-              <div className="flex items-center gap-2 mb-3">
-                <s.icon className={`w-3.5 h-3.5 ${s.iconColor}`} strokeWidth={1.5} />
-                <span className="text-xs text-neutral-400">{s.label}</span>
-              </div>
-              <p className="text-xl font-medium text-black">{s.value}</p>
-              {s.sub ? (
-                <p className="text-xs text-neutral-400 mt-1">{s.sub}</p>
-              ) : s.net !== undefined ? (
-                <div className="flex items-center gap-1 mt-1">
-                  {s.net >= 0 ? <ArrowUpRight className="w-3 h-3 text-emerald-500" /> : <ArrowDownRight className="w-3 h-3 text-red-500" />}
-                  <span className={`text-xs ${s.net >= 0 ? "text-emerald-600" : "text-red-600"}`}>{t.net(formatCurrency(Math.abs(s.net)))}</span>
-                </div>
-              ) : null}
+        {/* KPIs */}
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label={t.today.title}>
+          <Kpi label={t.kpi.bank} value={hasBank ? fmt(bankBalance) : "—"} sub={hasBank ? t.kpi.bankSub : t.kpi.bankNone} to="/bank" />
+          {has("quotes")
+            ? <Kpi label={t.kpi.owed} value={fmt(owedTotal)} sub={t.kpi.owedSub(owedList.length)} to="/quotes" />
+            : <Kpi label={t.kpi.today} value={fmt(num(s?.todaySales.total), true)} sub={t.kpi.todaySub(num(s?.todaySales.count))} to="/transactions" />}
+          {has("vendors")
+            ? <Kpi label={t.kpi.owe} value={fmt(bills?.unpaidTotal ?? 0)} sub={t.kpi.oweSub(bills?.unpaidCount ?? 0, bills?.overdueCount ?? 0)} tone={bills && bills.overdueCount > 0 ? "bad" : undefined} to="/vendors" />
+            : <Kpi label={t.kpi.monthExp} value={fmt(monthExp)} sub={t.kpi.monthExpSub} to="/reports" />}
+          <Kpi label={t.kpi.profit(dates.month)} value={fmt(profit)} sub={t.kpi.profitSub(fmt(monthSales), fmt(monthExp))} tone={profit >= 0 ? "good" : "bad"} to="/reports" />
+        </section>
+
+        {/* Shortcuts */}
+        <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <Shortcut icon={ShoppingCart} label={t.shortcuts.pos} to="/pos" />
+          <Shortcut icon={ClipboardList} label={t.shortcuts.quote} to="/quotes" locked={!!plan && !has("quotes")} lockedLabel={t.locked} />
+          <Shortcut icon={Camera} label={t.shortcuts.receipt} to="/receipts" locked={!!plan && !has("receipts")} lockedLabel={t.locked} />
+          <Shortcut icon={Truck} label={t.shortcuts.bill} to="/vendors" locked={!!plan && !has("vendors")} lockedLabel={t.locked} />
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-[1.25fr_1fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="home-today">
+            <div className="flex items-center justify-between gap-2">
+              <h2 id="home-today" className="font-semibold text-slate-900">{t.today.title}</h2>
+              <span className="rounded-full bg-slate-100 px-2.5 py-0.5 text-[11px] font-medium text-slate-500">{t.today.tag}</span>
             </div>
-          </AnimatedCard>
+            <ul className="mt-3 divide-y divide-slate-100">
+              {tasks.map((task) => <TaskRow key={task.title} task={task} openLabel={t.today.open} />)}
+            </ul>
+          </section>
+
+          {hasBank && (has("quotes") || has("vendors")) ? (
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="home-forecast">
+              <h2 id="home-forecast" className="font-semibold text-slate-900">{t.forecast.title}</h2>
+              <p className="mt-1 text-3xl font-bold tabular-nums tracking-tight text-slate-900">≈ {fmt(bankBalance + owedTotal - billsIn30)}</p>
+              <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
+                <p className="rounded-xl bg-emerald-50 px-3 py-2 text-emerald-800">{t.forecast.in} <b className="tabular-nums">+{fmt(owedTotal)}</b></p>
+                <p className="rounded-xl bg-red-50 px-3 py-2 text-red-800">{t.forecast.out} <b className="tabular-nums">−{fmt(billsIn30)}</b></p>
+              </div>
+              <p className="mt-3 flex gap-2 text-xs text-slate-500"><Sparkles className="h-4 w-4 shrink-0 text-violet-500" />{t.forecast.note}</p>
+            </section>
+          ) : (
+            <WeekCard week={week} max={weekMax} total={weekTotal} best={best} t={t} />
+          )}
+        </div>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          {hasBank && (has("quotes") || has("vendors")) && <WeekCard week={week} max={weekMax} total={weekTotal} best={best} t={t} />}
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="home-recent">
+            <div className="flex items-center justify-between">
+              <h2 id="home-recent" className="font-semibold text-slate-900">{t.recent.title}</h2>
+              <Link to="/transactions" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">{t.recent.all}<ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div>
+            {(s?.recentSales ?? []).length === 0 ? <p className="mt-3 text-sm text-slate-500">{t.recent.none}</p> : (
+              <ul className="mt-2 divide-y divide-slate-100">
+                {(s?.recentSales ?? []).slice(0, 5).map((sale: { id: number; customerName?: string | null; total: string; paymentMethod: string; status: string; createdAt: string | Date; items?: { serviceName: string }[] }) => (
+                  <li key={sale.id} className="flex items-center gap-3 py-2.5">
+                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-slate-100 text-slate-600"><Inbox className="h-4 w-4" /></span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-sm font-medium text-slate-900">{sale.items?.[0]?.serviceName || sale.customerName || t.recent.sale}</span>
+                      <span className="block truncate text-xs text-slate-500">
+                        {new Date(sale.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short" })} · {sale.status === "completed"
+                          ? (t.methods[sale.paymentMethod] ?? sale.paymentMethod)
+                          : <span className={sale.status === "pending" ? "font-medium text-amber-700" : "text-slate-500"}>{t.recent.status[sale.status] ?? sale.status}</span>}
+                      </span>
+                    </span>
+                    <span className={`text-sm font-semibold tabular-nums ${sale.status === "cancelled" || sale.status === "refunded" ? "text-slate-400 line-through" : "text-slate-900"}`}>{fmt(num(sale.total), true)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+        </div>
+      </div>
+    </AnimatedPage>
+  );
+}
+
+function Kpi({ label, value, sub, tone, to }: { label: string; value: string; sub: string; tone?: "good" | "bad"; to: string }) {
+  return (
+    <Link to={to} className="group rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+      <p className="text-xs font-medium text-slate-500">{label}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums tracking-tight sm:text-2xl ${tone === "good" ? "text-emerald-700" : tone === "bad" ? "text-red-700" : "text-slate-900"}`}>{value}</p>
+      <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{sub}</p>
+    </Link>
+  );
+}
+
+function Shortcut({ icon: Icon, label, to, locked, lockedLabel }: { icon: LucideIcon; label: string; to: string; locked?: boolean; lockedLabel?: string }) {
+  return (
+    <Link to={to} title={locked ? lockedLabel : undefined}
+      className="relative flex min-h-[56px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm sm:px-4 font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600"><Icon className="h-[18px] w-[18px]" /></span>
+      <span className="min-w-0 flex-1 leading-tight">{label}</span>
+      {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-label={lockedLabel} />}
+    </Link>
+  );
+}
+
+const TONES: Record<Tone, string> = {
+  info: "bg-blue-50 text-blue-600", bad: "bg-red-50 text-red-600", warn: "bg-amber-50 text-amber-600", good: "bg-emerald-50 text-emerald-600",
+};
+
+function TaskRow({ task, openLabel }: { task: Task; openLabel: string }) {
+  const Icon = task.tone === "bad" && task.icon === Bell ? AlertCircle : task.icon;
+  const body = (
+    <>
+      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${TONES[task.tone]}`}><Icon className="h-[18px] w-[18px]" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold text-slate-900">{task.title}</span>
+        <span className="block text-xs text-slate-500">{task.text}</span>
+      </span>
+      {task.to && <span className="inline-flex shrink-0 items-center rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{openLabel}</span>}
+    </>
+  );
+  return (
+    <li>
+      {task.to
+        ? <Link to={task.to} className="flex items-center gap-3 rounded-lg py-3 hover:bg-slate-50">{body}</Link>
+        : <div className="flex items-center gap-3 py-3">{body}</div>}
+    </li>
+  );
+}
+
+type WeekDay = { day: string; long: string; total: number };
+
+function WeekCard({ week, max, total, best, t }: { week: WeekDay[]; max: number; total: number; best: WeekDay | null; t: HomeCopy }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="home-week">
+      <div className="flex items-baseline justify-between gap-2">
+        <h2 id="home-week" className="font-semibold text-slate-900">{t.week.title}</h2>
+        <span className="text-sm font-semibold tabular-nums text-slate-900">{fmt(total)}</span>
+      </div>
+      <div className="mt-4 grid h-36 grid-cols-7 items-end gap-2" role="img" aria-label={best ? t.week.best(best.long, fmt(best.total)) : t.week.none}>
+        {week.map((d, i) => (
+          <div key={i} className="flex h-full flex-col items-center justify-end gap-1">
+            <span className="text-[10px] tabular-nums text-slate-400">{d.total ? fmt(d.total) : ""}</span>
+            <span className={`w-full max-w-[36px] rounded-md ${i === week.length - 1 ? "bg-blue-600" : "bg-slate-200"}`} style={{ height: `${Math.max(4, Math.round((d.total / max) * 100))}px` }} />
+            <span className="text-[11px] capitalize text-slate-500">{d.day}</span>
+          </div>
         ))}
       </div>
-
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Daily Sales Chart */}
-        <AnimatedCard delay={200} className="lg:col-span-2">
-          <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">{t.last7Days}</span>
-              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewReports} <ArrowUpRight className="w-3 h-3" /></Link>
-            </div>
-            <div className="h-48 flex items-end gap-2">
-              {safeData.dailySales?.length ? safeData.dailySales.map((d: any, i: number) => (
-                <div key={i} className="flex-1 flex flex-col items-center gap-1">
-                  <div className="w-full bg-neutral-100 rounded-t-sm relative overflow-hidden" style={{ height: `${Math.max((Number(d.total) / Math.max(...safeData.dailySales.map((x: any) => Number(x.total)))) * 160, 4)}px` }}>
-                    <div className="absolute bottom-0 left-0 right-0 bg-emerald-500 rounded-t-sm" style={{ height: "100%" }} />
-                  </div>
-                  <span className="text-[10px] text-neutral-400">{weekdayShort(d.date, locale) ?? d.dayName}</span>
-                </div>
-              )) : <p className="text-sm text-neutral-400 w-full text-center">{t.noData}</p>}
-            </div>
-          </div>
-        </AnimatedCard>
-
-        {/* Side Panel */}
-        <AnimatedCard delay={280}>
-          <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <p className="text-xs text-neutral-400 mb-3">{t.todayPayments}</p>
-            {safeData.paymentBreakdown?.length ? safeData.paymentBreakdown.map((p: any) => (
-              <div key={p.method} className="flex items-center justify-between py-1.5">
-                <span className="text-xs text-neutral-500">{paymentMethods[p.method] || p.method}</span>
-                <span className="text-xs font-medium text-black">{formatCurrency(p.total)}</span>
-              </div>
-            )) : <p className="text-sm text-neutral-400 text-center py-4">{t.noPaymentsToday}</p>}
-          </div>
-        </AnimatedCard>
-      </div>
-
-      {/* Bottom Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <AnimatedCard delay={400}>
-          <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">{t.financialSummary}</span>
-              <Link to="/reports" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewMore} <ArrowUpRight className="w-3 h-3" /></Link>
-            </div>
-            <div className="space-y-3">
-              {[
-                { label: t.today, value: formatCurrency(safeData.todaySales.total ?? 0) },
-                { label: t.thisWeek, value: formatCurrency(safeData.weekSales.total ?? 0) },
-                { label: t.thisMonth, value: formatCurrency(safeData.monthSales.total ?? 0) },
-                { label: t.weekExpenses, value: formatCurrency(safeData.weekExpenses ?? 0), color: "text-red-600" },
-                { label: t.monthExpenses, value: formatCurrency(safeData.monthExpenses ?? 0), color: "text-red-600" },
-              ].map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-xs text-neutral-500">{item.label}</span>
-                  <span className={`text-sm font-medium ${item.color || "text-black"}`}>{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        </AnimatedCard>
-
-        <AnimatedCard delay={480}>
-          <div className="bg-white border border-neutral-200 rounded-lg p-5 hover:border-neutral-300 hover:shadow-soft transition-[border-color,box-shadow] duration-200 ease-out-expo">
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs text-neutral-400">{t.recentSales}</span>
-              <Link to="/transactions" className="text-xs text-neutral-400 hover:text-black flex items-center gap-1 transition-colors duration-150">{t.viewAll} <ArrowUpRight className="w-3 h-3" /></Link>
-            </div>
-            {safeData.recentSales?.length ? safeData.recentSales.map((sale: any) => {
-              const productNames = sale.items?.map((i: any) => i.serviceName).join(", ") || noProducts;
-              const dateStr = sale.createdAt ? new Date(sale.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short" }) : "";
-              const timeStr = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString(locale, { hour: "2-digit", minute: "2-digit", hour12: true }) : "";
-              const paymentLabel = paymentMethods[sale.paymentMethod] || sale.paymentMethod;
-              return (
-                <div key={sale.id} className="flex items-center justify-between py-2.5 border-b border-neutral-100 last:border-0">
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-black truncate">{productNames}</p>
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <span className="text-[10px] text-neutral-500">{dateStr} · {timeStr}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-neutral-100 text-neutral-500">{paymentLabel}</span>
-                    </div>
-                  </div>
-                  <span className="text-xs font-semibold text-black ml-3 shrink-0">{formatCurrency(sale.total)}</span>
-                </div>
-              );
-            }) : <p className="text-sm text-neutral-400 text-center py-8">{t.noSalesBefore}<Link to="/pos" className="font-medium text-black">{t.noSalesLink}</Link>{t.noSalesAfter}</p>}
-          </div>
-        </AnimatedCard>
-      </div>
-
-    </div>
+      <p className="mt-3 text-xs text-slate-500">{best ? t.week.best(best.long, fmt(best.total)) : t.week.none}</p>
+    </section>
   );
 }

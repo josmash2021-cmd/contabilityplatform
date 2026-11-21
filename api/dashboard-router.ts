@@ -126,17 +126,16 @@ export const dashboardRouter = createRouter({
 
       const dailySalesMap = new Map((dailySalesRaw as Array<{ date: string; total: string; count: number }>).map((d: any) => [d.date, d]));
       const dailySales: Array<{ date: string; dayName: string; total: string; count: number }> = [];
+      // Count back from the user's today (the server clock is UTC and can already be "tomorrow").
       const localNow = new Date();
+      const [ty, tm, td] = todayDate ? todayDate.split("-").map(Number) : [localNow.getFullYear(), localNow.getMonth() + 1, localNow.getDate()];
       for (let i = 6; i >= 0; i--) {
-        const d = new Date(localNow.getFullYear(), localNow.getMonth(), localNow.getDate() - i);
-        const yyyy = d.getFullYear();
-        const mm = String(d.getMonth() + 1).padStart(2, "0");
-        const dd = String(d.getDate()).padStart(2, "0");
-        const dayStr = `${yyyy}-${mm}-${dd}`;
+        const d = new Date(Date.UTC(ty, tm - 1, td - i));
+        const dayStr = d.toISOString().slice(0, 10);
         const row = dailySalesMap.get(dayStr);
         dailySales.push({
           date: dayStr,
-          dayName: d.toLocaleDateString("es", { weekday: "short" }),
+          dayName: d.toLocaleDateString("es", { weekday: "short", timeZone: "UTC" }),
           total: String(Number(row?.total ?? 0).toFixed(2)),
           count: Number(row?.count ?? 0),
         });
