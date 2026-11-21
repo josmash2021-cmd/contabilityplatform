@@ -1,54 +1,53 @@
 import { useId, useState, type FormEvent } from "react";
-import { Loader2, ShoppingBag, Trash2, X } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/providers/trpc";
-import { useCopy, useLang } from "@/i18n/useI18n";
-import { intlLocale } from "@/i18n/lang";
+import { cn } from "@/lib/utils";
+import { useCopy } from "@/i18n/useI18n";
 import { clientesCopy } from "@/i18n/copy/clientes";
-import { fullName, money, type Customer, type CustomerForm } from "./customerUtils";
+import { PosSheet } from "@/components/pos/PosSheet";
+import { FIELD, LABEL, btn } from "@/components/pos/ui";
+import type { Customer, CustomerForm } from "./customerUtils";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** null = a new client. */
   customer: Customer | null;
-  canEdit: boolean;
-  canDelete: boolean;
-  onDelete: (c: Customer) => void;
+  /** After saving a new client (its id). */
+  onCreated?: (id: number) => void;
 };
 
-/** Create, edit (or, read-only, view) one client, with what they've bought. Full screen on phone, centered on desktop. */
-export function CustomerDialog({ open, onOpenChange, customer, canEdit, canDelete, onDelete }: Props) {
+/** The prototype's "Nuevo cliente" panel (and "Editar datos"). Bottom sheet on the phone, centered card on bigger screens. */
+export function CustomerDialog({ open, onOpenChange, customer, onCreated }: Props) {
+  const t = useCopy(clientesCopy);
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="grid-cols-1 content-start gap-0 overflow-y-auto bg-white p-0 sm:max-h-[calc(100dvh-4rem)] sm:max-w-lg sm:rounded-2xl">
-        <CustomerFormBody
-          key={customer?.id ?? "new"}
-          customer={customer}
-          canEdit={canEdit}
-          canDelete={canDelete}
-          onDelete={onDelete}
-          onClose={() => onOpenChange(false)}
-        />
-      </DialogContent>
-    </Dialog>
+    <PosSheet open={open} onOpenChange={onOpenChange} title={customer ? t.form.titleEdit : t.form.titleNew} closeLabel={t.form.close}>
+      {open && <FormBody key={customer?.id ?? "new"} customer={customer} onClose={() => onOpenChange(false)} onCreated={onCreated} />}
+    </PosSheet>
   );
 }
 
-function CustomerFormBody({ customer, canEdit, canDelete, onDelete, onClose }: Omit<Props, "open" | "onOpenChange"> & { onClose: () => void }) {
+function FormBody({ customer, onClose, onCreated }: { customer: Customer | null; onClose: () => void; onCreated?: (id: number) => void }) {
   const t = useCopy(clientesCopy);
+  const f = t.form;
   const utils = trpc.useUtils();
   const id = useId();
+  const [tried, setTried] = useState(false);
   const [form, setForm] = useState<CustomerForm>(() => ({
     name: customer?.name ?? "", lastName: customer?.lastName ?? "", email: customer?.email ?? "",
-    phone: customer?.phone ?? "", address: customer?.address ?? "",
+    phone: customer?.phone ?? "", address: customer?.address ?? "", notes: customer?.notes ?? "",
   }));
 
-  const refresh = () => { void utils.customers.list.invalidate(); void utils.customers.stats.invalidate(); };
+  const refresh = () => {
+    void utils.customers.list.invalidate();
+    void utils.customers.stats.invalidate();
+    void utils.customers.overview.invalidate();
+    void utils.customers.detail.invalidate();
+    void utils.customers.byId.invalidate();
+  };
   const create = trpc.customers.create.useMutation({
-    onSuccess: () => { refresh(); toast.success(t.toast.created); onClose(); },
+    onSuccess: (res) => { refresh(); toast.success(t.toast.created); onClose(); onCreated?.(res.id); },
     onError: (err) => toast.error(err.message),
   });
   const update = trpc.customers.update.useMutation({
@@ -58,147 +57,51 @@ function CustomerFormBody({ customer, canEdit, canDelete, onDelete, onClose }: O
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (!canEdit) return;
-    if (customer) update.mutate({ id: customer.id, ...form });
-    else create.mutate(form);
+    setTried(true);
+    const clean = { ...form, name: form.name.trim() };
+    if (!clean.name) return;
+    if (customer) update.mutate({ id: customer.id, ...clean });
+    else create.mutate(clean);
   };
-
+  const set = (k: keyof CustomerForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((x) => ({ ...x, [k]: e.target.value }));
   const busy = create.isPending || update.isPending;
-  const readOnly = !canEdit;
-  const title = !customer ? t.form.titleNew : readOnly ? t.form.titleView : t.form.titleEdit;
-  const set = (k: keyof CustomerForm) => (e: React.ChangeEvent<HTMLInputElement>) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  const nameBad = tried && !form.name.trim();
 
   return (
-    <div className="flex min-h-full flex-col">
-      <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
-        <div className="min-w-0">
-          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{customer ? fullName(customer) : title}</DialogTitle>
-          <DialogDescription className="mt-0.5 text-sm text-slate-500">{customer ? title : t.form.hint}</DialogDescription>
-        </div>
-        <button type="button" onClick={onClose} aria-label={t.form.close}
-          className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-          <X className="h-5 w-5" />
-        </button>
-      </header>
-
-      <form onSubmit={submit} className="space-y-4 px-4 py-5 sm:px-6">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field id={`${id}-name`} label={t.form.firstName} hint={canEdit ? t.form.required : undefined}>
-            <input id={`${id}-name`} value={form.name} onChange={set("name")} required readOnly={readOnly} autoComplete="off" autoFocus={!customer} className={inputCls} />
-          </Field>
-          <Field id={`${id}-last`} label={t.form.lastName}>
-            <input id={`${id}-last`} value={form.lastName} onChange={set("lastName")} readOnly={readOnly} autoComplete="off" className={inputCls} />
-          </Field>
-          <Field id={`${id}-phone`} label={t.form.phone}>
-            <input id={`${id}-phone`} type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} readOnly={readOnly} autoComplete="off" className={inputCls} />
-          </Field>
-          <Field id={`${id}-email`} label={t.form.email}>
-            <input id={`${id}-email`} type="email" value={form.email} onChange={set("email")} readOnly={readOnly} autoComplete="off" className={inputCls} />
-          </Field>
-        </div>
-        <Field id={`${id}-addr`} label={t.form.address}>
-          <input id={`${id}-addr`} value={form.address} onChange={set("address")} readOnly={readOnly} autoComplete="off" className={inputCls} />
-        </Field>
-
-        {canEdit && (
-          <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">
-            <button type="button" onClick={onClose} className="h-11 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:h-10">
-              {t.form.cancel}
-            </button>
-            <button type="submit" disabled={busy}
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60 sm:h-10">
-              {busy && <Loader2 className="h-4 w-4 animate-spin" />}
-              {busy ? t.form.saving : customer ? t.form.save : t.form.create}
-            </button>
-          </div>
-        )}
-      </form>
-
-      {customer && <PurchaseHistory customerId={customer.id} />}
-
-      {customer && canDelete && (
-        <div className="mt-auto border-t border-slate-100 px-4 py-4 sm:px-6">
-          <button type="button" onClick={() => onDelete(customer)}
-            className="inline-flex h-11 items-center gap-2 rounded-[10px] px-3 text-sm font-semibold text-red-700 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 sm:h-10">
-            <Trash2 className="h-4 w-4" />{t.del.button}
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
-
-const inputCls =
-  "h-11 w-full rounded-[10px] border border-slate-200 bg-white px-3 text-base text-slate-900 outline-none transition focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 read-only:bg-slate-50 read-only:text-slate-700 sm:text-sm";
-
-function Field({ id, label, hint, children }: { id: string; label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <label htmlFor={id} className="mb-1.5 block text-sm font-medium text-slate-700">
-        {label}{hint && <span className="ml-1 font-normal text-slate-500">{hint}</span>}
+    <form onSubmit={submit} noValidate className="grid gap-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className={LABEL}>
+          <span>{f.firstName} <small className="font-normal text-slate-500">({f.required})</small></span>
+          <input value={form.name} onChange={set("name")} placeholder={f.firstNamePh} autoComplete="off" autoFocus={!customer} aria-invalid={nameBad}
+            aria-describedby={nameBad ? `${id}-name-err` : undefined} className={cn(FIELD, nameBad && "border-red-300")} />
+          {nameBad && <small id={`${id}-name-err`} className="text-xs font-normal text-red-700">{f.nameMissing}</small>}
+        </label>
+        <label className={LABEL}>
+          {f.lastName}
+          <input value={form.lastName} onChange={set("lastName")} placeholder={f.lastNamePh} autoComplete="off" className={FIELD} />
+        </label>
+        <label className={LABEL}>
+          {f.phone}
+          <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="(555) 000-0000" autoComplete="off" className={FIELD} />
+        </label>
+        <label className={LABEL}>
+          {f.email}
+          <input type="email" value={form.email} onChange={set("email")} placeholder="nombre@correo.com" autoComplete="off" className={FIELD} />
+        </label>
+      </div>
+      <label className={LABEL}>
+        {f.address}
+        <input value={form.address} onChange={set("address")} autoComplete="off" className={FIELD} />
       </label>
-      {children}
-    </div>
-  );
-}
-
-type Sale = {
-  id: number;
-  total: string | number;
-  paymentMethod: string;
-  status: string;
-  createdAt: string | Date | null;
-  items?: { serviceName: string; quantity?: number | null }[];
-};
-
-/** "Cambio de aceite ×4, Alineación": one entry per item name with its total quantity. */
-function summarizeItems(items: Sale["items"]): string {
-  const qty = new Map<string, number>();
-  for (const i of items ?? []) if (i.serviceName) qty.set(i.serviceName, (qty.get(i.serviceName) ?? 0) + Math.max(1, Number(i.quantity ?? 1)));
-  return [...qty].map(([name, q]) => (q > 1 ? `${name} ×${q}` : name)).join(", ");
-}
-
-/** One client's sales (sales.byCustomer), newest first. */
-function PurchaseHistory({ customerId }: { customerId: number }) {
-  const t = useCopy(clientesCopy);
-  const locale = intlLocale(useLang().lang);
-  const { data, isLoading, isError } = trpc.sales.byCustomer.useQuery({ customerId });
-  const sales = (data ?? []) as Sale[];
-
-  return (
-    <section className="border-t border-slate-100 px-4 py-5 sm:px-6" aria-labelledby={`hist-${customerId}`}>
-      <h3 id={`hist-${customerId}`} className="flex items-center gap-2 font-semibold text-slate-900">
-        <ShoppingBag className="h-4 w-4 text-slate-500" />{t.history.title}
-      </h3>
-      {isLoading ? (
-        <div className="mt-3 space-y-2" aria-label={t.history.loading}><Skeleton className="h-12 rounded-xl" /><Skeleton className="h-12 rounded-xl" /></div>
-      ) : isError ? (
-        <p className="mt-2 text-sm text-red-700">{t.history.error}</p>
-      ) : sales.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">{t.history.none}</p>
-      ) : (
-        <ul className="mt-2 divide-y divide-slate-100">
-          {sales.map((s) => {
-            const what = summarizeItems(s.items) || t.history.noItems;
-            const when = s.createdAt ? new Date(s.createdAt).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" }) : "";
-            const voided = s.status === "cancelled" || s.status === "refunded";
-            const status = t.history.status[s.status];
-            return (
-              <li key={s.id} className="flex items-start justify-between gap-3 py-2.5">
-                <span className="min-w-0">
-                  <span className="block truncate text-sm font-medium text-slate-900">{what}</span>
-                  <span className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-500">
-                    {when}
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-600">{t.methods[s.paymentMethod] ?? s.paymentMethod}</span>
-                    {status && <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${s.status === "pending" ? "bg-amber-50 text-amber-800" : "bg-slate-100 text-slate-600"}`}>{status}</span>}
-                  </span>
-                </span>
-                <span className={`shrink-0 text-sm font-semibold tabular-nums ${voided ? "text-slate-400 line-through" : "text-slate-900"}`}>{money(Number(s.total ?? 0))}</span>
-              </li>
-            );
-          })}
-        </ul>
-      )}
-    </section>
+      <label className={LABEL}>
+        {f.notes}
+        <input value={form.notes} onChange={set("notes")} placeholder={f.notesPh} autoComplete="off" className={FIELD} />
+      </label>
+      <button type="submit" disabled={busy} className={cn(btn("primary"), "mt-1")}>
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+        {busy ? f.saving : customer ? f.save : f.create}
+      </button>
+      {!customer && <p className="text-[13px] text-slate-500">{f.hint}</p>}
+    </form>
   );
 }

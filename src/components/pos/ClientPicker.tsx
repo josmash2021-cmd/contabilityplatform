@@ -8,11 +8,13 @@ import type { CobrarCopy } from "@/i18n/copy/cobrar";
 import { PosSheet } from "./PosSheet";
 import { customerName, norm, type CustomerRow } from "./posTypes";
 
+export type PickedClient = { id: number; name: string; phone?: string | null; email?: string | null };
+
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   selectedId?: number;
-  onSelect: (c: { id: number; name: string } | undefined) => void;
+  onSelect: (c: PickedClient | undefined) => void;
   t: CobrarCopy["pos"];
   closeLabel: string;
 };
@@ -42,7 +44,7 @@ export function ClientPicker({ open, onOpenChange, selectedId, onSelect, t, clos
   const loading = base.isLoading || (!!query && debounced !== query && rows.length === 0);
 
   const choose = (c: CustomerRow | undefined) => {
-    onSelect(c ? { id: c.id, name: customerName(c) } : undefined);
+    onSelect(c ? { id: c.id, name: customerName(c), phone: c.phone, email: c.email ?? null } : undefined);
     onOpenChange(false);
     setQ(""); setDebounced("");
   };

@@ -51,7 +51,7 @@ export function AmountPad({ mode, onClose, onSubmit, t, closeLabel }: Props) {
     >
       {mode?.kind === "free" && (
         <div className="mb-3">
-          <label htmlFor="pos-pad-what" className="block text-xs font-medium text-slate-500">{t.pad.what} <span className="text-slate-400">({t.cart.optional})</span></label>
+          <label htmlFor="pos-pad-what" className="block text-xs font-medium text-slate-500">{t.pad.what} <span className="text-slate-400">({t.pad.optional})</span></label>
           <input
             id="pos-pad-what" value={label} onChange={(e) => setLabel(e.target.value)} placeholder={t.pad.whatPh} maxLength={200} autoComplete="off"
             className="mt-1 h-11 w-full rounded-[10px] border border-slate-200 bg-white px-3 text-base text-slate-900 placeholder:text-slate-400 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/30 sm:text-sm"

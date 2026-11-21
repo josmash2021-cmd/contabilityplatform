@@ -1,8 +1,6 @@
-import { useState } from "react";
+import { useId, useState } from "react";
 import { toast } from "sonner";
-import {
-  ArrowLeft, CalendarX2, CircleCheck, CircleX, Copy, Pencil, Printer, Receipt, RotateCcw, Send, Trash2, type LucideIcon,
-} from "lucide-react";
+import { ArrowLeft, Bell, CircleCheck, CircleX, FileDown, Pencil, Receipt, RotateCcw, Send, Trash2 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
@@ -10,55 +8,72 @@ import {
   AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { cn, formatCurrency } from "@/lib/utils";
+import { formatCurrency } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { quotesCopy, type QuotesCopy } from "@/i18n/copy/quotes";
-import {
-  canConvertQuote, canDeleteQuote, canEditQuote, localIsoDate, quoteExpired, type ManualQuoteStatus, type PaymentMethod,
-} from "../../../api/lib/quotes";
-import { Chip, QuoteStatusChip } from "./StatusChip";
+import { DocPreview } from "@/components/invoices/DocPreview";
+import { Dst, PopMenu, type MenuItem } from "@/components/invoices/proto";
+import { FIELD, btn } from "@/components/invoices/ui";
+import { SendDialog } from "@/components/invoices/SendDialog";
+import { firstName, fmtDay } from "@/components/invoices/shared";
+import { DEFAULT_TERMS, TERMS_OPTIONS } from "../../../api/lib/invoices";
+import { canConvertQuote, canDeleteQuote, canEditQuote, localIsoDate, type ManualQuoteStatus, type PaymentMethod } from "../../../api/lib/quotes";
 import { PaymentChoice } from "./PaymentChoice";
-import { PrintPortal, QuoteDocument } from "./QuoteDocument";
-import { copyText, formatDate, formatDay, quoteShareText, useRefreshQuotes, type CompanyInfo, type QuoteDetail } from "./shared";
-import { BTN } from "./ui";
+import { PrintPortal } from "./QuoteDocument";
+import { quoteShareText, useRefreshQuotes, type CompanyInfo, type QuoteDetail } from "./shared";
+import { quoteDocMeta, quoteTone, quoteView } from "./view";
 
-type View = "detail" | "convert" | "print";
-type Action = { key: string; label: string; icon: LucideIcon; onClick: () => void; danger?: boolean };
+export type QuoteOpen = { id: number; view: "detail" | "convert"; sheet: "send" | "remind" | null };
 
-/** A quote with everything that can be done with it: send, answer, convert, print, share. */
-export function QuoteDetailDialog({ quoteId, company, canChange, onClose, onEdit }: {
-  quoteId: number | null;
+/** A quote as the client sees it, with everything that can be done with it: send, answer, convert, print. */
+export function QuoteDetailDialog({ open, company, contactOf, canChange, onClose, onEdit, onConverted, onSeeInvoice }: {
+  open: QuoteOpen | null;
   company: CompanyInfo;
+  /** The client's phone and email, for WhatsApp and email. */
+  contactOf: (customerId: number | null) => { phone: string | null; email: string | null };
   /** False for a read-only team member (the accountant): only print and copy. */
   canChange: boolean;
   onClose: () => void;
   onEdit: (id: number) => void;
+  /** Turned into an invoice: `pending` when it's still to be paid. */
+  onConverted: (invoiceRef: string, pending: boolean) => void;
+  onSeeInvoice: (saleId: number) => void;
 }) {
   return (
-    <Dialog open={quoteId !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
-        {quoteId !== null && <DetailBody key={quoteId} quoteId={quoteId} company={company} canChange={canChange} onClose={onClose} onEdit={onEdit} />}
+    <Dialog open={open !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-[620px] sm:rounded-2xl">
+        {open !== null && (
+          <Body
+            key={`${open.id}-${open.view}-${open.sheet ?? ""}`}
+            open={open} company={company} contactOf={contactOf} canChange={canChange}
+            onClose={onClose} onEdit={onEdit} onConverted={onConverted} onSeeInvoice={onSeeInvoice}
+          />
+        )}
       </DialogContent>
     </Dialog>
   );
 }
 
-function DetailBody({ quoteId, company, canChange, onClose, onEdit }: {
-  quoteId: number;
+function Body({ open, company, contactOf, canChange, onClose, onEdit, onConverted, onSeeInvoice }: {
+  open: QuoteOpen;
   company: CompanyInfo;
+  contactOf: (customerId: number | null) => { phone: string | null; email: string | null };
   canChange: boolean;
   onClose: () => void;
   onEdit: (id: number) => void;
+  onConverted: (invoiceRef: string, pending: boolean) => void;
+  onSeeInvoice: (saleId: number) => void;
 }) {
   const t = useCopy(quotesCopy);
   const { lang } = useLang();
   const locale = intlLocale(lang);
   const refresh = useRefreshQuotes();
   const [today] = useState(() => localIsoDate(new Date()));
-  const [view, setView] = useState<View>("detail");
+  const [view, setView] = useState(open.view);
+  const [sheet, setSheet] = useState(open.sheet);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  const query = trpc.quotes.get.useQuery({ id: quoteId });
+  const query = trpc.quotes.get.useQuery({ id: open.id });
   const q = query.data;
 
   const setStatus = trpc.quotes.setStatus.useMutation({ onError: (e) => toast.error(e.message || t.toasts.error) });
@@ -70,154 +85,122 @@ function DetailBody({ quoteId, company, canChange, onClose, onEdit }: {
   if (!q) {
     return (
       <>
-        <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
-          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.detail.loading}</DialogTitle>
+        <DialogHeader className="px-4 pb-2 pt-4 pr-12 text-left">
+          <DialogTitle className="text-[17px] font-[750] text-slate-900">{t.detail.loading}</DialogTitle>
           <DialogDescription className="sr-only">{t.detail.loading}</DialogDescription>
         </DialogHeader>
         {query.isError ? (
-          <div className="flex flex-col items-center gap-3 p-8 text-center">
+          <div className="grid justify-items-center gap-3 p-8 text-center">
             <p className="text-sm text-slate-700" role="alert">{query.error.message || t.error}</p>
-            <button type="button" className={BTN.secondary} onClick={() => void query.refetch()}>{t.retry}</button>
+            <button type="button" className={btn()} onClick={() => void query.refetch()}>{t.retry}</button>
           </div>
         ) : (
-          <div className="space-y-3 p-6" role="status" aria-label={t.detail.loading}>
-            <Skeleton className="h-6 w-40" />
-            <Skeleton className="h-24 rounded-xl" />
-            <Skeleton className="h-11 rounded-xl" />
+          <div className="grid gap-3 p-6" role="status" aria-label={t.detail.loading}>
+            <Skeleton className="h-6 w-40" /><Skeleton className="h-48 rounded-xl" /><Skeleton className="h-11 rounded-xl" />
           </div>
         )}
       </>
     );
   }
 
+  if (view === "convert") return <ConvertView q={q} t={t} onBack={() => setView("detail")} onConverted={onConverted} />;
+
+  const v = quoteView(q, today);
   const changeStatus = (status: ManualQuoteStatus, done: string) =>
     setStatus.mutate({ id: q.id, status }, { onSuccess: () => { toast.success(done); refresh(); } });
-
-  const send = async () => {
-    // Copy first, while the click still counts as a user gesture for the clipboard.
-    const copied = await copyText(quoteShareText(q, t, company, locale));
-    changeStatus("sent", copied ? t.toasts.sent : t.toasts.sentNoCopy);
-  };
-  const copy = async () => {
-    if (await copyText(quoteShareText(q, t, company, locale))) toast.success(t.toasts.copied);
-    else toast.error(t.toasts.copyFailed);
-  };
-
-  const a: Record<string, Action> = {
-    send: { key: "send", label: t.detail.send, icon: Send, onClick: () => void send() },
-    accept: { key: "accept", label: t.detail.accept, icon: CircleCheck, onClick: () => changeStatus("accepted", t.toasts.status(t.status.accepted)) },
-    reject: { key: "reject", label: t.detail.reject, icon: CircleX, onClick: () => changeStatus("rejected", t.toasts.status(t.status.rejected)) },
-    reopen: { key: "reopen", label: t.detail.reopen, icon: RotateCcw, onClick: () => changeStatus("draft", t.toasts.status(t.status.draft)) },
-    convert: { key: "convert", label: t.detail.convert, icon: Receipt, onClick: () => setView("convert") },
-    print: { key: "print", label: t.detail.print, icon: Printer, onClick: () => setView("print") },
-    copy: { key: "copy", label: t.detail.copy, icon: Copy, onClick: () => void copy() },
-    edit: { key: "edit", label: t.detail.edit, icon: Pencil, onClick: () => onEdit(q.id) },
-    delete: { key: "delete", label: t.detail.delete, icon: Trash2, onClick: () => setConfirmDelete(true), danger: true },
-  };
-  const primaryByStatus = { draft: a.send, sent: a.accept, accepted: a.convert, rejected: a.reopen, converted: a.print };
-  const primary = canChange ? primaryByStatus[q.status] : a.print;
-  const secondary = !canChange ? [a.copy] : [
-    q.status === "draft" && a.accept,
-    (q.status === "draft" || q.status === "sent" || q.status === "accepted") && a.reject,
-    canConvertQuote(q.status) && primary !== a.convert && a.convert,
-    primary !== a.print && a.print,
-    a.copy,
-    canEditQuote(q.status) && a.edit,
-    canDeleteQuote(q.status) && a.delete,
-  ].filter((x): x is Action => Boolean(x));
-
-  const expired = quoteExpired(q.validUntil, q.status, today);
   const busy = setStatus.isPending || remove.isPending;
+  const printNow = () => window.print();
 
-  if (view === "convert") return <ConvertView q={q} t={t} onBack={() => setView("detail")} />;
-  if (view === "print") return <PrintView q={q} t={t} company={company} locale={locale} onBack={() => setView("detail")} />;
+  const primary = !canChange ? null
+    : q.status === "draft" ? { label: t.detail.send, icon: Send, run: () => setSheet("send") }
+      : q.status === "sent" ? { label: t.detail.accept, icon: CircleCheck, run: () => changeStatus("accepted", t.toasts.status(t.state.accepted)) }
+        : q.status === "accepted" ? { label: t.detail.convert, icon: Receipt, run: () => setView("convert") }
+          : q.status === "rejected" ? { label: t.detail.reopen, icon: RotateCcw, run: () => changeStatus("draft", t.toasts.status(t.state.draft)) }
+            : q.saleId ? { label: t.detail.seeInvoice, icon: Receipt, run: () => onSeeInvoice(q.saleId as number) } : null;
+
+  const secondary = !canChange ? [] : [
+    q.status === "sent" && { key: "remind", label: t.detail.remind, icon: Bell, run: () => setSheet("remind") },
+    (q.status === "sent" || q.status === "accepted") && { key: "send", label: t.detail.sendAgain, icon: Send, run: () => setSheet("send") },
+    q.status === "draft" && { key: "accept", label: t.detail.accept, icon: CircleCheck, run: () => changeStatus("accepted", t.toasts.status(t.state.accepted)) },
+  ].filter((x): x is { key: string; label: string; icon: typeof Send; run: () => void } => Boolean(x));
+
+  const menu: MenuItem[] = [{ key: "pdf", label: t.detail.print, icon: FileDown, onSelect: printNow }];
+  if (!canChange) menu.push({ key: "send", label: t.detail.send, icon: Send, onSelect: () => setSheet("send") });
+  if (canChange && canConvertQuote(q.status) && q.status !== "accepted") menu.push({ key: "convert", label: t.detail.convert, icon: Receipt, onSelect: () => setView("convert") });
+  if (canChange && canEditQuote(q.status)) menu.push({ key: "edit", label: t.detail.edit, icon: Pencil, onSelect: () => onEdit(q.id) });
+  if (canChange && (q.status === "draft" || q.status === "sent" || q.status === "accepted")) menu.push("sep", { key: "reject", label: t.detail.reject, icon: CircleX, onSelect: () => changeStatus("rejected", t.toasts.status(t.state.rejected)), danger: true });
+  if (canChange && canDeleteQuote(q.status)) menu.push({ key: "delete", label: t.detail.delete, icon: Trash2, onSelect: () => setConfirmDelete(true), danger: true });
+
+  const doc = (print: boolean) => (
+    <DocPreview
+      print={print}
+      company={company}
+      title={`${t.detail.doc.quote} ${q.number}`}
+      meta={quoteDocMeta(q, t, locale, today)}
+      customerName={q.customerName}
+      lines={q.items.map((it) => ({ key: String(it.id), description: it.description, quantity: it.quantity, unitPriceCents: Math.round(it.unitPrice * 100), lineCents: Math.round(it.lineTotal * 100) }))}
+      subtotalCents={Math.round(q.subtotal * 100)}
+      discountCents={Math.round(q.discount * 100)}
+      totalCents={Math.round(q.total * 100)}
+      notes={q.notes}
+      labels={t.detail.doc}
+    />
+  );
+
+  const shareText = sheet === "remind"
+    ? t.share.remind(firstName(q.customerName), q.number, formatCurrency(q.total), q.validUntil ? fmtDay(q.validUntil, locale, today) : null)
+    : quoteShareText(q, t, company, locale);
 
   return (
     <>
-      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.detail.title(q.number)}</DialogTitle>
+      <DialogHeader className="border-b border-slate-100 px-4 pb-3 pt-4 pr-12 text-left">
+        <DialogTitle className="text-[17px] font-[750] text-slate-900">{t.detail.title(q.number)}</DialogTitle>
         <DialogDescription asChild>
-          <div className="flex flex-wrap items-center gap-1.5 pt-1">
-            <QuoteStatusChip status={q.status} label={t.status[q.status]} />
-            {expired && <Chip icon={CalendarX2} label={t.expired} className="bg-amber-50 text-amber-800 ring-1 ring-amber-200" />}
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 pt-0.5 text-[13px] text-slate-500">
+            <span className="font-semibold text-slate-900">{q.customerName || t.noCustomer}</span>
+            <Dst label={t.state[v]} tone={quoteTone(v)} />
           </div>
         </DialogDescription>
       </DialogHeader>
 
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-        <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm sm:grid-cols-3">
-          <div className="col-span-2 min-w-0 sm:col-span-1">
-            <dt className="text-xs text-slate-500">{t.detail.customer}</dt>
-            <dd className="truncate font-medium text-slate-900">{q.customerName || t.quotes.noCustomer}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">{t.detail.created}</dt>
-            <dd className="text-slate-900">{formatDate(q.createdAt, locale)}</dd>
-          </div>
-          <div>
-            <dt className="text-xs text-slate-500">{t.detail.validUntil}</dt>
-            <dd className="text-slate-900">{q.validUntil ? formatDay(q.validUntil, locale) : t.detail.noDate}</dd>
-          </div>
-        </dl>
-
-        {expired && q.validUntil && <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900">{t.detail.expiredNote(formatDay(q.validUntil, locale))}</p>}
-        {q.status === "converted" && q.invoiceNumber && (
-          <p className="rounded-xl bg-slate-50 px-3 py-2.5 text-sm text-slate-700">
-            {t.detail.convertedTo(q.invoiceNumber, q.saleStatus ? t.detail.saleStatus[q.saleStatus] : "")}
-          </p>
-        )}
-
-        <section aria-labelledby={`quote-${q.id}-items`}>
-          <h3 id={`quote-${q.id}-items`} className="mb-1.5 text-sm font-semibold text-slate-900">{t.detail.items}</h3>
-          <ul className="divide-y divide-slate-100 rounded-xl border border-slate-200">
-            {q.items.map((it) => (
-              <li key={it.id} className="flex items-start justify-between gap-3 px-3 py-2.5">
-                <div className="min-w-0">
-                  <p className="break-words text-sm text-slate-900">{it.description}</p>
-                  <p className="text-xs tabular-nums text-slate-500">{it.quantity} × {formatCurrency(it.unitPrice)}</p>
-                </div>
-                <p className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{formatCurrency(it.lineTotal)}</p>
-              </li>
-            ))}
-          </ul>
-          <dl className="ml-auto mt-3 max-w-[18rem] space-y-1 text-sm tabular-nums">
-            {q.discount > 0 && (
-              <>
-                <div className="flex justify-between text-slate-600"><dt>{t.form.subtotal}</dt><dd>{formatCurrency(q.subtotal)}</dd></div>
-                <div className="flex justify-between text-slate-600"><dt>{t.form.discountLine}</dt><dd>−{formatCurrency(q.discount)}</dd></div>
-              </>
-            )}
-            <div className="flex justify-between border-t border-slate-200 pt-1.5 text-lg font-bold text-slate-900"><dt>{t.form.total}</dt><dd>{formatCurrency(q.total)}</dd></div>
-          </dl>
-        </section>
-
-        {q.notes && (
-          <section>
-            <h3 className="mb-1 text-sm font-semibold text-slate-900">{t.detail.notes}</h3>
-            <p className="whitespace-pre-wrap break-words text-sm text-slate-700">{q.notes}</p>
-          </section>
-        )}
+      <div className="min-h-0 flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-5">
+        {v === "expired" && q.validUntil && <p className="rounded-xl bg-amber-50 px-3 py-2.5 text-sm text-amber-900">{t.detail.expiredNote(fmtDay(q.validUntil, locale, today))}</p>}
+        {q.status === "converted" && q.invoiceNumber && <p className="rounded-xl bg-white px-3 py-2.5 text-sm text-slate-700 ring-1 ring-slate-200">{t.detail.convertedTo(q.invoiceNumber)}</p>}
+        <p className="text-xs font-semibold uppercase tracking-[0.06em] text-slate-500">{t.detail.asClient}</p>
+        {doc(false)}
       </div>
 
-      <div className="space-y-2 border-t border-slate-100 bg-white px-4 py-3 sm:px-6" role="group" aria-label={t.detail.actionsLabel}>
-        <button type="button" className={cn(BTN.primary, "h-12 w-full text-base sm:h-11")} disabled={busy} onClick={primary.onClick}>
-          <primary.icon className="h-5 w-5" aria-hidden="true" /> {primary.label}
-        </button>
-        {primary === a.send && <p className="text-center text-xs text-slate-500">{t.detail.sendHint}</p>}
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-          {secondary.map((x) => (
-            <button
-              key={x.key}
-              type="button"
-              disabled={busy}
-              onClick={x.onClick}
-              className={cn(x.danger ? BTN.dangerOutline : BTN.secondary, "min-w-0 px-3")}
-            >
-              <x.icon className="h-4 w-4 shrink-0" aria-hidden="true" /> <span className="truncate">{x.label}</span>
-            </button>
-          ))}
-        </div>
+      <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-white px-4 py-3">
+        {primary && (
+          <button type="button" className={btn("primary")} disabled={busy} onClick={primary.run}>
+            <primary.icon className="h-4 w-4" aria-hidden="true" />{primary.label}
+          </button>
+        )}
+        {secondary.map((x) => (
+          <button key={x.key} type="button" className={btn()} disabled={busy} onClick={x.run}>
+            <x.icon className="h-4 w-4" aria-hidden="true" />{x.label}
+          </button>
+        ))}
+        <PopMenu label={t.detail.more} items={menu} />
+        {q.status === "draft" && canChange && <p className="basis-full text-xs text-slate-500">{t.detail.sendHint}</p>}
       </div>
+
+      <PrintPortal>{doc(true)}</PrintPortal>
+
+      <SendDialog
+        open={sheet !== null}
+        onClose={() => setSheet(null)}
+        title={sheet === "remind" ? t.send.remindTitle(q.customerName || t.noCustomer) : t.send.title(q.number)}
+        recipient={q.customerName}
+        phone={contactOf(q.customerId).phone}
+        email={contactOf(q.customerId).email}
+        subject={sheet === "remind" ? t.share.remindSubject(q.number) : t.share.subject(q.number, company.name)}
+        initialText={shareText}
+        withPdf={sheet === "send"}
+        onPdf={printNow}
+        onSent={() => { if (q.status === "draft" && canChange) changeStatus("sent", t.toasts.sent); }}
+        t={t.send}
+      />
 
       <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
         <AlertDialogContent className="bg-white sm:rounded-2xl">
@@ -239,14 +222,16 @@ function DetailBody({ quoteId, company, canChange, onClose, onEdit }: {
 
 type ConvertChoice = "pending" | PaymentMethod;
 
-function ConvertView({ q, t, onBack }: { q: QuoteDetail; t: QuotesCopy; onBack: () => void }) {
+function ConvertView({ q, t, onBack, onConverted }: { q: QuoteDetail; t: QuotesCopy; onBack: () => void; onConverted: (ref: string, pending: boolean) => void }) {
+  const id = useId();
   const refresh = useRefreshQuotes();
   const [choice, setChoice] = useState<ConvertChoice>("pending");
+  const [termsDays, setTermsDays] = useState<number>(DEFAULT_TERMS);
   const convert = trpc.quotes.convertToSale.useMutation({
     onSuccess: (r) => {
       toast.success(r.pending ? t.toasts.convertedPending(r.invoiceNumber) : t.toasts.convertedPaid(r.invoiceNumber));
       refresh(true);
-      onBack();
+      onConverted(r.invoiceRef, r.pending);
     },
     onError: (e) => toast.error(e.message || t.toasts.error),
   });
@@ -256,61 +241,43 @@ function ConvertView({ q, t, onBack }: { q: QuoteDetail; t: QuotesCopy; onBack: 
     { value: "zelle", label: t.paymentMethods.zelle },
     { value: "card", label: t.paymentMethods.card },
   ];
+  const total = formatCurrency(q.total);
 
   return (
     <>
-      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.convert.title(q.number)}</DialogTitle>
+      <DialogHeader className="border-b border-slate-100 px-4 pb-3 pt-4 pr-12 text-left">
+        <DialogTitle className="text-[17px] font-[750] text-slate-900">{t.convert.title(q.number)}</DialogTitle>
         <DialogDescription className="text-sm text-slate-500">{t.convert.text}</DialogDescription>
       </DialogHeader>
-      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-6">
-        <div className="flex items-baseline justify-between gap-3 rounded-xl bg-slate-50 px-4 py-3">
-          <p className="min-w-0 truncate text-sm text-slate-700">{q.customerName || t.quotes.noCustomer}</p>
-          <p className="shrink-0 text-xl font-bold tabular-nums text-slate-900">{formatCurrency(q.total)}</p>
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4">
+        <div className="flex items-baseline justify-between gap-3 rounded-xl bg-slate-100 px-4 py-3">
+          <p className="min-w-0 truncate text-sm text-slate-700">{q.customerName || t.noCustomer}</p>
+          <p className="shrink-0 text-xl font-bold tabular-nums text-slate-900">{total}</p>
         </div>
         <PaymentChoice legend={t.convert.question} options={options} value={choice} onChange={setChoice} />
+        {choice === "pending" && (
+          <label htmlFor={`${id}-terms`} className="grid gap-1 text-[13px] font-semibold text-slate-900">
+            {t.convert.terms}
+            <select id={`${id}-terms`} value={termsDays} onChange={(e) => setTermsDays(Number(e.target.value))} className={FIELD}>
+              {TERMS_OPTIONS.map((d) => <option key={d} value={d}>{t.convert.termsOptions[d]}</option>)}
+            </select>
+          </label>
+        )}
         <p className="rounded-xl bg-blue-50 px-3 py-2.5 text-sm text-blue-900" aria-live="polite">{choice === "pending" ? t.convert.pendingHint : t.convert.paidHint}</p>
       </div>
-      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
-        <button type="button" onClick={onBack} className={BTN.ghost}>
+      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end">
+        <button type="button" onClick={onBack} className={btn()}>
           <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t.convert.back}
         </button>
         <button
           type="button"
-          className={BTN.primary}
+          className={btn("primary")}
           disabled={convert.isPending}
-          onClick={() => convert.mutate({ id: q.id, payment: choice })}
+          onClick={() => convert.mutate({ id: q.id, payment: choice, termsDays: choice === "pending" ? termsDays : undefined })}
         >
-          {convert.isPending ? t.convert.working : t.convert.confirm(formatCurrency(q.total))}
+          {convert.isPending ? t.convert.working : choice === "pending" ? t.convert.confirmPending(total) : t.convert.confirmPaid(total)}
         </button>
       </div>
-    </>
-  );
-}
-
-function PrintView({ q, t, company, locale, onBack }: { q: QuoteDetail; t: QuotesCopy; company: CompanyInfo; locale: string; onBack: () => void }) {
-  return (
-    <>
-      <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
-        <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{t.print.title}</DialogTitle>
-        <DialogDescription className="text-sm text-slate-500">{t.print.hint}</DialogDescription>
-      </DialogHeader>
-      <div className="min-h-0 flex-1 overflow-y-auto bg-slate-50 px-3 py-4 sm:px-6">
-        <div className="mx-auto max-w-[44rem] rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-8">
-          <QuoteDocument q={q} company={company} t={t} locale={locale} />
-        </div>
-      </div>
-      <div className="flex flex-col-reverse gap-2 border-t border-slate-100 bg-white px-4 py-3 sm:flex-row sm:justify-end sm:px-6">
-        <button type="button" onClick={onBack} className={BTN.ghost}>
-          <ArrowLeft className="h-4 w-4" aria-hidden="true" /> {t.print.back}
-        </button>
-        <button type="button" className={BTN.primary} onClick={() => window.print()}>
-          <Printer className="h-4 w-4" aria-hidden="true" /> {t.print.print}
-        </button>
-      </div>
-      <PrintPortal>
-        <QuoteDocument q={q} company={company} t={t} locale={locale} />
-      </PrintPortal>
     </>
   );
 }

@@ -1,8 +1,18 @@
 import { z } from "zod";
-import { createRouter, publicQuery, authedQuery } from "./middleware";
+import { TRPCError } from "@trpc/server";
+import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { customers } from "@db/schema";
 import { eq, like, asc, sql, and, or } from "drizzle-orm";
+import { contextHas, getPlanContext } from "./lib/planAccess";
+import { BUSINESS_TIME_ZONE } from "./lib/quotes";
+import { isValidTimeZone } from "./lib/ventas";
+import { customerDetail, customersOverview, importMerge } from "./lib/customerInsights";
+
+/** A customer row being written: the form's fields plus the date the plate expires, as a Date. */
+type CustomerWrite = Record<string, unknown> & { plateExpiryDate?: string | Date; email?: string | null; clientType?: string };
+
+const tzInput = z.string().max(64).refine(isValidTimeZone);
 
 export const customersRouter = createRouter({
   list: authedQuery
@@ -63,7 +73,7 @@ export const customersRouter = createRouter({
     }))
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
-      const data: any = { ...input, userId: ctx.user.id };
+      const data: CustomerWrite = { ...input, userId: ctx.user.id };
       if (data.plateExpiryDate) {
         const parsed = new Date(data.plateExpiryDate);
         if (!isNaN(parsed.getTime())) data.plateExpiryDate = parsed;
@@ -98,7 +108,7 @@ export const customersRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const { id, ...data } = input;
-      const upd: any = { ...data };
+      const upd: CustomerWrite = { ...data };
       if (upd.plateExpiryDate) {
         const parsed = new Date(upd.plateExpiryDate);
         if (!isNaN(parsed.getTime())) upd.plateExpiryDate = parsed;
@@ -144,7 +154,7 @@ export const customersRouter = createRouter({
 
       for (const row of input) {
         try {
-          const data: any = { ...row, userId: ctx.user.id };
+          const data: CustomerWrite = { ...row, userId: ctx.user.id };
           if (row.plateExpiryDate) {
             const parsed = new Date(row.plateExpiryDate);
             if (!isNaN(parsed.getTime())) data.plateExpiryDate = parsed;
@@ -210,4 +220,46 @@ export const customersRouter = createRouter({
         sql`${like(customers.name, `%${input.query}%`)} OR ${like(customers.lastName, `%${input.query}%`)}`
       ).limit(20);
     }),
+
+  /**
+   * The list's numbers, per client: billed this year, owed (pending sales and invoices), late,
+   * last visit. "Billed this year" is a report by client: only with that plan feature, and not
+   * for staff (same rule as before for the list).
+   */
+  overview: authedQuery
+    .input(z.object({ timeZone: tzInput.optional() }).optional())
+    .query(async ({ ctx, input }) => {
+      const db = getDb();
+      const plan = await getPlanContext(db, ctx.user);
+      const canSeeBilled = contextHas(plan, "clientReports") && ctx.member?.role !== "staff";
+      return customersOverview(db, Number(ctx.user.id), input?.timeZone ?? BUSINESS_TIME_ZONE, canSeeBilled);
+    }),
+
+  /** One client's card: what they bought, what they owe, how they pay, and their history. */
+  detail: authedQuery
+    .input(z.object({ id: z.number().int().positive(), timeZone: tzInput.optional() }))
+    .query(async ({ ctx, input }) => {
+      const d = await customerDetail(getDb(), Number(ctx.user.id), input.id, input.timeZone ?? BUSINESS_TIME_ZONE);
+      if (!d) throw new TRPCError({ code: "NOT_FOUND", message: ctx.lang === "en" ? "We couldn't find that client." : "No encontramos ese cliente." });
+      return d;
+    }),
+
+  /**
+   * Excel import that doesn't repeat clients: a row that is someone you already have (same email,
+   * phone or full name) fills in what that client was missing instead. dryRun only counts.
+   * Owner only (not in the staff list of api/lib/team.ts).
+   */
+  importMerge: authedQuery
+    .input(z.object({
+      dryRun: z.boolean(),
+      rows: z.array(z.object({
+        name: z.string().trim().max(255),
+        lastName: z.string().trim().max(255).optional(),
+        email: z.string().trim().max(320).optional(),
+        phone: z.string().trim().max(50).optional(),
+        address: z.string().trim().max(1000).optional(),
+        notes: z.string().trim().max(2000).optional(),
+      })).max(5000),
+    }))
+    .mutation(async ({ ctx, input }) => importMerge(getDb(), Number(ctx.user.id), input.rows, input.dryRun)),
 });

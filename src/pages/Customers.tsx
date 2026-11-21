@@ -1,5 +1,6 @@
-import { useDeferredValue, useId, useMemo, useState } from "react";
-import { AlertCircle, ChevronRight, FileSpreadsheet, Loader2, Pencil, Search, Trash2, UserPlus, Users, X } from "lucide-react";
+import { useDeferredValue, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router";
+import { AlertCircle, Loader2, Search, Upload, UserPlus, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatedPage } from "@/components/AnimatedPage";
 import {
@@ -7,27 +8,40 @@ import {
   AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 import { CustomerDialog } from "@/components/customers/CustomerDialog";
+import { CustomerDetail } from "@/components/customers/CustomerDetail";
 import { ImportCustomersDialog } from "@/components/customers/ImportCustomersDialog";
-import { fullName, initials, matchesSearch, money, type Customer } from "@/components/customers/customerUtils";
+import { firstName, fullName, matchesSearch, messageLink, type Customer } from "@/components/customers/customerUtils";
+import { Note, PageHead, SegTabs } from "@/components/pos/proto";
+import { FOCUS, SEARCH_BOX, SEARCH_INPUT, SLIST, SROW_HEAD, btn } from "@/components/pos/ui";
+import { DEVICE_TZ, money0C, moneyC, shortDay } from "@/components/pos/posTypes";
 import { trpc } from "@/providers/trpc";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { clientesCopy } from "@/i18n/copy/clientes";
 
-const pad = (n: number) => String(n).padStart(2, "0");
 /** The server returns at most 200 per page (customers.list). */
 const PAGE = 200;
 
-type Bought = { total: number; salesCount: number };
+type Tab = "all" | "owe" | "late" | "idle";
+type Stats = { billedYearCents: number | null; owedCents: number; late: boolean; lastVisit: string | null; idle: boolean };
+type Row = Pick<Customer, "id" | "name" | "lastName" | "phone" | "email"> & { s: Stats | undefined };
 
-/** 2.0 Clientes: search, list (cards on phone, table on desktop), create/edit dialog, delete with confirm, Excel import. */
+/**
+ * Clientes (the prototype's `customers` screen): who owes you, who's late, who stopped coming;
+ * each client's card at `?c=<id>`; `?new=1` opens the new-client form (from "+ Nuevo").
+ */
 export default function Customers() {
   const t = useCopy(clientesCopy);
   const locale = intlLocale(useLang().lang);
-  const searchId = useId();
+  const [params, setParams] = useSearchParams();
+  const openId = Number(params.get("c")) || 0;
+  const wantNew = params.get("new") === "1";
+
   const [search, setSearch] = useState("");
   const query = useDeferredValue(search.trim());
+  const [tab, setTab] = useState<Tab>("all");
   const [dialog, setDialog] = useState<{ open: boolean; customer: Customer | null }>({ open: false, customer: null });
   const [toDelete, setToDelete] = useState<Customer | null>(null);
   const [importOpen, setImportOpen] = useState(false);
@@ -35,14 +49,29 @@ export default function Customers() {
   // ── Who can do what (api/lib/team.ts): staff create and edit, only the owner deletes and imports, the accountant only reads ──
   const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
   const roleKnown = membership !== undefined;
-  const role = membership?.role ?? null;
-  const canEdit = role !== "accountant";
-  const canDelete = roleKnown && role === null;
-  const canImport = roleKnown && role === null;
+  const role = !roleKnown ? null : membership === null ? "owner" : membership.role;
+  const canEdit = roleKnown && role !== "accountant";
+  const canImport = role === "owner";
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
+  const { data: settings } = trpc.settings.get.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const company = settings?.companyName?.trim() || "";
+
+  // "+ Nuevo" → /customers?new=1 opens the form once (adjusting state while rendering, then the URL drops the flag).
+  const [newHandled, setNewHandled] = useState(false);
+  if (wantNew && !newHandled && roleKnown) {
+    setNewHandled(true);
+    if (canEdit) setDialog({ open: true, customer: null });
+  }
+  if (!wantNew && newHandled) setNewHandled(false);
+  useEffect(() => {
+    if (!wantNew || !roleKnown) return;
+    setParams((p) => { const n = new URLSearchParams(p); n.delete("new"); return n; }, { replace: true });
+  }, [wantNew, roleKnown, setParams]);
 
   const utils = trpc.useUtils();
   const list = trpc.customers.list.useQuery({ type: "all", limit: PAGE });
   const { data: stats } = trpc.customers.stats.useQuery();
+  const ov = trpc.customers.overview.useQuery({ timeZone: DEVICE_TZ });
   const loaded = useMemo(() => (list.data ?? []) as Customer[], [list.data]);
   const total = Math.max(Number(stats?.total ?? 0), loaded.length);
 
@@ -50,206 +79,61 @@ export default function Customers() {
   const searchServer = query.length > 0 && total > loaded.length;
   const remote = trpc.customers.list.useQuery({ type: "all", search: query, limit: PAGE }, { enabled: searchServer });
 
-  // What each client has bought: only where the plan includes reports by client (Negocio) and the role can read reports.
-  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
-  const showBought = roleKnown && role !== "staff" && !!plan?.features.includes("clientReports");
-  const today = useMemo(() => { const d = new Date(); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; }, []);
-  const { data: report } = trpc.reports.byClient.useQuery({ startDate: "2000-01-01", endDate: today }, { enabled: showBought, staleTime: 60_000, retry: false });
-  const bought = useMemo(() => {
-    const m = new Map<number, Bought>();
-    for (const r of report?.rows ?? []) if (r.customerId != null) m.set(r.customerId, { total: r.total, salesCount: r.salesCount });
-    return m;
-  }, [report]);
+  const statsById = useMemo(() => new Map((ov.data?.rows ?? []).map((r) => [r.customerId, r])), [ov.data]);
+  const canSeeBilled = !!ov.data?.canSeeBilled;
+  const today = ov.data?.today ?? "";
 
-  const shown = useMemo(() => {
-    if (!query) return loaded;
-    const local = loaded.filter((c) => matchesSearch(c, query));
-    const seen = new Set(local.map((c) => c.id));
-    const extra = ((remote.data ?? []) as Customer[]).filter((c) => !seen.has(c.id));
-    return [...local, ...extra];
-  }, [loaded, query, remote.data]);
+  const rows: Row[] = useMemo(() => {
+    if (tab === "all") {
+      let base = loaded;
+      if (query) {
+        const local = loaded.filter((c) => matchesSearch(c, query));
+        const seen = new Set(local.map((c) => c.id));
+        base = [...local, ...((remote.data ?? []) as Customer[]).filter((c) => !seen.has(c.id))];
+      }
+      return base.map((c) => ({ id: c.id, name: c.name, lastName: c.lastName, phone: c.phone, email: c.email, s: statsById.get(c.id) }));
+    }
+    // The other groups come whole from the server's numbers (every client with sales is there).
+    const pick = (ov.data?.rows ?? []).filter((r) => (tab === "owe" ? r.owedCents > 0 : tab === "late" ? r.late : r.idle));
+    pick.sort((a, b) => (tab === "idle" ? (a.lastVisit ?? "").localeCompare(b.lastVisit ?? "") : b.owedCents - a.owedCents));
+    return pick
+      .map((r) => ({ id: r.customerId, name: r.name, lastName: r.lastName, phone: r.phone, email: r.email, s: r }))
+      .filter((r) => !query || matchesSearch(r, query));
+  }, [tab, loaded, query, remote.data, statsById, ov.data]);
 
   const del = trpc.customers.delete.useMutation({
     onSuccess: () => {
       void utils.customers.list.invalidate();
       void utils.customers.stats.invalidate();
+      void utils.customers.overview.invalidate();
       toast.success(t.toast.deleted);
       setToDelete(null);
-      setDialog({ open: false, customer: null });
+      if (openId) closeDetail();
     },
     onError: (err) => toast.error(err.message),
   });
 
+  const scrollTop = () => document.querySelector("main")?.scrollTo({ top: 0 });
+  const openDetail = (id: number) => { setParams((p) => { const n = new URLSearchParams(p); n.set("c", String(id)); return n; }); scrollTop(); };
+  function closeDetail() { setParams((p) => { const n = new URLSearchParams(p); n.delete("c"); return n; }); scrollTop(); }
   const openNew = () => setDialog({ open: true, customer: null });
-  const openClient = (c: Customer) => setDialog({ open: true, customer: c });
-  const since = (c: Customer) => t.since(new Date(c.createdAt).toLocaleDateString(locale, { month: "short", year: "numeric" }));
 
   const isEmpty = list.isSuccess && total === 0 && loaded.length === 0;
+  const totals = ov.data?.totals;
+  const sub = list.isLoading ? " " : t.sub(total, totals && totals.owedCents > 0 ? money0C(totals.owedCents) : null, ov.data?.top?.name ?? null);
+  const idle = ov.data?.idle;
+  const winback = idle ? messageLink(idle, t.msg.winback(firstName(idle), company), company) : null;
+  const cols = canSeeBilled
+    ? "md:grid-cols-[minmax(0,1fr)_130px_130px_110px_110px]"
+    : "md:grid-cols-[minmax(0,1fr)_130px_110px_110px]";
 
-  return (
-    <AnimatedPage className="p-4 lg:p-8">
-      <div className="mx-auto max-w-6xl space-y-5">
-        <header className="flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
-            <p className="mt-0.5 text-sm text-slate-500">{list.isLoading ? " " : t.count(total)}</p>
-          </div>
-          {(canImport || canEdit) && !isEmpty && (
-            <div className="flex w-full gap-2 sm:w-auto">
-              {canImport && (
-                <button onClick={() => setImportOpen(true)}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10 sm:flex-none">
-                  <FileSpreadsheet className="h-4 w-4 text-emerald-600" />{t.importExcel}
-                </button>
-              )}
-              {canEdit && (
-                <button onClick={openNew}
-                  className="inline-flex h-11 flex-1 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 sm:h-10 sm:flex-none">
-                  <UserPlus className="h-4 w-4" />{t.newClient}
-                </button>
-              )}
-            </div>
-          )}
-        </header>
-
-        {!isEmpty && (
-          <div className="max-w-md">
-            <label htmlFor={searchId} className="mb-1.5 block text-sm font-medium text-slate-700">{t.searchLabel}</label>
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input id={searchId} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPh} autoComplete="off"
-                className="h-11 w-full rounded-[10px] border border-slate-200 bg-white pl-9 pr-11 text-base text-slate-900 outline-none placeholder:text-slate-400 focus-visible:border-blue-500 focus-visible:ring-2 focus-visible:ring-blue-500/30 sm:text-sm [&::-webkit-search-cancel-button]:hidden" />
-              {search && (
-                <button type="button" onClick={() => setSearch("")} aria-label={t.clearSearch}
-                  className="absolute right-0 top-0 grid h-11 w-11 place-items-center rounded-r-[10px] text-slate-400 hover:text-slate-700">
-                  <X className="h-4 w-4" />
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
-        {list.isLoading ? (
-          <div className="space-y-2" aria-busy="true">
-            {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-2xl" />)}
-          </div>
-        ) : list.isError ? (
-          <section className="rounded-2xl border border-red-200 bg-white p-5 text-center">
-            <AlertCircle className="mx-auto h-6 w-6 text-red-600" />
-            <p className="mt-2 text-sm font-medium text-slate-900">{t.loadError}</p>
-            <button onClick={() => void list.refetch()} className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">{t.retry}</button>
-          </section>
-        ) : isEmpty ? (
-          <EmptyState canEdit={canEdit} canImport={canImport} onNew={openNew} onImport={() => setImportOpen(true)} />
-        ) : shown.length === 0 ? (
-          <section className="rounded-2xl border border-slate-200 bg-white p-6 text-center">
-            {searchServer && remote.isFetching ? <Loader2 className="mx-auto h-5 w-5 animate-spin text-slate-400" /> : (
-              <>
-                <p className="text-sm text-slate-600">{t.noResults(query)}</p>
-                <button onClick={() => setSearch("")} className="mt-3 inline-flex h-11 items-center rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">{t.clearSearch}</button>
-              </>
-            )}
-          </section>
-        ) : (
-          <>
-            {/* Phone: cards */}
-            <ul className="space-y-2 md:hidden">
-              {shown.map((c) => {
-                const b = bought.get(c.id);
-                const contact = [c.phone, c.email].filter(Boolean).join(" · ");
-                return (
-                  <li key={c.id}>
-                    <button onClick={() => openClient(c)}
-                      className="flex min-h-[64px] w-full items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3.5 text-left transition hover:border-slate-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                      <Avatar c={c} />
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate font-semibold text-slate-900">{fullName(c)}</span>
-                        <span className="block truncate text-xs text-slate-500">{contact || t.noPhone}</span>
-                        {showBought && <span className="mt-0.5 block truncate text-xs font-medium tabular-nums text-slate-700">{b ? t.bought(money(b.total), b.salesCount) : t.noBuys}</span>}
-                      </span>
-                      <ChevronRight className="h-4 w-4 shrink-0 text-slate-400" />
-                    </button>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {/* Desktop: table */}
-            <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white md:block">
-              <table className="w-full table-fixed text-sm">
-                <thead className="border-b border-slate-200 bg-slate-50 text-left text-xs text-slate-500">
-                  <tr>
-                    <th scope="col" className="w-[32%] px-4 py-3 font-medium">{t.table.name}</th>
-                    <th scope="col" className="w-[18%] px-4 py-3 font-medium">{t.table.phone}</th>
-                    <th scope="col" className="px-4 py-3 font-medium">{t.table.email}</th>
-                    {showBought && <th scope="col" className="w-[18%] px-4 py-3 text-right font-medium">{t.table.bought}</th>}
-                    <th scope="col" className="w-[104px] px-4 py-3"><span className="sr-only">{t.table.actions}</span></th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {shown.map((c) => {
-                    const name = fullName(c);
-                    const b = bought.get(c.id);
-                    return (
-                      <tr key={c.id} className="hover:bg-slate-50/70">
-                        <td className="px-4 py-3">
-                          <button onClick={() => openClient(c)} className="flex w-full min-w-0 items-center gap-3 rounded-lg text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                            <Avatar c={c} />
-                            <span className="min-w-0">
-                              <span className="block truncate font-semibold text-slate-900 hover:text-blue-700">{name}</span>
-                              <span className="block truncate text-xs text-slate-500">{since(c)}</span>
-                            </span>
-                          </button>
-                        </td>
-                        <td className="truncate px-4 py-3 tabular-nums text-slate-700">{c.phone || <Missing label={t.noPhone} />}</td>
-                        <td className="truncate px-4 py-3 text-slate-700">{c.email || <Missing label={t.noEmail} />}</td>
-                        {showBought && (
-                          <td className="px-4 py-3 text-right tabular-nums">
-                            {b ? (
-                              <>
-                                <span className="block font-semibold text-slate-900">{money(b.total)}</span>
-                                <span className="block text-xs text-slate-500">{t.purchases(b.salesCount)}</span>
-                              </>
-                            ) : <span className="text-slate-400">{t.noBuys}</span>}
-                          </td>
-                        )}
-                        <td className="px-2 py-3">
-                          <div className="flex justify-end gap-1">
-                            <button onClick={() => openClient(c)} aria-label={canEdit ? t.edit(name) : t.view(name)} title={canEdit ? t.edit(name) : t.view(name)}
-                              className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-                              {canEdit ? <Pencil className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                            </button>
-                            {canDelete && (
-                              <button onClick={() => setToDelete(c)} aria-label={t.remove(name)} title={t.remove(name)}
-                                className="grid h-9 w-9 place-items-center rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500">
-                                <Trash2 className="h-4 w-4" />
-                              </button>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {!query && total > loaded.length && <p className="text-xs text-slate-500">{t.showing(loaded.length, total)}</p>}
-          </>
-        )}
-      </div>
-
+  const dialogs = (
+    <>
       <CustomerDialog
-        open={dialog.open}
-        onOpenChange={(open) => setDialog((d) => ({ ...d, open }))}
-        customer={dialog.customer}
-        canEdit={canEdit}
-        canDelete={canDelete}
-        onDelete={setToDelete}
+        open={dialog.open} onOpenChange={(open) => setDialog((d) => ({ ...d, open }))} customer={dialog.customer}
+        onCreated={(id) => { if (!openId) openDetail(id); }}
       />
-
       {canImport && <ImportCustomersDialog open={importOpen} onOpenChange={setImportOpen} />}
-
       <AlertDialog open={!!toDelete} onOpenChange={(open) => { if (!open && !del.isPending) setToDelete(null); }}>
         <AlertDialogContent className="bg-white sm:rounded-2xl">
           <AlertDialogHeader>
@@ -260,43 +144,170 @@ export default function Customers() {
             <AlertDialogCancel className="h-11 sm:h-10" disabled={del.isPending}>{t.del.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => { e.preventDefault(); if (toDelete) del.mutate({ id: toDelete.id }); }}
-              disabled={del.isPending}
-              className="h-11 bg-red-600 text-white hover:bg-red-700 sm:h-10">
+              disabled={del.isPending} className="h-11 bg-red-600 text-white hover:bg-red-700 sm:h-10"
+            >
               {del.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
               {del.isPending ? t.del.deleting : t.del.confirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+
+  if (openId) {
+    return (
+      <AnimatedPage className="p-4 lg:p-8">
+        <div className="mx-auto max-w-6xl">
+          <CustomerDetail
+            id={openId} role={role} features={plan?.features ?? []} company={company} locale={locale}
+            onBack={closeDetail} onEdit={(c) => setDialog({ open: true, customer: c })} onDelete={setToDelete}
+          />
+        </div>
+        {dialogs}
+      </AnimatedPage>
+    );
+  }
+
+  return (
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl">
+        <PageHead
+          title={t.title}
+          sub={sub}
+          right={(canImport || canEdit) && !isEmpty ? (
+            <div className="flex flex-wrap gap-1.5">
+              {canImport && <button type="button" onClick={() => setImportOpen(true)} className={btn()}><Upload className="h-4 w-4" aria-hidden />{t.importExcel}</button>}
+              {canEdit && <button type="button" onClick={openNew} className={btn("primary")}>{t.newClient}</button>}
+            </div>
+          ) : undefined}
+        />
+
+        {idle && (
+          <Note action={winback && canEdit ? <a href={winback} target="_blank" rel="noopener noreferrer" className={btn("sm")}>{t.writeTo}</a> : undefined}>
+            {t.idleTip(idle.name, shortDay(idle.lastVisit, locale, today))}
+          </Note>
+        )}
+
+        {list.isLoading ? (
+          <div className={cn(SLIST, "mt-[18px]")} aria-busy="true">
+            {Array.from({ length: 6 }, (_, i) => <div key={i} className="border-t border-slate-200 px-4 py-3 first:border-t-0"><Skeleton className="h-10 rounded-lg" /></div>)}
+          </div>
+        ) : list.isError ? (
+          <section className="mt-[18px] rounded-[14px] border border-red-200 bg-white p-5 text-center">
+            <AlertCircle className="mx-auto h-6 w-6 text-red-600" aria-hidden />
+            <p className="mt-2 text-sm font-medium text-slate-900">{t.loadError}</p>
+            <button type="button" onClick={() => void list.refetch()} className={cn(btn(), "mt-3")}>{t.retry}</button>
+          </section>
+        ) : isEmpty ? (
+          <EmptyState canEdit={canEdit} canImport={canImport} onNew={openNew} onImport={() => setImportOpen(true)} />
+        ) : (
+          <>
+            <SegTabs
+              label={t.tabsLabel} value={tab} onChange={setTab}
+              items={[
+                { value: "all", label: t.tabs.all, count: total },
+                { value: "owe", label: t.tabs.owe, count: totals?.oweCount ?? 0 },
+                { value: "late", label: t.tabs.late, count: totals?.lateCount ?? 0 },
+                { value: "idle", label: t.tabs.idle, count: totals?.idleCount ?? 0 },
+              ]}
+            />
+
+            {total > 8 && (
+              <label className={cn(SEARCH_BOX, "mt-3 max-w-sm")}>
+                <Search className="h-[18px] w-[18px] flex-none" aria-hidden />
+                <input type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t.searchPh} aria-label={t.searchLabel} autoComplete="off" className={SEARCH_INPUT} />
+                {search && (
+                  <button type="button" onClick={() => setSearch("")} aria-label={t.clearSearch} className={`-mr-2 grid h-11 w-11 place-items-center text-slate-400 hover:text-slate-700 ${FOCUS}`}><X className="h-4 w-4" aria-hidden /></button>
+                )}
+              </label>
+            )}
+
+            <div className={cn(SLIST, "mt-3")}>
+              <div className={cn("hidden gap-x-3.5 md:grid", cols, SROW_HEAD)} aria-hidden>
+                <span>{t.cols.client}</span>
+                {canSeeBilled && <span className="text-right">{t.cols.billed}</span>}
+                <span className="text-right">{t.cols.owes}</span>
+                <span className="text-right">{t.cols.last}</span>
+                <span />
+              </div>
+              {rows.length === 0 ? (
+                <div className="px-4 py-3 text-sm text-slate-500">
+                  {searchServer && remote.isFetching ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden /> : query ? t.noResults(query) : t.noneInGroup}
+                </div>
+              ) : (
+                <ul>
+                  {rows.map((r) => (
+                    <CustomerRow
+                      key={r.id} r={r} cols={cols} canSeeBilled={canSeeBilled} canMessage={canEdit} company={company}
+                      locale={locale} today={today} loadingStats={ov.isLoading} onOpen={() => openDetail(r.id)}
+                    />
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {tab === "all" && !query && total > loaded.length && <p className="mt-2 text-xs text-slate-500">{t.showing(loaded.length, total)}</p>}
+          </>
+        )}
+      </div>
+      {dialogs}
     </AnimatedPage>
   );
 }
 
-function Avatar({ c }: { c: Customer }) {
-  return <span aria-hidden className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-semibold text-blue-700">{initials(c)}</span>;
-}
+/** One `.srow.cust`: who and how to reach them; billed this year; what they owe; last visit; Recordar / Escribirle. */
+function CustomerRow({ r, cols, canSeeBilled, canMessage, company, locale, today, loadingStats, onOpen }: {
+  r: Row; cols: string; canSeeBilled: boolean; canMessage: boolean; company: string; locale: string; today: string; loadingStats: boolean; onOpen: () => void;
+}) {
+  const t = useCopy(clientesCopy);
+  const name = fullName(r);
+  const s = r.s;
+  const owes = s?.owedCents ?? 0;
+  const contact = [r.phone, r.email].filter(Boolean).join(" · ");
+  const remind = owes > 0 ? messageLink(r, t.msg.remind(firstName(r), moneyC(owes), company), t.msg.remindSubject(company)) : null;
+  const winback = !owes && s?.idle ? messageLink(r, t.msg.winback(firstName(r), company), company) : null;
+  const action = canMessage ? (remind ? { href: remind, label: t.remind } : winback ? { href: winback, label: t.writeTo } : null) : null;
 
-function Missing({ label }: { label: string }) {
-  return <span className="text-slate-400"><span aria-hidden>—</span><span className="sr-only">{label}</span></span>;
+  return (
+    <li
+      onClick={onOpen}
+      className={cn("grid cursor-pointer grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3.5 gap-y-1 border-t border-slate-200 px-4 py-3 text-sm transition first:border-t-0 hover:bg-slate-100", cols)}
+    >
+      <div className="col-start-1 row-start-1 min-w-0">
+        <button type="button" onClick={(e) => { e.stopPropagation(); onOpen(); }} className={`max-w-full truncate text-left font-[650] text-slate-900 hover:text-blue-600 ${FOCUS}`}>{name}</button>
+        <span className="block truncate text-xs text-slate-500">{contact || "—"}</span>
+      </div>
+      {canSeeBilled && <span className="hidden text-right tabular-nums text-slate-900 md:block">{s?.billedYearCents != null ? money0C(s.billedYearCents) : "$0"}</span>}
+      <span className="col-start-2 row-start-1 grid justify-items-end text-right md:col-auto md:row-auto">
+        {loadingStats ? <Skeleton className="h-4 w-14 rounded" /> : owes > 0 ? (
+          <>
+            <b className={cn("tabular-nums", s?.late ? "text-red-600" : "text-slate-900")}>{moneyC(owes)}</b>
+            {s?.late && <span className="text-xs font-medium text-red-600">{t.lateWord}</span>}
+          </>
+        ) : <span className="text-slate-500">{t.upToDate}</span>}
+      </span>
+      <span className={cn("hidden text-right md:block", s?.idle ? "text-amber-700" : "text-slate-500")}>{s?.lastVisit ? shortDay(s.lastVisit, locale, today) : t.never}</span>
+      <span className={cn("col-start-2 row-start-2 flex justify-end md:col-auto md:row-auto", !action && "hidden md:flex")}>
+        {action && (
+          <a href={action.href} target="_blank" rel="noopener noreferrer" onClick={(e) => e.stopPropagation()} className={btn("sm")}>{action.label}</a>
+        )}
+      </span>
+    </li>
+  );
 }
 
 function EmptyState({ canEdit, canImport, onNew, onImport }: { canEdit: boolean; canImport: boolean; onNew: () => void; onImport: () => void }) {
   const t = useCopy(clientesCopy);
   return (
-    <section className="rounded-2xl border border-slate-200 bg-white px-5 py-10 text-center sm:py-14">
-      <span className="mx-auto grid h-14 w-14 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Users className="h-7 w-7" /></span>
-      <h2 className="mt-4 text-lg font-bold tracking-tight text-slate-900">{canEdit ? t.empty.title : t.empty.readOnlyTitle}</h2>
-      <p className="mx-auto mt-1.5 max-w-md text-sm text-slate-500">{canEdit ? t.empty.text : t.empty.readOnlyText}</p>
+    <section className="mt-[18px] rounded-[14px] border border-dashed border-slate-200 bg-white px-5 py-10 text-center sm:py-14">
+      <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Users className="h-6 w-6" aria-hidden /></span>
+      <h2 className="mt-3 text-base font-bold text-slate-900">{canEdit ? t.empty.title : t.empty.readOnlyTitle}</h2>
+      <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{canEdit ? t.empty.text : t.empty.readOnlyText}</p>
       {canEdit && (
-        <div className="mx-auto mt-6 flex max-w-sm flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
-          <button onClick={onNew} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-5 text-sm font-semibold text-white shadow-sm hover:bg-blue-500">
-            <UserPlus className="h-4 w-4" />{t.empty.add}
-          </button>
-          {canImport && (
-            <button onClick={onImport} className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] border border-slate-200 bg-white px-5 text-sm font-semibold text-slate-800 hover:bg-slate-50">
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />{t.importExcel}
-            </button>
-          )}
+        <div className="mx-auto mt-5 flex max-w-sm flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
+          <button type="button" onClick={onNew} className={btn("primary")}><UserPlus className="h-4 w-4" aria-hidden />{t.empty.add}</button>
+          {canImport && <button type="button" onClick={onImport} className={btn()}><Upload className="h-4 w-4" aria-hidden />{t.importExcel}</button>}
         </div>
       )}
       {canImport && <p className="mt-3 text-xs text-slate-500">{t.empty.importHint}</p>}

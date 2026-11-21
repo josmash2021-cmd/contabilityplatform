@@ -2,6 +2,9 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { isDuplicateKey } from "./lib/dbErrors";
+import { methodOf, paymentsMatchTotal, unitsByService } from "./lib/ventas";
+import { ensureServiceExtras } from "./services-router";
+import { cashCountRouter } from "./cashcount-router";
 import { sales, saleServices, paymentRecords, services, customers, accounts, journalEntries, journalEntryLines } from "@db/schema";
 import { eq, desc, sql, and, inArray } from "drizzle-orm";
 import { TRPCError } from "@trpc/server";
@@ -14,6 +17,194 @@ async function nextDailyNumber(db: ReturnType<typeof getDb>, table: "sales" | "j
     FROM ${sql.identifier(table)} WHERE ${sql.identifier(column)} LIKE ${prefix + "%"}
   `)) as unknown as [{ n: number | string }[]];
   return Number(rows[0]?.[0]?.n ?? 0) + 1;
+}
+
+type SaleInput = {
+  customerId?: number;
+  customerName?: string;
+  items: Array<{ serviceId?: number; serviceName?: string; quantity: number; unitPrice: string | number }>;
+  subtotal: string | number;
+  discount?: string | number;
+  total: string | number;
+  paymentMethod: "cash" | "zelle" | "card" | "mixed";
+  payments?: Array<{ method: "cash" | "zelle" | "card"; amount: string | number; reference?: string }>;
+  notes?: string;
+};
+
+/** True when MySQL undid the transaction because of a deadlock (it can simply run again). */
+function isDeadlock(e: unknown): boolean {
+  for (let cur: unknown = e, depth = 0; cur && depth < 5; depth++) {
+    const err = cur as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
+    if (err.code === "ER_LOCK_DEADLOCK" || err.errno === 1213) return true;
+    if (typeof err.message === "string" && /Deadlock found/i.test(err.message)) return true;
+    cur = err.cause;
+  }
+  return false;
+}
+
+/** Saves one sale inside the caller's transaction. Same steps as before, plus the stock of tracked products. */
+async function saveSale(db: ReturnType<typeof getDb>, input: SaleInput, userId: number): Promise<{ id: number; invoiceNumber: string }> {
+  // Tenant check: the customer and every referenced service must belong to this user.
+  if (input.customerId) {
+    const own = await db.select({ id: customers.id }).from(customers)
+      .where(and(eq(customers.id, input.customerId), eq(customers.userId, userId))).limit(1);
+    if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente no encontrado" });
+  }
+  const serviceIds = [...new Set(input.items.map((i) => i.serviceId).filter((id): id is number => !!id))];
+  if (serviceIds.length > 0) {
+    const ownSvcs = await db.select({ id: services.id }).from(services)
+      .where(and(inArray(services.id, serviceIds), eq(services.userId, userId)));
+    if (ownSvcs.length !== serviceIds.length) throw new TRPCError({ code: "NOT_FOUND", message: "Servicio no encontrado" });
+  }
+
+  const date = new Date();
+  const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
+
+  // Invoice number: one past the highest already used today (counting broke after a deleted
+  // sale or two sales at once — the number is unique, so every later sale of the day failed).
+  let invoiceNumber = "";
+  let saleId = 0;
+  for (let n = await nextDailyNumber(db, "sales", "invoiceNumber", `FAC-${dateStr}-`), tries = 0; ; n++, tries++) {
+    invoiceNumber = `FAC-${dateStr}-${String(n).padStart(4, "0")}`;
+    try {
+      const saleResult = await db.insert(sales).values({
+        invoiceNumber,
+        customerId: input.customerId,
+        customerName: input.customerName,
+        subtotal: String(input.subtotal),
+        discount: String(input.discount ?? 0),
+        total: String(input.total),
+        paymentMethod: input.paymentMethod,
+        notes: input.notes,
+        createdBy: userId,
+      });
+      saleId = Number(saleResult[0].insertId);
+      break;
+    } catch (e: unknown) {
+      if (!isDuplicateKey(e) || tries >= 50) throw e;
+    }
+  }
+
+  let genericCustomServiceId: number | undefined;
+
+  for (const item of input.items) {
+    let resolvedServiceId: number;
+    let serviceName = item.serviceName;
+
+    // Custom charge: no serviceId or explicit 0
+    if (!item.serviceId) {
+      if (!genericCustomServiceId) {
+        const existing = await db.select({ id: services.id }).from(services).where(
+          and(eq(services.userId, userId), eq(services.name, "Cargo personalizado"))
+        ).limit(1);
+        if (existing.length > 0) {
+          genericCustomServiceId = existing[0].id;
+        } else {
+          const result = await db.execute(sql`
+            INSERT INTO services (userId, name, description, price, cost, isActive)
+            VALUES (${userId}, ${"Cargo personalizado"}, ${""}, ${"0"}, ${"0"}, ${1})
+          `);
+          genericCustomServiceId = Number(result[0].insertId);
+        }
+      }
+      resolvedServiceId = genericCustomServiceId!;
+    } else {
+      resolvedServiceId = item.serviceId;
+    }
+
+    if (!serviceName) {
+      const svc = await db.select({ name: services.name }).from(services).where(and(eq(services.id, resolvedServiceId), eq(services.userId, userId))).limit(1);
+      serviceName = svc[0]?.name ?? "Servicio";
+    }
+
+    await db.insert(saleServices).values({
+      saleId,
+      serviceId: resolvedServiceId,
+      serviceName,
+      quantity: item.quantity,
+      unitPrice: String(item.unitPrice),
+      total: String(Number(item.unitPrice) * item.quantity),
+    });
+  }
+
+  // Products that keep count of their stock go down by what was sold (it may go below 0:
+  // the sale is never refused at the counter; the catalog then shows "Agotado").
+  for (const [serviceId, units] of unitsByService(input.items)) {
+    await db.execute(sql`UPDATE serviceExtras SET stock = stock - ${units}, updatedAt = CURRENT_TIMESTAMP WHERE serviceId = ${serviceId} AND userId = ${userId} AND trackStock = 1`);
+  }
+
+  if (input.payments && input.payments.length > 0) {
+    for (const p of input.payments) {
+      await db.insert(paymentRecords).values({
+        saleId,
+        method: p.method,
+        amount: String(p.amount),
+        reference: p.reference,
+      });
+    }
+  } else {
+    await db.insert(paymentRecords).values({
+      saleId,
+      method: input.paymentMethod === "mixed" ? "cash" : input.paymentMethod,
+      amount: String(input.total),
+    });
+  }
+
+  // Auto journal entry
+  const dateStrJE = date.toISOString().split("T")[0];
+  const firstEntryNumber = await nextDailyNumber(db, "journalEntries", "entryNumber", `ASI-${dateStr}-`);
+
+  const cashAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1110"), eq(accounts.userId, userId))).limit(1);
+  const zelleAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1130"), eq(accounts.userId, userId))).limit(1);
+  const creditAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1150"), eq(accounts.userId, userId))).limit(1);
+  const revAcc = await db.select().from(accounts).where(and(eq(accounts.code, "4100"), eq(accounts.userId, userId))).limit(1);
+
+  const lines: Array<{ accountId: number; debit: string; credit: string; description: string }> = [];
+
+  if (input.payments && input.payments.length > 0) {
+    for (const p of input.payments) {
+      const accId = p.method === "cash" ? cashAcc[0]?.id : p.method === "zelle" ? zelleAcc[0]?.id : creditAcc[0]?.id;
+      if (accId) lines.push({ accountId: accId, debit: String(p.amount), credit: "0", description: `Pago ${p.method}` });
+    }
+  } else {
+    const accId = input.paymentMethod === "cash" ? cashAcc[0]?.id : input.paymentMethod === "zelle" ? zelleAcc[0]?.id : creditAcc[0]?.id;
+    if (accId) lines.push({ accountId: accId, debit: String(input.total), credit: "0", description: `Pago ${input.paymentMethod}` });
+  }
+
+  // Revenue is what was charged (the total, after any discount), so the entry balances.
+  if (revAcc[0]?.id) {
+    lines.push({ accountId: revAcc[0].id, debit: "0", credit: String(input.total), description: `Venta servicio` });
+  }
+
+  const totalDebits = lines.reduce((s, l) => s + Number(l.debit), 0);
+  const totalCredits = lines.reduce((s, l) => s + Number(l.credit), 0);
+
+  let jeId = 0;
+  for (let n = firstEntryNumber, tries = 0; ; n++, tries++) {
+    try {
+      const jeResult = await db.insert(journalEntries).values({
+        entryNumber: `ASI-${dateStr}-${String(n).padStart(4, "0")}`,
+        date: new Date(dateStrJE),
+        description: `Venta ${invoiceNumber}`,
+        reference: invoiceNumber,
+        referenceId: saleId,
+        referenceType: "sale",
+        debitTotal: String(totalDebits),
+        creditTotal: String(totalCredits),
+        createdBy: userId,
+      });
+      jeId = Number(jeResult[0].insertId);
+      break;
+    } catch (e: unknown) {
+      if (!isDuplicateKey(e) || tries >= 50) throw e;
+    }
+  }
+
+  for (const line of lines) {
+    await db.insert(journalEntryLines).values({ journalEntryId: jeId, ...line });
+  }
+
+  return { id: saleId, invoiceNumber };
 }
 
 export const salesRouter = createRouter({
@@ -109,161 +300,29 @@ export const salesRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       const db = getDb();
 
-      // Tenant check: the customer and every referenced service must belong to this user.
-      if (input.customerId) {
-        const own = await db.select({ id: customers.id }).from(customers)
-          .where(and(eq(customers.id, input.customerId), eq(customers.userId, ctx.user.id))).limit(1);
-        if (own.length === 0) throw new TRPCError({ code: "NOT_FOUND", message: "Cliente no encontrado" });
-      }
-      const serviceIds = [...new Set(input.items.map((i) => i.serviceId).filter((id): id is number => !!id))];
-      if (serviceIds.length > 0) {
-        const ownSvcs = await db.select({ id: services.id }).from(services)
-          .where(and(inArray(services.id, serviceIds), eq(services.userId, ctx.user.id)));
-        if (ownSvcs.length !== serviceIds.length) throw new TRPCError({ code: "NOT_FOUND", message: "Servicio no encontrado" });
-      }
-
-      const date = new Date();
-      const dateStr = date.toISOString().slice(0, 10).replace(/-/g, "");
-
-      // Invoice number: one past the highest already used today (counting broke after a deleted
-      // sale or two sales at once — the number is unique, so every later sale of the day failed).
-      let invoiceNumber = "";
-      let saleId = 0;
-      for (let n = await nextDailyNumber(db, "sales", "invoiceNumber", `FAC-${dateStr}-`), tries = 0; ; n++, tries++) {
-        invoiceNumber = `FAC-${dateStr}-${String(n).padStart(4, "0")}`;
-        try {
-          const saleResult = await db.insert(sales).values({
-            invoiceNumber,
-            customerId: input.customerId,
-            customerName: input.customerName,
-            subtotal: String(input.subtotal),
-            discount: String(input.discount ?? 0),
-            total: String(input.total),
-            paymentMethod: input.paymentMethod,
-            notes: input.notes,
-            createdBy: ctx.user.id,
-          });
-          saleId = Number(saleResult[0].insertId);
-          break;
-        } catch (e: unknown) {
-          if (!isDuplicateKey(e) || tries >= 50) throw e;
-        }
-      }
-
-      let genericCustomServiceId: number | undefined;
-
-      for (const item of input.items) {
-        let resolvedServiceId: number;
-        let serviceName = item.serviceName;
-
-        // Custom charge: no serviceId or explicit 0
-        if (!item.serviceId) {
-          if (!genericCustomServiceId) {
-            const existing = await db.select({ id: services.id }).from(services).where(
-              and(eq(services.userId, ctx.user.id), eq(services.name, "Cargo personalizado"))
-            ).limit(1);
-            if (existing.length > 0) {
-              genericCustomServiceId = existing[0].id;
-            } else {
-              const result = await db.execute(sql`
-                INSERT INTO services (userId, name, description, price, cost, isActive)
-                VALUES (${ctx.user.id}, ${"Cargo personalizado"}, ${""}, ${"0"}, ${"0"}, ${1})
-              `);
-              genericCustomServiceId = Number(result[0].insertId);
-            }
-          }
-          resolvedServiceId = genericCustomServiceId!;
-        } else {
-          resolvedServiceId = item.serviceId;
-        }
-
-        if (!serviceName) {
-          const svc = await db.select({ name: services.name }).from(services).where(and(eq(services.id, resolvedServiceId), eq(services.userId, ctx.user.id))).limit(1);
-          serviceName = svc[0]?.name ?? "Servicio";
-        }
-
-        await db.insert(saleServices).values({
-          saleId,
-          serviceId: resolvedServiceId,
-          serviceName,
-          quantity: item.quantity,
-          unitPrice: String(item.unitPrice),
-          total: String(Number(item.unitPrice) * item.quantity),
-        });
-      }
-
+      // Split payments (part cash, part card or Zelle) must add up to the total, and the sale
+      // says "mixed" only when there really are two methods.
       if (input.payments && input.payments.length > 0) {
-        for (const p of input.payments) {
-          await db.insert(paymentRecords).values({
-            saleId,
-            method: p.method,
-            amount: String(p.amount),
-            reference: p.reference,
-          });
+        if (!paymentsMatchTotal(input.payments, input.total)) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: ctx.lang === "en" ? "The payments don't add up to the total." : "Los pagos no suman el total." });
         }
-      } else {
-        await db.insert(paymentRecords).values({
-          saleId,
-          method: input.paymentMethod === "mixed" ? "cash" : input.paymentMethod,
-          amount: String(input.total),
-        });
-      }
-
-      // Auto journal entry
-      const dateStrJE = date.toISOString().split("T")[0];
-      const firstEntryNumber = await nextDailyNumber(db, "journalEntries", "entryNumber", `ASI-${dateStr}-`);
-
-      const cashAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1110"), eq(accounts.userId, ctx.user.id))).limit(1);
-      const zelleAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1130"), eq(accounts.userId, ctx.user.id))).limit(1);
-      const creditAcc = await db.select().from(accounts).where(and(eq(accounts.code, "1150"), eq(accounts.userId, ctx.user.id))).limit(1);
-      const revAcc = await db.select().from(accounts).where(and(eq(accounts.code, "4100"), eq(accounts.userId, ctx.user.id))).limit(1);
-
-      const lines: Array<{ accountId: number; debit: string; credit: string; description: string }> = [];
-
-      if (input.payments && input.payments.length > 0) {
-        for (const p of input.payments) {
-          const accId = p.method === "cash" ? cashAcc[0]?.id : p.method === "zelle" ? zelleAcc[0]?.id : creditAcc[0]?.id;
-          if (accId) lines.push({ accountId: accId, debit: String(p.amount), credit: "0", description: `Pago ${p.method}` });
+        if (input.paymentMethod !== "mixed" && methodOf(input.payments) !== input.paymentMethod) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: ctx.lang === "en" ? "The payment method doesn't match the payments." : "La forma de pago no coincide con los pagos." });
         }
-      } else {
-        const accId = input.paymentMethod === "cash" ? cashAcc[0]?.id : input.paymentMethod === "zelle" ? zelleAcc[0]?.id : creditAcc[0]?.id;
-        if (accId) lines.push({ accountId: accId, debit: String(input.total), credit: "0", description: `Pago ${input.paymentMethod}` });
       }
 
-      // Revenue is what was charged (the total, after any discount), so the entry balances.
-      if (revAcc[0]?.id) {
-        lines.push({ accountId: revAcc[0].id, debit: "0", credit: String(input.total), description: `Venta servicio` });
-      }
+      // The stock table must exist before the transaction (CREATE TABLE would commit it).
+      await ensureServiceExtras(db);
 
-      const totalDebits = lines.reduce((s, l) => s + Number(l.debit), 0);
-      const totalCredits = lines.reduce((s, l) => s + Number(l.credit), 0);
-
-      let jeId = 0;
-      for (let n = firstEntryNumber, tries = 0; ; n++, tries++) {
+      // The whole sale (lines, payments, stock, journal entry) is saved together or not at all.
+      // Two sales at the same moment can deadlock on the daily numbers: MySQL undoes one, and it runs again.
+      for (let attempt = 1; ; attempt++) {
         try {
-          const jeResult = await db.insert(journalEntries).values({
-            entryNumber: `ASI-${dateStr}-${String(n).padStart(4, "0")}`,
-            date: new Date(dateStrJE),
-            description: `Venta ${invoiceNumber}`,
-            reference: invoiceNumber,
-            referenceId: saleId,
-            referenceType: "sale",
-            debitTotal: String(totalDebits),
-            creditTotal: String(totalCredits),
-            createdBy: ctx.user.id,
-          });
-          jeId = Number(jeResult[0].insertId);
-          break;
+          return await db.transaction(async (tx: ReturnType<typeof getDb>) => saveSale(tx, input, Number(ctx.user.id)));
         } catch (e: unknown) {
-          if (!isDuplicateKey(e) || tries >= 50) throw e;
+          if (!isDeadlock(e) || attempt >= 4) throw e;
         }
       }
-
-      for (const line of lines) {
-        await db.insert(journalEntryLines).values({ journalEntryId: jeId, ...line });
-      }
-
-      return { id: saleId, invoiceNumber };
     }),
 
   updateStatus: authedQuery
@@ -334,9 +393,10 @@ export const salesRouter = createRouter({
       const tzExpr = `DATE_ADD(createdAt, INTERVAL ${tzOff} HOUR)`;
 
       // Helper: normalize db.execute result
-      const getRows = (r: any): any[] => {
-        if (Array.isArray(r) && r.length === 2 && Array.isArray(r[1]) && r[1][0]?.name !== undefined) return r[0];
-        return Array.isArray(r) ? r : [];
+      type StatRow = { total?: string; count?: number; method?: string };
+      const getRows = (r: unknown): StatRow[] => {
+        if (Array.isArray(r) && r.length === 2 && Array.isArray(r[1]) && r[1][0]?.name !== undefined) return r[0] as StatRow[];
+        return Array.isArray(r) ? (r as StatRow[]) : [];
       };
 
       // ─── TODAY ───
@@ -393,4 +453,7 @@ export const salesRouter = createRouter({
         paymentBreakdown: paymentResult as Array<{ method: string; total: string; count: number }>,
       };
     }),
+
+  /** Cierre de caja: today's money in by method, the cash that should be in the drawer, and the counts saved. */
+  cashCount: cashCountRouter,
 });

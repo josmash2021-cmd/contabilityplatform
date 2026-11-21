@@ -11,7 +11,6 @@ type QuotesOut = inferRouterOutputs<AppRouter>["quotes"];
 export type QuoteListItem = QuotesOut["list"]["items"][number];
 export type QuoteDetail = QuotesOut["get"];
 export type RecurringInvoice = QuotesOut["recurring"]["list"][number];
-export type Receivable = QuotesOut["receivables"][number];
 
 export type ServiceOption = { id: number; name: string; price: number };
 export type CustomerOption = { id: number; label: string; detail: string | null };
@@ -63,7 +62,8 @@ export function formatDate(value: Date | string, locale: string): string {
 
 // ── Lines being edited (form state keeps what the user typed) ──
 
-export type DraftLine = { key: string; serviceId: number | null; description: string; quantity: string; unitPrice: string };
+/** `custom`: a free-text line ("Otro") rather than one from the catalog. */
+export type DraftLine = { key: string; serviceId: number | null; description: string; quantity: string; unitPrice: string; custom?: boolean };
 export type LineValue = { serviceId: number | null; description: string; quantity: number; unitPrice: number };
 
 export function newKey(): string {
@@ -78,11 +78,24 @@ export function priceInput(n: number): string {
 export function toDraftLines(items: ReadonlyArray<{ serviceId: number | null; description: string; quantity: number; unitPrice: number }>): DraftLine[] {
   return items.map((it) => ({
     key: newKey(), serviceId: it.serviceId, description: it.description, quantity: String(it.quantity), unitPrice: priceInput(it.unitPrice),
+    custom: it.serviceId === null,
   }));
 }
 
 export function blankLine(): DraftLine {
   return { key: newKey(), serviceId: null, description: "", quantity: "1", unitPrice: "" };
+}
+
+/** A new line with the catalog's first service already chosen (like the prototype), or a free-text one. */
+export function firstLine(services: readonly ServiceOption[]): DraftLine {
+  const s = services[0];
+  if (!s) return { ...blankLine(), custom: true };
+  return { key: newKey(), serviceId: s.id, description: s.name, quantity: "1", unitPrice: priceInput(s.price) };
+}
+
+/** Lines still empty (no service picked, nothing typed) are left out instead of failing the form. */
+export function filledLines(lines: readonly DraftLine[]): DraftLine[] {
+  return lines.filter((l) => l.serviceId !== null || l.custom || l.description.trim() !== "" || l.unitPrice.trim() !== "");
 }
 
 /** A money amount typed by the user ("$1,200.50" is fine); null when it isn't one. */
@@ -162,6 +175,7 @@ export function useRefreshQuotes() {
   return useCallback((salesChanged = false) => {
     void utils.quotes.invalidate();
     if (salesChanged) {
+      void utils.invoices.invalidate();
       void utils.sales.invalidate();
       void utils.dashboard.invalidate();
     }

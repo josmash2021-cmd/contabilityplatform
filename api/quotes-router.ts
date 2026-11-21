@@ -4,6 +4,9 @@
 // like any sale not paid yet: no payment and no journal entry, so it doesn't count as income);
 // the user marks it collected when the client pays, which books it like the POS does.
 // runRecurringInvoices(db) does the due ones for every user; a server timer calls it.
+// Every sale made here is also an invoice in Facturas (api/invoices-router.ts): it gets its
+// due date there, and collecting / voiding goes through the same code as Facturas, so a
+// partly paid invoice is never booked twice.
 // The pure rules (totals, dates, statuses) live in ./lib/quotes.ts; tables are created on first use.
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -22,6 +25,10 @@ import {
   isValidIsoDate, lineTotalCents, quoteNumber, quoteTotals, scheduleFinished, toCents, todayInTimeZone,
   type Frequency, type PaymentMethod, type QuoteStatus,
 } from "./lib/quotes";
+import { DEFAULT_TERMS, MAX_TERMS } from "./lib/invoices";
+import {
+  addInvoiceForSale, deleteUserInvoicesData, ensureInvoicesTables, payInvoiceSale, voidInvoiceSale,
+} from "./invoices-router";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -168,6 +175,8 @@ function isNoSuchTable(e: unknown): boolean {
  * account is deleted). The sales they created are ordinary sales and are left to whoever deletes those.
  */
 export async function deleteUserQuotesData(db: Db, userId: number): Promise<void> {
+  // Their invoices' due dates, payments history and reminders go too.
+  await deleteUserInvoicesData(db, userId);
   try {
     await db.transaction(async (tx: Db) => {
       await tx.delete(quoteItems).where(inArray(quoteItems.quoteId, tx.select({ id: quotes.id }).from(quotes).where(eq(quotes.userId, userId))));
@@ -189,11 +198,11 @@ function resultHeader(res: unknown): ResultHeader {
   const head: unknown = Array.isArray(res) ? res[0] : res;
   return head && typeof head === "object" ? (head as ResultHeader) : {};
 }
-const insertIdOf = (res: unknown): number => Number(resultHeader(res).insertId ?? 0);
-const affectedRowsOf = (res: unknown): number => Number(resultHeader(res).affectedRows ?? 0);
+export const insertIdOf = (res: unknown): number => Number(resultHeader(res).insertId ?? 0);
+export const affectedRowsOf = (res: unknown): number => Number(resultHeader(res).affectedRows ?? 0);
 
 /** A unique-index clash (MySQL 1062), also when drizzle wraps the driver's error. */
-function isDuplicateKey(e: unknown): boolean {
+export function isDuplicateKey(e: unknown): boolean {
   let cur: unknown = e;
   for (let i = 0; i < 5 && cur && typeof cur === "object"; i++) {
     const err = cur as { code?: unknown; errno?: unknown; message?: unknown; cause?: unknown };
@@ -204,7 +213,7 @@ function isDuplicateKey(e: unknown): boolean {
   return false;
 }
 
-const isId = (v: number | null | undefined): v is number => typeof v === "number" && v > 0;
+export const isId = (v: number | null | undefined): v is number => typeof v === "number" && v > 0;
 
 /** The calendar dates "invoice number" and "journal entry number" use, exactly as api/sales-router.ts does. */
 function saleClock(now: Date) {
@@ -226,7 +235,7 @@ const itemInput = z.object({
   quantity: z.number().int().min(1).max(MAX_QUANTITY),
   unitPrice: z.number().finite().min(0).max(MAX_UNIT_PRICE),
 });
-type ItemInput = z.infer<typeof itemInput>;
+export type ItemInput = z.infer<typeof itemInput>;
 
 const customerInput = {
   customerId: id.nullable().optional(),
@@ -251,7 +260,7 @@ const recurringFields = {
 
 // ── Shared checks ──
 
-function checkLines(items: readonly ItemInput[], lang: Lang): void {
+export function checkLines(items: readonly ItemInput[], lang: Lang): void {
   for (const it of items) if (lineTotalCents(it) > MAX_LINE_CENTS) fail("BAD_REQUEST", lang, "lineTooBig");
 }
 
@@ -264,13 +273,13 @@ async function ownServiceIds(db: Db, userId: number, ids: readonly number[]): Pr
 }
 
 /** Every catalog service on the lines must be this user's (same tenant check as sales). */
-async function assertOwnServices(db: Db, userId: number, items: readonly ItemInput[], lang: Lang): Promise<void> {
+export async function assertOwnServices(db: Db, userId: number, items: readonly ItemInput[], lang: Lang): Promise<void> {
   const ids = [...new Set(items.map((i) => i.serviceId).filter(isId))];
   if ((await ownServiceIds(db, userId, ids)).size !== ids.length) fail("NOT_FOUND", lang, "serviceNotFound");
 }
 
 /** The customer must be this user's; with no name typed, the customer's own name is used. */
-async function resolveCustomer(
+export async function resolveCustomer(
   db: Db, userId: number, input: { customerId?: number | null; customerName?: string | null }, lang: Lang,
 ): Promise<{ customerId: number | null; customerName: string | null }> {
   const typed = input.customerName?.trim() || null;
@@ -282,7 +291,7 @@ async function resolveCustomer(
 }
 
 /** The customer id when it still exists for this user (a deleted customer keeps only the name). */
-async function existingCustomerId(db: Db, userId: number, customerId: number | null): Promise<number | null> {
+export async function existingCustomerId(db: Db, userId: number, customerId: number | null): Promise<number | null> {
   if (!customerId) return null;
   const rows: Array<{ id: number }> = await db.select({ id: customers.id }).from(customers)
     .where(and(eq(customers.id, customerId), eq(customers.userId, userId))).limit(1);
@@ -292,10 +301,10 @@ async function existingCustomerId(db: Db, userId: number, customerId: number | n
 // ── Creating sales ──
 
 /** A line of a sale about to be created. unitPrice is a decimal string. */
-type SaleLine = { serviceId: number | null; description: string; quantity: number; unitPrice: string };
+export type SaleLine = { serviceId: number | null; description: string; quantity: number; unitPrice: string };
 
 /** Lines whose catalog service was deleted since become free-text lines (the sale keeps the description). */
-async function saleLinesFor(db: Db, userId: number, lines: readonly SaleLine[]): Promise<SaleLine[]> {
+export async function saleLinesFor(db: Db, userId: number, lines: readonly SaleLine[]): Promise<SaleLine[]> {
   const own = await ownServiceIds(db, userId, lines.map((l) => l.serviceId).filter(isId));
   return lines.map((l) => ({ ...l, serviceId: l.serviceId && own.has(l.serviceId) ? l.serviceId : null }));
 }
@@ -314,7 +323,7 @@ async function customServiceId(db: Db, userId: number): Promise<number> {
   return insertIdOf(res);
 }
 
-type NewSale = {
+export type NewSale = {
   customerId: number | null;
   customerName: string | null;
   lines: readonly SaleLine[];
@@ -353,7 +362,9 @@ const dailyNumber = (prefix: string, n: number) => `${prefix}${String(n).padStar
  * entry, since the app only books completed sales (reports, the dashboard and the accounting
  * rebuild skip pending ones); paymentMethod is a placeholder until it's collected.
  */
-async function createSale(db: Db, userId: number, s: NewSale, payment: PaymentMethod | null): Promise<{ id: number; invoiceNumber: string }> {
+export async function createSale(
+  db: Db, userId: number, s: NewSale, payment: PaymentMethod | null,
+): Promise<{ id: number; invoiceNumber: string; journalEntryId: number | null }> {
   const { dateStr, todayStart } = saleClock(new Date());
   const prefix = `FAC-${dateStr}-`;
   const first = await firstDailyNumber(db, sales, sales.invoiceNumber, sales.createdAt, prefix, todayStart);
@@ -396,11 +407,12 @@ async function createSale(db: Db, userId: number, s: NewSale, payment: PaymentMe
     });
   }
 
+  let journalEntryId: number | null = null;
   if (payment) {
     await db.insert(paymentRecords).values({ saleId, method: payment, amount: s.total });
-    await postSaleJournal(db, userId, { id: saleId, invoiceNumber, total: s.total }, payment);
+    journalEntryId = await postSaleJournal(db, userId, { id: saleId, invoiceNumber, total: s.total }, payment);
   }
-  return { id: saleId, invoiceNumber };
+  return { id: saleId, invoiceNumber, journalEntryId };
 }
 
 /** Chart-of-accounts code each payment method lands in (same as sales and the accounting rebuild). */
@@ -411,14 +423,20 @@ const REVENUE_ACCOUNT = "4100";
  * Books a paid sale like api/sales-router.ts does for a POS sale (ASI-YYYYMMDD-NNNN entry, debit
  * the payment method's account, credit revenue), crediting the total so the entry balances when
  * there's a discount, and with a number that can't collide. Without a chart of accounts it books
- * nothing: the accounting rebuild adds the entry later (it books completed sales that have none).
+ * nothing (returns null): the accounting rebuild adds the entry later (it books completed sales
+ * that have none). Facturas books each payment of an invoice with it (`sale.total` is then that
+ * payment's amount), and a refund with `reverse` (debit revenue, credit the method's account).
+ * Every entry references the sale, so the rebuild never books the sale a second time.
  */
-async function postSaleJournal(db: Db, userId: number, sale: { id: number; invoiceNumber: string; total: string }, method: PaymentMethod): Promise<void> {
+export async function postSaleJournal(
+  db: Db, userId: number, sale: { id: number; invoiceNumber: string; total: string }, method: PaymentMethod,
+  opts: { description?: string; reverse?: boolean } = {},
+): Promise<number | null> {
   const accs: Array<{ id: number; code: string }> = await db.select({ id: accounts.id, code: accounts.code }).from(accounts)
     .where(and(eq(accounts.userId, userId), inArray(accounts.code, [ASSET_ACCOUNT[method], REVENUE_ACCOUNT])));
   const asset = accs.find((a) => a.code === ASSET_ACCOUNT[method]);
   const revenue = accs.find((a) => a.code === REVENUE_ACCOUNT);
-  if (!asset || !revenue) return;
+  if (!asset || !revenue) return null;
 
   const { dateStr, dayIso, todayStart } = saleClock(new Date());
   const prefix = `ASI-${dateStr}-`;
@@ -430,7 +448,7 @@ async function postSaleJournal(db: Db, userId: number, sale: { id: number; invoi
       const res = await db.insert(journalEntries).values({
         entryNumber: dailyNumber(prefix, first + attempt),
         date: new Date(dayIso),
-        description: `Venta ${sale.invoiceNumber}`,
+        description: opts.description ?? `Venta ${sale.invoiceNumber}`,
         reference: sale.invoiceNumber,
         referenceId: sale.id,
         referenceType: "sale",
@@ -444,10 +462,16 @@ async function postSaleJournal(db: Db, userId: number, sale: { id: number; invoi
     }
   }
   if (jeId === 0) throw new Error("No free journal entry number");
-  await db.insert(journalEntryLines).values([
-    { journalEntryId: jeId, accountId: asset.id, debit: sale.total, credit: "0", description: `Pago ${method}` },
-    { journalEntryId: jeId, accountId: revenue.id, debit: "0", credit: sale.total, description: "Venta servicio" },
-  ]);
+  await db.insert(journalEntryLines).values(opts.reverse
+    ? [
+      { journalEntryId: jeId, accountId: revenue.id, debit: sale.total, credit: "0", description: "Devolución al cliente" },
+      { journalEntryId: jeId, accountId: asset.id, debit: "0", credit: sale.total, description: `Reembolso ${method}` },
+    ]
+    : [
+      { journalEntryId: jeId, accountId: asset.id, debit: sale.total, credit: "0", description: `Pago ${method}` },
+      { journalEntryId: jeId, accountId: revenue.id, debit: "0", credit: sale.total, description: "Venta servicio" },
+    ]);
+  return jeId;
 }
 
 // ── Quotes ──
@@ -622,7 +646,7 @@ const recurringCols = {
 };
 
 /** The stored JSON lines, tolerating a driver that hands back the raw string. */
-function parseItems(raw: unknown): RecurringItem[] {
+export function parseItems(raw: unknown): RecurringItem[] {
   let value: unknown = raw;
   if (typeof value === "string") {
     try { value = JSON.parse(value); } catch { return []; }
@@ -715,16 +739,22 @@ async function runRecurringInvoice(db: Db, recurringId: number, userId: number, 
         .where(and(eq(recurringInvoiceRuns.recurringId, recurringId), sql`${recurringInvoiceRuns.periodDate} = ${period}`)).limit(1);
       if (done.length > 0) continue; // invoiced before (the date was moved back): never twice
       const label = `Factura recurrente del ${period}`;
+      const total = centsToDecimal(totals.totalCents);
       const sale = await createSale(tx, userId, {
         customerId,
         customerName: row.customerName,
         lines,
         subtotal: centsToDecimal(totals.subtotalCents),
         discount: "0.00",
-        total: centsToDecimal(totals.totalCents),
+        total,
         notes: row.notes ? `${label} · ${row.notes}` : label,
       }, null);
       await tx.insert(recurringInvoiceRuns).values({ recurringId, userId, periodDate: period, saleId: sale.id });
+      // It's an invoice in Facturas, due DEFAULT_TERMS days after its period.
+      await addInvoiceForSale(tx, userId, {
+        saleId: sale.id, source: "recurring", customerId, customerName: row.customerName, total,
+        termsDays: DEFAULT_TERMS, issueDate: period, notes: row.notes, detail: { period },
+      });
       created++;
     }
     await tx.update(recurringInvoices).set({ nextDate: due.next, lastRunAt: new Date() }).where(eq(recurringInvoices.id, recurringId));
@@ -757,6 +787,7 @@ async function userHasQuotes(db: Db, userId: number): Promise<boolean> {
  */
 export async function runRecurringInvoices(db: Db, now: Date = new Date()): Promise<{ created: number }> {
   await ensureQuotesTables(db);
+  await ensureInvoicesTables(db);
   const today = todayInTimeZone(now);
   const due: Array<{ id: number; userId: number }> = await db.select({ id: recurringInvoices.id, userId: recurringInvoices.userId })
     .from(recurringInvoices).where(dueFilter(today))
@@ -792,6 +823,7 @@ async function setup(ctx: { user: PlanUser; lang: Lang }): Promise<{ db: Db; use
   const db = getDb();
   await requireFeature(db, ctx.user, "quotes", ctx.lang);
   await ensureQuotesTables(db);
+  await ensureInvoicesTables(db);
   return { db, userId: Number(ctx.user.id) };
 }
 
@@ -1007,10 +1039,15 @@ export const quotesRouter = createRouter({
   /**
    * Turns the quote into a sale, all in one transaction with the quote locked (two clicks can't
    * make two sales). Paid now ("cash" | "zelle" | "card"): a completed sale with its payment and
-   * journal entry, like the POS. Not paid yet ("pending"): a pending sale to collect later.
+   * journal entry, like the POS. Not paid yet ("pending"): a pending sale to collect later, which
+   * is an invoice in Facturas due `termsDays` days from today (default 14).
    */
   convertToSale: authedQuery
-    .input(z.object({ id, payment: z.enum(["pending", "cash", "zelle", "card"]) }))
+    .input(z.object({
+      id,
+      payment: z.enum(["pending", "cash", "zelle", "card"]),
+      termsDays: z.number().int().min(0).max(MAX_TERMS).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const { db, userId } = await setup(ctx);
       const payment = input.payment === "pending" ? null : input.payment;
@@ -1033,9 +1070,15 @@ export const quotesRouter = createRouter({
             notes: `Cotización ${q.number}`,
           }, payment);
           await tx.update(quotes).set({ status: "converted", saleId: created.id }).where(eq(quotes.id, q.id));
+          await addInvoiceForSale(tx, userId, {
+            saleId: created.id, source: "quote", quoteId: q.id, customerId, customerName: q.customerName, total: q.total,
+            termsDays: input.termsDays ?? DEFAULT_TERMS, issueDate: todayInTimeZone(new Date()), notes: q.notes,
+            detail: { quote: q.number },
+            payment: payment ? { method: payment, amount: q.total, journalEntryId: created.journalEntryId } : null,
+          });
           return created;
         });
-        return { saleId: sale.id, invoiceNumber: sale.invoiceNumber, pending: payment === null };
+        return { saleId: sale.id, invoiceNumber: sale.invoiceNumber, invoiceRef: `s${sale.id}`, pending: payment === null };
       } catch (e) {
         if (e instanceof TRPCError) throw e;
         console.error("[quotes] convertToSale failed:", e);
@@ -1088,29 +1131,25 @@ export const quotesRouter = createRouter({
     }));
   }),
 
-  /** The client paid a pending sale: it becomes a completed sale with its payment and journal entry. */
+  /**
+   * The client paid a pending sale: what's still owed is recorded as a payment with its journal
+   * entry (the same code as Facturas, so a partly paid invoice is never booked twice) and the
+   * sale becomes completed.
+   */
   collect: authedQuery
     .input(z.object({ saleId: id, method: z.enum(PAYMENT_METHODS) }))
     .mutation(async ({ ctx, input }) => {
       const { db, userId } = await setup(ctx);
       const sale = await loadOwnPendingSale(db, userId, input.saleId, ctx.lang);
-      await db.transaction(async (tx: Db) => {
-        const res = await tx.update(sales).set({ status: "completed", paymentMethod: input.method })
-          .where(and(eq(sales.id, sale.id), eq(sales.createdBy, userId), eq(sales.status, "pending")));
-        if (affectedRowsOf(res) === 0) fail("CONFLICT", ctx.lang, "saleNotPending");
-        await tx.insert(paymentRecords).values({ saleId: sale.id, method: input.method, amount: sale.total });
-        await postSaleJournal(tx, userId, sale, input.method);
-      });
+      await payInvoiceSale(db, userId, sale.id, { amountCents: null, method: input.method }, ctx.lang);
       return { saleId: sale.id, invoiceNumber: sale.invoiceNumber };
     }),
 
-  /** Voids a pending sale (it was never booked, so there's nothing else to undo). */
+  /** Voids a pending sale; anything already paid on it is given back with its reversing entry (Facturas' void). */
   cancelPending: authedQuery.input(z.object({ saleId: id })).mutation(async ({ ctx, input }) => {
     const { db, userId } = await setup(ctx);
     const sale = await loadOwnPendingSale(db, userId, input.saleId, ctx.lang);
-    const res = await db.update(sales).set({ status: "cancelled" })
-      .where(and(eq(sales.id, sale.id), eq(sales.createdBy, userId), eq(sales.status, "pending")));
-    if (affectedRowsOf(res) === 0) fail("CONFLICT", ctx.lang, "saleNotPending");
+    await voidInvoiceSale(db, userId, sale.id, ctx.lang);
     return { saleId: sale.id, invoiceNumber: sale.invoiceNumber };
   }),
 });

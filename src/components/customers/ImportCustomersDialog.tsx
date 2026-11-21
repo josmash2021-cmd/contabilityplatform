@@ -1,38 +1,76 @@
 import { useId, useRef, useState } from "react";
-import { FileSpreadsheet, Loader2, X } from "lucide-react";
+import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { trpc } from "@/providers/trpc";
+import { cn } from "@/lib/utils";
 import { useCopy } from "@/i18n/useI18n";
 import { clientesCopy } from "@/i18n/copy/clientes";
-import type { ImportRow } from "./customerUtils";
+import { IMPORT_FIELDS, guessField, splitFullName, type ImportField } from "../../../api/lib/ventas";
+import { PosSheet } from "@/components/pos/PosSheet";
+import { Note } from "@/components/pos/proto";
+import { FOCUS, LINK_BTN, MENU_TITLE, btn } from "@/components/pos/ui";
 
-const PREVIEW = 50;
+type Sheet = { fileName: string; headers: string[]; data: string[][] };
+type Row = { name: string; lastName?: string; email?: string; phone?: string; address?: string; notes?: string };
 
-/** Reads an Excel/CSV file in the browser and sends its rows to customers.importExcel (same columns as before the redesign). */
+const MAX_ROWS = 5000;
+
+/** Spreadsheet rows → client rows, following the column mapping. Rows without a name are left out. */
+function buildRows(sheet: Sheet, map: ImportField[]): Row[] {
+  const out: Row[] = [];
+  for (const cells of sheet.data) {
+    const r: Row = { name: "" };
+    const notes: string[] = [];
+    map.forEach((field, i) => {
+      const v = String(cells[i] ?? "").trim();
+      if (!v || field === "skip") return;
+      if (field === "fullName") { const s = splitFullName(v); r.name = r.name || s.name; r.lastName = r.lastName || s.lastName || undefined; }
+      else if (field === "notes") notes.push(v);
+      else if (field === "name") r.name = r.name ? `${r.name} ${v}` : v;
+      else if (!r[field]) r[field] = v;
+    });
+    if (notes.length) r.notes = notes.join(" · ");
+    if (r.name) out.push(r);
+  }
+  return out.slice(0, MAX_ROWS);
+}
+
+/**
+ * The prototype's "Importar clientes" (`.imp-file`, `.imp-map`): read an Excel/CSV in the browser,
+ * say what each column is, see who you already have (they're merged, not repeated), import.
+ * Owner only (customers.importMerge isn't in the staff list).
+ */
 export function ImportCustomersDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const t = useCopy(clientesCopy);
   const d = t.importDialog;
   const id = useId();
   const utils = trpc.useUtils();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [rows, setRows] = useState<ImportRow[]>([]);
-  const [fileName, setFileName] = useState("");
+  const [sheet, setSheet] = useState<Sheet | null>(null);
+  const [map, setMap] = useState<ImportField[]>([]);
 
-  const close = (next: boolean) => {
-    onOpenChange(next);
-    if (!next) { setRows([]); setFileName(""); }
-  };
-
-  const importExcel = trpc.customers.importExcel.useMutation({
+  const check = trpc.customers.importMerge.useMutation();
+  const run = trpc.customers.importMerge.useMutation({
     onSuccess: (res) => {
       void utils.customers.list.invalidate();
       void utils.customers.stats.invalidate();
-      toast.success(t.toast.imported(res.created, res.errors));
+      void utils.customers.overview.invalidate();
+      toast.success(t.toast.imported(res.created, res.merged, res.errors));
       close(false);
     },
     onError: (err) => toast.error(err.message),
   });
+
+  const close = (next: boolean) => {
+    onOpenChange(next);
+    if (!next) { setSheet(null); setMap([]); check.reset(); }
+  };
+
+  const recheck = (s: Sheet, m: ImportField[]) => {
+    const rows = buildRows(s, m);
+    if (rows.length > 0) check.mutate({ dryRun: true, rows });
+    else check.reset();
+  };
 
   const handleFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -42,96 +80,100 @@ export function ImportCustomersDialog({ open, onOpenChange }: { open: boolean; o
       const XLSX = await import("xlsx");
       const wb = XLSX.read(await file.arrayBuffer(), { type: "array" });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json<Array<string | number>>(ws, { header: 1 });
-      if (data.length < 2) { toast.error(t.toast.emptyFile); return; }
-      const headers = (data[0] as Array<string | number>).map((h) => String(h).toLowerCase().trim());
-      const parsed = data.slice(1).map((row) => {
-        const obj: Record<string, string> = {};
-        headers.forEach((h, i) => { obj[h] = String(row[i] ?? "").trim(); });
-        return obj;
-      }).filter((r) => r[headers[0]]);
-      const mapped: ImportRow[] = parsed.map((row) => {
-        const get = (...keys: string[]) => { for (const k of keys) { if (row[k] !== undefined && row[k] !== "") return row[k]; } return ""; };
-        return {
-          name: get("nombre", "name", "nombres"), lastName: get("apellido", "lastname", "apellidos"),
-          email: get("email", "correo", "e-mail"), phone: get("telefono", "phone", "telf", "celular"),
-          address: get("direccion", "address", "dir"), notes: get("notas", "notes"),
-        };
-      }).filter((m) => m.name);
-      setRows(mapped);
-      setFileName(file.name);
+      const raw = XLSX.utils.sheet_to_json<Array<string | number>>(ws, { header: 1, blankrows: false });
+      if (raw.length < 2) { toast.error(t.toast.emptyFile); return; }
+      const headers = (raw[0] as Array<string | number>).map((h, i) => String(h ?? "").trim() || `#${i + 1}`);
+      const data = raw.slice(1).map((r) => headers.map((_, i) => String((r as Array<string | number>)[i] ?? "").trim())).filter((r) => r.some(Boolean));
+      if (data.length === 0) { toast.error(t.toast.emptyFile); return; }
+      // Each field once: the first column that looks like it wins, the rest start as "No importar".
+      const used = new Set<ImportField>();
+      const guessed = headers.map((h) => {
+        const g = guessField(h);
+        if (g === "skip" || (g !== "notes" && used.has(g))) return "skip" as const;
+        used.add(g);
+        return g;
+      });
+      const s = { fileName: file.name, headers, data };
+      setSheet(s);
+      setMap(guessed);
+      recheck(s, guessed);
     } catch {
       toast.error(t.toast.readError);
     }
   };
 
+  const setField = (i: number, f: ImportField) => {
+    if (!sheet) return;
+    const next = map.map((x, k) => (k === i ? f : x));
+    setMap(next);
+    recheck(sheet, next);
+  };
+
+  const hasName = map.includes("name") || map.includes("fullName");
+  const res = check.data;
+  const doImport = () => {
+    if (!sheet) return;
+    if (!hasName) { toast.error(t.toast.noName); return; }
+    const rows = buildRows(sheet, map);
+    if (rows.length === 0) { toast.error(t.toast.emptyFile); return; }
+    run.mutate({ dryRun: false, rows });
+  };
+  const label = !res ? d.importN(sheet ? buildRows(sheet, map).length : 0) : res.newCount === 0 && res.mergeCount > 0 ? d.importMerged(res.mergeCount) : d.importN(res.newCount);
+
   return (
-    <Dialog open={open} onOpenChange={close}>
-      <DialogContent showCloseButton={false} className="grid-cols-1 content-start gap-0 overflow-y-auto bg-white p-0 sm:max-h-[calc(100dvh-4rem)] sm:max-w-2xl sm:rounded-2xl">
-        <header className="flex items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{d.title}</DialogTitle>
-            <DialogDescription className="mt-0.5 text-sm text-slate-500">{d.text}</DialogDescription>
-          </div>
-          <button type="button" onClick={() => close(false)} aria-label={t.form.close}
-            className="-mr-2 grid h-11 w-11 shrink-0 place-items-center rounded-full text-slate-500 hover:bg-slate-100 hover:text-slate-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-            <X className="h-5 w-5" />
-          </button>
-        </header>
-
-        <div className="space-y-4 px-4 py-5 sm:px-6">
-          <div className="rounded-xl border-2 border-dashed border-slate-200 p-5 text-center">
-            <FileSpreadsheet className="mx-auto h-8 w-8 text-emerald-600" />
-            <p className="mt-2 text-sm text-slate-600">{d.columns}</p>
-            <label htmlFor={`${id}-file`} className="sr-only">{d.fileLabel}</label>
-            <input id={`${id}-file`} ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="sr-only" tabIndex={-1} />
-            <button type="button" onClick={() => fileRef.current?.click()}
-              className="mt-3 inline-flex h-11 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 sm:h-10">
-              {rows.length > 0 ? d.chooseOther : d.choose}
-            </button>
-            {fileName && <p className="mt-2 truncate text-xs text-slate-500">{fileName}</p>}
-          </div>
-
-          {rows.length > 0 && (
-            <>
-              <div className="flex items-center justify-between gap-2">
-                <p className="text-sm font-semibold text-slate-900">{d.ready(rows.length)}</p>
-                <button type="button" onClick={() => { setRows([]); setFileName(""); }}
-                  className="inline-flex h-10 items-center gap-1 rounded-lg px-2 text-sm font-medium text-slate-600 hover:bg-slate-100">
-                  <X className="h-4 w-4" />{d.clear}
-                </button>
-              </div>
-              <div className="max-h-64 overflow-auto rounded-xl border border-slate-200">
-                <table className="w-full text-left text-xs">
-                  <thead className="sticky top-0 bg-slate-50 text-slate-500">
-                    <tr>{d.headers.map((h) => <th key={h} scope="col" className="px-3 py-2 font-medium">{h}</th>)}</tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {rows.slice(0, PREVIEW).map((r, i) => (
-                      <tr key={i}>
-                        {([r.name, r.lastName, r.phone, r.email] as const).map((v, j) => (
-                          <td key={j} className="max-w-[10rem] truncate px-3 py-1.5 text-slate-700">{v}</td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {rows.length > PREVIEW && <p className="text-xs text-slate-500">{d.more(rows.length - PREVIEW)}</p>}
-              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-                <button type="button" onClick={() => close(false)} className="h-11 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:h-10">
-                  {d.cancel}
-                </button>
-                <button type="button" onClick={() => importExcel.mutate(rows)} disabled={importExcel.isPending}
-                  className="inline-flex h-11 items-center justify-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-500 disabled:opacity-60 sm:h-10">
-                  {importExcel.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
-                  {importExcel.isPending ? d.importing : d.importN(rows.length)}
-                </button>
-              </div>
-            </>
-          )}
+    <PosSheet open={open} onOpenChange={close} title={d.title} closeLabel={t.form.close} wide>
+      <input id={`${id}-file`} ref={fileRef} type="file" accept=".xlsx,.xls,.csv" onChange={handleFile} className="sr-only" tabIndex={-1} aria-label={d.choose} />
+      {!sheet ? (
+        <div className="grid justify-items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-100 px-4 py-6 text-center">
+          <Upload className="h-6 w-6 text-blue-600" aria-hidden />
+          <button type="button" onClick={() => fileRef.current?.click()} className={btn("primary")}><FileSpreadsheet className="h-4 w-4" aria-hidden />{d.choose}</button>
+          <p className="text-xs text-slate-500">{d.chooseHint}</p>
         </div>
-      </DialogContent>
-    </Dialog>
+      ) : (
+        <>
+          {/* `.imp-file` */}
+          <div className="flex items-center gap-2.5 rounded-xl border border-dashed border-slate-200 bg-slate-100 p-3">
+            <Upload className="h-5 w-5 flex-none text-blue-600" aria-hidden />
+            <div className="min-w-0 flex-1">
+              <b className="block truncate text-sm text-slate-900">{sheet.fileName}</b>
+              <span className="block text-xs text-slate-500">{d.rows(sheet.data.length)}</span>
+            </div>
+            <button type="button" onClick={() => fileRef.current?.click()} className={cn(LINK_BTN, "text-[13px]")}>{d.chooseOther}</button>
+          </div>
+
+          {/* `.imp-map` */}
+          <p className={MENU_TITLE}>{d.mapTitle}</p>
+          <div className="grid gap-1.5">
+            {sheet.headers.map((h, i) => (
+              <div key={`${h}-${i}`} className="grid grid-cols-[minmax(0,1fr)_20px_minmax(0,1fr)] items-center gap-2 text-sm">
+                <span className="truncate text-slate-900" title={h}>{h}</span>
+                <span className="text-slate-500" aria-hidden>→</span>
+                <select
+                  value={map[i] ?? "skip"} onChange={(e) => setField(i, e.target.value as ImportField)} aria-label={d.mapLabel(h)}
+                  className={`min-h-11 rounded-[9px] border border-slate-200 bg-white px-2 text-sm text-slate-900 sm:min-h-9 ${FOCUS}`}
+                >
+                  {IMPORT_FIELDS.map((f) => <option key={f} value={f}>{d.fields[f]}</option>)}
+                </select>
+              </div>
+            ))}
+          </div>
+
+          {!hasName && <p className="mt-3 text-[13px] font-semibold text-amber-700">{d.noNameCol}</p>}
+          {check.isPending && <p className="mt-3 flex items-center gap-2 text-[13px] text-slate-500"><Loader2 className="h-4 w-4 animate-spin" aria-hidden />{d.checking}</p>}
+          {res && !check.isPending && res.mergeCount > 0 && <Note className="mt-3">{d.dupes(res.mergeCount, res.mergeNames)}</Note>}
+          {res && !check.isPending && res.repeatedInFile > 0 && <p className="mt-2 text-[13px] text-slate-500">{d.repeated(res.repeatedInFile)}</p>}
+
+          <div className="mt-3.5 flex flex-wrap gap-1.5">
+            <button
+              type="button" onClick={doImport}
+              disabled={run.isPending || !hasName || (!!res && res.newCount === 0 && res.mergeCount === 0)}
+              className={btn("primary")}
+            >
+              {run.isPending ? <><Loader2 className="h-4 w-4 animate-spin" aria-hidden />{d.importing}</> : label}
+            </button>
+          </div>
+        </>
+      )}
+    </PosSheet>
   );
 }

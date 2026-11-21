@@ -1,34 +1,34 @@
 import { useId, useState, type FormEvent } from "react";
 import { toast } from "sonner";
+import { ChevronRight } from "lucide-react";
 import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
-import { useCopy } from "@/i18n/useI18n";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
 import { quotesCopy, type QuotesCopy } from "@/i18n/copy/quotes";
-import { addDays, isValidIsoDate, localIsoDate } from "../../../api/lib/quotes";
+import { LinesEditor } from "@/components/invoices/LinesEditor";
+import { FIELD, LABEL, btn } from "@/components/invoices/ui";
+import { fmtDay } from "@/components/invoices/shared";
+import { addDays, localIsoDate } from "../../../api/lib/quotes";
 import { CustomerField } from "./CustomerField";
-import { ItemsEditor } from "./ItemsEditor";
 import {
-  blankLine, draftTotals, money, parseLines, parseMoney, priceInput, toDraftLines, useRefreshQuotes,
+  draftTotals, filledLines, firstLine, money, parseLines, parseMoney, priceInput, toDraftLines, useRefreshQuotes,
   type CustomerOption, type CustomerValue, type DraftLine, type QuoteDetail, type ServiceOption,
 } from "./shared";
-import { BTN, FIELD, LABEL } from "./ui";
 
 export type BuilderState = { mode: "create" } | { mode: "edit"; id: number };
 
-/** Days a new quote stays valid by default. */
-const DEFAULT_VALID_DAYS = 15;
+const VALID_DAYS = [7, 15, 30] as const;
+const DEFAULT_VALID = "d15";
 
-/** Create or edit a quote, in a dialog (full screen on phones). */
+/** "Nueva cotización" (the prototype's panel with `.form`); also edits one. Full screen on phones. */
 export function QuoteBuilderDialog({ state, onClose, onSaved, services, customers }: {
   state: BuilderState | null;
   onClose: () => void;
-  onSaved: (id: number) => void;
+  /** `send`: open the send options next. */
+  onSaved: (id: number, send: boolean) => void;
   services: readonly ServiceOption[];
   customers: readonly CustomerOption[];
 }) {
@@ -39,19 +39,19 @@ export function QuoteBuilderDialog({ state, onClose, onSaved, services, customer
 
   return (
     <Dialog open={state !== null} onOpenChange={(o) => { if (!o) onClose(); }}>
-      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-2xl sm:rounded-2xl">
-        <DialogHeader className="border-b border-slate-100 px-4 py-4 pr-12 text-left sm:px-6">
-          <DialogTitle className="text-lg font-bold tracking-tight text-slate-900">{editId !== null ? t.form.editTitle(initial?.number ?? "") : t.form.createTitle}</DialogTitle>
-          <DialogDescription className="text-sm text-slate-500">{t.form.intro}</DialogDescription>
+      <DialogContent className="flex flex-col gap-0 overflow-hidden bg-white p-0 sm:max-h-[90vh] sm:max-w-[520px] sm:rounded-2xl">
+        <DialogHeader className="px-4 pb-1 pt-4 pr-12 text-left">
+          <DialogTitle className="text-[17px] font-[750] text-slate-900">{editId !== null ? t.form.editTitle(initial?.number ?? "") : t.form.createTitle}</DialogTitle>
+          <DialogDescription className="sr-only">{t.form.intro}</DialogDescription>
         </DialogHeader>
         {state === null ? null : editId !== null && !initial ? (
           existing.isError ? (
-            <div className="flex flex-col items-center gap-3 p-8 text-center">
+            <div className="grid justify-items-center gap-3 p-8 text-center">
               <p className="text-sm text-slate-600" role="alert">{existing.error.message || t.error}</p>
-              <Button variant="outline" className={BTN.secondary} onClick={() => void existing.refetch()}>{t.retry}</Button>
+              <button type="button" className={btn()} onClick={() => void existing.refetch()}>{t.retry}</button>
             </div>
           ) : (
-            <div className="space-y-3 p-6" role="status" aria-label={t.detail.loading}>
+            <div className="grid gap-3 p-6" role="status" aria-label={t.detail.loading}>
               <Skeleton className="h-10 rounded-xl" />
               <Skeleton className="h-28 rounded-xl" />
               <Skeleton className="h-10 rounded-xl" />
@@ -64,7 +64,6 @@ export function QuoteBuilderDialog({ state, onClose, onSaved, services, customer
             services={services}
             customers={customers}
             t={t}
-            onCancel={onClose}
             onSaved={onSaved}
           />
         )}
@@ -73,118 +72,108 @@ export function QuoteBuilderDialog({ state, onClose, onSaved, services, customer
   );
 }
 
-function QuoteForm({ initial, services, customers, t, onCancel, onSaved }: {
+function QuoteForm({ initial, services, customers, t, onSaved }: {
   initial: QuoteDetail | null;
   services: readonly ServiceOption[];
   customers: readonly CustomerOption[];
   t: QuotesCopy;
-  onCancel: () => void;
-  onSaved: (id: number) => void;
+  onSaved: (id: number, send: boolean) => void;
 }) {
   const id = useId();
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
   const refresh = useRefreshQuotes();
+  const [today] = useState(() => localIsoDate(new Date()));
   const [customer, setCustomer] = useState<CustomerValue>(() => ({ id: initial?.customerId ?? null, name: initial?.customerName ?? "" }));
-  const [lines, setLines] = useState<DraftLine[]>(() => (initial ? toDraftLines(initial.items) : [blankLine()]));
+  const [lines, setLines] = useState<DraftLine[]>(() => (initial ? toDraftLines(initial.items) : [firstLine(services)]));
   const [discount, setDiscount] = useState(() => (initial && initial.discount > 0 ? priceInput(initial.discount) : ""));
-  const [validUntil, setValidUntil] = useState(() => (initial ? initial.validUntil ?? "" : addDays(localIsoDate(new Date()), DEFAULT_VALID_DAYS)));
+  // "d7" / "d15" / "d30": days from today; "keep": the date it already has; "none": no deadline.
+  const [valid, setValid] = useState<string>(() => (initial ? (initial.validUntil ? "keep" : "none") : DEFAULT_VALID));
   const [notes, setNotes] = useState(initial?.notes ?? "");
   const [error, setError] = useState<string | null>(null);
 
   const onError = (e: { message: string }) => setError(e.message || t.toasts.error);
-  const create = trpc.quotes.create.useMutation({
-    onSuccess: (r) => { toast.success(t.toasts.created(r.number)); refresh(); onSaved(r.id); },
-    onError,
-  });
-  const update = trpc.quotes.update.useMutation({
-    onSuccess: (r) => { toast.success(t.toasts.updated); refresh(); onSaved(r.id); },
-    onError,
-  });
+  const create = trpc.quotes.create.useMutation({ onError });
+  const update = trpc.quotes.update.useMutation({ onError });
   const pending = create.isPending || update.isPending;
-  const totals = draftTotals(lines, discount);
+  const totals = draftTotals(filledLines(lines), discount);
+  const validUntil = valid === "keep" ? initial?.validUntil ?? null : valid === "none" ? null : addDays(today, Number(valid.slice(1)));
 
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const parsed = parseLines(lines, t.form);
+  const submit = (send: boolean) => (e?: FormEvent) => {
+    e?.preventDefault();
+    const parsed = parseLines(filledLines(lines), t.form);
     if ("error" in parsed) return setError(parsed.error);
     const disc = discount.trim() === "" ? 0 : parseMoney(discount);
     if (disc === null) return setError(t.form.errors.discount);
-    if (validUntil && !isValidIsoDate(validUntil)) return setError(t.form.errors.date);
     setError(null);
     const payload = {
       customerId: customer.id,
       customerName: customer.name.trim() || null,
       items: parsed.items,
       discount: disc,
-      validUntil: validUntil || null,
+      validUntil,
       notes: notes.trim() || null,
     };
-    if (initial) update.mutate({ id: initial.id, ...payload });
-    else create.mutate(payload);
+    if (initial) {
+      update.mutate({ id: initial.id, ...payload }, { onSuccess: (r) => { toast.success(t.toasts.updated); refresh(); onSaved(r.id, false); } });
+    } else {
+      create.mutate(payload, { onSuccess: (r) => { toast.success(t.toasts.created(r.number)); refresh(); onSaved(r.id, send); } });
+    }
   };
 
   return (
-    <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
-      <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6">
+    <form onSubmit={submit(true)} className="flex min-h-0 flex-1 flex-col" noValidate>
+      <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto px-4 pb-4 pt-2">
         <CustomerField value={customer} onChange={setCustomer} customers={customers} t={t.form} />
-        <ItemsEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={t.form} />
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-discount`} className={LABEL}>{t.form.discount}</Label>
-            <div className="relative">
-              <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400" aria-hidden="true">$</span>
-              <Input
-                id={`${id}-discount`}
-                inputMode="decimal"
-                autoComplete="off"
-                placeholder="0.00"
-                value={discount}
-                onChange={(e) => { setDiscount(e.target.value); setError(null); }}
-                className={cn(FIELD, "pl-7")}
+        <LinesEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={t.lines} />
+        <label htmlFor={`${id}-valid`} className={LABEL}>
+          {t.form.validFor}
+          <select id={`${id}-valid`} value={valid} onChange={(e) => setValid(e.target.value)} className={FIELD} aria-describedby={`${id}-valid-hint`}>
+            {initial?.validUntil && <option value="keep">{t.form.validKeep(fmtDay(initial.validUntil, locale, today))}</option>}
+            {VALID_DAYS.map((d) => <option key={d} value={`d${d}`}>{t.form.validOptions[d]}</option>)}
+            <option value="none">{t.form.validNone}</option>
+          </select>
+          {validUntil && <span id={`${id}-valid-hint`} className="text-xs font-normal text-slate-500">{t.form.validUntil(fmtDay(validUntil, locale, today))}</span>}
+        </label>
+        <details className="group grid gap-2" open={Boolean(initial && (initial.discount > 0 || initial.notes))}>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-1.5 text-[13px] font-semibold text-blue-600 sm:min-h-0 [&::-webkit-details-marker]:hidden">
+            <ChevronRight className="h-4 w-4 transition-transform group-open:rotate-90" aria-hidden="true" />
+            {t.form.more}
+          </summary>
+          <div className="mt-2 grid gap-2.5">
+            <label htmlFor={`${id}-disc`} className={LABEL}>
+              {t.form.discount}
+              <span className="relative block">
+                <span className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-sm text-slate-500" aria-hidden="true">$</span>
+                <input id={`${id}-disc`} inputMode="decimal" autoComplete="off" placeholder="0.00" value={discount} onChange={(e) => { setDiscount(e.target.value); setError(null); }} className={cn(FIELD, "pl-6")} />
+              </span>
+            </label>
+            <label htmlFor={`${id}-notes`} className={LABEL}>
+              {t.form.notes}
+              <textarea
+                id={`${id}-notes`} rows={2} maxLength={2000} value={notes} placeholder={t.form.notesPlaceholder}
+                onChange={(e) => setNotes(e.target.value)}
+                className="w-full resize-y rounded-[10px] border border-slate-200 bg-white px-2.5 py-2 text-base font-normal text-slate-900 placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:text-sm"
               />
-            </div>
+            </label>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor={`${id}-valid`} className={LABEL}>{t.form.validUntil}</Label>
-            <Input
-              id={`${id}-valid`}
-              type="date"
-              value={validUntil}
-              onChange={(e) => { setValidUntil(e.target.value); setError(null); }}
-              className={FIELD}
-            />
-          </div>
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor={`${id}-notes`} className={LABEL}>{t.form.notes}</Label>
-          <Textarea
-            id={`${id}-notes`}
-            value={notes}
-            maxLength={2000}
-            rows={3}
-            placeholder={t.form.notesPlaceholder}
-            onChange={(e) => setNotes(e.target.value)}
-            className={cn(FIELD, "min-h-[4.5rem] py-2")}
-          />
-        </div>
+        </details>
       </div>
-
-      <div className="space-y-3 border-t border-slate-100 bg-white px-4 py-3 sm:px-6">
-        <dl className="space-y-0.5 text-sm">
-          {totals.discountCents > 0 && (
-            <>
-              <div className="flex justify-between text-slate-600"><dt>{t.form.subtotal}</dt><dd>{money(totals.subtotalCents)}</dd></div>
-              <div className="flex justify-between text-slate-600"><dt>{t.form.discountLine}</dt><dd>−{money(totals.discountCents)}</dd></div>
-            </>
-          )}
-          <div className="flex justify-between text-lg font-bold tabular-nums text-slate-900"><dt>{t.form.total}</dt><dd aria-live="polite">{money(totals.totalCents)}</dd></div>
-        </dl>
-        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
-          <Button type="button" variant="ghost" onClick={onCancel} className={BTN.ghost}>{t.form.cancel}</Button>
-          <Button type="submit" disabled={pending} className={BTN.primary}>
-            {pending ? t.form.saving : t.form.save}
-          </Button>
+      <div className="grid gap-2.5 border-t border-slate-100 bg-white px-4 py-3">
+        <div className="flex items-baseline justify-between rounded-[10px] bg-slate-100 px-3 py-2.5 text-sm">
+          <span>{t.form.total}</span>
+          <b className="text-xl font-bold tabular-nums" aria-live="polite">{money(totals.totalCents)}</b>
         </div>
+        {error && <p role="alert" className="text-xs text-red-600">{error}</p>}
+        {initial ? (
+          <button type="button" className={btn("primary", "w-full")} disabled={pending} onClick={() => submit(false)()}>{pending ? t.form.saving : t.form.save}</button>
+        ) : (
+          <>
+            <button type="submit" className={btn("primary", "w-full")} disabled={pending}>{pending ? t.form.saving : t.form.send}</button>
+            <button type="button" className={btn("w-full")} disabled={pending} onClick={() => submit(false)()}>{t.form.draft}</button>
+          </>
+        )}
+        <p className="text-xs text-slate-500">{t.form.foot}</p>
       </div>
     </form>
   );

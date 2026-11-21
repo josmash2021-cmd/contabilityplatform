@@ -20,9 +20,9 @@ import { quotesCopy, type QuotesCopy } from "@/i18n/copy/quotes";
 import { FREQUENCIES, anchorDayOf, isValidIsoDate, localIsoDate, nextPeriodDate, type Frequency } from "../../../api/lib/quotes";
 import { Chip } from "./StatusChip";
 import { CustomerField } from "./CustomerField";
-import { ItemsEditor } from "./ItemsEditor";
+import { LinesEditor } from "@/components/invoices/LinesEditor";
 import {
-  blankLine, draftTotals, formatDay, money, parseLines, toDraftLines, useRefreshQuotes,
+  draftTotals, filledLines, firstLine, formatDay, money, parseLines, toDraftLines, useRefreshQuotes,
   type CustomerOption, type CustomerValue, type DraftLine, type RecurringInvoice, type ServiceOption,
 } from "./shared";
 import { BTN, CARD, FIELD, LABEL } from "./ui";
@@ -63,7 +63,6 @@ export function RecurringTab({ services, customers, canChange, form, onForm: set
 
   return (
     <div className="space-y-4">
-      <p className="max-w-2xl text-sm text-slate-500">{t.recurring.intro}</p>
 
       {list.isLoading ? (
         <div className="grid grid-cols-1 gap-3 lg:grid-cols-2" role="status" aria-label={t.loading}>
@@ -91,7 +90,7 @@ export function RecurringTab({ services, customers, canChange, form, onForm: set
       ) : (
         <ul className="grid grid-cols-1 gap-3 lg:grid-cols-2">
           {items.map((r) => {
-            const name = r.customerName || t.quotes.noCustomer;
+            const name = r.customerName || t.noCustomer;
             const state = r.finished ? "finished" : r.active ? "active" : "paused";
             return (
               <li key={r.id} className="min-w-0">
@@ -209,7 +208,7 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
   const refresh = useRefreshQuotes();
   const [today] = useState(() => localIsoDate(new Date()));
   const [customer, setCustomer] = useState<CustomerValue>(() => ({ id: initial?.customerId ?? null, name: initial?.customerName ?? "" }));
-  const [lines, setLines] = useState<DraftLine[]>(() => (initial ? toDraftLines(initial.items) : [blankLine()]));
+  const [lines, setLines] = useState<DraftLine[]>(() => (initial ? toDraftLines(initial.items) : [firstLine(services)]));
   const [frequency, setFrequency] = useState<Frequency>(initial?.frequency ?? "monthly");
   const [date, setDate] = useState(() => initial?.nextDate ?? localIsoDate(new Date()));
   const [endDate, setEndDate] = useState(initial?.endDate ?? "");
@@ -230,7 +229,7 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
     onError,
   });
   const pending = create.isPending || update.isPending;
-  const totals = draftTotals(lines, "");
+  const totals = draftTotals(filledLines(lines), "");
 
   // Unchanged schedule: keeps its original anchor day; a new date or frequency anchors on the new date.
   const rescheduled = !initial || date !== initial.nextDate || frequency !== initial.frequency;
@@ -242,7 +241,7 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    const parsed = parseLines(lines, t.form);
+    const parsed = parseLines(filledLines(lines), t.form);
     if ("error" in parsed) return setError(parsed.error);
     if (totals.totalCents <= 0) return setError(f.errors.total);
     if (!dateOk) return setError(f.errors.start);
@@ -266,7 +265,7 @@ function RecurringForm({ initial, services, customers, t, locale, onDone }: {
     <form onSubmit={submit} className="flex min-h-0 flex-1 flex-col" noValidate>
       <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-4 py-4 sm:px-6">
         <CustomerField value={customer} onChange={setCustomer} customers={customers} t={t.form} />
-        <ItemsEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={t.form} />
+        <LinesEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={t.lines} />
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <div className="space-y-1.5">
