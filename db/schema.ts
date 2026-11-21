@@ -687,3 +687,17 @@ export const taxMessages = mysqlTable("taxMessages", {
 }, (table) => [
   index("taxMessages_returnId_idx").on(table.returnId),
 ]);
+
+// ─── Asistente de inteligencia artificial ───
+// Created with CREATE TABLE IF NOT EXISTS in api/assistant-router.ts. "hidden" = cleared
+// from the chat; hidden questions still count toward the month's limit.
+export const assistantMessages = mysqlTable("assistantMessages", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull(),
+  role: mysqlEnum("role", ["user", "assistant"]).notNull(),
+  content: text("content").notNull(),
+  hidden: boolean("hidden").default(false).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("assistantMessages_user_idx").on(table.userId, table.createdAt),
+]);

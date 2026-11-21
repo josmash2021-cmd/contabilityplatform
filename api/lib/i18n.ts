@@ -31,6 +31,11 @@ const messages = {
     taxNotReady: "Todavía falta algo para enviar. Revisa la lista de documentos.",
     taxNotFound: "No encontramos ese documento.",
     planMissingFeature: "Tu plan no incluye esta función. Puedes cambiar de plan en Ajustes.",
+    assistantQuota: "Ya usaste todas las preguntas de este mes. Se renuevan el día 1, o puedes cambiar de plan en Ajustes.",
+    assistantNotReady: "El asistente se está activando. Inténtalo en unos minutos.",
+    assistantError: "No pude contestar ahora. Inténtalo de nuevo en un momento.",
+    assistantBusy: "Hay muchas preguntas en este momento. Inténtalo en un minuto.",
+    assistantDeclined: "No puedo ayudar con eso. Pregúntame sobre tus ingresos, gastos, ventas o metas.",
   },
   en: {
     emailExists: "An account with this email already exists",
@@ -53,6 +58,11 @@ const messages = {
     taxNotReady: "Something is still missing before you can send. Check the document list.",
     taxNotFound: "We couldn't find that document.",
     planMissingFeature: "Your plan doesn't include this feature. You can change your plan in Settings.",
+    assistantQuota: "You've used all of this month's questions. They renew on the 1st, or you can change your plan in Settings.",
+    assistantNotReady: "The assistant is being set up. Please try again in a few minutes.",
+    assistantError: "I couldn't answer right now. Please try again in a moment.",
+    assistantBusy: "There are many questions right now. Please try again in a minute.",
+    assistantDeclined: "I can't help with that. Ask me about your income, spending, sales or goals.",
   },
 } as const;
 

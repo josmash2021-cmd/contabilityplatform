@@ -62,6 +62,7 @@ const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
 const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
 const Taxes = lazyPage(() => import("@/pages/Taxes"));
+const Assistant = lazyPage(() => import("@/pages/Assistant"));
 
 function PageLoader() {
   return (
@@ -127,6 +128,7 @@ export default function App() {
           <Route path="/bank/transactions" element={<BankTransactions />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/taxes" element={<Taxes />} />
+          <Route path="/assistant" element={<Assistant />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
@@ -145,6 +147,7 @@ export default function App() {
           <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
           {/* Impuestos: no bank needed (personal Básico is free and only has taxes) */}
           <Route path="/personal/taxes" element={<Taxes />} />
+          <Route path="/personal/assistant" element={<Assistant />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />
