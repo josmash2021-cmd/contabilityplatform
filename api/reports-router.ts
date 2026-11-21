@@ -45,8 +45,10 @@ export const reportsRouter = createRouter({
       const userId = ctx.user.id;
       const tzOff = input?.tzOffsetHours ?? 0;
       const tzExprSales = `DATE_ADD(createdAt, INTERVAL ${tzOff} HOUR)`;
-      const tzExprBank = `DATE_ADD(transactionDate, INTERVAL ${tzOff} HOUR)`;
-      const tzExprExp = `DATE_ADD(date, INTERVAL ${tzOff} HOUR)`;
+      // Bank movements and expenses carry a calendar DATE (no time): shifting them by the time
+      // zone moved the 1st of a month into the previous month. Only sales (timestamps) need it.
+      const tzExprBank = `transactionDate`;
+      const tzExprExp = `date`;
 
       const pad = (n: number) => String(n).padStart(2, "0");
 
