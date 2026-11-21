@@ -314,6 +314,13 @@ function PhoneFrame({ label, tabs, children }: { label: string; tabs: [Tab, Tab,
 
 const box = "rounded-2xl border border-slate-200 bg-white";
 
+// Merchant logos, as in the app: an image when we have one, otherwise the brand's mark in its colors.
+const MERCHANT_MARKS: Record<string, { img?: string; text?: string; bg?: string; fg?: string }> = {
+  Uber: { text: "Uber", bg: "#000000", fg: "#FFFFFF" },
+  Starbucks: { img: "/brands/merchants/starbucks.png" },
+  "H-E-B": { text: "H-E-B", bg: "#DC291E", fg: "#FFFFFF" },
+};
+
 /** "For you": the personal Home screen of the app on a phone. */
 export function PhonePreview() {
   const { phone: ph, personalApp: a } = usePreviewCopy();
@@ -375,9 +382,16 @@ export function PhonePreview() {
           <div className="mt-1.5 divide-y divide-slate-100">
             {a.recent.map((r) => {
               const RIcon = { car: Car, coffee: Coffee, cart: ShoppingCart, work: Briefcase }[r.kind as "car" | "coffee" | "cart" | "work"];
+              const mark = MERCHANT_MARKS[r.who];
               return (
                 <div key={r.who} className="flex items-center gap-2.5 py-2">
-                  <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${r.income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><RIcon className="h-4 w-4" /></span>
+                  {mark?.img ? (
+                    <img src={mark.img} alt="" width={32} height={32} loading="lazy" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                  ) : mark?.text ? (
+                    <span className="grid h-8 w-8 shrink-0 place-items-center whitespace-nowrap rounded-full text-[8.5px] font-extrabold tracking-tight" style={{ background: mark.bg, color: mark.fg }}>{mark.text}</span>
+                  ) : (
+                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${r.income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><RIcon className="h-4 w-4" /></span>
+                  )}
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-[11.5px] font-semibold text-slate-900">{r.who}</p>
                     <p className="text-[9.5px] text-slate-500">{r.cat}</p>
