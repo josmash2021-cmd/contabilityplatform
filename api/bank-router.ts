@@ -22,14 +22,16 @@ const plaidSecret = process.env.PLAID_SECRET || "";
 const isProductionSecret = plaidSecret.length > 30 && !plaidSecret.startsWith("sk-");
 const isProductionEnv = process.env.PLAID_ENV === "production" || isProductionSecret;
 
-async function initPlaid() {
+/** The shared Plaid client (null when Plaid isn't configured). Other routers reuse it. */
+export async function initPlaid() {
   if (plaidClient) return plaidClient;
   try {
     const { Configuration, PlaidApi, PlaidEnvironments } = await import("plaid");
     const env = isProductionEnv ? "production" : "sandbox";
     console.log(`[Plaid] Using ${env.toUpperCase()} environment (detected production: ${isProductionEnv})`);
     const config = new Configuration({
-      basePath: PlaidEnvironments[env],
+      // PLAID_BASE_URL only exists for local tests against a fake Plaid; production never sets it.
+      basePath: process.env.PLAID_BASE_URL || PlaidEnvironments[env],
       baseOptions: { headers: { "PLAID-CLIENT-ID": process.env.PLAID_CLIENT_ID, "PLAID-SECRET": process.env.PLAID_SECRET } },
     });
     plaidClient = new PlaidApi(config);
