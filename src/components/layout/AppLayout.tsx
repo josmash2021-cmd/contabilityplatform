@@ -16,7 +16,7 @@ import {
   LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
   Target, ArrowLeftRight, User, Tv, Shield,
-  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen,
+  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen, PiggyBank,
 } from "lucide-react";
 
 /** Shown at the top of the app while the user is on the free trial. */
@@ -63,6 +63,7 @@ const personalNav = [
   { path: "/personal/transactions", label: "Transacciones", icon: ArrowLeftRight },
   { path: "/personal/subscriptions", label: "Suscripciones", icon: Tv },
   { path: "/personal/goals", label: "Metas", icon: Target },
+  { path: "/personal/budgets", label: "Presupuestos", icon: PiggyBank },
   { path: "/personal/taxes", label: "Impuestos", icon: FileText },
   { path: "/personal/assistant", label: "Asistente", icon: Sparkles },
   { path: "/settings", label: "Perfil", icon: User },

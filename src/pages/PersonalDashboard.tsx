@@ -11,14 +11,15 @@ import {
   TrendingUp, TrendingDown, Wallet, Landmark, RefreshCw,
   ArrowUpRight, ArrowDownRight, Building2, Zap, CircleDollarSign, ChevronDown,
   ShoppingBag, Utensils, Fuel, Tv, Banknote,
-  Send, Receipt, LogOut, Star, CheckCircle, HeartPulse,
+  Send, Receipt, LogOut, Star, CheckCircle, HeartPulse, AlertTriangle,
 } from "lucide-react";
-import { useNavigate } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { personalCopy } from "@/i18n/copy/personal";
+import { budgetsCopy, budgetCategoryLabel } from "@/i18n/copy/budgets";
 
 const INCOME_CATS: Record<string, { icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
   zelle_income: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
@@ -128,6 +129,7 @@ export default function PersonalDashboard() {
   const navigate = useNavigate();
   const { lang } = useLang();
   const { dashboard: copy, common, categories } = useCopy(personalCopy);
+  const { alert: budgetAlert } = useCopy(budgetsCopy);
   const now = new Date();
   const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
   const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
@@ -256,6 +258,15 @@ export default function PersonalDashboard() {
     refetchInterval: 30000, // Live balance refresh every 30s
     refetchIntervalInBackground: true,
   });
+
+  // ─── Budget alerts (Pro): categories near or over their monthly limit ───
+  const { data: planInfo } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const canBudget = planInfo?.features.includes("budgets") ?? false;
+  const { data: budgets } = trpc.personal.listBudgets.useQuery(
+    { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
+    { enabled: canBudget, staleTime: 5 * 60_000, retry: false },
+  );
+  const budgetAlerts = canBudget ? (budgets?.items ?? []).filter((b) => b.status === "near" || b.status === "over") : [];
 
   const transactions = monthData?.transactions ?? [];
   // Balance always from getMonthData (backend calculates from bankAccounts table)
@@ -483,6 +494,28 @@ export default function PersonalDashboard() {
           </>
         )}
       </div>
+
+      {/* Budget alerts — only with budgets in the plan and something near or over */}
+      {budgetAlerts.length > 0 && (
+        <Card className="border-amber-200 rounded-xl shadow-none mb-4">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-600" aria-hidden="true" /> {budgetAlert.title}</CardTitle></CardHeader>
+          <CardContent className="pt-0">
+            <ul className="space-y-1">
+              {budgetAlerts.map((b) => (
+                <li key={b.category} className="flex items-center justify-between gap-3 py-1.5">
+                  <span className="text-sm text-black truncate">{budgetCategoryLabel(b.category, categories.expense)}</span>
+                  <span className={`text-xs font-medium shrink-0 ${b.status === "over" ? "text-red-600" : "text-amber-700"}`}>
+                    {b.status === "over" ? budgetAlert.over(formatCurrency(Math.abs(b.remaining ?? 0))) : budgetAlert.near(b.percent ?? 0)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            <Link to={`/personal/budgets?month=${selectedMonth}&year=${selectedYear}`} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-neutral-600 hover:text-black transition-colors">
+              {budgetAlert.cta} <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Income Breakdown — clickable, navigates to category detail */}
       {!isLoading && incomeBreakdown.length > 0 && (

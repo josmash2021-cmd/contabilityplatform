@@ -2,7 +2,17 @@ import { z } from "zod";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { personalTransactions, personalCategories, personalGoals } from "@db/schema";
-import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
+import { eq, and, desc, sql, gte, lte, isNotNull } from "drizzle-orm";
+import { bankRouter } from "./bank-router";
+import { requireFeature } from "./lib/planAccess";
+import { CATEGORY_KEY_RE, MAX_BUDGET_LIMIT, budgetTotals, buildBudgetRows, spendingByCategory, type SpendingTx } from "./lib/budgets";
+
+const budgetMonthInput = z.object({
+  year: z.number().int().min(2000).max(2100),
+  month: z.number().int().min(1).max(12),
+});
+/** A spending category key as stored on bank transactions ("shopping", "home_expense"...). */
+const budgetCategoryInput = z.string().regex(CATEGORY_KEY_RE);
 
 // ─── PERSONAL TRANSACTIONS ───
 
@@ -25,10 +35,10 @@ export const personalRouter = createRouter({
       const endDay = new Date(input.year, input.month, 0).getDate();
       const endStr = `${input.year}-${String(input.month).padStart(2, "0")}-${String(endDay).padStart(2, "0")}`;
 
-      let conditions = [
+      const conditions = [
         eq(personalTransactions.userId, userId),
-        gte(personalTransactions.transactionDate, startStr),
-        lte(personalTransactions.transactionDate, endStr),
+        gte(personalTransactions.transactionDate, sql`${startStr}`),
+        lte(personalTransactions.transactionDate, sql`${endStr}`),
       ];
       if (input.type && input.type !== "all") {
         conditions.push(eq(personalTransactions.type, input.type));
@@ -89,7 +99,7 @@ export const personalRouter = createRouter({
       if (!ctx.user) throw new Error("No autenticado");
       const db = getDb();
       const { id, ...data } = input;
-      const updateData: any = {};
+      const updateData: Record<string, unknown> = {};
       if (data.description) updateData.description = data.description;
       if (data.amount) updateData.amount = String(data.amount.toFixed(2));
       if (data.type) updateData.type = data.type;
@@ -129,8 +139,8 @@ export const personalRouter = createRouter({
 
       const baseFilter = and(
         eq(personalTransactions.userId, userId),
-        gte(personalTransactions.transactionDate, startStr),
-        lte(personalTransactions.transactionDate, endStr)
+        gte(personalTransactions.transactionDate, sql`${startStr}`),
+        lte(personalTransactions.transactionDate, sql`${endStr}`)
       );
 
       const income = await db.select({ total: sql<string>`COALESCE(SUM(${personalTransactions.amount}), 0)` })
@@ -158,7 +168,7 @@ export const personalRouter = createRouter({
     .query(async ({ input, ctx }) => {
       if (!ctx.user) return [];
       const db = getDb();
-      let conditions = [eq(personalCategories.userId, ctx.user.id)];
+      const conditions = [eq(personalCategories.userId, ctx.user.id)];
       if (input?.type && input.type !== "all") {
         conditions.push(eq(personalCategories.type, input.type));
       }
@@ -178,6 +188,8 @@ export const personalRouter = createRouter({
     .mutation(async ({ input, ctx }) => {
       if (!ctx.user) throw new Error("No autenticado");
       const db = getDb();
+      // A category with a limit is a budget: only plans with budgets can set one.
+      if (input.budgetLimit !== undefined) await requireFeature(db, ctx.user, "budgets", ctx.lang);
       const result = await db.insert(personalCategories).values({
         userId: ctx.user.id,
         name: input.name,
@@ -197,6 +209,64 @@ export const personalRouter = createRouter({
       await db.delete(personalCategories)
         .where(and(eq(personalCategories.id, input.id), eq(personalCategories.userId, ctx.user.id)));
       return { success: true };
+    }),
+
+  // ─── BUDGETS (personal Pro: monthly limit per spending category, with alerts) ───
+  // A budget is personalCategories.budgetLimit on the row whose name is the category key.
+  // Spending comes from the same place as the dashboard's "Gastos por categoría" and the
+  // transactions page: bank.getMonthData (Plaid first, saved bankTransactions if Plaid fails),
+  // all accounts, expense transactions grouped by category.
+
+  listBudgets: authedQuery
+    .input(budgetMonthInput)
+    .query(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireFeature(db, ctx.user, "budgets", ctx.lang);
+      const bank = bankRouter.createCaller(ctx);
+      const [limitRows, connection, monthData] = await Promise.all([
+        db.select({ name: personalCategories.name, budgetLimit: personalCategories.budgetLimit })
+          .from(personalCategories)
+          .where(and(eq(personalCategories.userId, ctx.user.id), isNotNull(personalCategories.budgetLimit))) as Promise<Array<{ name: string; budgetLimit: string | null }>>,
+        bank.checkConnection(),
+        bank.getMonthData({ year: input.year, month: input.month }),
+      ]);
+
+      const limits = new Map<string, number>();
+      for (const row of limitRows) {
+        const limit = Number(row.budgetLimit);
+        if (Number.isFinite(limit) && limit > 0) limits.set(row.name, limit);
+      }
+      const txs: SpendingTx[] = monthData.transactions;
+      const items = buildBudgetRows(limits, spendingByCategory(txs));
+      return {
+        year: input.year,
+        month: input.month,
+        bankConnected: connection.hasBank,
+        items,
+        totals: budgetTotals(items),
+      };
+    }),
+
+  /** Sets a category's monthly limit, or clears it with limit: null. The limit applies to every month. */
+  setBudget: authedQuery
+    .input(z.object({
+      category: budgetCategoryInput,
+      limit: z.number().min(0.01).max(MAX_BUDGET_LIMIT).nullable(),
+    }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      await requireFeature(db, ctx.user, "budgets", ctx.lang);
+      if (input.limit === null) {
+        await db.update(personalCategories)
+          .set({ budgetLimit: null })
+          .where(and(eq(personalCategories.userId, ctx.user.id), eq(personalCategories.name, input.category)));
+        return { category: input.category, limit: null };
+      }
+      const limit = (Math.round(input.limit * 100) / 100).toFixed(2);
+      await db.insert(personalCategories)
+        .values({ userId: ctx.user.id, name: input.category, type: "expense", budgetLimit: limit })
+        .onDuplicateKeyUpdate({ set: { budgetLimit: limit } });
+      return { category: input.category, limit: Number(limit) };
     }),
 
   // ─── GOALS ───

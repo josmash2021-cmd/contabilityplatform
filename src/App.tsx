@@ -63,6 +63,7 @@ const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
 const Taxes = lazyPage(() => import("@/pages/Taxes"));
 const Assistant = lazyPage(() => import("@/pages/Assistant"));
+const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"));
 const Receipts = lazyPage(() => import("@/pages/Receipts"));
 const Vendors = lazyPage(() => import("@/pages/Vendors"));
 const Quotes = lazyPage(() => import("@/pages/Quotes"));
@@ -151,6 +152,7 @@ export default function App() {
           <Route path="/personal/bank" element={<PersonalBank />} />
           <Route path="/personal/transactions" element={<PersonalBankGate><PersonalTransactions /></PersonalBankGate>} />
           <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
+          <Route path="/personal/budgets" element={<PersonalBankGate><PersonalBudgets /></PersonalBankGate>} />
           <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
           <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
           {/* Impuestos: no bank needed (personal Básico is free and only has taxes) */}
