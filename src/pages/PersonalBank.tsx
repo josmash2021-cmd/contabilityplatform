@@ -1,164 +1,157 @@
-import { useState, useCallback, useEffect } from "react";
-import { trpc } from "@/providers/trpc";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Landmark, Link2, Loader2, CheckCircle, AlertCircle } from "lucide-react";
+import { useState } from "react";
+import { CreditCard, Landmark, Loader2, Plus, RefreshCw, ShieldCheck, Unplug, Wallet } from "lucide-react";
 import { toast } from "sonner";
-import { useCopy } from "@/i18n/useI18n";
-import { personalCopy } from "@/i18n/copy/personal";
+import { AnimatedPage } from "@/components/AnimatedPage";
+import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription,
+  AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { trpc } from "@/providers/trpc";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { personalBankCopy } from "@/i18n/copy/personalBank";
 
-// Load Plaid Link SDK dynamically
-function loadPlaidSdk(errorMessage: string): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.Plaid) { resolve(); return; }
-    const script = document.createElement("script");
-    script.src = "https://cdn.plaid.com/link/v2/stable/link-initialize.js";
-    script.onload = () => resolve();
-    script.onerror = () => reject(new Error(errorMessage));
-    document.head.appendChild(script);
-  });
-}
+type Account = { id: number; bankName: string; accountType: string | null; accountNumber: string | null; currentBalance: string | null; lastSyncedAt: string | Date | null };
 
-declare global {
-  interface Window {
-    Plaid: any;
-  }
-}
+/** Plaid reports what you owe on cards and loans as their balance. */
+const isDebt = (type: string | null) => type === "credit" || type === "loan";
+const money = (n: number) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
+/** 2.0 personal bank: connected accounts and balances, refresh, add another, disconnect. */
 export default function PersonalBank() {
-  const { bank: t } = useCopy(personalCopy);
-  const [status, setStatus] = useState<"idle" | "loading" | "ready" | "success" | "error">("idle");
-  const [errorMsg, setErrorMsg] = useState("");
-  const [linkToken, setLinkToken] = useState<string | null>(null);
+  const t = useCopy(personalBankCopy);
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
+  const utils = trpc.useUtils();
+  const [connecting, setConnecting] = useState(false);
 
-  const createLinkMut = trpc.bank.createLinkToken.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.linkToken) {
-        setLinkToken(data.linkToken);
-        setStatus("ready");
-        toast.success(t.ready);
-      } else {
-        setStatus("error");
-        setErrorMsg(data.error || t.startError);
-        toast.error(data.error || t.startError);
-      }
+  const { data: bank, isLoading: checking } = trpc.bank.checkConnection.useQuery(undefined, { staleTime: 30_000 });
+  const hasBank = bank?.hasBank === true;
+  const { data: rawAccounts, isLoading: loadingAccounts } = trpc.bank.listAccounts.useQuery(undefined, { enabled: hasBank });
+  const accounts = (rawAccounts ?? []) as Account[];
+
+  const refreshAll = () => Promise.all([
+    utils.bank.listAccounts.invalidate(), utils.bank.checkConnection.invalidate(),
+    utils.bank.getMonthData.invalidate(), utils.bank.getAllPlaidAccounts.invalidate(),
+  ]);
+
+  const refresh = trpc.bank.refreshAllBalances.useMutation({
+    onSuccess: (d) => {
+      if (d.success) { toast.success(t.refreshed); void utils.bank.listAccounts.invalidate(); }
+      else toast.error(t.refreshError);
     },
-    onError: (err) => {
-      setStatus("error");
-      setErrorMsg(err.message);
-      toast.error(err.message);
+    onError: () => toast.error(t.refreshError),
+  });
+  const disconnect = trpc.bank.disconnect.useMutation({
+    onSuccess: (d) => {
+      if (!d.success) { toast.error("error" in d && d.error ? d.error : t.refreshError); return; }
+      toast.success(t.danger.done);
+      try { localStorage.removeItem("aethel_bank_connected"); } catch { /* storage blocked */ }
+      void refreshAll();
     },
+    onError: (e) => toast.error(e.message),
   });
 
-  const exchangeMut = trpc.bank.exchangePublicToken.useMutation({
-    onSuccess: (data) => {
-      if (data.success) {
-        setStatus("success");
-        toast.success(t.connected);
-        setTimeout(() => window.location.href = "/personal", 1500);
-      } else {
-        setStatus("error");
-        setErrorMsg(data.error || t.connectError);
-        toast.error(data.error || t.connectError);
-      }
-    },
-    onError: (err) => {
-      setStatus("error");
-      setErrorMsg(err.message);
-      toast.error(err.message);
-    },
-  });
-
-  const openPlaidLink = useCallback(async () => {
-    if (!linkToken) {
-      // First get the token
-      setStatus("loading");
-      createLinkMut.mutate();
-      return;
-    }
-
-    try {
-      await loadPlaidSdk(t.sdkError);
-      const handler = window.Plaid.create({
-        token: linkToken,
-        onSuccess: (public_token: string) => {
-          exchangeMut.mutate({ publicToken: public_token });
-        },
-        onExit: (err: any) => {
-          if (err != null) {
-            console.error("Plaid exit error:", err);
-            setStatus("idle");
-          }
-        },
-        onEvent: (eventName: string) => {
-          console.log("Plaid event:", eventName);
-        },
-      });
-      handler.open();
-    } catch (err: any) {
-      setStatus("error");
-      setErrorMsg(err.message);
-      toast.error(err.message);
-    }
-  }, [linkToken, createLinkMut, exchangeMut, t.sdkError]);
+  const total = accounts.filter((a) => !isDebt(a.accountType)).reduce((a, acc) => a + Number(acc.currentBalance ?? 0), 0);
+  const owed = accounts.filter((a) => isDebt(a.accountType)).reduce((a, acc) => a + Number(acc.currentBalance ?? 0), 0);
+  const latest = accounts.reduce<number>((m, a) => Math.max(m, a.lastSyncedAt ? new Date(a.lastSyncedAt).getTime() : 0), 0);
+  const updatedText = latest ? t.updated(new Date(latest).toLocaleString(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })) : t.neverUpdated;
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-neutral-50 p-4">
-      <Card className="w-full max-w-md border-none shadow-none bg-white">
-        <CardContent className="p-8 text-center">
-          {/* Icon */}
-          <div className="w-20 h-20 rounded-2xl bg-neutral-100 flex items-center justify-center mx-auto mb-6">
-            <Landmark className="w-10 h-10 text-neutral-400" />
-          </div>
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-3xl space-y-5">
+        <header>
+          <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+          <p className="mt-0.5 text-sm text-slate-500">{t.subtitle}</p>
+        </header>
 
-          {/* Title */}
-          <h1 className="text-xl font-semibold text-black mb-2">
-            {t.title}
-          </h1>
-          <p className="text-sm text-neutral-400 mb-8">
-            {t.text}
-          </p>
+        {checking ? <Skeleton className="h-48 rounded-2xl" /> : !hasBank ? (
+          <section className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+            <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10"><Landmark className="h-6 w-6" /></span>
+            <h2 className="mt-5 text-xl font-bold tracking-tight">{t.connect.title}</h2>
+            <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-300">{t.connect.text}</p>
+            <ul className="mt-5 space-y-2">
+              {t.connect.points.map((p) => <li key={p} className="flex items-start gap-2 text-sm text-slate-200"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{p}</li>)}
+            </ul>
+            <button onClick={() => setConnecting(true)} className="mt-6 inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-100">
+              <Landmark className="h-4 w-4" />{t.connect.button}
+            </button>
+          </section>
+        ) : (
+          <>
+            <section className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
+              <div>
+                <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Wallet className="h-3.5 w-3.5" />{t.total}</p>
+                <p className={`mt-1 text-3xl font-bold tabular-nums tracking-tight ${total < 0 ? "text-red-700" : "text-slate-900"}`}>{money(total)}</p>
+                {owed > 0 && <p className="mt-1 text-sm text-amber-700">{t.owedCards(money(owed))}</p>}
+                <p className="mt-1 text-xs text-slate-500">{updatedText}</p>
+              </div>
+              <button onClick={() => refresh.mutate()} disabled={refresh.isPending}
+                className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50 disabled:opacity-60">
+                {refresh.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}{t.refresh}
+              </button>
+            </section>
 
-          {/* Error display */}
-          {status === "error" && (
-            <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-red-50 rounded-lg">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0" />
-              <p className="text-xs text-red-700">{errorMsg}</p>
-            </div>
-          )}
+            <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="pb-accounts">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <h2 id="pb-accounts" className="font-semibold text-slate-900">{t.accounts}</h2>
+                <button onClick={() => setConnecting(true)} className="inline-flex h-9 items-center gap-1.5 rounded-lg px-2 text-sm font-semibold text-blue-600 hover:bg-blue-50">
+                  <Plus className="h-4 w-4" />{t.addAccount}
+                </button>
+              </div>
+              {loadingAccounts ? <Skeleton className="mt-3 h-24 rounded-xl" /> : (
+                <ul className="mt-2 divide-y divide-slate-100">
+                  {accounts.map((a) => {
+                    const credit = a.accountType === "credit";
+                    const Icon = credit ? CreditCard : Landmark;
+                    const bal = Number(a.currentBalance ?? 0);
+                    const debt = isDebt(a.accountType);
+                    return (
+                      <li key={a.id} className="flex items-center gap-3 py-3">
+                        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-slate-600"><Icon className="h-5 w-5" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-semibold text-slate-900">{a.bankName}</span>
+                          <span className="block truncate text-xs text-slate-500">
+                            {t.types[a.accountType ?? ""] ?? a.accountType ?? ""}{a.accountNumber ? ` · ${t.ending(a.accountNumber)}` : ""}
+                          </span>
+                        </span>
+                        {debt
+                          ? <span className="shrink-0 text-right"><span className="block text-sm font-semibold tabular-nums text-amber-700">{money(bal)}</span><span className="block text-[11px] text-slate-500">{t.owe}</span></span>
+                          : <span className={`shrink-0 text-sm font-semibold tabular-nums ${bal < 0 ? "text-red-700" : "text-slate-900"}`}>{money(bal)}</span>}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
 
-          {/* Security note */}
-          <div className="flex items-center gap-2 justify-center mb-6 p-3 bg-emerald-50 rounded-lg">
-            <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-            <p className="text-xs text-emerald-700">
-              {t.security}
-            </p>
-          </div>
-
-          {/* Connect button */}
-          <Button
-            onClick={openPlaidLink}
-            disabled={status === "loading" || status === "success"}
-            className="w-full h-12 bg-black text-white rounded-xl hover:bg-neutral-800 text-sm font-medium"
-          >
-            {status === "loading" ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> {t.preparing}</>
-            ) : status === "success" ? (
-              <><CheckCircle className="w-4 h-4 mr-2" /> {t.connectedBtn}</>
-            ) : (
-              <><Link2 className="w-4 h-4 mr-2" /> {t.connect}</>
-            )}
-          </Button>
-
-          {/* Back button */}
-          <button
-            onClick={() => window.location.href = "/personal"}
-            className="mt-4 text-xs text-neutral-400 hover:text-neutral-600 transition-colors"
-          >
-            {t.back}
-          </button>
-        </CardContent>
-      </Card>
-    </div>
+            <section className="rounded-2xl border border-red-200 bg-white p-4 sm:p-5" aria-labelledby="pb-danger">
+              <h2 id="pb-danger" className="font-semibold text-slate-900">{t.danger.title}</h2>
+              <p className="mt-1 text-sm text-slate-500">{t.danger.text}</p>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <button disabled={disconnect.isPending} className="mt-4 inline-flex h-10 items-center gap-2 rounded-[10px] border border-red-200 bg-white px-4 text-sm font-semibold text-red-700 hover:bg-red-50 disabled:opacity-60">
+                    {disconnect.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Unplug className="h-4 w-4" />}{t.danger.button}
+                  </button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>{t.danger.confirmTitle}</AlertDialogTitle>
+                    <AlertDialogDescription>{t.danger.confirmText}</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>{t.danger.cancel}</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => disconnect.mutate()} className="bg-red-600 hover:bg-red-700">{t.danger.confirm}</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </section>
+          </>
+        )}
+      </div>
+      {connecting && <PlaidLinkOverlay onClose={() => setConnecting(false)} onSuccess={() => { setConnecting(false); void refreshAll(); }} />}
+    </AnimatedPage>
   );
 }

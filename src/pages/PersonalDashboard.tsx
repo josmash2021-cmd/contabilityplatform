@@ -1,568 +1,361 @@
-import { useState, useRef, useEffect } from "react";
-import { trpc } from "@/providers/trpc";
-import { AnimatedPage } from "@/components/AnimatedPage";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatCurrency } from "@/lib/utils";
-import { toast } from "sonner";
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router";
 import {
-  TrendingUp, TrendingDown, Wallet, Landmark, RefreshCw,
-  ArrowUpRight, ArrowDownRight, Building2, Zap, CircleDollarSign, ChevronDown,
-  ShoppingBag, Utensils, Fuel, Tv, Banknote,
-  Send, Receipt, LogOut, Star, CheckCircle, HeartPulse, AlertTriangle,
+  AlertTriangle, ArrowDownRight, ArrowRight, ArrowUpRight, Banknote, Building2, CheckCircle2, CircleDollarSign, FileText, Fuel,
+  HeartPulse, Landmark, Lock, PiggyBank, Receipt, Send, ShieldCheck, ShoppingBag, Sparkles, Target, TrendingDown, TrendingUp, Tv, Utensils, Wallet,
+  type LucideIcon,
 } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { AnimatedPage } from "@/components/AnimatedPage";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
-import { useBankHealthMonitor } from "@/hooks/useBankHealthMonitor";
+import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { personalCopy } from "@/i18n/copy/personal";
-import { budgetsCopy, budgetCategoryLabel } from "@/i18n/copy/budgets";
+import { budgetCategoryLabel } from "@/i18n/copy/budgets";
+import { personalHomeCopy, type PersonalHomeCopy } from "@/i18n/copy/personalHome";
+import { DRAFT_STEP } from "@contracts/taxRules";
 
-const INCOME_CATS: Record<string, { icon: typeof TrendingUp; iconBg: string; iconColor: string }> = {
-  zelle_income: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  transfer_income: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
-  deposit: { icon: Building2, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  cash_deposit: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  cash_income: { icon: CircleDollarSign, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  income: { icon: TrendingUp, iconBg: "bg-emerald-100", iconColor: "text-emerald-600" },
-  paycheck: { icon: Banknote, iconBg: "bg-blue-100", iconColor: "text-blue-600" },
-  transfer: { icon: ArrowUpRight, iconBg: "bg-sky-100", iconColor: "text-sky-600" },
+const CAT_STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
+  zelle_income: { icon: Send, tone: "bg-purple-50 text-purple-600" },
+  transfer_income: { icon: ArrowUpRight, tone: "bg-sky-50 text-sky-600" },
+  deposit: { icon: Building2, tone: "bg-blue-50 text-blue-600" },
+  cash_deposit: { icon: Banknote, tone: "bg-amber-50 text-amber-600" },
+  cash_income: { icon: CircleDollarSign, tone: "bg-emerald-50 text-emerald-600" },
+  income: { icon: TrendingUp, tone: "bg-emerald-50 text-emerald-600" },
+  paycheck: { icon: Banknote, tone: "bg-blue-50 text-blue-600" },
+  zelle_sent: { icon: Send, tone: "bg-purple-50 text-purple-600" },
+  cash_withdrawal: { icon: Banknote, tone: "bg-amber-50 text-amber-600" },
+  subscription: { icon: Tv, tone: "bg-pink-50 text-pink-600" },
+  shopping: { icon: ShoppingBag, tone: "bg-violet-50 text-violet-600" },
+  home_expense: { icon: Utensils, tone: "bg-orange-50 text-orange-600" },
+  business_expense: { icon: Receipt, tone: "bg-slate-100 text-slate-600" },
+  gasolina: { icon: Fuel, tone: "bg-orange-50 text-orange-600" },
+  medical: { icon: HeartPulse, tone: "bg-red-50 text-red-600" },
+  food: { icon: Utensils, tone: "bg-orange-50 text-orange-600" },
 };
+const styleOf = (cat: string, type: string) => CAT_STYLE[cat] ?? (type === "income" ? { icon: ArrowUpRight, tone: "bg-emerald-50 text-emerald-600" } : { icon: Receipt, tone: "bg-slate-100 text-slate-600" });
 
-const EXPENSE_CATS: Record<string, { icon: typeof TrendingDown; iconBg: string; iconColor: string }> = {
-  zelle_sent: { icon: Send, iconBg: "bg-purple-100", iconColor: "text-purple-600" },
-  cash_withdrawal: { icon: Banknote, iconBg: "bg-amber-100", iconColor: "text-amber-600" },
-  subscription: { icon: Tv, iconBg: "bg-pink-100", iconColor: "text-pink-600" },
-  shopping: { icon: ShoppingBag, iconBg: "bg-violet-100", iconColor: "text-violet-600" },
-  home_expense: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  business_expense: { icon: Receipt, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  gasolina: { icon: Fuel, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-  transfer: { icon: ArrowDownRight, iconBg: "bg-slate-100", iconColor: "text-slate-600" },
-  other: { icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" },
-  medical: { icon: HeartPulse, iconBg: "bg-red-100", iconColor: "text-red-600" },
-  food: { icon: Utensils, iconBg: "bg-orange-100", iconColor: "text-orange-600" },
-};
+const upperFirst = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const fmt = (n: number, cents = false) => `${n < 0 ? "−" : ""}$${Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: cents ? 2 : 0, maximumFractionDigits: cents ? 2 : 0 })}`;
+/** Plaid dates are calendar days sent as UTC midnight: read them in UTC so they don't slip a day. */
+const txDay = (d: unknown, locale: string) => (d ? new Date(d as string).toLocaleDateString(locale, { day: "numeric", month: "short", timeZone: "UTC" }) : "");
+/** Plaid reports what you owe on cards and loans as their balance. */
+const isDebt = (type?: string | null) => type === "credit" || type === "loan";
+const added = (d: unknown) => typeof d === "object" && d !== null && "added" in d && Number((d as { added?: unknown }).added) > 0;
 
-function buildBreakdown(
-  byCategory: Array<{ category: string; type: string; total: string; count: number }>,
-  type: "income" | "expense",
-  catConfig: Record<string, { icon: any; iconBg: string; iconColor: string }>,
-  labels: Record<string, string>,
-) {
-  return byCategory
-    .filter((c) => c.type === type && parseFloat(c.total) > 0)
-    .map((c) => {
-      const config = catConfig[c.category] || { icon: Receipt, iconBg: "bg-neutral-100", iconColor: "text-neutral-600" };
-      const label = (catConfig[c.category] && labels[c.category]) || c.category;
-      return { category: c.category, label, icon: config.icon, iconBg: config.iconBg, iconColor: config.iconColor, amount: parseFloat(c.total), count: c.count };
-    })
-    .sort((a, b) => b.amount - a.amount);
-}
+type Tx = { id?: number; plaidTransactionId?: string; description: string; amount: string; type: string; category: string; transactionDate?: string | Date };
+type Goal = { id: number; name: string; targetAmount: string; currentAmount: string; isActive: boolean | null };
+type Tone = "bad" | "warn" | "info" | "good";
+type Item = { tone: Tone; icon: LucideIcon; title: string; text: string; to?: string };
 
-function AccountDropdown({ accounts, selectedId, onChange }: {
-  accounts: any[];
-  selectedId: string;
-  onChange: (id: string) => void;
-}) {
-  const { common } = useCopy(personalCopy);
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(e: MouseEvent) { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); }
-    if (open) document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, [open]);
-
-  const selected = accounts.find((a) => String(a.id) === selectedId);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 h-8 px-2.5 border border-neutral-200 rounded-md bg-white text-xs hover:border-neutral-300 transition-colors"
-      >
-        <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-        <span className="truncate max-w-[90px]">{selected?.bankName ?? common.account}</span>
-        <ChevronDown className={`w-3.5 h-3.5 text-neutral-400 shrink-0 transition-transform ${open ? "rotate-180" : ""}`} />
-      </button>
-      {open && (
-        <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-neutral-200 rounded-lg shadow-lg z-50 py-1">
-          {accounts.map((acc: any) => (
-            <button
-              key={acc.id}
-              onClick={() => { onChange(String(acc.id)); setOpen(false); }}
-              className={`w-full text-left px-3 py-2 text-sm flex items-center justify-between transition-colors ${
-                String(acc.id) === selectedId ? "bg-neutral-100 text-black font-medium" : "text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Landmark className="w-3.5 h-3.5 text-neutral-400 shrink-0" />
-                <span className="truncate">{acc.bankName}</span>
-              </div>
-              <span className={`text-xs font-medium shrink-0 ml-2 ${parseFloat(acc.currentBalance ?? "0") >= 0 ? "text-emerald-600" : "text-red-600"}`}>
-                {formatCurrency(parseFloat(acc.currentBalance ?? "0"))}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Extract unique accounts from transactions as fallback ───
-function extractAccountsFromTxs(txs: any[], fallbackName: string): Array<{ id: number; bankName: string; accountType: string | null }> {
-  const map = new Map<number, { id: number; bankName: string; accountType: string | null }>();
-  for (const t of txs) {
-    if (t.bankAccountId && !map.has(t.bankAccountId)) {
-      map.set(t.bankAccountId, { id: t.bankAccountId, bankName: t.bankName || fallbackName, accountType: null });
-    }
-  }
-  return Array.from(map.values());
-}
-
+/** The 2.0 personal home: how the month is going, where the money goes, what needs a look. */
 export default function PersonalDashboard() {
-  const navigate = useNavigate();
+  const t = useCopy(personalHomeCopy);
+  const { categories } = useCopy(personalCopy);
   const { lang } = useLang();
-  const { dashboard: copy, common, categories } = useCopy(personalCopy);
-  const { alert: budgetAlert } = useCopy(budgetsCopy);
-  const now = new Date();
-  const [selectedYear, setSelectedYear] = useState(String(now.getFullYear()));
-  const [selectedMonth, setSelectedMonth] = useState(String(now.getMonth() + 1));
-  const [selectedAccountId, setSelectedAccountIdRaw] = useState<string>("");
-  const setSelectedAccountId = (id: string) => {
-    setSelectedAccountIdRaw(id);
-    try { localStorage.setItem("personal_selected_account_id", id); } catch { /* ignore */ }
-  };
-  const [showAllTxs, setShowAllTxs] = useState(false);
-  const [confirmDisconnect, setConfirmDisconnect] = useState(false);
-  const [showPlaidOverlay, setShowPlaidOverlay] = useState(false);
-  const hasAutoSelected = useRef(false);
+  const locale = intlLocale(lang);
+  const { user } = useAuth();
   const utils = trpc.useUtils();
+  const [connecting, setConnecting] = useState(false);
 
-  // Elite Autonomous Agent — handles all auto-sync, auto-fix, auto-reconnect
-  const accountIdNum = selectedAccountId ? parseInt(selectedAccountId) : undefined;
-  const bankHealth = useBankHealthMonitor(accountIdNum, selectedYear, selectedMonth);
+  const when = useMemo(() => {
+    const now = new Date();
+    return {
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      long: upperFirst(now.toLocaleDateString(locale, { weekday: "long", day: "numeric", month: "long" })),
+      monthName: now.toLocaleDateString(locale, { month: "long" }),
+    };
+  }, [locale]);
 
-  // Load selected account from localStorage on mount
-  useEffect(() => {
-    try {
-      const saved = localStorage.getItem("personal_selected_account_id");
-      if (saved) setSelectedAccountIdRaw(saved);
-    } catch { /* ignore */ }
-  }, []);
-
-  // ─── Check if bank is connected ───
-  const { data: bankConnection, isLoading: isCheckingBank } = trpc.bank.checkConnection.useQuery(undefined, {
-    staleTime: 30000,
-  });
-  const userHasBank = (bankConnection as any)?.hasBank === true; // bank connection status
-
-  // ─── AI Auto-Categorization Agent ───
-  // Silently fixes miscategorized transactions on page load
-  const autoFixMutation = trpc.bank.autoFixCategories.useMutation({
-    onSuccess: (data) => {
-      if (data.fixed && data.fixed > 0) {
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-  });
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      autoFixMutation.mutate();
-    }, 3000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // ─── Mutations (MUST be before useEffect that uses them) ───
-  const syncRecentMutation = trpc.bank.syncRecent.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-
-  const syncMutation = trpc.bank.syncTransactions.useMutation({
-    onSuccess: (data) => {
-      if (data.success && data.added && data.added > 0) {
-        utils.bank.getMonthData.invalidate();
-      }
-    },
-    onError: () => { /* silent */ },
-  });
-
-  // Auto-sync recent transactions on page load
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      syncRecentMutation.mutate();
-    }, 2000);
-    return () => clearTimeout(timer);
-  }, []);
-
-  // PLAID POLLING: Auto-sync every 2 minutes for new transactions
-  useEffect(() => {
-    if (!userHasBank) return;
-    const interval = setInterval(() => {
-      syncMutation.mutate({
-        year: parseInt(selectedYear),
-        month: parseInt(selectedMonth),
-      });
-    }, 2 * 60 * 1000);
-    return () => clearInterval(interval);
-  }, [userHasBank, selectedYear, selectedMonth]);
-
-  // Sync selected month when it changes (for past months)
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      syncMutation.mutate({
-        year: parseInt(selectedYear),
-        month: parseInt(selectedMonth),
-      });
-    }, 1500);
-    return () => clearTimeout(timer);
-  }, [selectedYear, selectedMonth]);
-
-  // ─── Accounts from DB ───
-  const { data: dbAccounts, isLoading: accountsLoading } = trpc.bank.listAccounts.useQuery(undefined, {
-    refetchInterval: 30000, // Live balance refresh every 30s
-    refetchIntervalInBackground: true,
-    onSuccess: (data) => {
-      if (data && data.length > 0 && !hasAutoSelected.current && !selectedAccountId) {
-        hasAutoSelected.current = true;
-        setSelectedAccountId(String(data[0].id));
-      }
-    },
-  });
-
-  const dbAccountsList = dbAccounts ?? [];
-
-  // ─── ALL ACCOUNTS DIRECTLY FROM PLAID (for dropdown) ───
-  const { data: plaidAccountsData } = trpc.bank.getAllPlaidAccounts.useQuery(undefined, {
-    staleTime: 60000,
-    refetchInterval: 30000,
-  });
-
-  // ─── Month data (filtered by selected account for display) ───
-  const { data: monthData, isLoading } = trpc.bank.getMonthData.useQuery({
-    year: parseInt(selectedYear),
-    month: parseInt(selectedMonth),
-    accountId: selectedAccountId ? parseInt(selectedAccountId) : undefined,
-  }, {
-    refetchInterval: 30000, // Live balance refresh every 30s
-    refetchIntervalInBackground: true,
-  });
-
-  // ─── Budget alerts (Pro): categories near or over their monthly limit ───
-  const { data: planInfo } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
-  const canBudget = planInfo?.features.includes("budgets") ?? false;
-  const { data: budgets } = trpc.personal.listBudgets.useQuery(
-    { year: parseInt(selectedYear), month: parseInt(selectedMonth) },
-    { enabled: canBudget, staleTime: 5 * 60_000, retry: false },
+  const { data: bank } = trpc.bank.checkConnection.useQuery(undefined, { staleTime: 30_000 });
+  const hasBank = bank?.hasBank === true;
+  const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const canBudget = plan?.features.includes("budgets") ?? false;
+  const { data: accounts } = trpc.bank.listAccounts.useQuery(undefined, { enabled: hasBank, staleTime: 60_000 });
+  const { data: monthData } = trpc.bank.getMonthData.useQuery(
+    { year: when.year, month: when.month },
+    { enabled: hasBank, staleTime: 60_000, refetchInterval: 2 * 60_000 },
   );
-  const budgetAlerts = canBudget ? (budgets?.items ?? []).filter((b) => b.status === "near" || b.status === "over") : [];
+  const { data: budgets } = trpc.personal.listBudgets.useQuery({ year: when.year, month: when.month }, { enabled: hasBank && canBudget, staleTime: 5 * 60_000, retry: false });
+  const { data: goals } = trpc.personal.listGoals.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const { data: tax } = trpc.tax.current.useQuery(undefined, { staleTime: 5 * 60_000 });
 
-  const transactions = monthData?.transactions ?? [];
-  // Balance always from getMonthData (backend calculates from bankAccounts table)
-  const balance = parseFloat(monthData?.liveBalance ?? "0");
-
-  // ─── Accounts for dropdown: use Plaid data (ALL accounts) ───
-  // Merge Plaid accounts with DB data for currentBalance
-  const plaidAccounts = plaidAccountsData?.accounts ?? [];
-  const accounts = plaidAccounts.length > 0
-    ? plaidAccounts.map((pa: any) => {
-        const dbMatch = dbAccountsList.find((dbAcc: any) => dbAcc.id === pa.id || dbAcc.plaidAccountId === pa.plaidAccountId);
-        return dbMatch ? { ...pa, currentBalance: dbMatch.currentBalance } : pa;
-      })
-    : dbAccountsList;
-  const activeId = selectedAccountId || (accounts[0] ? String(accounts[0].id) : "");
-  const activeAccount = accounts.find((a: any) => String(a.id) === activeId) ?? accounts[0];
-
-  // ─── Refresh on load ───
-  const refreshMutation = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: (data) => {
-      utils.bank.listAccounts.invalidate();
-      if (data.added && data.added > 0) toast.success(copy.newAccounts(data.added));
-      else if (data.updated && data.updated > 0) toast.success(copy.balancesUpdated(data.updated));
-      else if (data.total === 1 && accounts.length === 1) {
-        toast.info(copy.onlyOneAccount);
-      }
-    },
-    onError: (err) => toast.error(err.message),
-  });
-  useEffect(() => { refreshMutation.mutate(); }, []);
-
-  // ─── Auto-sync with Plaid every 60s for live balance ───
+  // ── Keep the bank fresh, quietly: new transactions and balances on arrival, then the month every 3 minutes ──
+  const refreshMonth = () => { void utils.bank.getMonthData.invalidate(); };
+  const { mutate: syncRecent } = trpc.bank.syncRecent.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
+  const { mutate: syncMonth } = trpc.bank.syncTransactions.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
+  const { mutate: refreshBalances } = trpc.bank.refreshAllBalances.useMutation({ onSuccess: () => { void utils.bank.listAccounts.invalidate(); }, onError: () => {} });
+  const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({ onSuccess: (d) => { if (d.fixed && d.fixed > 0) refreshMonth(); }, onError: () => {} });
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (!refreshMutation.isPending) {
-        refreshMutation.mutate();
-      }
-    }, 60000);
-    return () => clearInterval(interval);
-  }, [refreshMutation.isPending]);
+    if (!hasBank) return;
+    syncRecent();
+    refreshBalances();
+    const fix = setTimeout(() => autoFix(), 3000);
+    const every = setInterval(() => syncMonth({ year: when.year, month: when.month }), 3 * 60_000);
+    return () => { clearTimeout(fix); clearInterval(every); };
+  }, [hasBank, syncRecent, refreshBalances, autoFix, syncMonth, when.year, when.month]);
 
-  // ─── Disconnect ───
-  const disconnectMut = trpc.bank.disconnect.useMutation({
-    onSuccess: () => {
-      toast.success(copy.disconnected);
-      setConfirmDisconnect(false);
-      setSelectedAccountId("");
-      hasAutoSelected.current = false;
-      try { localStorage.removeItem("aethel_bank_connected"); } catch { /* ignore */ }
-      utils.bank.listAccounts.invalidate();
-      utils.bank.checkConnection.invalidate();
-      utils.bank.getMonthData.invalidate();
-      utils.bank.getAllPlaidAccounts.invalidate();
-    },
-    onError: (err) => toast.error(err.message),
-  });
+  const firstName = (user?.name || "").trim().split(/\s+/)[0] ?? "";
+  const labelOf = (cat: string, type: string) => budgetCategoryLabel(cat, type === "income" ? categories.income : categories.expense);
 
-  const incomeVal = parseFloat(monthData?.income ?? "0");
-  const expenseVal = parseFloat(monthData?.expense ?? "0");
-
-  // Category breakdown
-  const categoryGroups = new Map<string, { category: string; type: string; total: number; count: number }>();
-  for (const t of transactions) {
-    const key = `${t.category}-${t.type}`;
-    const existing = categoryGroups.get(key);
-    if (existing) { existing.total += parseFloat(t.amount); existing.count++; }
-    else categoryGroups.set(key, { category: t.category, type: t.type, total: parseFloat(t.amount), count: 1 });
+  // ── Tax items show for everyone (both personal plans include the return) ──
+  const taxItems: Item[] = [];
+  const redo = tax?.docs.filter((d) => d.source === "client" && d.status === "redo").length ?? 0;
+  if (redo > 0) { const [a, b] = t.attention.taxRedo(redo); taxItems.push({ tone: "bad", icon: FileText, title: a, text: b, to: "/personal/taxes" }); }
+  else if (tax?.access.allowed && (tax.ret?.step ?? DRAFT_STEP) === DRAFT_STEP && tax.missing && (tax.missing.docs.length > 0 || tax.missing.income)) {
+    taxItems.push({ tone: "info", icon: FileText, title: t.attention.taxDocs[0], text: t.attention.taxDocs[1], to: "/personal/taxes" });
   }
-  const byCategory = Array.from(categoryGroups.values()).map(c => ({ ...c, total: String(c.total.toFixed(2)) }));
-  const incomeBreakdown = buildBreakdown(byCategory, "income", INCOME_CATS, categories.income);
-  const expenseBreakdown = buildBreakdown(byCategory, "expense", EXPENSE_CATS, categories.expense);
-  const categoryLabel = (cat: string) =>
-    (INCOME_CATS[cat] && categories.income[cat]) || (EXPENSE_CATS[cat] && categories.expense[cat]) || cat;
 
-  const displayedTransactions = showAllTxs ? transactions : transactions.slice(0, 5);
-  const hasMore = transactions.length > 5;
-
-  const months = common.months.map((label, i) => ({ value: String(i + 1), label }));
-
-  // ─── NOT CONNECTED: Early return, same as business Bank.tsx ───
-  if (!userHasBank) {
-    return (
-      <div className="max-w-5xl mx-auto p-6 lg:p-10">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold text-black">{copy.myBank}</h1>
-          <p className="text-sm text-neutral-400 mt-1">{copy.connectSubtitle}</p>
-        </div>
-        <Card className="border-neutral-200 rounded-xl shadow-none">
-          <CardContent className="p-16 flex flex-col items-center justify-center text-center">
-            <div className="w-16 h-16 bg-neutral-100 rounded-full flex items-center justify-center mb-5">
-              <Landmark className="w-8 h-8 text-neutral-400" />
-            </div>
-            <h3 className="text-lg font-semibold text-black mb-2">{common.noBank.title}</h3>
-            <p className="text-sm text-neutral-400 max-w-sm mb-6">{copy.noBankText}</p>
-            <Button onClick={() => setShowPlaidOverlay(true)} className="bg-black hover:bg-neutral-800 text-white rounded-lg h-10 px-6">
-              <Landmark className="w-4 h-4 mr-2" /> {common.noBank.connect}
-            </Button>
-          </CardContent>
-        </Card>
-        {showPlaidOverlay && <PlaidLinkOverlay onClose={() => setShowPlaidOverlay(false)} />}
+  const header = (
+    <header className="flex flex-wrap items-end justify-between gap-3">
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.hello(firstName)}</h1>
+        <p className="mt-0.5 text-sm text-slate-500">{when.long}</p>
       </div>
+      <Link to="/personal/taxes" className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 hover:bg-slate-50">
+        <FileText className="h-4 w-4 text-blue-600" />{t.myReturn}
+      </Link>
+    </header>
+  );
+
+  // ── No bank yet: one clear next step, plus the return ──
+  if (bank && !hasBank) {
+    return (
+      <AnimatedPage className="p-4 lg:p-8">
+        <div className="mx-auto max-w-6xl space-y-5">
+          {header}
+          <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr]">
+            <section className="rounded-2xl bg-slate-900 p-6 text-white sm:p-8">
+              <span className="grid h-12 w-12 place-items-center rounded-2xl bg-white/10"><Landmark className="h-6 w-6" /></span>
+              <h2 className="mt-5 text-xl font-bold tracking-tight sm:text-2xl">{t.connect.title}</h2>
+              <p className="mt-2 max-w-lg text-sm leading-relaxed text-slate-300">{t.connect.text}</p>
+              <ul className="mt-5 space-y-2">
+                {t.connect.points.map((p) => (
+                  <li key={p} className="flex items-start gap-2 text-sm text-slate-200"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" />{p}</li>
+                ))}
+              </ul>
+              <button onClick={() => setConnecting(true)} className="mt-6 inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-100">
+                <Landmark className="h-4 w-4" />{t.connect.button}
+              </button>
+            </section>
+            <div className="space-y-4">
+              <section className="rounded-2xl border border-slate-200 bg-white p-5">
+                <span className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50 text-blue-600"><FileText className="h-5 w-5" /></span>
+                <h2 className="mt-3 font-semibold text-slate-900">{t.connect.taxTitle}</h2>
+                <p className="mt-1 text-sm text-slate-500">{t.connect.taxText}</p>
+                <Link to="/personal/taxes" className="mt-4 inline-flex items-center gap-1 text-sm font-semibold text-blue-600 hover:underline">{t.connect.taxButton}<ArrowRight className="h-4 w-4" /></Link>
+              </section>
+              {taxItems.length > 0 && <Attention items={taxItems} t={t} />}
+            </div>
+          </div>
+          <Shortcuts t={t} lockBudgets={!!plan && !canBudget} />
+        </div>
+        {connecting && <PlaidLinkOverlay onClose={() => setConnecting(false)} />}
+      </AnimatedPage>
     );
   }
 
+  // ── Connected ──
+  const txs: Tx[] = (monthData?.transactions ?? []) as Tx[];
+  const income = Number(monthData?.income ?? 0);
+  const expense = Number(monthData?.expense ?? 0);
+  const kept = income - expense;
+  const accountList: { currentBalance?: string | null; accountType?: string | null }[] = accounts ?? [];
+  const cashAccounts = accountList.filter((a) => !isDebt(a.accountType));
+  const balance = cashAccounts.reduce((a, acc) => a + Number(acc.currentBalance ?? 0), 0);
+  const countOf = (type: string) => txs.filter((x) => x.type === type).length;
+
+  // Where the money goes: biggest expense categories.
+  const byCat = new Map<string, number>();
+  for (const x of txs) if (x.type === "expense") byCat.set(x.category, (byCat.get(x.category) ?? 0) + Number(x.amount));
+  const spending = [...byCat.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+  const items: Item[] = [];
+  for (const b of budgets?.items ?? []) {
+    if (b.status === "over") { const [a, c] = t.attention.over(labelOf(b.category, "expense"), fmt(Math.abs(b.remaining ?? 0))); items.push({ tone: "bad", icon: AlertTriangle, title: a, text: c, to: "/personal/budgets" }); }
+    else if (b.status === "near") { const [a, c] = t.attention.near(labelOf(b.category, "expense"), b.percent ?? 0); items.push({ tone: "warn", icon: AlertTriangle, title: a, text: c, to: "/personal/budgets" }); }
+  }
+  items.push(...taxItems);
+  if (canBudget && budgets && !budgets.items.some((b) => b.limit !== null) && spending.length > 0) {
+    items.push({ tone: "info", icon: PiggyBank, title: t.attention.noBudgets[0], text: t.attention.noBudgets[1], to: "/personal/budgets" });
+  }
+  if (items.length === 0) items.push({ tone: "good", icon: CheckCircle2, title: t.attention.allGood[0], text: t.attention.allGood[1] });
+
+  const goalList = ((goals ?? []) as Goal[]).filter((g) => g.isActive !== false).slice(0, 3);
+  const recent = [...txs].sort((a, b) => new Date(b.transactionDate ?? 0).getTime() - new Date(a.transactionDate ?? 0).getTime()).slice(0, 6);
+
   return (
-    <AnimatedPage className="p-4 lg:p-6">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-        <div>
-          <h1 className="text-lg font-semibold text-black">{copy.title}</h1>
-          <p className="text-xs text-neutral-500">{monthData ? (monthData.monthName ? `${common.months[parseInt(selectedMonth) - 1]} ${selectedYear}` : "") : copy.subtitleFallback}</p>
+    <AnimatedPage className="p-4 lg:p-8">
+      <div className="mx-auto max-w-6xl space-y-5">
+        {header}
+
+        <p className="flex items-start gap-2 rounded-xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-slate-200">
+          {kept >= 0 ? <TrendingUp className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" /> : <TrendingDown className="mt-0.5 h-4 w-4 shrink-0 text-red-600" />}
+          <span>{txs.length > 0 ? t.status(when.monthName, fmt(income), fmt(expense), fmt(Math.abs(kept)), kept >= 0) : t.statusEmpty(when.monthName)}</span>
+        </p>
+
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <Kpi label={t.kpi.balance} value={fmt(balance)} sub={t.kpi.balanceSub(cashAccounts.length)} to="/personal/bank" icon={Wallet} />
+          <Kpi label={t.kpi.income} value={fmt(income)} sub={t.kpi.count(countOf("income"))} to="/personal/transactions" icon={ArrowUpRight} tone="good" />
+          <Kpi label={t.kpi.expense} value={fmt(expense)} sub={t.kpi.count(countOf("expense"))} to="/personal/transactions" icon={ArrowDownRight} />
+          {kept >= 0
+            ? <Kpi label={t.kpi.saved} value={fmt(kept)} sub={income > 0 ? t.kpi.savedSub(Math.round((kept / income) * 100)) : "—"} to="/personal/goals" icon={PiggyBank} tone="good" />
+            : <Kpi label={t.kpi.overspent} value={fmt(-kept)} sub={t.kpi.overspentSub} to="/personal/transactions" icon={TrendingDown} tone="bad" />}
+        </section>
+
+        <div className="grid gap-4 lg:grid-cols-2">
+          <Attention items={items} t={t} />
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="ph-spend">
+            <h2 id="ph-spend" className="font-semibold text-slate-900">{t.spending.title}</h2>
+            {spending.length === 0 ? <p className="mt-3 text-sm text-slate-500">{t.spending.none}</p> : (
+              <ul className="mt-3 space-y-3">
+                {spending.map(([cat, total]) => {
+                  const pct = expense > 0 ? Math.round((total / expense) * 100) : 0;
+                  const { icon: Icon, tone } = styleOf(cat, "expense");
+                  return (
+                    <li key={cat}>
+                      <Link to={`/personal/category/${cat}?month=${when.month}&year=${when.year}`} className="group flex items-center gap-3 rounded-lg">
+                        <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>
+                        <span className="min-w-0 flex-1">
+                          <span className="flex items-baseline justify-between gap-2">
+                            <span className="truncate text-sm font-medium text-slate-900 group-hover:underline">{labelOf(cat, "expense")}</span>
+                            <span className="shrink-0 text-sm font-semibold tabular-nums text-slate-900">{fmt(total)}</span>
+                          </span>
+                          <span className="mt-1.5 block h-1.5 overflow-hidden rounded-full bg-slate-100" role="img" aria-label={t.spending.of(pct)}>
+                            <span className="block h-full rounded-full bg-blue-600" style={{ width: `${Math.max(2, pct)}%` }} />
+                          </span>
+                          <span className="mt-1 block text-[11px] text-slate-500">{t.spending.of(pct)}</span>
+                        </span>
+                      </Link>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
-        <div className="flex items-center gap-2 flex-wrap">
-          <AccountDropdown accounts={accounts} selectedId={activeId} onChange={setSelectedAccountId} />
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="h-9 w-[120px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{months
-              .filter(m => parseInt(selectedYear) < now.getFullYear() || parseInt(m.value) <= now.getMonth() + 1)
-              .map(m => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}</SelectContent>
-          </Select>
-          <Select value={selectedYear} onValueChange={setSelectedYear}>
-            <SelectTrigger className="h-9 w-[88px] border-neutral-200 text-sm"><SelectValue /></SelectTrigger>
-            <SelectContent>{[2026, 2025, 2024].map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
-          </Select>
-          {/* Autonomous agent status indicator */}
-          <div className="flex items-center gap-1.5">
-            <div
-              title={bankHealth.message}
-              className={`w-2.5 h-2.5 rounded-full ${
-                bankHealth.status === "healthy" ? "bg-emerald-400" :
-                bankHealth.status === "warning" ? "bg-amber-400 animate-pulse" :
-                "bg-neutral-300"
-              }`}
-            />
-            {bankHealth.pendingSync && <RefreshCw className="w-3 h-3 text-blue-500 animate-spin" />}
-          </div>
-          {/* Disconnect button */}
-          {accounts.length > 0 && (
-            confirmDisconnect ? (
-              <div className="flex items-center gap-1">
-                <span className="text-[10px] text-red-600 font-medium">{copy.confirmDisconnect}</span>
-                <button onClick={() => setConfirmDisconnect(false)} className="h-7 px-1.5 text-[10px] border border-neutral-200 rounded bg-white hover:bg-neutral-50">{copy.no}</button>
-                <button onClick={() => disconnectMut.mutate()} disabled={disconnectMut.isPending} className="h-7 px-1.5 text-[10px] bg-red-600 hover:bg-red-700 text-white rounded">{copy.yes}</button>
+
+        <Shortcuts t={t} lockBudgets={!!plan && !canBudget} />
+
+        <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="ph-goals">
+            <div className="flex items-center justify-between">
+              <h2 id="ph-goals" className="font-semibold text-slate-900">{t.goals.title}</h2>
+              <Link to="/personal/goals" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">{t.goals.all}<ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div>
+            {goalList.length === 0 ? (
+              <div className="mt-3 rounded-xl bg-slate-50 p-4 text-sm text-slate-600">
+                <p>{t.goals.none}</p>
+                <Link to="/personal/goals" className="mt-2 inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline"><Target className="h-4 w-4" />{t.goals.create}</Link>
               </div>
             ) : (
-              <button onClick={() => setConfirmDisconnect(true)} className="h-8 w-8 flex items-center justify-center border border-red-200 text-red-500 rounded-md bg-white hover:bg-red-50 transition-colors shrink-0" title={copy.disconnectBank}>
-                <LogOut className="w-3.5 h-3.5" />
-              </button>
-            )
-          )}
+              <ul className="mt-3 space-y-4">
+                {goalList.map((g) => {
+                  const target = Number(g.targetAmount); const saved = Number(g.currentAmount);
+                  const pct = target > 0 ? Math.min(100, Math.round((saved / target) * 100)) : 0;
+                  return (
+                    <li key={g.id}>
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="truncate text-sm font-medium text-slate-900">{g.name}</span>
+                        <span className={`shrink-0 text-xs font-semibold ${pct >= 100 ? "text-emerald-700" : "text-slate-500"}`}>{pct >= 100 ? t.goals.done : `${pct}%`}</span>
+                      </div>
+                      <div className="mt-1.5 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${pct >= 100 ? "bg-emerald-500" : "bg-blue-600"}`} style={{ width: `${Math.max(2, pct)}%` }} /></div>
+                      <p className="mt-1 text-[11px] tabular-nums text-slate-500">{t.goals.progress(fmt(saved), fmt(target))}</p>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="ph-recent">
+            <div className="flex items-center justify-between">
+              <h2 id="ph-recent" className="font-semibold text-slate-900">{t.recent.title}</h2>
+              <Link to="/personal/transactions" className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:underline">{t.recent.all}<ArrowRight className="h-3.5 w-3.5" /></Link>
+            </div>
+            {recent.length === 0 ? <p className="mt-3 text-sm text-slate-500">{t.recent.none}</p> : (
+              <ul className="mt-2 divide-y divide-slate-100">
+                {recent.map((x, i) => {
+                  const { icon: Icon, tone } = styleOf(x.category, x.type);
+                  const isIn = x.type === "income";
+                  return (
+                    <li key={x.plaidTransactionId ?? x.id ?? i} className="flex items-center gap-3 py-2.5">
+                      <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${tone}`}><Icon className="h-4 w-4" /></span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-sm font-medium text-slate-900">{x.description}</span>
+                        <span className="block truncate text-xs text-slate-500">{txDay(x.transactionDate, locale)} · {labelOf(x.category, x.type)}</span>
+                      </span>
+                      <span className={`shrink-0 text-sm font-semibold tabular-nums ${isIn ? "text-emerald-700" : "text-slate-900"}`}>{isIn ? "+" : "−"}{fmt(Number(x.amount), true).replace("−", "")}</span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </section>
         </div>
       </div>
-
-      {/* Bank Balance Card */}
-      {(isLoading || accountsLoading) && <Skeleton className="h-28 rounded-xl mb-4" />}
-      {!isLoading && !accountsLoading && (
-        <Card className={`rounded-xl shadow-none mb-4 bg-white ${balance >= 0 ? "border-2 border-emerald-400" : "border-2 border-red-400"}`}>
-          <CardContent className="p-5">
-            <div className="flex items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Landmark className="w-4 h-4 text-neutral-400" />
-                  <span className="text-xs text-neutral-500">{activeAccount?.bankName ?? common.bank}</span>
-                  {accounts[0]?.id === activeAccount?.id && <Star className="w-3 h-3 text-amber-500 fill-amber-500" />}
-                  {monthData?.fromPlaid ? (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded-full">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      {copy.live}
-                    </span>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded-full" title={copy.noBankConnection}>
-                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
-                      {copy.outdated}
-                    </span>
-                  )}
-                </div>
-                <p className={`text-2xl font-bold ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`}>{formatCurrency(balance)}</p>
-                <p className="text-[11px] text-neutral-400 mt-0.5">{balance >= 0 ? copy.available : copy.overdraft}</p>
-                {monthData?.lastSyncedAt && (
-                  <p className="text-[10px] text-neutral-400 mt-0.5">
-                    {copy.updated(new Date(monthData.lastSyncedAt).toLocaleString(intlLocale(lang), { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }))}
-                  </p>
-                )}
-              </div>
-              <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${balance >= 0 ? "bg-emerald-100" : "bg-red-100"}`}>
-                <CircleDollarSign className={`w-6 h-6 ${balance >= 0 ? "text-emerald-600" : "text-red-600"}`} />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-        {isLoading ? Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-xl" />) : (
-          <>
-            <Card className="border-emerald-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-emerald-300 transition-all">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-emerald-100 flex items-center justify-center"><TrendingUp className="w-4 h-4 text-emerald-600" /></div><span className="text-xs text-neutral-500">{common.income}</span></div>
-                <p className="text-lg font-semibold text-emerald-700">+{formatCurrency(incomeVal)}</p>
-                <p className="text-[10px] text-neutral-400">{common.txCount(transactions.filter((t: any) => t.type === "income").length)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-rose-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-rose-300 transition-all">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-rose-100 flex items-center justify-center"><TrendingDown className="w-4 h-4 text-rose-600" /></div><span className="text-xs text-neutral-500">{common.expenses}</span></div>
-                <p className="text-lg font-semibold text-rose-700">-{formatCurrency(expenseVal)}</p>
-                <p className="text-[10px] text-neutral-400">{common.txCount(transactions.filter((t: any) => t.type === "expense").length)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-sky-200 rounded-xl shadow-none">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-sky-100 flex items-center justify-center"><Wallet className="w-4 h-4 text-sky-600" /></div><span className="text-xs text-neutral-500">{copy.totalBalance}</span></div>
-                <p className="text-lg font-semibold text-sky-700">{formatCurrency(balance)}</p>
-                <p className="text-[10px] text-neutral-400">{copy.accountsCount(accounts.length)}</p>
-              </CardContent>
-            </Card>
-            <Card className="border-violet-200 rounded-xl shadow-none cursor-pointer hover:shadow-md hover:border-violet-300 transition-all">
-              <CardContent className="p-4">
-                <div className="flex items-center gap-2 mb-2"><div className="w-8 h-8 rounded-lg bg-violet-100 flex items-center justify-center"><Zap className="w-4 h-4 text-violet-600" /></div><span className="text-xs text-neutral-500">{common.transactions}</span></div>
-                <p className="text-lg font-semibold text-violet-700">{transactions.length}</p>
-                <p className="text-[10px] text-neutral-400">{common.thisMonth}</p>
-              </CardContent>
-            </Card>
-          </>
-        )}
-      </div>
-
-      {/* Budget alerts — only with budgets in the plan and something near or over */}
-      {budgetAlerts.length > 0 && (
-        <Card className="border-amber-200 rounded-xl shadow-none mb-4">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-amber-600" aria-hidden="true" /> {budgetAlert.title}</CardTitle></CardHeader>
-          <CardContent className="pt-0">
-            <ul className="space-y-1">
-              {budgetAlerts.map((b) => (
-                <li key={b.category} className="flex items-center justify-between gap-3 py-1.5">
-                  <span className="text-sm text-black truncate">{budgetCategoryLabel(b.category, categories.expense)}</span>
-                  <span className={`text-xs font-medium shrink-0 ${b.status === "over" ? "text-red-600" : "text-amber-700"}`}>
-                    {b.status === "over" ? budgetAlert.over(formatCurrency(Math.abs(b.remaining ?? 0))) : budgetAlert.near(b.percent ?? 0)}
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <Link to={`/personal/budgets?month=${selectedMonth}&year=${selectedYear}`} className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-neutral-600 hover:text-black transition-colors">
-              {budgetAlert.cta} <ArrowUpRight className="w-3.5 h-3.5" aria-hidden="true" />
-            </Link>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Income Breakdown — clickable, navigates to category detail */}
-      {!isLoading && incomeBreakdown.length > 0 && (
-        <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingUp className="w-4 h-4 text-emerald-600" /> {copy.incomeBreakdown}</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{incomeBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-emerald-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{common.txCount(item.count)}</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-emerald-600">+{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
-        </Card>
-      )}
-
-      {/* Expense Breakdown — clickable, navigates to category detail */}
-      {!isLoading && expenseBreakdown.length > 0 && (
-        <Card className="border-neutral-200 rounded-xl shadow-none mb-4">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-medium text-black flex items-center gap-2"><TrendingDown className="w-4 h-4 text-rose-600" /> {copy.expenseBreakdown}</CardTitle></CardHeader>
-          <CardContent className="pt-0"><div className="space-y-1">{expenseBreakdown.map((item) => { const Icon = item.icon; return (<div key={item.category} onClick={() => navigate(`/personal/category/${item.category}?month=${selectedMonth}&year=${selectedYear}`)} className="flex items-center justify-between py-2.5 px-1 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"><div className="flex items-center gap-3"><div className={`w-8 h-8 rounded-lg ${item.iconBg} flex items-center justify-center`}><Icon className={`w-4 h-4 ${item.iconColor}`} /></div><div><p className="text-sm text-black">{item.label}</p><p className="text-[10px] text-neutral-400">{common.txCount(item.count)}</p></div></div><div className="flex items-center gap-1"><p className="text-sm font-semibold text-rose-600">-{formatCurrency(item.amount)}</p><ArrowUpRight className="w-3.5 h-3.5 text-neutral-300" /></div></div>); })}</div></CardContent>
-        </Card>
-      )}
-
-      {/* All Transactions */}
-      <Card className="border-neutral-200 rounded-xl shadow-none">
-        <CardHeader className="pb-3"><CardTitle className="text-sm font-medium text-black">{copy.monthTransactions} {transactions.length > 0 && <span className="text-neutral-400 font-normal ml-1">({transactions.length})</span>}</CardTitle></CardHeader>
-        <CardContent className="pt-0">
-          <div className="space-y-0">
-            {isLoading ? <div className="space-y-2 py-4">{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-lg" />)}</div>
-              : transactions.length === 0 ? (
-                <div className="text-center py-10"><Landmark className="w-10 h-10 text-neutral-300 mx-auto mb-3" /><p className="text-sm text-neutral-400">{common.noTxThisMonth}</p></div>
-              ) : displayedTransactions.map((tx: any) => (
-                <div key={tx.id} className="flex items-center justify-between py-3 border-b border-neutral-100 last:border-0 hover:bg-neutral-50/50 px-1 rounded transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${tx.type === "income" ? "bg-emerald-100" : "bg-rose-100"}`}>
-                      {tx.type === "income" ? <ArrowUpRight className="w-4 h-4 text-emerald-600" /> : <ArrowDownRight className="w-4 h-4 text-rose-600" />}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium text-black truncate">{tx.description}</p>
-                      <div className="flex items-center gap-1.5 text-[11px] text-neutral-500">
-                        <span>{categoryLabel(tx.category)}</span>
-                        <span>·</span>
-                        <span>{tx.transactionDate ? new Date(tx.transactionDate).toLocaleDateString(intlLocale(lang)) : ""}</span>
-                      </div>
-                    </div>
-                  </div>
-                  <span className={`text-sm font-semibold shrink-0 ml-3 ${tx.type === "income" ? "text-emerald-700" : "text-rose-700"}`}>{tx.type === "income" ? "+" : "-"}{formatCurrency(tx.amount)}</span>
-                </div>
-              ))}
-            {!isLoading && hasMore && (<button onClick={() => setShowAllTxs(!showAllTxs)} className="w-full py-3 text-center text-sm font-medium text-neutral-500 hover:text-black hover:bg-neutral-50 rounded-lg transition-colors mt-1">{showAllTxs ? common.showLess : copy.showMore(transactions.length - 5)}</button>)}
-          </div>
-        </CardContent>
-      </Card>
     </AnimatedPage>
+  );
+}
+
+function Kpi({ label, value, sub, to, icon: Icon, tone }: { label: string; value: string; sub: string; to: string; icon: LucideIcon; tone?: "good" | "bad" }) {
+  return (
+    <Link to={to} className="rounded-2xl border border-slate-200 bg-white p-4 transition hover:border-slate-300 hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+      <p className="flex items-center gap-1.5 text-xs font-medium text-slate-500"><Icon className="h-3.5 w-3.5" />{label}</p>
+      <p className={`mt-1 text-xl font-bold tabular-nums tracking-tight sm:text-2xl ${tone === "good" ? "text-emerald-700" : tone === "bad" ? "text-red-700" : "text-slate-900"}`}>{value}</p>
+      <p className="mt-0.5 line-clamp-2 text-xs leading-snug text-slate-500">{sub}</p>
+    </Link>
+  );
+}
+
+const TONES: Record<Tone, string> = { info: "bg-blue-50 text-blue-600", bad: "bg-red-50 text-red-600", warn: "bg-amber-50 text-amber-600", good: "bg-emerald-50 text-emerald-600" };
+
+function Attention({ items, t }: { items: Item[]; t: PersonalHomeCopy }) {
+  return (
+    <section className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="ph-attn">
+      <h2 id="ph-attn" className="font-semibold text-slate-900">{t.attention.title}</h2>
+      <ul className="mt-2 divide-y divide-slate-100">
+        {items.map((it) => {
+          const body = (
+            <>
+              <span className={`grid h-9 w-9 shrink-0 place-items-center rounded-full ${TONES[it.tone]}`}><it.icon className="h-[18px] w-[18px]" /></span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-slate-900">{it.title}</span>
+                <span className="block text-xs text-slate-500">{it.text}</span>
+              </span>
+              {it.to && <span className="shrink-0 rounded-lg border border-slate-200 px-3 py-1.5 text-xs font-semibold text-slate-700">{t.attention.open}</span>}
+            </>
+          );
+          return (
+            <li key={it.title}>
+              {it.to ? <Link to={it.to} className="flex items-center gap-3 rounded-lg py-3 hover:bg-slate-50">{body}</Link> : <div className="flex items-center gap-3 py-3">{body}</div>}
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}
+
+function Shortcuts({ t, lockBudgets }: { t: PersonalHomeCopy; lockBudgets: boolean }) {
+  const list: [string, string, LucideIcon, boolean][] = [
+    ["/personal/goals", t.shortcuts.goals, Target, false],
+    ["/personal/budgets", t.shortcuts.budgets, PiggyBank, lockBudgets],
+    ["/personal/subscriptions", t.shortcuts.subscriptions, Tv, false],
+    ["/personal/assistant", t.shortcuts.assistant, Sparkles, false],
+  ];
+  return (
+    <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      {list.map(([to, label, Icon, locked]) => (
+        <Link key={to} to={to} title={locked ? t.locked : undefined}
+          className="flex min-h-[56px] items-center gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm font-semibold text-slate-800 transition hover:border-slate-300 hover:bg-slate-50 sm:px-4">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-xl bg-blue-50 text-blue-600"><Icon className="h-[18px] w-[18px]" /></span>
+          <span className="min-w-0 flex-1 leading-tight">{label}</span>
+          {locked && <Lock className="h-3.5 w-3.5 shrink-0 text-slate-300" aria-label={t.locked} />}
+        </Link>
+      ))}
+    </section>
   );
 }
