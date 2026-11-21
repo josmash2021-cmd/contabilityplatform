@@ -62,6 +62,12 @@ module.exports = {
         card: "0 1px 3px rgba(0,0,0,0.04), 0 1px 2px rgba(0,0,0,0.02)",
       },
       keyframes: {
+        "icon-cycle": {
+          "0%, 26%": { opacity: "1", transform: "scale(1) rotate(0deg)", filter: "blur(0)" },
+          "36%": { opacity: "0", transform: "scale(0.45) rotate(70deg)", filter: "blur(2px)" },
+          "90%": { opacity: "0", transform: "scale(0.45) rotate(-70deg)", filter: "blur(2px)" },
+          "100%": { opacity: "1", transform: "scale(1) rotate(0deg)", filter: "blur(0)" },
+        },
         aurora: {
           "0%": { transform: "translate3d(0, 0, 0) scale(1)" },
           "50%": { transform: "translate3d(6%, -4%, 0) scale(1.08)" },
@@ -119,6 +125,7 @@ module.exports = {
         "soft-float": "soft-float 6s ease-in-out infinite",
         "hero-in": "hero-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both",
         aurora: "aurora 22s ease-in-out infinite alternate",
+        "icon-cycle": "icon-cycle 6s cubic-bezier(0.4, 0, 0.2, 1) infinite",
       },
       transitionTimingFunction: {
         "out-expo": "cubic-bezier(0.16, 1, 0.3, 1)",

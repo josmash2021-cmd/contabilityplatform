@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import {
-  ArrowRight, Check, ShieldCheck, Lock, Languages, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
+  ArrowRight, Check, ShieldCheck, Lock, Languages, PiggyBank, Rocket, TrendingUp, type LucideIcon, Eye, CreditCard, Unplug, Landmark, Layers, Zap, FileBarChart,
   ShoppingCart, Users, Receipt, Smartphone, Wallet, Tags, Tv, Target, CalendarCheck, Building2, User, Store,
   Sparkles, LayoutDashboard,
 } from "lucide-react";
@@ -276,10 +276,32 @@ function Security({ c }: { c: C["security"] }) {
 }
 
 // ── Pricing ──
+// Each plan's icon turns into the next one in its set, smoothly (still when motion is off).
+const PLAN_ICON_SETS = {
+  personal: [User, Wallet, PiggyBank],
+  personalPro: [Sparkles, Receipt, ShieldCheck],
+  basic: [Store, ShoppingCart, Receipt],
+  business: [Building2, TrendingUp, Users],
+  pro: [Layers, Rocket, Users],
+} as const;
+function PlanIcon({ icons, offset, className }: { icons: readonly LucideIcon[]; offset: number; className: string }) {
+  return (
+    <span className="relative inline-grid h-6 w-6 shrink-0 place-items-center" aria-hidden>
+      {icons.map((Icon, k) => (
+        <Icon
+          key={k}
+          className={`absolute h-5 w-5 ${className} motion-safe:animate-icon-cycle ${k ? "opacity-0 motion-safe:opacity-100" : ""}`}
+          style={{ animationDelay: `${-(offset + [0, 4, 2][k])}s` }}
+        />
+      ))}
+    </span>
+  );
+}
+
 function Pricing({ c }: { c: C["pricing"] }) {
   const [billing, setBilling] = useState<"monthly" | "annual">("monthly");
   const [group, setGroup] = useState<LandingGroup>("personal");
-  const planIcons = { personal: User, personalPro: Sparkles, basic: Store, business: Building2, pro: Layers } as const;
+  const planIcons = PLAN_ICON_SETS;
   const plans = LANDING_PLAN_GROUPS[group];
   return (
     <section id="precios" className="scroll-mt-nav bg-slate-50 py-24 sm:py-28" aria-labelledby="pricing-title">
@@ -338,7 +360,7 @@ function Pricing({ c }: { c: C["pricing"] }) {
             const p = c.plans[plan.key];
             const featured = !!plan.featured;
             const price = billing === "monthly" ? plan.monthly : plan.annual;
-            const Icon = planIcons[plan.key];
+            const icons = planIcons[plan.key];
             return (
               <Reveal key={plan.key} delay={i * 90} className={plans.length === 3 && i === 2 ? "md:col-span-2 md:mx-auto md:w-1/2 lg:col-span-1 lg:mx-0 lg:w-auto" : ""}>
                 <div
@@ -355,7 +377,7 @@ function Pricing({ c }: { c: C["pricing"] }) {
                     <span className="absolute -top-3 right-7 rounded-full bg-amber-100 px-3 py-1 text-xs font-semibold text-amber-800 ring-1 ring-amber-200">{c.soonBadge}</span>
                   )}
                   <div className="flex items-center gap-2.5">
-                    <Icon className={`h-5 w-5 ${featured ? "text-blue-400" : "text-blue-600"}`} />
+                    <PlanIcon icons={icons} offset={i * 0.6} className={featured ? "text-blue-400" : "text-blue-600"} />
                     <h3 className="text-lg font-semibold">{p.name}</h3>
                   </div>
                   <p className={`mt-2 min-h-10 text-sm ${featured ? "text-slate-400" : "text-slate-600"}`}>{p.tagline}</p>
@@ -370,7 +392,7 @@ function Pricing({ c }: { c: C["pricing"] }) {
 
                   {plan.available ? (
                     <Link
-                      to={`/register?mode=${plan.mode}`}
+                      to={`/register?mode=${plan.mode}&plan=${plan.key}`}
                       className={`group mt-6 inline-flex h-12 items-center justify-center gap-2 rounded-xl text-[15px] font-semibold transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2 ${
                         featured ? "bg-blue-600 text-white hover:bg-blue-500" : "bg-slate-900 text-white hover:bg-slate-800"
                       }`}
