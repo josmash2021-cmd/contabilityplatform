@@ -23,8 +23,8 @@ function getAppUrl() {
   return process.env.APP_URL || "https://aethelaccountingplatform.com";
 }
 
-// Prices live in ./lib/plans: business Básico $40, Negocio $80, Pro $150; personal Básico free, Pro $40.
-const tierInput = z.enum(["basic", "standard", "pro"]).optional();
+// Prices live in ./lib/plans: business Básico $40, Pro $80, Negocio $150; personal Básico free, Pro $40.
+const tierInput = z.enum(["basic", "pro", "business"]).optional();
 
 /** Which plan (tier) the user's latest payment was for. Null when unknown. Tiers aren't stored: the amount tells them apart. */
 async function lastPaidTier(db: ReturnType<typeof getDb>, userId: number, mode: AccountMode): Promise<Tier | null> {

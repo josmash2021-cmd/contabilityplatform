@@ -90,8 +90,8 @@ export default function SubscriptionSettings() {
   const mode = isPersonal ? "personal" : "business";
   const pricing = useCopy(marketingCopy).pricing;
   const { data: tierData } = trpc.subscription.currentTier.useQuery();
-  // Before tiers, everyone paid Negocio (business) or Pro (personal).
-  const tierPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, isPersonal ? "pro" : "standard")!;
+  // Before tiers, everyone paid the $80 / $40 plan, which is Pro now.
+  const tierPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, "pro")!;
   const tierCopy = pricing.plans[tierPlan.key];
 
   const planText = isPersonal ? s.personal : s.business;

@@ -16,11 +16,11 @@ export function SubscriptionExpiredOverlay() {
     undefined,
     { refetchInterval: 60000 } // Check every minute
   );
-  // Renew at the price of the plan the person had (before tiers: Negocio or Pro).
+  // Renew at the price of the plan the person had (before tiers: Pro).
   const { user } = useAuth();
   const mode = user?.modePreference === "personal" ? "personal" : "business";
   const { data: tierData } = trpc.subscription.currentTier.useQuery();
-  const renewPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, mode === "personal" ? "pro" : "standard")!;
+  const renewPlan = findPlan(mode, tierData?.tier) ?? findPlan(mode, "pro")!;
 
   // Check if subscription is expired
   const isExpired = (() => {

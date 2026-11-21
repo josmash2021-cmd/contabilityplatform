@@ -182,8 +182,8 @@ const es = {
         lead: "",
         note: "",
       },
-      business: {
-        name: "Negocio",
+      pro: {
+        name: "Pro",
         tagline: "Para negocios, emprendedores y profesionales independientes.",
         features: [
           "Punto de venta: efectivo, Zelle y tarjeta",
@@ -193,12 +193,18 @@ const es = {
           "Reporte de ingresos, gastos y utilidad",
           "Panel de ventas del día, la semana y el mes",
         ],
-        soon: ["Asistente de inteligencia artificial · límite x10", "Proveedores y facturas por pagar", "Cotizaciones y facturas recurrentes", "Vista para tu contador, Excel y PDF"],
+        soon: [
+          "Impuestos de tu negocio: documentos, preparador y seguimiento de tu declaración",
+          "Asistente de inteligencia artificial · límite x10",
+          "Proveedores y facturas por pagar",
+          "Cotizaciones y facturas recurrentes",
+          "Vista para tu contador, Excel y PDF",
+        ],
         lead: "",
-        note: "",
+        note: "La preparación de la declaración se cobra aparte.",
       },
-      pro: {
-        name: "Pro",
+      business: {
+        name: "Negocio",
         tagline: "Para equipos y negocios con varias cuentas.",
         features: ["Hasta 10 bancos conectados", "Soporte prioritario"],
         soon: [
@@ -206,8 +212,8 @@ const es = {
           "Reportes por cliente y por servicio",
           "10 usuarios y acceso para tu contador",
         ],
-        lead: "Todo lo de Negocio, más:",
-        note: "",
+        lead: "Todo lo de Pro, más:",
+        note: "La preparación de la declaración se cobra aparte.",
       },
     },
   },
@@ -559,8 +565,8 @@ const en: MarketingCopy = {
         lead: "",
         note: "",
       },
-      business: {
-        name: "Business",
+      pro: {
+        name: "Pro",
         tagline: "For businesses, entrepreneurs and independent professionals.",
         features: [
           "Point of sale: cash, Zelle and card",
@@ -570,12 +576,18 @@ const en: MarketingCopy = {
           "Income, expense and profit report",
           "Daily, weekly and monthly sales dashboard",
         ],
-        soon: ["Artificial intelligence assistant · limit x10", "Vendors and bills to pay", "Quotes and recurring invoices", "Accountant view, Excel and PDF"],
+        soon: [
+          "Your business taxes: documents, tax preparer and your return's progress",
+          "Artificial intelligence assistant · limit x10",
+          "Vendors and bills to pay",
+          "Quotes and recurring invoices",
+          "Accountant view, Excel and PDF",
+        ],
         lead: "",
-        note: "",
+        note: "Preparing your tax return is charged separately.",
       },
-      pro: {
-        name: "Pro",
+      business: {
+        name: "Business",
         tagline: "For teams and businesses with several accounts.",
         features: ["Up to 10 connected banks", "Priority support"],
         soon: [
@@ -583,8 +595,8 @@ const en: MarketingCopy = {
           "Reports by client and by service",
           "10 users plus access for your accountant",
         ],
-        lead: "Everything in Business, plus:",
-        note: "",
+        lead: "Everything in Pro, plus:",
+        note: "Preparing your tax return is charged separately.",
       },
     },
   },

@@ -281,8 +281,8 @@ const PLAN_ICON_SETS = {
   personal: [Receipt, FileText, ShieldCheck],
   personalPro: [Wallet, PiggyBank, Sparkles],
   basic: [Store, ShoppingCart, Receipt],
-  business: [Building2, TrendingUp, Users],
-  pro: [Layers, Rocket, Users],
+  pro: [TrendingUp, Building2, Sparkles],
+  business: [Layers, Rocket, Users],
 } as const;
 function PlanIcon({ icons, offset, className }: { icons: readonly LucideIcon[]; offset: number; className: string }) {
   return (

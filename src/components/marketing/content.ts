@@ -4,8 +4,8 @@
 export const TRIAL_DAYS = 7;
 
 export type PlanKey = "personal" | "business";
-/** Same tiers as api/lib/plans.ts: basic, standard (Negocio) and pro. */
-export type PlanTier = "basic" | "standard" | "pro";
+/** Same tiers as api/lib/plans.ts: basic (Básico), pro (Pro) and business (Negocio). */
+export type PlanTier = "basic" | "pro" | "business";
 
 /**
  * Plans shown on the landing page and in the in-app plan picker, in two groups:
@@ -22,8 +22,8 @@ export const LANDING_PLAN_GROUPS: Record<LandingGroup, LandingPlan[]> = {
   ],
   business: [
     { key: "basic", mode: "business", tier: "basic", monthly: 40, annual: 400 },
-    { key: "business", mode: "business", tier: "standard", monthly: 80, annual: 800, featured: true },
-    { key: "pro", mode: "business", tier: "pro", monthly: 150, annual: 1500 },
+    { key: "pro", mode: "business", tier: "pro", monthly: 80, annual: 800, featured: true },
+    { key: "business", mode: "business", tier: "business", monthly: 150, annual: 1500 },
   ],
 };
 
