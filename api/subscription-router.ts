@@ -26,6 +26,17 @@ function getAppUrl() {
 // Prices live in ./lib/plans: business Básico $40, Negocio $80, Pro $150; personal Básico free, Pro $40.
 const tierInput = z.enum(["basic", "standard", "pro"]).optional();
 
+/** Which plan (tier) the user's latest payment was for. Null when unknown. Tiers aren't stored: the amount tells them apart. */
+async function lastPaidTier(db: ReturnType<typeof getDb>, userId: number, mode: AccountMode): Promise<Tier | null> {
+  const last = await db.select().from(subscriptionPayments)
+    .where(eq(subscriptionPayments.userId, userId))
+    .orderBy(desc(subscriptionPayments.paidAt))
+    .limit(1);
+  const p = last[0];
+  if (!p || p.status !== "succeeded") return null;
+  return tierFromAmountCents(Math.round(Number(p.amount) * 100), p.plan as Plan, mode);
+}
+
 /** The plan the client asked for, checked against the account's mode. Throws for a plan that can't be bought. */
 function paidTier(mode: AccountMode, requested: Tier | undefined): Tier {
   const tier = requested ?? defaultTier(mode);
@@ -563,16 +574,7 @@ export const subscriptionRouter = createRouter({
   // Tiers aren't stored: the amount Stripe charged tells them apart.
   currentTier: authedQuery.query(async ({ ctx }) => {
     if (!ctx.user) return { tier: null as Tier | null };
-    const db = getDb();
-    const mode = accountMode(ctx.user.modePreference);
-    const last = await db.select().from(subscriptionPayments)
-      .where(eq(subscriptionPayments.userId, Number(ctx.user.id)))
-      .orderBy(desc(subscriptionPayments.paidAt))
-      .limit(1);
-    const p = last[0];
-    if (!p || p.status !== "succeeded") return { tier: null as Tier | null };
-    const cents = Math.round(Number(p.amount) * 100);
-    return { tier: tierFromAmountCents(cents, p.plan as Plan, mode) };
+    return { tier: await lastPaidTier(getDb(), Number(ctx.user.id), accountMode(ctx.user.modePreference)) };
   }),
 
   // ── Get payment history ──
@@ -815,7 +817,9 @@ export const subscriptionRouter = createRouter({
         }
 
         // Get annual price and calculate difference: $800 - $1 already paid = $799
-        const annualPriceId = await getOrCreatePrice(stripe, "annual");
+        const mode = accountMode(ctx.user.modePreference);
+        const tier = (await lastPaidTier(db, userId, mode)) ?? defaultTier(mode);
+        const annualPriceId = await getOrCreatePrice(stripe, "annual", mode, tier);
         const annualPrice = await stripe.prices.retrieve(annualPriceId);
         const annualAmount = (annualPrice.unit_amount || 80000); // $800 in cents
         const monthlyAmount = 100; // $1 in cents (already paid)
