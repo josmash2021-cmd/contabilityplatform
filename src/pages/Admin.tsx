@@ -11,13 +11,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { formatCurrency } from "@/lib/utils";
 import { toast } from "sonner";
+import { useCopy } from "@/i18n/useI18n";
+import { taxesCopy } from "@/i18n/copy/taxes";
 import {
   Shield, Users, CreditCard, Ban, CheckCircle, Lock, Unlock,
   Gift, Search, DollarSign, UserX, UserCheck,
   Crown, Calendar, Trash2, AlertTriangle, Wrench,
   Download, ChevronLeft, ChevronRight, RefreshCw,
   Building2, ShoppingCart, TrendingUp,
-  Activity, Clock, UserMinus
+  Activity, Clock, UserMinus, Receipt
 } from "lucide-react";
 
 export default function Admin() {
@@ -43,6 +45,8 @@ export default function Admin() {
   );
   const { data: subscriptions, refetch: refetchSubs } = trpc.admin.listSubscriptions.useQuery(undefined, { enabled: isAdmin, ...live });
   const { data: maintenanceStatus, refetch: refetchMaintenance } = trpc.admin.maintenanceStatus.useQuery();
+  const taxT = useCopy(taxesCopy);
+  const { data: taxReturns } = trpc.tax.adminList.useQuery(undefined, { enabled: isAdmin });
 
   const users = usersData?.users ?? [];
   const pagination = usersData?.pagination;
@@ -237,6 +241,24 @@ export default function Admin() {
             <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-1.5 text-xs text-emerald-600">
               <TrendingUp className="w-3.5 h-3.5" />
               <span>Ver historial de pagos</span>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Impuestos (tax returns) */}
+        <Card onClick={() => navigate("/admin/impuestos")} className="group border-neutral-200/70 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer">
+          <CardContent className="p-5">
+            <div className="flex items-center justify-between">
+              <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
+                <Receipt className="w-5 h-5 text-amber-600" />
+              </div>
+              <ChevronRight className="w-4 h-4 text-neutral-300 transition-all group-hover:text-neutral-600 group-hover:translate-x-0.5" />
+            </div>
+            <p className="text-3xl font-bold text-black tracking-tight mt-4">{taxReturns?.length ?? 0}</p>
+            <p className="text-xs font-medium text-neutral-400 uppercase tracking-wide mt-1">{taxT.admin.title}</p>
+            <div className="mt-3 pt-3 border-t border-neutral-100 flex items-center gap-1.5 text-xs text-neutral-400">
+              <Receipt className="w-3.5 h-3.5" />
+              <span>{taxT.admin.subtitle}</span>
             </div>
           </CardContent>
         </Card>

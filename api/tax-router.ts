@@ -16,8 +16,9 @@ import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
-  canSend, currentTaxYear, isClientDocKind, missingToSend, type TaxMode,
-} from "./lib/taxRules";
+  canSend, currentTaxYear, isClientDocKind, missingToSend,
+  type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
+} from "@contracts/taxRules";
 
 type Db = ReturnType<typeof getDb>;
 type CtxUser = { id: number | string; role?: string | null; modePreference?: string | null; createdAt?: Date | string | null; name?: string | null };
@@ -111,7 +112,8 @@ export async function taxAccess(db: Db, user: CtxUser): Promise<{ allowed: boole
   if (getTrialInfo(user.createdAt)?.active) return { allowed: true };
   const userId = Number(user.id);
   if ((await lastPaidTier(db, userId, mode)) === "basic") return { allowed: false };
-  const sub = (await db.select().from(subscriptions).where(eq(subscriptions.userId, userId)).orderBy(desc(subscriptions.createdAt)).limit(1))[0];
+  const sub = (await db.select({ status: subscriptions.status, currentPeriodEnd: subscriptions.currentPeriodEnd }).from(subscriptions)
+    .where(eq(subscriptions.userId, userId)).orderBy(desc(subscriptions.createdAt)).limit(1))[0];
   const active = !!sub && (sub.status === "active" || sub.status === "trialing") && (!sub.currentPeriodEnd || new Date(sub.currentPeriodEnd) > new Date());
   return { allowed: active };
 }
@@ -168,12 +170,12 @@ function modeOf(user: CtxUser): TaxMode {
   return accountMode(user.modePreference);
 }
 
-async function findReturn(db: Db, userId: number, mode: TaxMode, year: number) {
+async function findReturn(db: Db, userId: number, mode: TaxMode, year: number): Promise<TaxReturnMeta | null> {
   return (await db.select(retMeta).from(taxReturns)
     .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), eq(taxReturns.taxYear, year))).limit(1))[0] ?? null;
 }
 
-async function getOrCreateReturn(db: Db, userId: number, mode: TaxMode, year: number) {
+async function getOrCreateReturn(db: Db, userId: number, mode: TaxMode, year: number): Promise<TaxReturnMeta> {
   const found = await findReturn(db, userId, mode, year);
   if (found) return found;
   await db.insert(taxReturns).values({ userId, mode, taxYear: year, state: "AL", step: DRAFT_STEP, stepDates: [], answers: {} })
@@ -186,6 +188,11 @@ async function filesByKind(db: Db, returnId: number): Promise<Record<string, num
   const rows = await db.select({ kind: taxDocuments.kind, n: sql<number>`count(*)` }).from(taxDocuments)
     .where(and(eq(taxDocuments.returnId, returnId), eq(taxDocuments.source, "client"))).groupBy(taxDocuments.kind);
   return Object.fromEntries(rows.map((r: { kind: string; n: number }) => [r.kind, Number(r.n)]));
+}
+
+/** Moves the return to the top of the preparer's list when the client does something. */
+async function touch(db: Db, returnId: number) {
+  await db.update(taxReturns).set({ updatedAt: new Date() }).where(eq(taxReturns.id, returnId));
 }
 
 function stepDatesWith(dates: (string | null)[] | null | undefined, step: number): (string | null)[] {
@@ -208,13 +215,13 @@ export const taxRouter = createRouter({
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
     const base = { access, mode, year, keyReady: hasTaxKey() };
-    if (!access.allowed) return { ...base, ret: null, docs: [], messages: [], past: [], missing: null };
+    if (!access.allowed) return { ...base, ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
     await ensureTaxTables(db);
     const userId = Number(ctx.user.id);
     const ret = await findReturn(db, userId, mode, year);
-    const docs = ret ? await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt) : [];
-    const messages = ret ? await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt) : [];
-    const past = await db.select(retMeta).from(taxReturns)
+    const docs: TaxDocMeta[] = ret ? await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt) : [];
+    const messages: TaxMessage[] = ret ? await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt) : [];
+    const past: TaxReturnMeta[] = await db.select(retMeta).from(taxReturns)
       .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), lt(taxReturns.taxYear, year))).orderBy(desc(taxReturns.taxYear));
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
@@ -225,9 +232,9 @@ export const taxRouter = createRouter({
   pastYear: authedQuery.input(z.object({ returnId: z.number().int().positive() })).query(async ({ ctx, input }) => {
     const db = getDb();
     await ensureTaxTables(db);
-    const ret = (await db.select(retMeta).from(taxReturns).where(and(eq(taxReturns.id, input.returnId), eq(taxReturns.userId, Number(ctx.user.id)))).limit(1))[0];
+    const ret: TaxReturnMeta | undefined = (await db.select(retMeta).from(taxReturns).where(and(eq(taxReturns.id, input.returnId), eq(taxReturns.userId, Number(ctx.user.id)))).limit(1))[0];
     if (!ret) throw new TRPCError({ code: "NOT_FOUND", message: msg(ctx.lang, "taxNotFound") });
-    const docs = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
+    const docs: TaxDocMeta[] = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
     return { ret, docs };
   }),
 
@@ -265,6 +272,7 @@ export const taxRouter = createRouter({
       await db.insert(taxDocuments).values({
         returnId: ret.id, userId, kind: input.kind, source: "client", fileName, mimeType: input.mimeType, size: buf.length, data: encryptTaxFile(buf),
       });
+      await touch(db, ret.id);
       return { ok: true };
     }),
 
@@ -317,6 +325,7 @@ export const taxRouter = createRouter({
     await ensureTaxTables(db);
     const ret = await getOrCreateReturn(db, Number(ctx.user.id), modeOf(ctx.user), currentTaxYear());
     await db.insert(taxMessages).values({ returnId: ret.id, fromRole: "client", authorName: ctx.user.name ?? null, body: input.body });
+    await touch(db, ret.id);
     return { ok: true };
   }),
 
@@ -336,7 +345,7 @@ export const taxRouter = createRouter({
   adminList: adminQuery.query(async () => {
     const db = getDb();
     await ensureTaxTables(db);
-    const rets = await db.select({ ...retMeta, name: users.name, email: users.email }).from(taxReturns)
+    const rets: (TaxReturnMeta & { name: string | null; email: string | null })[] = await db.select({ ...retMeta, name: users.name, email: users.email }).from(taxReturns)
       .leftJoin(users, eq(users.id, taxReturns.userId)).orderBy(desc(taxReturns.updatedAt));
     const ids = rets.map((r: { id: number }) => r.id);
     const pending = ids.length ? await db.select({ returnId: taxDocuments.returnId, n: sql<number>`count(*)` }).from(taxDocuments)
@@ -346,17 +355,17 @@ export const taxRouter = createRouter({
     type Count = { returnId: number; n: number };
     const pend = new Map<number, number>(pending.map((r: Count) => [r.returnId, Number(r.n)]));
     const unr = new Map<number, number>(unread.map((r: Count) => [r.returnId, Number(r.n)]));
-    return rets.map((r: (typeof rets)[number]) => ({ ...r, pendingDocs: pend.get(r.id) ?? 0, unreadMessages: unr.get(r.id) ?? 0 }));
+    return rets.map((r): TaxReturnRow => ({ ...r, pendingDocs: pend.get(r.id) ?? 0, unreadMessages: unr.get(r.id) ?? 0 }));
   }),
 
   adminGet: adminQuery.input(z.object({ returnId: z.number().int().positive() })).query(async ({ input }) => {
     const db = getDb();
     await ensureTaxTables(db);
-    const ret = (await db.select({ ...retMeta, name: users.name, email: users.email }).from(taxReturns)
+    const ret: (TaxReturnMeta & { name: string | null; email: string | null }) | undefined = (await db.select({ ...retMeta, name: users.name, email: users.email }).from(taxReturns)
       .leftJoin(users, eq(users.id, taxReturns.userId)).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
     if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
-    const docs = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
-    const messages = await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt);
+    const docs: TaxDocMeta[] = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
+    const messages: TaxMessage[] = await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt);
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
     return { ret, docs, messages, missing: missingToSend(ret.mode, ret.answers ?? {}, counts) };

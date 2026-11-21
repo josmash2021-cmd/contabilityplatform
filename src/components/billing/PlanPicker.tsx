@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Check, Loader2 } from "lucide-react";
+import { Link } from "react-router";
+import { ArrowRight, Check, Loader2 } from "lucide-react";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
 import { billingCopy } from "@/i18n/copy/billing";
@@ -100,7 +101,15 @@ export function PlanPicker({ mode, onPick, pendingTier = null, initialBilling = 
               </p>
 
               {plan.free ? (
-                <p className="mt-5 rounded-xl bg-slate-50 px-4 py-3 text-sm text-slate-600 ring-1 ring-slate-200">{g.freeStays}</p>
+                <div className="mt-5 grid gap-2">
+                  <Link
+                    to="/personal/taxes"
+                    className="inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-white text-sm font-semibold text-slate-900 ring-1 ring-slate-300 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                  >
+                    {g.goTaxes} <ArrowRight className="h-4 w-4" />
+                  </Link>
+                  <p className="text-center text-xs text-slate-500">{g.freeStays}</p>
+                </div>
               ) : (
                 <button
                   type="button"

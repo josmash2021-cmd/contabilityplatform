@@ -96,3 +96,47 @@ export function missingToSend(mode: TaxMode, answers: Answers, filesByKind: Reco
 export function canSend(m: Missing): boolean {
   return m.questions.length === 0 && m.docs.length === 0 && !m.income;
 }
+
+// ── What the tax endpoints return (shared with the client) ──
+export type TaxResult = { kind: "refund" | "owe"; amount: number } | null;
+
+export type TaxReturnMeta = {
+  id: number;
+  userId: number;
+  taxYear: number;
+  mode: TaxMode;
+  state: string;
+  step: number;
+  stepDates: (string | null)[] | null;
+  answers: Record<string, boolean | null> | null;
+  filingStatus: string | null;
+  fedResult: TaxResult;
+  stateResult: TaxResult;
+  submittedAt: Date | null;
+  updatedAt: Date;
+};
+
+export type TaxDocMeta = {
+  id: number;
+  kind: string;
+  source: "client" | "preparer";
+  fileName: string;
+  mimeType: string;
+  size: number;
+  status: "pending" | "ok" | "redo";
+  note: string | null;
+  createdAt: Date;
+};
+
+export type TaxMessage = {
+  id: number;
+  returnId: number;
+  fromRole: "client" | "preparer";
+  authorName: string | null;
+  body: string;
+  readAt: Date | null;
+  createdAt: Date;
+};
+
+/** A return in the preparer's list, with who it belongs to and what needs attention. */
+export type TaxReturnRow = TaxReturnMeta & { name: string | null; email: string | null; pendingDocs: number; unreadMessages: number };

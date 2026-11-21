@@ -33,7 +33,8 @@ const es = {
     termsPost: ".",
     choose: (name: string) => `Elegir ${name}`,
     chosen: "Elegiste este plan",
-    freeStays: "Tu cuenta gratis se queda contigo. Impuestos llega muy pronto y te avisaremos.",
+    freeStays: "Tu cuenta gratis se queda contigo, con Impuestos incluido.",
+    goTaxes: "Ir a Impuestos",
     business: {
       monthly: {
         subtitle: "Suscripción Premium",
@@ -352,7 +353,8 @@ const en: BillingCopy = {
     termsPost: ".",
     choose: (name: string) => `Choose ${name}`,
     chosen: "You picked this plan",
-    freeStays: "Your free account stays with you. Taxes is coming very soon and we'll let you know.",
+    freeStays: "Your free account stays with you, with Taxes included.",
+    goTaxes: "Go to Taxes",
     business: {
       monthly: {
         subtitle: "Premium subscription",

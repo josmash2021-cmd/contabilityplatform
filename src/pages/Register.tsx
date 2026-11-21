@@ -45,7 +45,8 @@ export default function Register() {
         }
         localStorage.setItem("auth_user", JSON.stringify(data.user));
         toast.success(t.created);
-        window.location.href = "/personal";
+        // Picked the free Básico (taxes) on the landing page: start there.
+        window.location.href = params.get("plan") === "personal" ? "/personal/taxes" : "/personal";
       } else {
         toast.error(data.error || t.error);
       }

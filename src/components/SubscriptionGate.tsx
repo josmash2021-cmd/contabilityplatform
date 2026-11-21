@@ -207,7 +207,8 @@ export function SubscriptionPageGate({ children }: { children: React.ReactNode }
     );
   }
 
-  if (userMode === "personal" && currentPath !== "/settings") {
+  // Personal Básico is free and includes Impuestos: never blocked.
+  if (userMode === "personal" && currentPath !== "/settings" && currentPath !== "/personal/taxes") {
     return (
       <>
         <div className="relative">{children}</div>

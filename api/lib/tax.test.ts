@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { decryptTaxFile, encryptTaxFile, TaxKeyMissingError } from "./taxCrypto";
-import { canSend, currentTaxYear, isClientDocKind, missingToSend, shownDocKinds } from "./taxRules";
+import { canSend, currentTaxYear, isClientDocKind, missingToSend, shownDocKinds } from "@contracts/taxRules";
 import { sniffTaxFile } from "../tax-router";
 
 const KEY = randomBytes(32).toString("base64");

@@ -60,6 +60,8 @@ const Diagnostico = lazyPage(() => import("@/pages/Diagnostico"));
 const Admin = lazyPage(() => import("@/pages/Admin"));
 const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
 const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
+const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
+const Taxes = lazyPage(() => import("@/pages/Taxes"));
 
 function PageLoader() {
   return (
@@ -124,6 +126,7 @@ export default function App() {
           <Route path="/bank/category/:category" element={<BankCategoryDetail />} />
           <Route path="/bank/transactions" element={<BankTransactions />} />
           <Route path="/reports" element={<Reports />} />
+          <Route path="/taxes" element={<Taxes />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
@@ -131,6 +134,8 @@ export default function App() {
           <Route path="/admin/bloqueados" element={<AdminDetail section="blocked" />} />
           <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
           <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
+          <Route path="/admin/impuestos" element={<AdminTaxes />} />
+          <Route path="/admin/impuestos/:id" element={<AdminTaxes />} />
           {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
           <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
           <Route path="/personal/bank" element={<PersonalBank />} />
@@ -138,6 +143,8 @@ export default function App() {
           <Route path="/personal/goals" element={<PersonalBankGate><PersonalGoals /></PersonalBankGate>} />
           <Route path="/personal/subscriptions" element={<PersonalBankGate><PersonalSubscriptions /></PersonalBankGate>} />
           <Route path="/personal/category/:category" element={<PersonalBankGate><PersonalCategoryDetail /></PersonalBankGate>} />
+          {/* Impuestos: no bank needed (personal Básico is free and only has taxes) */}
+          <Route path="/personal/taxes" element={<Taxes />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

@@ -145,13 +145,12 @@ const es = {
       personal: {
         name: "Básico",
         tagline: "Tus impuestos, sin complicaciones.",
-        features: [] as string[],
-        soon: [
+        features: [
           "Impuestos: sube tus documentos desde el teléfono",
           "Tu preparador y el seguimiento de tu declaración, federal y estatal",
           "Tus declaraciones de años pasados, siempre a la mano",
-          "Asistente de inteligencia artificial · límite x5",
         ],
+        soon: ["Asistente de inteligencia artificial · límite x5"],
         lead: "",
         note: "",
       },
@@ -192,9 +191,9 @@ const es = {
           "Hasta 3 bancos conectados, con movimientos automáticos",
           "Reporte de ingresos, gastos y utilidad",
           "Panel de ventas del día, la semana y el mes",
+          "Impuestos de tu negocio: documentos, preparador y seguimiento de tu declaración",
         ],
         soon: [
-          "Impuestos de tu negocio: documentos, preparador y seguimiento de tu declaración",
           "Asistente de inteligencia artificial · límite x10",
           "Proveedores y facturas por pagar",
           "Cotizaciones y facturas recurrentes",
@@ -528,13 +527,12 @@ const en: MarketingCopy = {
       personal: {
         name: "Basic",
         tagline: "Your taxes, without the hassle.",
-        features: [] as string[],
-        soon: [
+        features: [
           "Taxes: upload your documents from your phone",
           "Your tax preparer and your return's progress, federal and state",
           "Your past years' returns, always at hand",
-          "Artificial intelligence assistant · limit x5",
         ],
+        soon: ["Artificial intelligence assistant · limit x5"],
         lead: "",
         note: "",
       },
@@ -575,9 +573,9 @@ const en: MarketingCopy = {
           "Up to 3 connected banks, with automatic transactions",
           "Income, expense and profit report",
           "Daily, weekly and monthly sales dashboard",
+          "Your business taxes: documents, tax preparer and your return's progress",
         ],
         soon: [
-          "Your business taxes: documents, tax preparer and your return's progress",
           "Artificial intelligence assistant · limit x10",
           "Vendors and bills to pay",
           "Quotes and recurring invoices",
