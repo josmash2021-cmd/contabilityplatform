@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { createRouter, adminQuery, publicQuery } from "./middleware";
 import { getDb } from "./queries/connection";
+import { deleteUserTaxData } from "./tax-router";
 import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 
@@ -213,6 +214,8 @@ export const adminRouter = createRouter({
       }
 
       try {
+        // Tax documents (IDs, Social Security) go first: their tables have no cascade.
+        await deleteUserTaxData(db, input.userId);
         await db.delete(users).where(eq(users.id, input.userId));
         return { success: true, message: `Usuario ${targetUser.name || targetUser.email} eliminado` };
       } catch (e: any) {

@@ -13,6 +13,8 @@ import {
   time,
   index,
   uniqueIndex,
+  json,
+  customType,
   type AnyMySqlColumn,
 } from "drizzle-orm/mysql-core";
 
@@ -623,3 +625,65 @@ export const payouts = mysqlTable("payouts", {
 
 export type Payout = typeof payouts.$inferSelect;
 export type InsertPayout = typeof payouts.$inferInsert;
+
+// ─── Impuestos (tax returns prepared by our team: federal + Alabama) ───
+// Created with CREATE TABLE IF NOT EXISTS in api/tax-router.ts (ensureTaxTables).
+
+/** Encrypted file bytes (see api/lib/taxCrypto.ts). */
+const longblob = customType<{ data: Buffer; driverData: Buffer }>({
+  dataType() {
+    return "longblob";
+  },
+});
+
+export const taxReturns = mysqlTable("taxReturns", {
+  id: serial("id").primaryKey(),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  taxYear: int("taxYear").notNull(),
+  mode: mysqlEnum("mode", ["business", "personal"]).notNull(),
+  state: varchar("state", { length: 2 }).default("AL").notNull(),
+  /** -1 = still gathering documents; 0..7 = the steps the client sees. */
+  step: int("step").default(-1).notNull(),
+  /** ISO date for each step reached, by index. */
+  stepDates: json("stepDates").$type<(string | null)[]>(),
+  answers: json("answers").$type<Record<string, boolean | null>>(),
+  filingStatus: varchar("filingStatus", { length: 40 }),
+  /** { kind: "refund" | "owe", amount } for the federal and the state return. */
+  fedResult: json("fedResult").$type<{ kind: "refund" | "owe"; amount: number } | null>(),
+  stateResult: json("stateResult").$type<{ kind: "refund" | "owe"; amount: number } | null>(),
+  consentAt: timestamp("consentAt"),
+  submittedAt: timestamp("submittedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().notNull().$onUpdate(() => new Date()),
+}, (table) => [
+  uniqueIndex("taxReturns_user_year_mode").on(table.userId, table.taxYear, table.mode),
+]);
+
+export const taxDocuments = mysqlTable("taxDocuments", {
+  id: serial("id").primaryKey(),
+  returnId: bigint("returnId", { mode: "number", unsigned: true }).notNull().references(() => taxReturns.id, { onDelete: "cascade" }),
+  userId: bigint("userId", { mode: "number", unsigned: true }).notNull().references(() => users.id, { onDelete: "cascade" }),
+  kind: varchar("kind", { length: 30 }).notNull(),
+  source: mysqlEnum("source", ["client", "preparer"]).default("client").notNull(),
+  fileName: varchar("fileName", { length: 255 }).notNull(),
+  mimeType: varchar("mimeType", { length: 100 }).notNull(),
+  size: int("size").notNull(),
+  data: longblob("data").notNull(),
+  status: mysqlEnum("status", ["pending", "ok", "redo"]).default("pending").notNull(),
+  note: text("note"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("taxDocuments_returnId_idx").on(table.returnId),
+]);
+
+export const taxMessages = mysqlTable("taxMessages", {
+  id: serial("id").primaryKey(),
+  returnId: bigint("returnId", { mode: "number", unsigned: true }).notNull().references(() => taxReturns.id, { onDelete: "cascade" }),
+  fromRole: mysqlEnum("fromRole", ["client", "preparer"]).notNull(),
+  authorName: varchar("authorName", { length: 255 }),
+  body: text("body").notNull(),
+  readAt: timestamp("readAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+}, (table) => [
+  index("taxMessages_returnId_idx").on(table.returnId),
+]);

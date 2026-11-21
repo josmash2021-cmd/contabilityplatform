@@ -116,3 +116,40 @@ describe("logout", () => {
     expect(resHeaders.get("set-cookie")).toMatch(/local_auth_token=;.*Max-Age=0/);
   });
 });
+
+describe("Impuestos: preparer endpoints are admin only", () => {
+  const preparer: Array<[string, (c: Caller) => Promise<unknown>]> = [
+    ["tax.adminList", (c) => c.tax.adminList()],
+    ["tax.adminGet", (c) => c.tax.adminGet({ returnId: 1 })],
+    ["tax.adminSetDoc", (c) => c.tax.adminSetDoc({ docId: 1, status: "ok" })],
+    ["tax.adminSetStep", (c) => c.tax.adminSetStep({ returnId: 1, step: 2 })],
+    ["tax.adminSetResults", (c) => c.tax.adminSetResults({ returnId: 1, fed: { kind: "refund", amount: 100 } })],
+    ["tax.adminUpload", (c) => c.tax.adminUpload({ returnId: 1, kind: "final_fed", fileName: "1040.pdf", mimeType: "application/pdf", dataBase64: "JVBERi0xLjQK" })],
+    ["tax.adminDeleteDoc", (c) => c.tax.adminDeleteDoc({ docId: 1 })],
+    ["tax.adminSendMessage", (c) => c.tax.adminSendMessage({ returnId: 1, body: "hola" })],
+    ["tax.adminMarkRead", (c) => c.tax.adminMarkRead({ returnId: 1 })],
+  ];
+  for (const [name, call] of preparer) {
+    it(`${name} rejects a regular user`, async () => {
+      expect(await trpcCode(call(makeCaller(regularUser)))).toBe("FORBIDDEN");
+    });
+  }
+  it("tax.current needs a session", async () => {
+    expect(await trpcCode(makeCaller().tax.current())).toBe("UNAUTHORIZED");
+  });
+});
+
+describe("Impuestos: uploads are validated before anything is stored", () => {
+  const pdf = Buffer.from("%PDF-1.4 test").toString("base64");
+  it("rejects a file type we don't take (e.g. HTML)", async () => {
+    const code = await trpcCode(makeCaller(regularUser).tax.upload({ kind: "w2", fileName: "x.html", mimeType: "text/html", dataBase64: pdf }));
+    expect(code).toBe("BAD_REQUEST");
+  });
+  it("rejects a file larger than 10 MB", async () => {
+    const big = "A".repeat(Math.ceil((10 * 1024 * 1024 * 4) / 3) + 100);
+    expect(await trpcCode(makeCaller(regularUser).tax.upload({ kind: "w2", fileName: "big.pdf", mimeType: "application/pdf", dataBase64: big }))).toBe("BAD_REQUEST");
+  });
+  it("submit requires both checkboxes", async () => {
+    expect(await trpcCode(makeCaller(regularUser).tax.submit({ consent: true, terms: false }))).toBe("BAD_REQUEST");
+  });
+});
