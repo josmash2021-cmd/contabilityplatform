@@ -18,6 +18,10 @@ import { setupRouter } from "./setup-router";
 import { adminRouter } from "./admin-router";
 import { taxRouter } from "./tax-router";
 import { assistantRouter } from "./assistant-router";
+import { receiptsRouter } from "./receipts-router";
+import { vendorsRouter } from "./vendors-router";
+import { quotesRouter } from "./quotes-router";
+import { accountantRouter } from "./accountant-router";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales } from "@db/schema";
@@ -45,6 +49,10 @@ export const appRouter = createRouter({
   admin: adminRouter,
   tax: taxRouter,
   assistant: assistantRouter,
+  receipts: receiptsRouter,
+  vendors: vendorsRouter,
+  quotes: quotesRouter,
+  accountant: accountantRouter,
   debug: createRouter({
     myData: authedQuery.query(async ({ ctx }) => {
       const db = getDb();

@@ -16,7 +16,7 @@ import {
   LayoutDashboard, ShoppingCart, Wrench as WrenchIcon, Users, Receipt,
   Landmark, BarChart3, Settings, Menu, LogOut,
   Target, ArrowLeftRight, User, Tv, Shield,
-  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles,
+  AlertTriangle, Construction, Gift, Loader2, FileText, Sparkles, Camera, Truck, ClipboardList, BookOpen,
 } from "lucide-react";
 
 /** Shown at the top of the app while the user is on the free trial. */
@@ -49,7 +49,11 @@ const businessNav = [
   { path: "/transactions", label: "Transacciones", icon: Receipt },
   { path: "/bank", label: "Banco", icon: Landmark },
   { path: "/reports", label: "Reportes", icon: BarChart3 },
+  { path: "/receipts", label: "Recibos", icon: Camera },
+  { path: "/vendors", label: "Proveedores", icon: Truck },
+  { path: "/quotes", label: "Cotizaciones", icon: ClipboardList },
   { path: "/taxes", label: "Impuestos", icon: FileText },
+  { path: "/accountant", label: "Contador", icon: BookOpen },
   { path: "/assistant", label: "Asistente", icon: Sparkles },
   { path: "/settings", label: "Ajustes", icon: Settings },
 ];

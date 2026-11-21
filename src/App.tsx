@@ -63,6 +63,10 @@ const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
 const Taxes = lazyPage(() => import("@/pages/Taxes"));
 const Assistant = lazyPage(() => import("@/pages/Assistant"));
+const Receipts = lazyPage(() => import("@/pages/Receipts"));
+const Vendors = lazyPage(() => import("@/pages/Vendors"));
+const Quotes = lazyPage(() => import("@/pages/Quotes"));
+const Accountant = lazyPage(() => import("@/pages/Accountant"));
 
 function PageLoader() {
   return (
@@ -129,6 +133,10 @@ export default function App() {
           <Route path="/reports" element={<Reports />} />
           <Route path="/taxes" element={<Taxes />} />
           <Route path="/assistant" element={<Assistant />} />
+          <Route path="/receipts" element={<Receipts />} />
+          <Route path="/vendors" element={<Vendors />} />
+          <Route path="/quotes" element={<Quotes />} />
+          <Route path="/accountant" element={<Accountant />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/admin" element={<Admin />} />
           <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
