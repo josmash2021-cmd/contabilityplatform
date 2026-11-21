@@ -1,41 +1,48 @@
-import { useState, useMemo } from "react";
-import { trpc } from "@/providers/trpc";
-import { formatCurrency } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { useMemo, useState } from "react";
+import { Calculator, ChevronUp, Eye } from "lucide-react";
 import { toast } from "sonner";
-import {
-  Minus, Plus, Trash2, Search, User, X, Check, Banknote, Smartphone, Receipt,
-  Package, ChevronDown
-} from "lucide-react";
+import { trpc } from "@/providers/trpc";
 import { AnimatedPage } from "@/components/AnimatedPage";
-import { useCopy } from "@/i18n/useI18n";
-import { businessCopy } from "@/i18n/copy/business";
+import { useCopy, useLang } from "@/i18n/useI18n";
+import { intlLocale } from "@/i18n/lang";
+import { cobrarCopy } from "@/i18n/copy/cobrar";
+import { ServicePicker } from "@/components/pos/ServicePicker";
+import { CartBody, CartEmpty, CartLines, CartSummary, ChargeButton, type CartProps } from "@/components/pos/CartPanel";
+import { ClientPicker } from "@/components/pos/ClientPicker";
+import { AmountPad } from "@/components/pos/AmountPad";
+import { PosSheet } from "@/components/pos/PosSheet";
+import { SaleDone, type Company } from "@/components/pos/SaleDone";
+import {
+  SERVER_CUSTOM_SERVICE, money, norm, num,
+  type CartItem, type DoneSale, type PadMode, type PayMethod, type ServiceRow,
+} from "@/components/pos/posTypes";
 
-interface CartItem {
-  id: string;
-  serviceId?: number;
-  name: string;
-  price: number;
-  quantity: number;
-  isCustom?: boolean;
-}
-
-// Labels come from businessCopy.paymentMethods (keyed by id).
-const PAYMENT_METHODS = [
-  { id: "cash" as const, icon: Banknote },
-  { id: "zelle" as const, icon: Smartphone },
-  { id: "card" as const, icon: Receipt },
-];
-
+/** Cobrar 2.0: pick what was sold, check the running sale, choose how they pay, charge. */
 export default function POS() {
-  const { pos: t, common } = useCopy(businessCopy);
-  const { data: servicesList } = trpc.services.list.useQuery();
-  const { data: customers } = trpc.customers.list.useQuery({ type: "all" });
-  const { data: settings } = trpc.settings.get.useQuery();
+  const copy = useCopy(cobrarCopy);
+  const t = copy.pos;
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
   const utils = trpc.useUtils();
+
+  const services = trpc.services.list.useQuery();
+  const { data: settings } = trpc.settings.get.useQuery();
+  // Team role (same cached query as the menu): an employee can't open Servicios or Ajustes; the accountant only reads.
+  const { data: membership } = trpc.team.myMembership.useQuery(undefined, { staleTime: 60_000 });
+  const canManage = !membership;
+  const readOnly = membership?.role === "accountant";
+
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [client, setClient] = useState<{ id: number; name: string } | undefined>();
+  const [discount, setDiscount] = useState("0");
+  const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
+  const [payment, setPayment] = useState<PayMethod>("cash");
+  const [search, setSearch] = useState("");
+  const [cartOpen, setCartOpen] = useState(false);
+  const [clientOpen, setClientOpen] = useState(false);
+  const [pad, setPad] = useState<PadMode | null>(null);
+  const [padKey, setPadKey] = useState(0);
+  const [done, setDone] = useState<DoneSale | null>(null);
 
   const createSale = trpc.sales.create.useMutation({
     onSuccess: () => {
@@ -43,113 +50,78 @@ export default function POS() {
       utils.dashboard.summary.invalidate();
       toast.success(t.saleRecorded);
       setCart([]);
-      setSelectedCustomer(undefined);
-      setSelectedService(null);
-      setAmount("0");
+      setClient(undefined);
       setDiscount("0");
-      setShowPayment(false);
-      setShowZellePanel(false);
+      setCartOpen(false);
     },
     onError: (err) => toast.error(err.message),
   });
 
-  const [cart, setCart] = useState<CartItem[]>([]);
-  const [amount, setAmount] = useState("0");
-  const [selectedCustomer, setSelectedCustomer] = useState<number | undefined>();
-  const [selectedService, setSelectedService] = useState<any>(null);
-  const [activePayment, setActivePayment] = useState("cash");
-  const [showPayment, setShowPayment] = useState(false);
-  const [discount, setDiscount] = useState("0");
-  const [showCart, setShowCart] = useState(false);
-  const [showZellePanel, setShowZellePanel] = useState(false);
-  const [discountType, setDiscountType] = useState<"fixed" | "percentage">("fixed");
-  const [serviceDialogOpen, setServiceDialogOpen] = useState(false);
-  const [serviceSearch, setServiceSearch] = useState("");
-  const [leftPanel, setLeftPanel] = useState<"none" | "services" | "customers">("services");
-  const [mobilePanel, setMobilePanel] = useState<"none" | "services" | "customers">("none");
+  // Active services, minus the server's own catch-all for custom charges ("Monto libre" covers that).
+  const all = useMemo(
+    () => ((services.data ?? []) as ServiceRow[]).filter((s) => !!s.isActive && !(s.name === SERVER_CUSTOM_SERVICE && num(s.price) === 0)),
+    [services.data],
+  );
+  const shown = useMemo(() => {
+    const q = norm(search.trim());
+    return q ? all.filter((s) => norm(s.name || "").includes(q)) : all;
+  }, [all, search]);
+  const qtyById = useMemo(() => {
+    const m = new Map<number, number>();
+    for (const i of cart) if (i.serviceId && !i.isCustom) m.set(i.serviceId, (m.get(i.serviceId) ?? 0) + i.quantity);
+    return m;
+  }, [cart]);
 
-  const selectedCustomerData = customers?.find((c: NonNullable<typeof customers>[0]) => c.id === selectedCustomer);
-
-  const filteredServices = useMemo(() => {
-    return (servicesList ?? []).filter((s: NonNullable<typeof servicesList>[0]) =>
-      s.name.toLowerCase().includes(serviceSearch.toLowerCase()) && s.isActive
-    );
-  }, [servicesList, serviceSearch]);
-
-  const appendDigit = (digit: string) => {
-    setAmount((prev) => {
-      if (digit === ".") {
-        if (prev.includes(".")) return prev;
-        return prev + ".";
-      }
-      if (prev === "0") return digit;
-      const decPart = prev.split(".")[1];
-      if (decPart && decPart.length >= 2) return prev;
-      if (prev.replace(/[^0-9]/g, "").length >= 8 && !prev.includes(".")) return prev;
-      return prev + digit;
-    });
-  };
-
-  const backspace = () => {
-    setAmount((prev) => (prev.length <= 1 ? "0" : prev.slice(0, -1)));
-  };
-
-  const selectService = (service: any) => {
-    setSelectedService(service);
-    setAmount(String(service.price ?? "0"));
-    setServiceDialogOpen(false);
-    setServiceSearch("");
-    setLeftPanel("none");
-    setMobilePanel("none");
-  };
-
-  const selectCustomer = (id: number) => {
-    setSelectedCustomer(id);
-    setLeftPanel("none");
-    setMobilePanel("none");
-  };
-
-  const clearService = () => {
-    setSelectedService(null);
-    setAmount("0");
-  };
-
-  const addToCart = () => {
-    const price = parseFloat(amount);
-    if (Number.isNaN(price) || price <= 0) {
-      toast.error(t.invalidAmount);
-      return false;
-    }
-    const item: CartItem = {
-      id: crypto.randomUUID(),
-      serviceId: selectedService?.id,
-      name: selectedService?.name || t.customCharge,
-      price,
-      quantity: 1,
-      isCustom: !selectedService,
-    };
-    setCart((prev) => [...prev, item]);
-    setAmount("0");
-    setSelectedService(null);
-    return true;
-  };
-
-  const updateQty = (id: string, d: number) => {
-    setCart((prev) => prev.map((i) => i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i).filter((i) => i.quantity > 0));
-  };
-
+  // Same math as before the redesign.
   const subtotal = cart.reduce((s, i) => s + i.price * i.quantity, 0);
   const discountRaw = parseFloat(discount) || 0;
   const discountAmt = discountType === "percentage" ? Math.min(subtotal * (discountRaw / 100), subtotal) : Math.min(discountRaw, subtotal);
   const total = Math.max(0, subtotal - discountAmt);
+  const count = cart.reduce((a, i) => a + i.quantity, 0);
+  const zelleEmail = settings?.zelleEmail || null;
 
-  const companyZelleEmail = settings?.zelleEmail || t.notConfigured;
-  const hasCompanyZelle = !!settings?.zelleEmail;
+  const addLine = (item: Omit<CartItem, "id" | "quantity">) => {
+    setCart((prev) => {
+      // Tapping the same service at the same price again adds one more.
+      const same = !item.isCustom && prev.find((i) => !i.isCustom && i.serviceId === item.serviceId && i.price === item.price);
+      if (same) return prev.map((i) => (i === same ? { ...i, quantity: i.quantity + 1 } : i));
+      return [...prev, { ...item, id: crypto.randomUUID(), quantity: 1 }];
+    });
+  };
 
-  const handleSale = (method: string) => {
+  const openPad = (mode: PadMode) => { setPadKey((k) => k + 1); setPad(mode); };
+
+  const pick = (s: ServiceRow) => {
+    const price = num(s.price);
+    if (price > 0) addLine({ serviceId: s.id, name: s.name, price, isCustom: false });
+    else openPad({ kind: "service", service: s }); // no set price: ask how much
+  };
+
+  const onPad = (mode: PadMode, amount: number, label: string) => {
+    if (!(amount > 0)) { toast.error(t.invalidAmount); return; }
+    if (mode.kind === "free") addLine({ name: label || t.customCharge, price: amount, isCustom: true });
+    else if (mode.kind === "service") addLine({ serviceId: mode.service.id, name: mode.service.name, price: amount, isCustom: false });
+    else setCart((prev) => prev.map((i) => (i.id === mode.lineId ? { ...i, price: amount } : i)));
+    setPad(null);
+  };
+
+  const updateQty = (id: string, d: number) => {
+    setCart((prev) => prev.map((i) => (i.id === id ? { ...i, quantity: Math.max(0, i.quantity + d) } : i)).filter((i) => i.quantity > 0));
+  };
+
+  const charge = () => {
+    if (cart.length === 0) { toast.error(t.emptyCart); return; }
+    if (readOnly || (payment === "zelle" && !zelleEmail)) return;
+    const snapshot = {
+      method: payment,
+      customerName: client?.name,
+      items: cart.map((i) => ({ name: i.name, quantity: i.quantity, price: i.price })),
+      subtotal, discount: discountAmt, total,
+    };
+    // Same input as before the redesign.
     createSale.mutate({
-      customerId: selectedCustomer,
-      customerName: selectedCustomerData ? `${selectedCustomerData.name} ${selectedCustomerData.lastName || ""}`.trim() : undefined,
+      customerId: client?.id,
+      customerName: client?.name || undefined,
       items: cart.map((i) => ({
         serviceId: i.serviceId,
         serviceName: i.isCustom ? i.name : undefined,
@@ -159,479 +131,116 @@ export default function POS() {
       subtotal: String(subtotal.toFixed(2)),
       discount: String(discountAmt.toFixed(2)),
       total: String(total.toFixed(2)),
-      paymentMethod: method as "cash" | "zelle" | "card" | "mixed",
+      paymentMethod: payment,
+    }, {
+      onSuccess: (res) => setDone({ ...snapshot, id: res.id, invoiceNumber: res.invoiceNumber, at: new Date().toISOString() }),
     });
   };
 
-  const handleCheckout = () => {
-    if (cart.length === 0) { toast.error(t.emptyCart); return; }
-    handleSale(activePayment);
-  };
+  const company: Company = useMemo(() => {
+    const s = settings;
+    const addr = [s?.address, s?.unitNumber].filter(Boolean).join(", ");
+    const cityLine = [s?.city, [s?.state, s?.zipCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+    return { name: s?.companyName || "", lines: [addr, cityLine, s?.phone || ""].filter(Boolean) };
+  }, [settings]);
 
-  const handleZelleConfirm = () => {
-    handleSale("zelle");
+  const cartProps: CartProps = {
+    cart, onQty: updateQty, onRemove: (id) => updateQty(id, -Infinity),
+    onEditPrice: (i) => openPad({ kind: "price", lineId: i.id, name: i.name, price: i.price }),
+    client, onPickClient: () => setClientOpen(true), onClearClient: () => setClient(undefined),
+    discount, onDiscount: setDiscount, discountType, onDiscountType: setDiscountType,
+    subtotal, discountAmt, total, payment, onPayment: setPayment,
+    zelleEmail, canManage, methods: copy.methods, t,
   };
-
-  const handleCobrarClick = () => {
-    if (cart.length === 0) {
-      if (addToCart()) {
-        setShowPayment(true);
-      }
-    } else {
-      setShowPayment(true);
-    }
-  };
-
-  const handleAddAnother = () => {
-    addToCart();
-  };
-
-  const numericValue = parseFloat(amount) || 0;
+  const chargeDisabled = cart.length === 0 || readOnly || (payment === "zelle" && !zelleEmail);
+  const chargeBtn = <ChargeButton total={total} payment={payment} disabled={chargeDisabled} pending={createSale.isPending} onCharge={charge} t={t} />;
+  const showBar = !done && cart.length > 0;
 
   return (
-    <div className="h-[calc(100dvh-3.5rem)] lg:h-full flex flex-col lg:flex-row bg-white lg:pr-[380px]">
-      {/* Mobile calculator */}
-      <div className="lg:hidden flex-1 min-h-0 p-1.5">
-        <AnimatedPage delay={100} className="w-full h-full">
-          <div className="max-w-md mx-auto h-full flex flex-col">
-            {/* Amount display */}
-            <div className="shrink-0 py-1.5 mb-1 text-center bg-neutral-50 rounded-xl border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-0.5">{t.amountToCharge}</p>
-              <p className="text-3xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
+    <>
+      <AnimatedPage className="p-4 lg:p-8">
+        <div className="mx-auto max-w-6xl space-y-5">
+          <header className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h1 className="text-2xl font-bold tracking-tight text-slate-900">{t.title}</h1>
+              <p className="mt-0.5 text-sm text-slate-500">{t.sub}</p>
             </div>
-
-            {/* Selected badges */}
-            {(selectedService || selectedCustomerData) && (
-              <div className="shrink-0 flex flex-wrap items-center justify-center gap-1 mb-1">
-                {selectedService && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-black text-white px-2 py-0.5 rounded-full">
-                    <Package className="w-2.5 h-2.5" /> {selectedService.name}
-                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-2.5 h-2.5" /></button>
-                  </span>
-                )}
-                {selectedCustomerData && (
-                  <span className="inline-flex items-center gap-1 text-[10px] bg-neutral-100 text-black px-2 py-0.5 rounded-full">
-                    <User className="w-2.5 h-2.5" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
-                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-2.5 h-2.5" /></button>
-                  </span>
-                )}
-              </div>
+            {!done && (
+              <button onClick={() => openPad({ kind: "free" })} className="inline-flex h-10 items-center gap-2 rounded-[10px] border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                <Calculator className="h-4 w-4" aria-hidden />{t.freeAmount}
+              </button>
             )}
+          </header>
 
-            {/* Action buttons */}
-            <div className="shrink-0 grid grid-cols-2 gap-2 mb-2">
-              <button
-                onClick={() => setMobilePanel("services")}
-                className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
-              >
-                <Package className="w-4 h-4" /> {t.serviceProduct}
-              </button>
-              <button
-                onClick={() => setMobilePanel("customers")}
-                className="flex items-center justify-center gap-2 p-2.5 rounded-lg border border-neutral-200 hover:border-black hover:bg-neutral-50 transition-colors text-xs font-medium text-black"
-              >
-                <User className="w-4 h-4" /> {t.customer}
-              </button>
-            </div>
+          {readOnly && (
+            <p className="flex items-start gap-2 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-900 ring-1 ring-amber-200">
+              <Eye className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" aria-hidden />{t.readOnly}
+            </p>
+          )}
 
-            {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-0.5 mb-2">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                <button
-                  key={digit}
-                  onClick={() => appendDigit(digit)}
-                  className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
-                >
-                  {digit}
-                </button>
-              ))}
-              <button onClick={backspace} className="h-full rounded-xl bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center">
-                <X className="w-6 h-6" />
-              </button>
-              <button onClick={() => appendDigit("0")} className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">0</button>
-              <button onClick={() => appendDigit(".")} className="h-full rounded-xl bg-white border border-neutral-200 text-3xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">.</button>
-            </div>
-
-            {/* Bottom row */}
-            <div className="shrink-0 grid grid-cols-2 gap-2">
-              <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-11 rounded-xl border-neutral-200 text-black text-sm font-medium hover:bg-neutral-50 disabled:opacity-50">
-                <Plus className="w-4 h-4 mr-1" /> {t.add}
-              </Button>
-              <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-11 rounded-xl bg-black hover:bg-neutral-800 text-white text-sm font-medium disabled:opacity-50">
-                {t.charge}
-              </Button>
-            </div>
-
-            {/* Mobile cart preview */}
-            <div className="shrink-0 mt-1">
-              {cart.length > 0 && (
-                <div className="flex items-center justify-between bg-neutral-50 border border-neutral-200 rounded-lg px-3 py-1.5">
-                  <button onClick={() => setShowCart(!showCart)} className="text-xs font-medium text-black flex items-center gap-1">
-                    {t.itemsToggle(cart.length)} <ChevronDown className={`w-3 h-3 transition-transform ${showCart ? "rotate-180" : ""}`} />
-                  </button>
-                  <span className="text-sm font-bold text-black">{formatCurrency(total)}</span>
+          {done ? (
+            <SaleDone sale={done} company={company} locale={locale} onNew={() => setDone(null)} t={t} methods={copy.methods} closeLabel={copy.close} />
+          ) : (
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_380px] lg:items-start">
+              <ServicePicker
+                services={shown} noServices={all.length === 0} loading={services.isLoading} error={services.isError}
+                onRetry={() => services.refetch()} retryLabel={copy.retry}
+                search={search} onSearch={setSearch} qtyById={qtyById} onPick={pick} onFree={() => openPad({ kind: "free" })}
+                canManage={canManage} t={t}
+              />
+              {/* Desktop: the sale stays in view; long sales scroll their lines, the total and the button never move. */}
+              <aside className="hidden flex-col rounded-2xl border border-slate-200 bg-white p-5 lg:sticky lg:top-6 lg:flex lg:max-h-[calc(100dvh-13rem)] lg:min-h-[24rem]" aria-labelledby="pos-cart">
+                <div className="mb-3 flex shrink-0 items-baseline justify-between gap-2">
+                  <h2 id="pos-cart" className="font-semibold text-slate-900">{t.cart.title}</h2>
+                  {count > 0 && <span className="text-xs font-medium text-slate-500">{t.cart.items(count)}</span>}
                 </div>
-              )}
-              {showCart && cart.length > 0 && (
-                <div className="mt-1 max-h-20 overflow-y-auto border border-neutral-200 rounded-lg p-2 space-y-1.5 bg-white">
-                  {cart.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-xs text-black truncate">{item.name}</p>
-                        <p className="text-[10px] text-neutral-400">{t.each(formatCurrency(item.price))}</p>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <button onClick={() => updateQty(item.id, -1)} className="w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Minus className="w-2.5 h-2.5" /></button>
-                        <span className="text-xs w-4 text-center font-medium">{item.quantity}</span>
-                        <button onClick={() => updateQty(item.id, 1)} className="w-5 h-5 flex items-center justify-center rounded-full bg-neutral-100 text-neutral-600"><Plus className="w-2.5 h-2.5" /></button>
-                      </div>
-                      <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500"><Trash2 className="w-3.5 h-3.5" /></button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </AnimatedPage>
-      </div>
-
-      {/* Desktop left: calculator */}
-      <div className="hidden lg:flex lg:w-[42%] flex-col p-4 h-full">
-        <AnimatedPage delay={100} className="w-full h-full">
-          <div className="max-w-md mx-auto h-full flex flex-col">
-            {/* Amount display */}
-            <div className="shrink-0 py-3 mb-2 text-center bg-neutral-50 rounded-2xl border border-neutral-100">
-              <p className="text-[10px] text-neutral-400 uppercase tracking-wide mb-1">{t.amountToCharge}</p>
-              <p className="text-5xl font-semibold text-black tracking-tight">{formatCurrency(numericValue)}</p>
-            </div>
-
-            {/* Selected badges */}
-            {(selectedService || selectedCustomerData) && (
-              <div className="shrink-0 flex flex-wrap items-center justify-center gap-2 mb-2">
-                {selectedService && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-black text-white px-2.5 py-1 rounded-full">
-                    <Package className="w-3 h-3" /> {selectedService.name}
-                    <button onClick={clearService} className="ml-1 hover:text-neutral-300"><X className="w-3 h-3" /></button>
-                  </span>
+                {cart.length === 0 ? <CartEmpty t={t} /> : (
+                  <>
+                    <div className="-mx-5 min-h-[5rem] flex-1 overflow-y-auto px-5"><CartLines {...cartProps} /></div>
+                    <div className="mt-3 shrink-0 border-t border-slate-100 pt-3"><CartSummary {...cartProps} /></div>
+                    <div className="mt-4 shrink-0">{chargeBtn}</div>
+                  </>
                 )}
-                {selectedCustomerData && (
-                  <span className="inline-flex items-center gap-1 text-xs bg-neutral-100 text-black px-2.5 py-1 rounded-full">
-                    <User className="w-3 h-3" /> {selectedCustomerData.name} {selectedCustomerData.lastName}
-                    <button onClick={() => setSelectedCustomer(undefined)} className="ml-1 text-neutral-400 hover:text-black"><X className="w-3 h-3" /></button>
-                  </span>
-                )}
-              </div>
-            )}
-
-            {/* Numeric keypad */}
-            <div className="flex-1 min-h-0 grid grid-cols-3 grid-rows-4 gap-2 mb-2">
-              {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                <button
-                  key={digit}
-                  onClick={() => appendDigit(digit)}
-                  className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all"
-                >
-                  {digit}
-                </button>
-              ))}
-              <button onClick={backspace} className="h-full rounded-lg bg-neutral-100 text-neutral-600 hover:bg-neutral-200 active:scale-95 transition-all flex items-center justify-center">
-                <X className="w-8 h-8" />
-              </button>
-              <button onClick={() => appendDigit("0")} className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">0</button>
-              <button onClick={() => appendDigit(".")} className="h-full rounded-lg bg-white border border-neutral-200 text-4xl font-semibold text-black hover:border-black hover:bg-neutral-50 active:scale-95 transition-all">.</button>
+              </aside>
             </div>
+          )}
 
-            {/* Bottom row */}
-            <div className="shrink-0 grid grid-cols-2 gap-2">
-              <Button onClick={handleAddAnother} disabled={numericValue <= 0} variant="outline" className="h-14 rounded-lg border-neutral-200 text-black text-base font-medium hover:bg-neutral-50 disabled:opacity-50">
-                <Plus className="w-5 h-5 mr-1" /> {t.add}
-              </Button>
-              <Button onClick={handleCobrarClick} disabled={cart.length === 0 && numericValue <= 0} className="h-14 rounded-lg bg-black hover:bg-neutral-800 text-white text-base font-medium disabled:opacity-50">
-                {t.charge}
-              </Button>
-            </div>
-          </div>
-        </AnimatedPage>
-      </div>
+          {/* Room for the phone summary bar */}
+          {showBar && <div className="h-16 lg:hidden" aria-hidden />}
+        </div>
+      </AnimatedPage>
 
-      {/* Desktop center: services/customers panel */}
-      <div className="hidden lg:flex lg:flex-1 flex-col h-full border-l border-neutral-200 bg-white">
-        {/* Vertical action buttons */}
-        <div className="flex items-center justify-center gap-4 px-4 py-3 border-b border-neutral-100 bg-white">
+      {/* Phone: the sale summary sits above the tab bar and opens the cart (outside the animated wrapper so `fixed` works). */}
+      {showBar && (
+        <div className="fixed inset-x-0 bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-30 px-3 lg:hidden">
           <button
-            onClick={() => setLeftPanel("services")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "services" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
+            onClick={() => setCartOpen(true)}
+            aria-label={t.bar.open(t.cart.items(count), money(total))}
+            className="mx-auto flex h-14 w-full max-w-md items-center gap-3 rounded-2xl bg-slate-900 pl-4 pr-2 text-left text-white shadow-lg shadow-slate-900/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2"
           >
-            <Package className="w-4 h-4" /> {t.services}
-          </button>
-          <button
-            onClick={() => setLeftPanel("customers")}
-            className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors text-sm font-medium ${leftPanel === "customers" ? "bg-black text-white" : "text-neutral-600 hover:bg-neutral-100"}`}
-          >
-            <User className="w-4 h-4" /> {t.customers}
+            <span className="min-w-0 flex-1 truncate text-sm">
+              <span className="text-white/75">{t.cart.items(count)}</span>
+              <span className="text-white/40"> · </span>
+              <span className="text-base font-bold tabular-nums">{money(total)}</span>
+            </span>
+            <span className="inline-flex h-10 shrink-0 items-center gap-1 rounded-xl bg-blue-600 px-4 text-sm font-semibold">
+              {t.bar.charge}<ChevronUp className="h-4 w-4" aria-hidden />
+            </span>
           </button>
         </div>
+      )}
 
-        {/* Options content */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {leftPanel === "services" && (
-            <>
-              <div className="p-3 border-b border-neutral-100">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                  <Input placeholder={t.searchServices} value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
-                </div>
-              </div>
-              <ScrollArea className="flex-1 px-3">
-                <div className="space-y-0.5">
-                  {filteredServices.length === 0 ? (
-                    <p className="text-sm text-neutral-400 text-center py-8">{t.noServices}</p>
-                  ) : (
-                    filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
-                      <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
-                          <p className="text-sm text-black">{s.name}</p>
-                        </div>
-                        <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </>
-          )}
-          {leftPanel === "customers" && (
-            <>
-              <div className="px-4 py-3 border-b border-neutral-100">
-                <h3 className="text-sm font-medium text-black">{t.selectCustomer}</h3>
-              </div>
-              <ScrollArea className="flex-1 px-3 py-2">
-                <div className="space-y-0.5">
-                  {customers?.map((c: NonNullable<typeof customers>[0]) => (
-                    <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
-                      <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-black">{c.name} {c.lastName}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </>
-          )}
-        </div>
-      </div>
+      {/* Phone and tablet: the cart as a sheet */}
+      <PosSheet
+        open={cartOpen && !done} onOpenChange={setCartOpen} closeLabel={copy.close}
+        title={t.cart.title} description={count > 0 ? t.cart.items(count) : undefined}
+        footer={cart.length > 0 ? chargeBtn : undefined}
+      >
+        <CartBody {...cartProps} />
+      </PosSheet>
 
-      {/* Mobile slide-up panel */}
-      <div className={`lg:hidden fixed inset-0 z-50 transition-opacity duration-300 ${mobilePanel !== "none" ? "opacity-100 pointer-events-auto" : "opacity-0 pointer-events-none"}`}>
-        <div className="absolute inset-0 bg-black/40" onClick={() => setMobilePanel("none")} />
-        <div className={`absolute inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-2xl transition-transform duration-300 ease-out ${mobilePanel !== "none" ? "translate-y-0" : "translate-y-full"}`}>
-          <div className="flex items-center justify-between px-4 py-3 border-b border-neutral-100">
-            <h3 className="text-base font-medium text-black">{mobilePanel === "services" ? t.selectService : t.selectCustomer}</h3>
-            <button onClick={() => setMobilePanel("none")} className="p-1 rounded-full hover:bg-neutral-100 text-neutral-400 hover:text-black"><X className="w-5 h-5" /></button>
-          </div>
-          {mobilePanel === "services" && (
-            <div className="p-3">
-              <div className="relative mb-2">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-neutral-400" />
-                <Input placeholder={t.searchServices} value={serviceSearch} onChange={(e) => setServiceSearch(e.target.value)} className="pl-8 h-9 text-sm border-neutral-200" />
-              </div>
-              <ScrollArea className="h-[60vh]">
-                <div className="space-y-0.5">
-                  {filteredServices.length === 0 ? (
-                    <p className="text-sm text-neutral-400 text-center py-8">{t.noServices}</p>
-                  ) : (
-                    filteredServices.map((s: NonNullable<typeof servicesList>[0]) => (
-                      <button key={s.id} onClick={() => selectService(s)} className="w-full flex items-center justify-between p-3 rounded hover:bg-neutral-50 text-left transition-colors">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(s.name || "?").charAt(0)}</div>
-                          <p className="text-sm text-black">{s.name}</p>
-                        </div>
-                        <p className="text-sm font-medium text-black">{formatCurrency(s.price)}</p>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-          {mobilePanel === "customers" && (
-            <div className="p-3">
-              <ScrollArea className="h-[60vh]">
-                <div className="space-y-0.5">
-                  {customers?.map((c: NonNullable<typeof customers>[0]) => (
-                    <button key={c.id} onClick={() => selectCustomer(c.id)} className="w-full flex items-center gap-3 p-2.5 rounded hover:bg-neutral-50 text-left transition-colors duration-150">
-                      <div className="w-7 h-7 rounded-full bg-neutral-100 flex items-center justify-center text-xs text-neutral-600 font-medium">{(c.name || "?").charAt(0)}</div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-black">{c.name} {c.lastName}</p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Payment Dialog */}
-      <Dialog open={showPayment} onOpenChange={setShowPayment}>
-        <DialogContent className="bg-white border-neutral-200 max-w-md">
-          <DialogHeader><DialogTitle className="text-black font-medium">{t.paymentMethod}</DialogTitle></DialogHeader>
-          <PaymentDialog
-            activePayment={activePayment}
-            setActivePayment={setActivePayment}
-            total={total}
-            handleCheckout={handleCheckout}
-            createSalePending={createSale.isPending}
-            showZellePanel={showZellePanel}
-            setShowZellePanel={setShowZellePanel}
-            companyZelleEmail={companyZelleEmail}
-            hasCompanyZelle={hasCompanyZelle}
-            handleZelleConfirm={handleZelleConfirm}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Desktop right: cart sidebar */}
-      <div className="hidden lg:flex fixed right-0 top-0 bottom-0 w-[380px] border-l border-neutral-200 bg-white flex-col">
-        <div className="px-5 pt-4 pb-2 border-b border-neutral-100">
-          <p className="text-xs text-neutral-400">{common.items(cart.length)}</p>
-        </div>
-        <ScrollArea className="flex-1 px-5 py-2">
-          {cart.length === 0 ? <p className="text-neutral-300 text-sm text-center py-12">{t.emptyCartHint}</p> : (
-            <div className="space-y-3">
-              {cart.map((item) => (
-                <div key={item.id} className="flex items-center gap-3">
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-black truncate">{item.name}</p>
-                    <p className="text-xs text-neutral-400">{t.each(formatCurrency(item.price))}</p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => updateQty(item.id, -1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Minus className="w-3 h-3" /></button>
-                    <span className="text-sm w-5 text-center">{item.quantity}</span>
-                    <button onClick={() => updateQty(item.id, 1)} className="w-6 h-6 flex items-center justify-center rounded hover:bg-neutral-100 text-neutral-400 hover:text-black transition-colors"><Plus className="w-3 h-3" /></button>
-                  </div>
-                  <span className="text-sm text-black min-w-[56px] text-right">{formatCurrency(item.price * item.quantity)}</span>
-                  <button onClick={() => updateQty(item.id, -999)} className="text-neutral-300 hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
-                </div>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
-        <div className="px-5 py-3 border-t border-neutral-100 space-y-2">
-          <div className="flex justify-between text-sm"><span className="text-neutral-400">{t.subtotal}</span><span className="text-black">{formatCurrency(subtotal)}</span></div>
-          <div className="flex justify-between text-sm items-center">
-            <span className="text-neutral-400">{t.discount}</span>
-            <div className="flex items-center gap-2">
-              <div className="flex bg-gray-100 rounded-full p-0.5">
-                <button onClick={() => setDiscountType("fixed")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "fixed" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>$</button>
-                <button onClick={() => setDiscountType("percentage")} className={`px-2 py-0.5 text-[10px] font-medium rounded-full transition-colors ${discountType === "percentage" ? "bg-white text-black shadow-sm" : "text-neutral-500"}`}>%</button>
-              </div>
-              <Input type="number" value={discount} onChange={(e) => setDiscount(e.target.value)} className="w-16 h-7 text-right text-sm border-neutral-200" min="0" step={discountType === "percentage" ? "1" : "0.01"} max={discountType === "percentage" ? "100" : undefined} />
-            </div>
-          </div>
-          {discountType === "percentage" && discountRaw > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-neutral-400">{t.equals}</span>
-              <span className="text-neutral-500">-{formatCurrency(discountAmt)}</span>
-            </div>
-          )}
-          <div className="border-t border-neutral-100 pt-2 flex justify-between"><span className="text-black font-medium">{t.total}</span><span className="text-lg font-medium text-black">{formatCurrency(total)}</span></div>
-          <Button onClick={handleCobrarClick} disabled={cart.length === 0} className="w-full bg-black hover:bg-neutral-800 text-white h-9 text-sm">{t.charge}</Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-// Extracted Payment Dialog Component
-function PaymentDialog({
-  activePayment, setActivePayment, total, handleCheckout, createSalePending,
-  showZellePanel, setShowZellePanel, companyZelleEmail, hasCompanyZelle,
-  handleZelleConfirm
-}: any) {
-  const { pos: t, paymentMethods } = useCopy(businessCopy);
-  return (
-    <div className="relative flex flex-col h-full">
-      {/* Payment Method Selection */}
-      <div className="relative z-10 flex-shrink-0 pt-4">
-        <div className="grid grid-cols-3 gap-3">
-          {PAYMENT_METHODS.map((m) => {
-            const Icon = m.icon;
-            return (
-              <button
-                key={m.id}
-                onClick={() => { setActivePayment(m.id); setShowZellePanel(false); }}
-                className={`flex flex-col items-center gap-2 py-4 rounded-xl border-2 text-sm font-medium transition-all duration-200 ${activePayment === m.id ? "border-black bg-black text-white" : "border-neutral-200 bg-white text-neutral-600 hover:border-neutral-400"}`}
-              >
-                <Icon className={`w-6 h-6 ${activePayment === m.id ? "text-white" : "text-neutral-500"}`} />
-                {paymentMethods[m.id]}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Amount Display - Centered */}
-      <div className="relative z-10 flex-1 flex flex-col items-center justify-center min-h-0">
-        {activePayment === "cash" && (
-          <div className="text-center space-y-3">
-            <Banknote className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">{t.cashPayment}</p>
-            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
-          </div>
-        )}
-
-        {activePayment === "zelle" && !showZellePanel && (
-          <div className="text-center space-y-4">
-            <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">{t.zellePayment}</p>
-            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
-          </div>
-        )}
-
-        {activePayment === "zelle" && showZellePanel && (
-          <div className="text-center space-y-4 w-full">
-            <Smartphone className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">{t.sendZelleTo}</p>
-            <div className="bg-white border border-neutral-200 rounded-xl p-4 mx-8">
-              <p className="text-lg font-semibold text-black">{companyZelleEmail}</p>
-            </div>
-            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
-          </div>
-        )}
-
-        {activePayment === "card" && (
-          <div className="text-center space-y-3">
-            <Receipt className="w-12 h-12 text-neutral-300 mx-auto" />
-            <p className="text-sm text-neutral-400">{t.cardPayment}</p>
-            <p className="text-4xl font-bold text-black">{formatCurrency(total)}</p>
-          </div>
-        )}
-      </div>
-
-      {/* Action Button - Bottom */}
-      <div className="relative z-10 flex-shrink-0 pb-6 pt-4">
-        {activePayment === "zelle" && !showZellePanel && (
-          <Button onClick={() => setShowZellePanel(true)} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-            <Smartphone className="w-5 h-5 mr-2" /> {t.showZelle}
-          </Button>
-        )}
-        {activePayment === "zelle" && showZellePanel && (
-          <div className="flex gap-3">
-            <Button onClick={() => setShowZellePanel(false)} variant="outline" className="flex-1 border-neutral-200 h-14 text-base rounded-xl">{t.back}</Button>
-            <Button onClick={handleZelleConfirm} disabled={createSalePending || !hasCompanyZelle} className="flex-1 bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-              {createSalePending ? t.processing : <><Check className="w-5 h-5 mr-1" /> {t.confirm}</>}
-            </Button>
-          </div>
-        )}
-        {activePayment !== "zelle" && (
-          <Button onClick={handleCheckout} disabled={createSalePending} className="w-full bg-black hover:bg-neutral-800 text-white h-14 text-base rounded-xl">
-            {createSalePending ? t.processing : <><Check className="w-5 h-5 mr-2" /> {activePayment === "cash" ? t.chargeCash : t.chargeCard}</>}
-          </Button>
-        )}
-      </div>
-    </div>
+      <ClientPicker open={clientOpen} onOpenChange={setClientOpen} selectedId={client?.id} onSelect={setClient} t={t} closeLabel={copy.close} />
+      <AmountPad key={padKey} mode={pad} onClose={() => setPad(null)} onSubmit={onPad} t={t} closeLabel={copy.close} />
+    </>
   );
 }
