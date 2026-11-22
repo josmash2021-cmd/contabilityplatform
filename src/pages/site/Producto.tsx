@@ -5,7 +5,7 @@ import { ArrowRight, Check, Gift, Languages, Smartphone, type LucideIcon } from 
 import { SitePage, PageHero } from "@/components/marketing/SitePage";
 import { Reveal } from "@/components/marketing/Reveal";
 import { SectionHeading } from "@/components/marketing/LandingSections";
-import { DashboardPreview } from "@/components/marketing/Previews";
+import { DashboardTour } from "@/components/marketing/DashboardTour";
 import { ProductoTour } from "@/components/marketing/site/ProductoTour";
 import { LANDING_PLAN_GROUPS, TRIAL_DAYS, type LandingGroup } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
@@ -104,7 +104,7 @@ export default function Producto() {
         title={<>{c.hero.titleA} <span className="whitespace-nowrap bg-gradient-to-r from-blue-300 to-blue-500 bg-clip-text text-transparent">{c.hero.titleB}</span></>}
         text={c.hero.text}
         secondary={{ label: c.hero.secondary, to: "/precios" }}
-        visual={<div className="mx-auto w-full max-w-xl lg:max-w-none"><DashboardPreview /></div>}
+        visual={<div className="mx-auto w-full min-w-0 max-w-xl lg:max-w-none"><DashboardTour /></div>}
       >
         <ul className="mt-8 flex flex-wrap gap-x-6 gap-y-2 text-sm text-slate-400">
           {c.hero.checks(TRIAL_DAYS).map((t) => (

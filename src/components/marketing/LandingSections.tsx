@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { Reveal } from "@/components/marketing/Reveal";
-import { BusinessPhonePreview, ConnectStepPreview, DashboardPreview, NumbersStepPreview, PhonePreview, SignupStepPreview } from "@/components/marketing/Previews";
+import { BusinessPhonePreview, ConnectStepPreview, NumbersStepPreview, PhonePreview, SignupStepPreview } from "@/components/marketing/Previews";
+import { DashboardTour } from "@/components/marketing/DashboardTour";
 import { LANDING_PLAN_GROUPS, TRIAL_DAYS, annualPerMonth, type LandingGroup } from "@/components/marketing/content";
 import type { MarketingCopy } from "@/i18n/copy/marketing";
 
@@ -66,8 +67,8 @@ export function Hero({ c }: { c: C["hero"] }) {
           </ul>
         </div>
 
-        <div className="animate-hero-in mx-auto w-full max-w-xl [animation-delay:200ms] lg:max-w-none">
-          <DashboardPreview />
+        <div className="animate-hero-in mx-auto w-full min-w-0 max-w-xl [animation-delay:200ms] lg:max-w-none">
+          <DashboardTour />
         </div>
       </div>
     </section>
