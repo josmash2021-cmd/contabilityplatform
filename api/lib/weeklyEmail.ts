@@ -45,6 +45,22 @@ export function weeklyLines(w: Weekly): string[] {
   return out;
 }
 
+/** The Monday email itself (what's sent and what's previewed). */
+export function weeklyMail(to: string, w: Weekly, firstName: string, appUrl: string): { to: string; subject: string; text: string; html: string } {
+  const lines = weeklyLines(w);
+  const title = `Tu resumen del ${mondayLabel(w.monday)}`;
+  const name = firstName.trim();
+  return {
+    to,
+    subject: title,
+    text: `Hola${name ? ` ${name}` : ""},\n\n${lines.map((l) => `• ${l}`).join("\n")}\n\nVer más en la app: ${appUrl}/assistant\n\nRecibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo.`,
+    html: simpleHtml(title,
+      [`Hola${name ? ` ${escapeHtml(name)}` : ""}, así te fue:`, `<ul style="margin:0;padding-left:18px">${lines.map((l) => `<li style="margin:0 0 6px">${escapeHtml(l)}</li>`).join("")}</ul>`],
+      { label: "Abrir la app", url: `${appUrl}/assistant` },
+      "Recibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo."),
+  };
+}
+
 /** "lunes 23 nov" */
 function mondayLabel(day: string): string {
   const d = new Date(`${day}T12:00:00Z`);
@@ -83,18 +99,7 @@ export async function runWeeklyEmails(db: Db, opts: { now?: Date; force?: boolea
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       if (!user?.email) continue;
       const w = await weeklyOf(db, user);
-      const lines = weeklyLines(w);
-      const title = `Tu resumen del ${mondayLabel(w.monday)}`;
-      const name = (user.name || "").trim().split(/\s+/)[0] || "";
-      const ok = await sendMail({
-        to: user.email,
-        subject: title,
-        text: `Hola${name ? ` ${name}` : ""},\n\n${lines.map((l) => `• ${l}`).join("\n")}\n\nVer más en la app: ${appUrl}/assistant\n\nRecibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo.`,
-        html: simpleHtml(title,
-          [`Hola${name ? ` ${escapeHtml(name)}` : ""}, así te fue:`, `<ul style="margin:0;padding-left:18px">${lines.map((l) => `<li style="margin:0 0 6px">${escapeHtml(l)}</li>`).join("")}</ul>`],
-          { label: "Abrir la app", url: `${appUrl}/assistant` },
-          "Recibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo."),
-      });
+      const ok = await sendMail(weeklyMail(user.email, w, (user.name || "").trim().split(/\s+/)[0] || "", appUrl));
       if (ok) sent++;
       else {
         failed++;

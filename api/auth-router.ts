@@ -8,7 +8,8 @@ import { signLocalToken, LOCAL_AUTH_COOKIE } from "./local-auth";
 import { randomInt } from "node:crypto";
 import { RateLimiter, normalizeEmail } from "./lib/security";
 import { msg } from "./lib/i18n";
-import { escapeHtml, sendMail, simpleHtml } from "./lib/mailer";
+import { sendMail } from "./lib/mailer";
+import { resetCodeMail } from "./lib/accountEmails";
 
 // ── Rate limits (per email) ──
 // The reset code is only 6 digits: without an attempt limit it can be brute-forced
@@ -165,33 +166,7 @@ export const authRouter = createRouter({
         expiresAt,
       });
       // The code goes to the account's email (lib/mailer: the owner's Gmail). The answer stays the same either way.
-      const es = ctx.lang !== "en";
-      const name = (rows[0].name || "").trim().split(/\s+/)[0] || "";
-      await sendMail({
-        to: input.email,
-        subject: es ? `Tu código para cambiar la contraseña: ${code}` : `Your code to change your password: ${code}`,
-        text: es
-          ? `Hola${name ? ` ${name}` : ""},
-
-Tu código es ${code}. Escríbelo en la app para crear una contraseña nueva. Vence en 30 minutos.
-
-Si no lo pediste tú, ignora este correo: tu contraseña no cambia.`
-          : `Hi${name ? ` ${name}` : ""},
-
-Your code is ${code}. Enter it in the app to create a new password. It expires in 30 minutes.
-
-If you didn't ask for it, ignore this email: your password doesn't change.`,
-        html: simpleHtml(
-          es ? "Tu código para cambiar la contraseña" : "Your code to change your password",
-          [
-            es ? `Hola${name ? ` ${escapeHtml(name)}` : ""}, escribe este código en la app para crear una contraseña nueva:` : `Hi${name ? ` ${escapeHtml(name)}` : ""}, enter this code in the app to create a new password:`,
-            `<span style="display:inline-block;font-size:28px;font-weight:700;letter-spacing:6px;background:#f1f5f9;border-radius:10px;padding:10px 16px">${code}</span>`,
-            es ? "Vence en 30 minutos." : "It expires in 30 minutes.",
-          ],
-          undefined,
-          es ? "Si no lo pediste tú, ignora este correo: tu contraseña no cambia." : "If you didn't ask for it, ignore this email: your password doesn't change.",
-        ),
-      });
+      await sendMail(resetCodeMail(input.email, ctx.lang === "en" ? "en" : "es", (rows[0].name || "").trim().split(/\s+/)[0] || "", code));
 
       return genericOk;
     }),
