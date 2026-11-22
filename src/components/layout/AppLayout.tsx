@@ -237,7 +237,7 @@ export function AppLayout() {
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (same || still) { navigate(path); return; }
     setLeaving(true);
-    window.setTimeout(() => { navigate(path); setLeaving(false); }, 140);
+    window.setTimeout(() => { navigate(path); setLeaving(false); }, 250);
   };
 
   const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/expenses"] : TABS[userMode])

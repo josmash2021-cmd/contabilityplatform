@@ -558,18 +558,22 @@ function WeeklyCard({ t, locale, canAsk, onAsk }: { t: AssistantCopy; locale: st
   });
   return (
     <section className={CARD} aria-labelledby="as-week">
-      <div className="mb-2 flex flex-wrap items-start justify-between gap-x-2 gap-y-0.5">
-        <h2 id="as-week" className="inline-flex items-start gap-1.5 text-[15px] font-bold text-slate-900">
-          <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden />{data ? t.week.title(monday) : t.week.title("…")}
-        </h2>
-        <span className="text-xs text-slate-500">{t.week.note}</span>
+      {/* Like the 2.0 card: the title, and the Monday email switch beside it (green when on). */}
+      <div className="mb-2 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="as-week" className="inline-flex items-start gap-1.5 text-[15px] font-bold text-slate-900">
+            <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" aria-hidden />{data ? t.week.title(monday) : t.week.title("…")}
+          </h2>
+          <p className="mt-0.5 text-xs text-slate-500">{t.week.note}</p>
+        </div>
+        {prefs.data?.mailReady && (
+          <label className="flex max-w-[150px] shrink-0 cursor-pointer items-center gap-2 text-right text-xs leading-snug text-slate-500">
+            <span>{t.week.email}</span>
+            <Switch checked={!!prefs.data.weeklyEmail} disabled={setEmail.isPending} onCheckedChange={(on) => setEmail.mutate({ on })} aria-label={t.week.email}
+              className="shrink-0 data-[state=checked]:bg-emerald-600" />
+          </label>
+        )}
       </div>
-      {prefs.data?.mailReady && (
-        <label className="mb-2 flex cursor-pointer items-center justify-between gap-3 rounded-[10px] bg-slate-50 px-3 py-2 text-[13px] text-slate-700">
-          <span>{t.week.email}</span>
-          <Switch checked={!!prefs.data.weeklyEmail} disabled={setEmail.isPending} onCheckedChange={(on) => setEmail.mutate({ on })} aria-label={t.week.email} />
-        </label>
-      )}
       {isLoading ? (
         <div className="space-y-2" role="status" aria-label={t.week.loading}><Skeleton className="h-4 w-full" /><Skeleton className="h-4 w-5/6" /><Skeleton className="h-4 w-4/6" /></div>
       ) : isError || !data ? (
