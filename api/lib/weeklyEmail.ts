@@ -7,12 +7,13 @@ import type { getDb } from "../queries/connection";
 import { users } from "@db/schema";
 import { weeklyOf } from "../assistant-router";
 import { isMissingTable } from "./dbErrors";
-import { escapeHtml, mailReady, sendMail, simpleHtml } from "./mailer";
+import { brandedHtml, escapeHtml, mailFiles, mailList, mailP, mailReady, mailTiles, sendMail, type Mail, type MailFile } from "./mailer";
+import { money } from "../../src/components/reports/export/model";
+import { weekKpis, weeklyDetailOf, weeklyFileBase, weeklyPdf, weeklyXlsx, type WeeklyDetail } from "./weeklyReport";
 
 type Db = ReturnType<typeof getDb>;
 type Weekly = Awaited<ReturnType<typeof weeklyOf>>;
 
-const money = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
 
 /** Monday and the hour, in US Central time. */
@@ -45,19 +46,57 @@ export function weeklyLines(w: Weekly): string[] {
   return out;
 }
 
-/** The Monday email itself (what's sent and what's previewed). */
-export function weeklyMail(to: string, w: Weekly, firstName: string, appUrl: string): { to: string; subject: string; text: string; html: string } {
+/** The PDF and the Excel that come with the Monday email. */
+export function weeklyFiles(d: WeeklyDetail, created: Date): MailFile[] {
+  const base = weeklyFileBase(d.w);
+  return [
+    { filename: `${base}.pdf`, content: weeklyPdf(d, created), contentType: "application/pdf" },
+    { filename: `${base}.xlsx`, content: weeklyXlsx(d, created), contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" },
+  ];
+}
+
+/** The Monday email itself (what's sent and what's previewed): big numbers, what matters, and the files. */
+export function weeklyMail(to: string, d: WeeklyDetail, firstName: string, appUrl: string, files: MailFile[]): Mail {
+  const w = d.w;
   const lines = weeklyLines(w);
+  // The first line repeats the boxes (in and out), unless the bank had nothing and it talks about sales.
+  const notes = w.mode === "business" && w.bank.count === 0 ? lines : lines.slice(1);
+  const tiles = weekKpis(d).map((k) => ({ label: k.label, value: money(k.amount), line: k.line, good: k.good }));
   const title = `Tu resumen del ${mondayLabel(w.monday)}`;
   const name = firstName.trim();
+  const hi = `Hola${name ? ` ${name}` : ""}`;
+  const footer = "Recibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo.";
+  const pdf = files.find((f) => f.filename.endsWith(".pdf")), xlsx = files.find((f) => f.filename.endsWith(".xlsx"));
+  const fileRows = [
+    ...(pdf ? [{ kind: "PDF" as const, name: pdf.filename, note: "Para leer o imprimir" }] : []),
+    ...(xlsx ? [{ kind: "XLS" as const, name: xlsx.filename, note: "Para tu contador o para hacer tus cuentas" }] : []),
+  ];
   return {
     to,
     subject: title,
-    text: `Hola${name ? ` ${name}` : ""},\n\n${lines.map((l) => `• ${l}`).join("\n")}\n\nVer más en la app: ${appUrl}/assistant\n\nRecibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo.`,
-    html: simpleHtml(title,
-      [`Hola${name ? ` ${escapeHtml(name)}` : ""}, así te fue:`, `<ul style="margin:0;padding-left:18px">${lines.map((l) => `<li style="margin:0 0 6px">${escapeHtml(l)}</li>`).join("")}</ul>`],
-      { label: "Abrir la app", url: `${appUrl}/assistant` },
-      "Recibes este correo porque lo activaste en el Asistente. Puedes apagarlo ahí mismo."),
+    text: [
+      `${hi}, así te fue la semana ${d.weekLabel}:`,
+      "",
+      ...tiles.map((t) => `${t.label}: ${t.value} (${t.line})`),
+      ...(notes.length ? ["", ...notes.map((l) => `• ${l}`)] : []),
+      ...(fileRows.length ? ["", `Adjuntamos tu resumen en ${fileRows.map((f) => (f.kind === "PDF" ? "PDF" : "Excel")).join(" y ")}.`] : []),
+      "",
+      `Ver más en la app: ${appUrl}/assistant`,
+      "",
+      footer,
+    ].join("\n"),
+    html: brandedHtml({
+      title,
+      preheader: tiles.slice(0, 3).map((t) => `${t.label} ${t.value}`).join(" · "),
+      body:
+        mailP(`${escapeHtml(hi)}, así te fue la semana ${escapeHtml(d.weekLabel)}:`) +
+        mailTiles(tiles) +
+        (notes.length ? mailList(notes) : "") +
+        (fileRows.length ? mailFiles(fileRows.length === 2 ? "Adjuntamos tu resumen en PDF y en Excel" : "Adjuntamos tu resumen", fileRows) : ""),
+      button: { label: "Abrir la app", url: `${appUrl}/assistant` },
+      footer,
+    }),
+    attachments: files,
   };
 }
 
@@ -99,7 +138,13 @@ export async function runWeeklyEmails(db: Db, opts: { now?: Date; force?: boolea
       const [user] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
       if (!user?.email) continue;
       const w = await weeklyOf(db, user);
-      const ok = await sendMail(weeklyMail(user.email, w, (user.name || "").trim().split(/\s+/)[0] || "", appUrl));
+      const detail = await weeklyDetailOf(db, userId, w);
+      // The files are a bonus: if they can't be made, the email still goes out with the numbers.
+      let files: MailFile[] = [];
+      try { files = weeklyFiles(detail, opts.now ?? new Date()); } catch (e: unknown) {
+        console.error(`[weekly-email] files for user ${userId} failed:`, e instanceof Error ? e.message : e);
+      }
+      const ok = await sendMail(weeklyMail(user.email, detail, (user.name || "").trim().split(/\s+/)[0] || "", appUrl, files));
       if (ok) sent++;
       else {
         failed++;

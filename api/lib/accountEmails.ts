@@ -1,25 +1,30 @@
 // The account emails the app sends, built in one place so what's sent and what's previewed are the same.
-import { escapeHtml, simpleHtml, type Mail } from "./mailer";
+import { brandedHtml, escapeHtml, mailCode, mailNote, mailP, type Mail } from "./mailer";
 
 /** "Olvidé mi contraseña": the 6-digit code, valid for 30 minutes. */
 export function resetCodeMail(to: string, lang: "es" | "en", firstName: string, code: string): Mail {
   const es = lang !== "en";
   const name = firstName.trim();
+  const hi = es ? `Hola${name ? ` ${name}` : ""}` : `Hi${name ? ` ${name}` : ""}`;
+  const title = es ? "Tu código para cambiar la contraseña" : "Your code to change your password";
+  const security = es
+    ? "Nadie de Personal & Business Solutions te va a pedir este código: no lo compartas con nadie. Si no lo pediste tú, ignora este correo; tu contraseña no cambia."
+    : "No one from Personal & Business Solutions will ever ask you for this code: don't share it. If you didn't ask for it, ignore this email; your password doesn't change.";
   return {
     to,
     subject: es ? `Tu código para cambiar la contraseña: ${code}` : `Your code to change your password: ${code}`,
     text: es
-      ? `Hola${name ? ` ${name}` : ""},\n\nTu código es ${code}. Escríbelo en la app para crear una contraseña nueva. Vence en 30 minutos.\n\nSi no lo pediste tú, ignora este correo: tu contraseña no cambia.`
-      : `Hi${name ? ` ${name}` : ""},\n\nYour code is ${code}. Enter it in the app to create a new password. It expires in 30 minutes.\n\nIf you didn't ask for it, ignore this email: your password doesn't change.`,
-    html: simpleHtml(
-      es ? "Tu código para cambiar la contraseña" : "Your code to change your password",
-      [
-        es ? `Hola${name ? ` ${escapeHtml(name)}` : ""}, escribe este código en la app para crear una contraseña nueva:` : `Hi${name ? ` ${escapeHtml(name)}` : ""}, enter this code in the app to create a new password:`,
-        `<span style="display:inline-block;font-size:28px;font-weight:700;letter-spacing:6px;background:#f1f5f9;border-radius:10px;padding:10px 16px">${code}</span>`,
-        es ? "Vence en 30 minutos." : "It expires in 30 minutes.",
-      ],
-      undefined,
-      es ? "Si no lo pediste tú, ignora este correo: tu contraseña no cambia." : "If you didn't ask for it, ignore this email: your password doesn't change.",
-    ),
+      ? `${hi},\n\nTu código es ${code}. Escríbelo en la app para crear una contraseña nueva. Vence en 30 minutos.\n\n${security}`
+      : `${hi},\n\nYour code is ${code}. Enter it in the app to create a new password. It expires in 30 minutes.\n\n${security}`,
+    html: brandedHtml({
+      lang,
+      title,
+      preheader: es ? `Tu código es ${code}. Vence en 30 minutos.` : `Your code is ${code}. It expires in 30 minutes.`,
+      body:
+        mailP(`${escapeHtml(hi)}, ${es ? "escribe este código en la app para crear una contraseña nueva:" : "enter this code in the app to create a new password:"}`) +
+        mailCode(code) +
+        mailP(es ? "Vence en <b>30 minutos</b>. Si se te pasa, pide otro en «Olvidé mi contraseña»." : "It expires in <b>30 minutes</b>. If it does, ask for another one in “Forgot my password”.") +
+        mailNote(`<b>${es ? "Cuida tu cuenta." : "Keep your account safe."}</b> ${escapeHtml(security)}`),
+    }),
   };
 }
