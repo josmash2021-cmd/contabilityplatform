@@ -115,6 +115,9 @@ export function SupportBubble() {
   const [contactBad, setContactBad] = useState(false);
   const [savedEmail, setSavedEmail] = useState<string | null>(null);
   const [skipContact, setSkipContact] = useState(false);
+  // Closing plays the opening backwards (index.css .sup-panel-out), then the chat goes away.
+  const [closing, setClosing] = useState(false);
+  const shown = open && !closing;
   const phone = useMedia("(max-width: 639px)");
   const utils = trpc.useUtils();
   const listRef = useRef<HTMLDivElement>(null);
@@ -132,6 +135,16 @@ export function SupportBubble() {
   const messages: Msg[] = q.data?.messages ?? [];
   const status = chat?.status ?? "none";
   const unread = !open && chat ? chat.unread : 0;
+  // In case the animation's end never arrives (a hidden tab), it still closes; opening again cancels it.
+  const closeTimer = useRef<number | undefined>(undefined);
+  const finishClose = () => { window.clearTimeout(closeTimer.current); setOpen(false); setClosing(false); };
+  const close = () => {
+    if (!open || closing) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { finishClose(); return; }
+    setClosing(true);
+    closeTimer.current = window.setTimeout(finishClose, 450);
+  };
+  const reopen = () => { window.clearTimeout(closeTimer.current); setClosing(false); setOpen(true); };
 
   // A small "¿Tienes preguntas?" next to the bubble, once per visit, if they haven't written yet.
   useEffect(() => {
@@ -156,7 +169,13 @@ export function SupportBubble() {
   useEffect(() => {
     if (!open) return;
     if (!phone) inputRef.current?.focus();
-    const onKey = (e: globalThis.KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { setOpen(false); setClosing(false); return; }
+      setClosing(true);
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = window.setTimeout(() => { setOpen(false); setClosing(false); }, 450);
+    };
     window.addEventListener("keydown", onKey);
     const before = document.body.style.overflow;
     if (phone) document.body.style.overflow = "hidden";
@@ -221,8 +240,10 @@ export function SupportBubble() {
       <div
         role="dialog"
         aria-label={t.dialog}
+        onAnimationEnd={(e) => { if (closing && e.target === e.currentTarget) finishClose(); }}
         className={cn(
-          "sup-panel-in fixed z-[70] flex flex-col overflow-hidden bg-slate-50",
+          closing ? "sup-panel-out" : "sup-panel-in",
+          "fixed z-[70] flex flex-col overflow-hidden bg-slate-50",
           phone
             ? "inset-0 pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)]"
             : "bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))] right-5 h-[min(640px,calc(100dvh-8rem))] w-[390px] rounded-[28px] shadow-[0_40px_90px_-30px_rgba(2,6,23,0.55)] ring-1 ring-slate-900/10",
@@ -243,7 +264,7 @@ export function SupportBubble() {
                 <span className="truncate">{statusText}</span>
               </p>
             </div>
-            <button type="button" onClick={() => setOpen(false)} aria-label={t.close}
+            <button type="button" onClick={close} aria-label={t.close}
               className="grid h-9 w-9 shrink-0 place-items-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50">
               <X className="h-5 w-5" />
             </button>
@@ -333,11 +354,11 @@ export function SupportBubble() {
     <>
       {thread}
       {/* The bubble (hidden behind the full-screen chat on phones). */}
-      {!(open && phone) && (
+      {!(shown && phone) && (
         <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[70] flex items-center gap-3 sm:right-5">
-          {teaser && !open && (
+          {teaser && !shown && (
             <div className="sup-teaser-in relative hidden max-w-[240px] rounded-2xl bg-white py-2.5 pl-3.5 pr-8 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 sm:block">
-              <button type="button" onClick={() => { hideTeaser(); setOpen(true); }} className="text-left">
+              <button type="button" onClick={() => { hideTeaser(); reopen(); }} className="text-left">
                 <span className="block text-[13px] font-semibold text-slate-900">{t.teaser.title}</span>
                 <span className="block text-[12px] text-slate-500">{t.teaser.text}</span>
               </button>
@@ -348,16 +369,16 @@ export function SupportBubble() {
           )}
           <button
             type="button"
-            onClick={() => { hideTeaser(); setOpen((o) => !o); }}
-            aria-label={open ? t.close : t.open}
-            aria-expanded={open}
+            onClick={() => { hideTeaser(); if (shown) close(); else reopen(); }}
+            aria-label={shown ? t.close : t.open}
+            aria-expanded={shown}
             className="group relative grid h-14 w-14 place-items-center rounded-full bg-gradient-to-br from-blue-500 via-blue-600 to-indigo-600 text-white shadow-[0_18px_40px_-12px_rgba(37,99,235,0.75)] ring-1 ring-white/20 transition-transform duration-200 hover:scale-105 active:scale-95 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-blue-300"
           >
-            {!open && <span aria-hidden className="sup-ring pointer-events-none absolute inset-0 rounded-full ring-2 ring-blue-400/70" />}
-            <span className={cn("transition-transform duration-300", open ? "rotate-90 scale-90" : "")}>
-              {open ? <X className="h-6 w-6" /> : <SupportIcon className="h-7 w-7" />}
+            {!shown && <span aria-hidden className="sup-ring pointer-events-none absolute inset-0 rounded-full ring-2 ring-blue-400/70" />}
+            <span className={cn("transition-transform duration-300", shown ? "rotate-90 scale-90" : "")}>
+              {shown ? <X className="h-6 w-6" /> : <SupportIcon className="h-7 w-7" />}
             </span>
-            {!open && (unread > 0
+            {!shown && (unread > 0
               ? <span className="day-pop absolute -right-0.5 -top-0.5 grid h-5 min-w-5 place-items-center rounded-full bg-rose-500 px-1 text-[11px] font-bold text-white ring-2 ring-white">{unread}</span>
               : <span aria-hidden className="absolute right-0.5 top-0.5 h-3.5 w-3.5 rounded-full bg-emerald-400 ring-2 ring-white" />)}
           </button>
