@@ -162,6 +162,8 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
   :root { --toast-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
   :root:has([data-tabbar]) { --toast-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
   :root:has([data-pos-bar]) { --toast-bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
+  /* Asistente: above the box to write, which sits on the tab bar (Assistant.tsx sets --chat-dock). */
+  :root:has([data-chat-dock]) { --toast-bottom: calc(var(--chat-dock, 160px) + 12px); }
 }
 
 /* Changing page from the menu: the page goes soft, then the next one comes into focus (AppLayout `go`).

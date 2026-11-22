@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import {
@@ -7,6 +8,7 @@ import {
 import type { inferRouterOutputs } from "@trpc/server";
 import type { AppRouter } from "../../api/router";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { useMedia } from "@/hooks/useMedia";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Switch } from "@/components/ui/switch";
@@ -112,6 +114,24 @@ export default function Assistant() {
   }, [messages.length, pending]);
 
   const scrollEnd = () => endRef.current?.scrollIntoView({ block: "end" });
+
+  // Phones and tablets (where the app's tab bar shows): the box to write sits at the bottom of the screen, right
+  // above the tab bar, on a solid background, however long the chat is. It's drawn outside the page so the page's
+  // entrance animation can't move it. The chat keeps that much room at its end so the last message never hides.
+  const hasChat = messages.length > 0 || !!pending;
+  const phone = useMedia("(max-width: 1023px)");
+  const dockRef = useRef<HTMLDivElement>(null);
+  const [dockH, setDockH] = useState(0);
+  useEffect(() => {
+    const el = dockRef.current;
+    if (!el || !phone || typeof ResizeObserver === "undefined") return;
+    const ro = new ResizeObserver(() => {
+      setDockH(el.offsetHeight);
+      document.documentElement.style.setProperty("--chat-dock", `${el.offsetHeight}px`);
+    });
+    ro.observe(el);
+    return () => { ro.disconnect(); document.documentElement.style.removeProperty("--chat-dock"); };
+  }, [phone, hasChat]);
 
   // Speaking instead of typing: what's heard goes into the box after what was already written.
   const dictBase = useRef("");
@@ -324,15 +344,28 @@ export default function Assistant() {
                   <Bubble mine={false} label={t.assistant}><TypingDots label={pending.files.length ? t.reading : t.writing} /></Bubble>
                 </>
               )}
-              <div ref={endRef} />
+              <div ref={endRef} style={phone ? { scrollMarginBottom: dockH + 8 } : undefined} />
+              {/* After the last message: room for the box at the bottom (the page's own bottom space is 112px). */}
+              {phone && <div aria-hidden style={{ height: Math.max(0, dockH + 8 - 112) }} />}
             </section>
-            <div className="sticky bottom-[calc(76px+env(safe-area-inset-bottom,0px))] z-10 -mx-1 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent px-1 pb-1 pt-4 lg:bottom-0">
-              <div className="grid gap-2">
-                {planNote}
-                {composer}
-                <p className="text-center text-[11px] text-slate-400">{t.disclaimer}</p>
+            {phone ? createPortal(
+              <div ref={dockRef} data-chat-dock="" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/80 bg-slate-50 px-4 pb-[calc(78px+env(safe-area-inset-bottom,0px))] pt-3">
+                <div className="mx-auto grid max-w-3xl gap-2">
+                  {planNote}
+                  {composer}
+                  <p className="text-center text-[11px] text-slate-400">{t.disclaimer}</p>
+                </div>
+              </div>,
+              document.body,
+            ) : (
+              <div className="sticky bottom-0 z-10 -mx-1 bg-gradient-to-t from-slate-50 via-slate-50 to-transparent px-1 pb-1 pt-4">
+                <div className="grid gap-2">
+                  {planNote}
+                  {composer}
+                  <p className="text-center text-[11px] text-slate-400">{t.disclaimer}</p>
+                </div>
               </div>
-            </div>
+            )}
           </>
         )}
       </div>
