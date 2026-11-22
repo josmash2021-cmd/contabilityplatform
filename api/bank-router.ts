@@ -1284,7 +1284,8 @@ export const bankRouter = createRouter({
         client_name: "Aethel Accounting platform",
         products: ["transactions"],
         country_codes: ["US"],
-        language: "en",
+        // Plaid's window speaks the owner's language (Spanish unless the app is in English).
+        language: ctx.lang === "en" ? "en" : "es",
         transactions: { days_requested: 730 },
       });
       console.log(`[createLinkToken] Link token created for user ${ctx.user.id}`);
@@ -1366,7 +1367,12 @@ export const bankRouter = createRouter({
       // The bank's original logo, name and color from Plaid, and a fresh "ok" (best effort: never blocks the connection).
       try { await refreshInstitution(db, client as PlaidLike, Number(ctx.user.id), itemId, accessToken); }
       catch (e: unknown) { console.error("[exchangePublicToken] institution not saved:", e instanceof Error ? e.message : e); }
-      return { success: true, accountCount: plaidAccounts.length };
+      // The "Listo" screen shows each account with its balance right away.
+      const accounts = plaidAccounts.map((a: Parameters<typeof plaidBalance>[0] & { account_id: string; name: string; official_name?: string | null; mask?: string | null }) => {
+        const bal = plaidBalance(a);
+        return { id: a.account_id, name: cleanAccountName(a.name, a.official_name), mask: a.mask || null, type: a.type || null, balance: bal == null ? null : Number(bal) };
+      });
+      return { success: true as const, accountCount: plaidAccounts.length, itemId, accounts };
     } catch (err: any) {
       return { success: false, error: err.response?.data?.error_message || err.message || "Error" };
     }

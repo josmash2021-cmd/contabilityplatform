@@ -32,6 +32,7 @@ React 19 + Vite + Tailwind 3 + shadcn (`src/components/ui`) · tRPC on Hono · d
 - **Email**: `api/lib/mailer.ts` (`sendMail` never throws, `brandedHtml`, `mailP`, `mailNote`…), Gmail SMTP via `SMTP_USER`/`SMTP_PASS`; email images must be PNG (Gmail drops SVG).
 - **React lint**: hooks before any early return; no synchronous `setState` inside effects (do it in callbacks/timers); `react-refresh/only-export-components`; class names with `cn` from `@/lib/utils`.
 - **Motion**: `useInView`, `useReducedMotion` (`src/hooks/useInView.ts`), `useMedia`; keyframes in `src/index.css`, each with a `prefers-reduced-motion` fallback.
+- **Bank connection**: `src/components/PlaidLinkOverlay.tsx` (portal on `<body>`, bottom sheet on phones): intro → Plaid's own window (language follows `x-lang`) → live import (`bank.exchangePublicToken` returns `itemId` + accounts, then `banks.syncItem`, last 30 days) → Listo with each account, its bank logo (`BankLogo`) and balance.
 - Tax pages are behind an email-code gate (`api/lib/taxGate.ts`, header `x-tax-unlock`).
 
 ## Checks before pushing
@@ -45,6 +46,7 @@ React 19 + Vite + Tailwind 3 + shadcn (`src/components/ui`) · tRPC on Hono · d
 - Fakes: `mysqltest/fake-claude.mjs` (:4999; no-tools requests = support chat), `fake-plaid.mjs` (:4998), `fake-smtp.mjs 2599` (writes `mails/<n>.eml`).
 - Local server (after `npm run build`): `TZ=UTC NODE_ENV=production PORT=3457 DATABASE_URL=mysql://root@127.0.0.1:1912/pbs TAX_FILES_KEY=<any 32-byte base64> JWT_SECRET=<long string> APP_URL=http://127.0.0.1:3457 ANTHROPIC_API_KEY=fake-key ANTHROPIC_BASE_URL=http://127.0.0.1:4999 PLAID_BASE_URL=http://127.0.0.1:4998 PLAID_CLIENT_ID=x PLAID_SECRET=x SMTP_HOST=127.0.0.1 SMTP_PORT=2599 SMTP_USER=app@demo.local SMTP_PASS=x node dist/boot.js`
 - E2E suites: `mysqltest/*-e2e.ts` (bundled by verify-all). Browser checks: `browser/cdp-*.mjs` drive headless Chrome (`C:/Program Files/Google/Chrome/Application/chrome.exe`) over CDP and save screenshots; `browser/sheet2.mjs` makes contact sheets.
+- Plaid Link in the browser: `browser/cdp-connect2-body.mjs` swaps Plaid's script (Fetch interception of `cdn.plaid.com`) for a stub that answers with a fake-Plaid public token (`POST :4998/sandbox/public_token/create {institution_id}`).
 - Gotchas: screenshot `clip` is in page coordinates (add `scrollX/scrollY`); the server reads the auth **cookie before** `x-auth-token`, so test `fetch` calls use `credentials: "omit"`; make a test admin with `UPDATE users SET role='admin'` on the local DB only.
 
 ## Open items (ask the owner when relevant)
