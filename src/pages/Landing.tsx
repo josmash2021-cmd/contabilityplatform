@@ -4,6 +4,7 @@ import { MarketingFooter } from "@/components/marketing/MarketingFooter";
 import { Hero, TrustStrip, ValueProps, Product, HowItWorks, Security, Pricing, Faq, FinalCta } from "@/components/marketing/LandingSections";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
+import { useNoZoom } from "@/hooks/useNoZoom";
 
 function usePauseOffscreenSections() {
   useEffect(() => {
@@ -21,6 +22,7 @@ function usePauseOffscreenSections() {
 export default function Landing() {
   const c = useCopy(marketingCopy);
   usePauseOffscreenSections();
+  useNoZoom(); // The site doesn't zoom (the app does).
   return (
     <div className="font-brand min-h-screen bg-white text-slate-900">
       <a href="#contenido" className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow">

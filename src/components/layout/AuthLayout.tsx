@@ -6,12 +6,14 @@ import { TRIAL_DAYS } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { authCopy } from "@/i18n/copy/auth";
 import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
+import { useNoZoom } from "@/hooks/useNoZoom";
 
 /** Split layout for /login, /register and /forgot-password. */
 export default function AuthLayout() {
   const { pathname } = useLocation();
   const { layout } = useCopy(authCopy);
   const c = layout.titles[pathname] ?? layout.defaultTitle;
+  useNoZoom(); // No zoom on the sign-in pages (the app itself zooms).
 
   return (
     <div className="font-brand min-h-screen bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">

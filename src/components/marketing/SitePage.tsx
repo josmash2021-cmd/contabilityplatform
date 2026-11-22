@@ -9,6 +9,7 @@ import { FinalCta, primaryCta } from "@/components/marketing/LandingSections";
 import { TRIAL_DAYS } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
+import { useNoZoom } from "@/hooks/useNoZoom";
 
 type Cta = { label: string; to: string };
 
@@ -58,6 +59,7 @@ export function PageHero({ eyebrow, title, text, primary, secondary, visual, chi
 /** A full site page: nav, the page's sections, the closing call to action and the footer. */
 export function SitePage({ children, title }: { children: ReactNode; /** Browser tab title. */ title: string }) {
   const c = useCopy(marketingCopy);
+  useNoZoom(); // The site doesn't zoom (the app does).
   useEffect(() => {
     const prev = document.title;
     document.title = `${title} · Personal & Business Solutions`;

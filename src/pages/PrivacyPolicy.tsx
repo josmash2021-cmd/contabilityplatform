@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router";
 import { useCopy } from "@/i18n/useI18n";
 import { billingCopy } from "@/i18n/copy/billing";
+import { useNoZoom } from "@/hooks/useNoZoom";
 
 const CONTACT_EMAIL = "josmash2021@gmail.com";
 
@@ -17,6 +18,7 @@ function Rich({ parts }: { parts: string[] }) {
 export default function PrivacyPolicy() {
   const navigate = useNavigate();
   const t = useCopy(billingCopy).privacy;
+  useNoZoom(); // Part of the public site: no zoom.
 
   return (
     <AnimatedPage className="p-4 lg:p-6 max-w-3xl mx-auto">
