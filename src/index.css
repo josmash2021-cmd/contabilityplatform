@@ -160,8 +160,8 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 :root { --toast-bottom: 24px; }
 @media (max-width: 1023px) {
   :root { --toast-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-  :root:has([data-tabbar]) { --toast-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
-  :root:has([data-pos-bar]) { --toast-bottom: calc(154px + env(safe-area-inset-bottom, 0px)); }
+  :root:has([data-tabbar]) { --toast-bottom: calc(74px + max(16px, calc(env(safe-area-inset-bottom, 0px) + 8px))); }
+  :root:has([data-pos-bar]) { --toast-bottom: calc(138px + max(16px, calc(env(safe-area-inset-bottom, 0px) + 8px))); }
   /* Asistente: above the box to write, which sits on the tab bar (Assistant.tsx sets --chat-dock). */
   :root:has([data-chat-dock]) { --toast-bottom: calc(var(--chat-dock, 160px) + 12px); }
 }

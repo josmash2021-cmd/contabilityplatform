@@ -11,6 +11,15 @@ import { oneToastAtATime } from "@/lib/oneToast"
 // One notification at a time: a new one replaces the one on screen.
 oneToastAtATime()
 
+// Installed on the home screen (iPhone "Agregar a inicio", or an installed web app): the page fills the whole
+// screen, so it asks the phone for its safe areas (env(safe-area-inset-*)) and keeps the tab bar and sheets clear
+// of the home bar at the bottom. In Safari or Chrome nothing changes.
+if (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as Navigator & { standalone?: boolean }).standalone) {
+  const vp = document.querySelector('meta[name="viewport"]')
+  const content = vp?.getAttribute("content") ?? ""
+  if (vp && !content.includes("viewport-fit")) vp.setAttribute("content", `${content}, viewport-fit=cover`)
+}
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

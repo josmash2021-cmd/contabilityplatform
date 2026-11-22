@@ -21,7 +21,7 @@ import type { Feature } from "@contracts/planFeatures";
 import {
   Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Wallet, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
   FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Lock,
-  LogOut, Construction, Gift, Loader2, type LucideIcon,
+  LogOut, Construction, Gift, Loader2, Camera, User, Banknote, type LucideIcon,
 } from "lucide-react";
 
 type Item = { path: string; icon: LucideIcon; feature?: Feature };
@@ -41,6 +41,16 @@ const PERSONAL_GROUPS: Group[] = [
   { title: "plan", items: [{ path: "/personal/budgets", icon: PieChart, feature: "budgets" }, { path: "/personal/goals", icon: Target }, { path: "/personal/subscriptions", icon: Repeat }] },
   { title: "account", items: [{ path: "/personal/bank", icon: Landmark }, { path: "/personal/assistant", icon: Sparkles }, { path: "/settings", icon: Settings }] },
 ];
+/** The "+" sheet (Crear): an icon for each thing it creates. */
+function newIcon(path: string): LucideIcon {
+  if (path === "/expenses?photo=1") return Camera;
+  const base = path.split("?")[0];
+  const icons: Record<string, LucideIcon> = {
+    "/pos": ShoppingCart, "/invoices": FileText, "/quotes": ClipboardList, "/expenses": Wallet, "/customers": User,
+    "/personal/transactions": Banknote, "/personal/goals": Target, "/personal/budgets": PieChart,
+  };
+  return icons[base] ?? Plus;
+}
 /** The phone tab bar: two tabs, the "+" button, one tab, and "Más". */
 const TABS = { business: ["/", "/transactions", "/invoices"], personal: ["/personal", "/personal/transactions", "/personal/goals"] };
 
@@ -137,22 +147,16 @@ function SideNav({ groups, pathname, locked, label, t, onGo, counts }: NavProps)
 
 /** Jump to any section by typing its name (or what it's for). */
 /** "+ Nuevo": the things people create most, one tap away. */
-function NewMenu({ items, t, onGo, round }: { items: [string, string, string?][]; t: AppCopy; onGo: (p: string) => void; round?: boolean }) {
+function NewMenu({ items, t, onGo }: { items: [string, string, string?][]; t: AppCopy; onGo: (p: string) => void }) {
   if (items.length === 0) return null;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        {round ? (
-          <button className="grid h-12 w-12 -translate-y-3 place-items-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400" aria-label={t.shell.newTitle}>
-            <Plus className="h-6 w-6" />
-          </button>
-        ) : (
-          <button className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2">
-            <Plus className="h-4 w-4" />{t.shell.newBtn}
-          </button>
-        )}
+        <button className="inline-flex h-10 items-center gap-1.5 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 focus-visible:ring-offset-2">
+          <Plus className="h-4 w-4" />{t.shell.newBtn}
+        </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align={round ? "center" : "end"} side={round ? "top" : "bottom"} className="w-56">
+      <DropdownMenuContent align="end" side="bottom" className="w-56">
         <DropdownMenuLabel>{t.shell.newTitle}</DropdownMenuLabel>
         {items.map(([path, label, sub]) => (
           <DropdownMenuItem key={path + label} onSelect={() => onGo(path)} className="flex-col items-start gap-0 py-2">
@@ -198,6 +202,7 @@ export function AppLayout() {
   const { data: settings } = trpc.settings.get.useQuery(undefined, { staleTime: Infinity, refetchOnMount: false });
   const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
   const [moreOpen, setMoreOpen] = useState(false);
+  const [newOpen, setNewOpen] = useState(false);
   const pathname = location.pathname;
 
   // Route guard: keep people in their mode's routes.
@@ -267,6 +272,7 @@ export function AppLayout() {
   }, [location.key, location.pathname]);
   const go = (path: string) => {
     setMoreOpen(false);
+    setNewOpen(false);
     const el = fxRef.current;
     const same = path === pathname;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
@@ -348,9 +354,16 @@ export function AppLayout() {
         </main>
 
         {/* ── Phone tab bar ── */}
-        <nav data-tabbar aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white px-1 pb-[calc(16px+env(safe-area-inset-bottom,0px))] pt-1.5 lg:hidden">
+        <nav data-tabbar aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white pb-[max(16px,calc(env(safe-area-inset-bottom,0px)+8px))] pl-[max(4px,env(safe-area-inset-left,0px))] pr-[max(4px,env(safe-area-inset-right,0px))] pt-1.5 lg:hidden">
           {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} count={counts[tab.path]} /> : <span key="empty-l" />)}
-          <div className="grid place-items-center">{newItems.length ? <NewMenu items={newItems} t={t} onGo={go} round /> : null}</div>
+          <div className="grid place-items-center">
+            {newItems.length ? (
+              <button type="button" onClick={() => setNewOpen(true)} aria-haspopup="dialog" aria-expanded={newOpen} aria-label={t.shell.newTitle}
+                className="grid h-12 w-12 -translate-y-3 place-items-center rounded-full bg-blue-600 text-white shadow-lg shadow-blue-600/30 transition-transform active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
+                <Plus className={cn("h-6 w-6 transition-transform duration-300", newOpen && "rotate-45")} />
+              </button>
+            ) : null}
+          </div>
           {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
           <button
             onClick={() => setMoreOpen(true)}
@@ -360,6 +373,29 @@ export function AppLayout() {
             <MoreHorizontal className="h-[22px] w-[22px]" aria-hidden />{t.shell.more}
           </button>
         </nav>
+        {/* The "+" sheet (Crear): what you can make, each with its icon, like the Más sheet. */}
+        <Sheet open={newOpen} onOpenChange={setNewOpen}>
+          <SheetContent side="bottom" className="max-h-[86vh] gap-0 overflow-y-auto rounded-t-[18px] p-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden">
+            <SheetHeader className="min-h-8 justify-center p-0 pr-10 text-left"><SheetTitle className="text-[19px] font-[750] tracking-tight text-slate-900">{t.shell.newTitle}</SheetTitle></SheetHeader>
+            <ul className="mt-3.5 grid gap-1.5">
+              {newItems.map(([path, itemLabel, sub]) => {
+                const Icon = newIcon(path);
+                return (
+                  <li key={path + itemLabel}>
+                    <button type="button" onClick={() => go(path)}
+                      className="flex w-full items-center gap-3 rounded-xl border border-slate-200 bg-white p-3 text-left transition-colors hover:bg-slate-50 active:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                      <Icon className="h-5 w-5 shrink-0 text-slate-800" aria-hidden />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-slate-900">{itemLabel}</span>
+                        {sub && <span className="block truncate text-xs font-medium text-slate-500">{sub}</span>}
+                      </span>
+                    </button>
+                  </li>
+                );
+              })}
+            </ul>
+          </SheetContent>
+        </Sheet>
         <Sheet open={moreOpen} onOpenChange={setMoreOpen}>
           <SheetContent side="bottom" className="max-h-[86vh] gap-0 overflow-y-auto rounded-t-[18px] p-4 pb-[calc(18px+env(safe-area-inset-bottom,0px))] lg:hidden">
             {/* The title on the same line as the close button, like the 2.0 sheet. */}

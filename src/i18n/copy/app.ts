@@ -58,9 +58,9 @@ const es = {
     newTitle: "Crear",
     newItems: {
       business: [
-        ["/pos", "Cobrar", "Venta en el momento"], ["/invoices?new=1", "Factura", "Con link para pagar"],
+        ["/pos", "Cobrar", "Venta en el momento"], ["/invoices?new=1", "Factura", "Con link de pago"],
         ["/quotes?new=1", "Cotización", "Presupuesto para un cliente"], ["/expenses?new=1", "Gasto", "Registra un pago que hiciste"],
-        ["/expenses?photo=1", "Foto de recibo", "Tómale foto y listo"], ["/customers?new=1", "Cliente", "Nombre y teléfono"],
+        ["/expenses?photo=1", "Foto de recibo", "Lo leemos por ti"], ["/customers?new=1", "Cliente", "Nombre y teléfono"],
       ],
       personal: [
         ["/personal/transactions?new=1", "Gasto en efectivo", "Para lo que no pasa por el banco"],
@@ -184,9 +184,9 @@ const en: AppCopy = {
     newTitle: "Create",
     newItems: {
       business: [
-        ["/pos", "Checkout", "A sale right now"], ["/invoices?new=1", "Invoice", "With a link to pay"],
+        ["/pos", "Checkout", "A sale right now"], ["/invoices?new=1", "Invoice", "With a payment link"],
         ["/quotes?new=1", "Quote", "An estimate for a client"], ["/expenses?new=1", "Expense", "Record a payment you made"],
-        ["/expenses?photo=1", "Receipt photo", "Snap it and you're done"], ["/customers?new=1", "Client", "Name and phone"],
+        ["/expenses?photo=1", "Receipt photo", "We read it for you"], ["/customers?new=1", "Client", "Name and phone"],
       ],
       personal: [
         ["/personal/transactions?new=1", "Cash expense", "For what doesn't go through the bank"],

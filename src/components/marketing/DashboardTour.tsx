@@ -584,10 +584,14 @@ export function DashboardTour() {
   // The pointer goes to what this beat is about, the way a hand moves a mouse. A guide point travels a slight
   // curve (quick to start, a long gentle slowdown), and the pointer follows it like a hand on a soft spring: it
   // never starts or stops at once, keeps its speed when the next move begins, and settles with a touch of give.
-  // When it's still it sways a little. Each beat sets where it's going; a loop draws it while the tour plays.
+  // When it's still it sways a little. Each beat sets what it's going to; the loop follows that element where it
+  // really is on every frame (a window that is still sliding in included), so the click lands on it.
   const boxRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
-  const motion = useRef({ placed: false, gx: 0, gy: 0, x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: 0, cx: 0, cy: 0, tx: 0, ty: 0, t0: 0, dur: 0 });
+  const motion = useRef({
+    placed: false, gx: 0, gy: 0, x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: 0, cx: 0, cy: 0, tx: 0, ty: 0, t0: 0, dur: 0,
+    el: null as HTMLElement | null, jx: 0, jy: 0,
+  });
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
@@ -602,11 +606,12 @@ export function DashboardTour() {
     const target = frame.at ? box.querySelector<HTMLElement>(`[data-tour="${frame.at}"]`) : null;
     if (!target) return;
     const r = target.getBoundingClientRect();
-    // A spot near the middle, a little off it, different on each beat.
-    const jx = (((at * 37) % 11) / 10 - 0.5) * Math.min(r.width * 0.35, 40);
-    const jy = (((at * 53) % 7) / 6 - 0.5) * Math.min(r.height * 0.3, 8);
-    m.tx = r.left - b.left + r.width / 2 + jx;
-    m.ty = r.top - b.top + r.height / 2 + jy;
+    // A spot near the middle, a little off it, different on each beat (kept well inside what it clicks).
+    m.el = target;
+    m.jx = (((at * 37) % 11) / 10 - 0.5) * Math.min(r.width * 0.3, 30);
+    m.jy = (((at * 53) % 7) / 6 - 0.5) * Math.min(r.height * 0.25, 6);
+    m.tx = r.left - b.left + r.width / 2 + m.jx;
+    m.ty = r.top - b.top + r.height / 2 + m.jy;
     m.fx = m.gx;
     m.fy = m.gy;
     const dx = m.tx - m.fx;
@@ -617,15 +622,15 @@ export function DashboardTour() {
     m.cx = m.fx + dx * 0.45 - (dy / d) * bend;
     m.cy = m.fy + dy * 0.45 + (dx / d) * bend;
     m.t0 = performance.now();
-    // Longer moves take longer; it always arrives (and settles) before the click.
-    m.dur = Math.min(Math.min(1000, Math.max(520, 380 + d * 0.6)), Math.max(420, frame.ms - 320));
+    // Longer moves take longer; it always arrives and settles before the click.
+    m.dur = Math.min(Math.min(950, Math.max(480, 380 + d * 0.55)), Math.max(380, frame.ms - 450));
   }, [frame, at]);
 
   useEffect(() => {
     if (!playing) return;
     const minJerk = (s: number) => s * s * s * (10 - 15 * s + 6 * s * s);
-    const W = 17; // how quickly the hand follows (rad/s)
-    const Z = 0.76; // a little give when it stops
+    const W = 22; // how quickly the hand follows (rad/s)
+    const Z = 0.8; // a little give when it stops
     let raf = 0;
     let last = performance.now();
     let idle = 1;
@@ -635,8 +640,22 @@ export function DashboardTour() {
       const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
       last = now;
       if (cur && m.placed) {
+        // Where the element it's going to is right now (it may still be sliding in).
+        const box = boxRef.current;
+        if (m.el && box) {
+          if (m.el.isConnected) {
+            const r = m.el.getBoundingClientRect();
+            const b = box.getBoundingClientRect();
+            m.tx = r.left - b.left + r.width / 2 + m.jx;
+            m.ty = r.top - b.top + r.height / 2 + m.jy;
+            if (!m.dur) { m.gx = m.tx; m.gy = m.ty; }
+          } else {
+            m.el = null;
+          }
+        }
         if (m.dur) {
-          const p = Math.min(1, (now - m.t0) / m.dur);
+          // The frame's time can be a hair before the move was set: never below 0 (a negative power is NaN).
+          const p = Math.min(1, Math.max(0, (now - m.t0) / m.dur));
           const s = minJerk(Math.pow(p, 0.8)); // fast to start, long soft finish
           const u = 1 - s;
           m.gx = u * u * m.fx + 2 * u * s * m.cx + s * s * m.tx;
@@ -657,6 +676,8 @@ export function DashboardTour() {
           m.x += m.vx * h;
           m.y += m.vy * h;
         }
+        // If anything ever went wrong, start again from the guide instead of freezing.
+        if (!Number.isFinite(m.x) || !Number.isFinite(m.y)) { m.x = m.gx; m.y = m.gy; m.vx = 0; m.vy = 0; }
         cur.style.transform = `translate(${m.x.toFixed(2)}px, ${m.y.toFixed(2)}px)`;
       }
       raf = requestAnimationFrame(tick);

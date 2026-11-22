@@ -14,7 +14,8 @@ export function useNoZoom(): void {
     // Phones: the page can't scale.
     const meta = document.querySelector<HTMLMetaElement>('meta[name="viewport"]');
     const before = meta?.getAttribute("content") ?? null;
-    meta?.setAttribute("content", LOCKED);
+    // Keeps viewport-fit=cover when the app is installed on the home screen (main.tsx).
+    meta?.setAttribute("content", before?.includes("viewport-fit=cover") ? `${LOCKED}, viewport-fit=cover` : LOCKED);
     // Pinch and double tap don't zoom; one finger still scrolls both ways.
     const root = document.documentElement;
     const touchBefore = root.style.touchAction;
