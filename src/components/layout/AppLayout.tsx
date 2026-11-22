@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense } from "react";
 import { toast } from "sonner";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
@@ -243,15 +243,39 @@ export function AppLayout() {
   const allItems = groups.flatMap((g) => g.items);
   const label = (path: string) => (path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : t.shell.labels[path] ?? path);
   const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);
-  // Changing page from the menu: the page goes soft for a moment, then the next one comes into focus (index.css .page-out / .page-in).
-  const [leaving, setLeaving] = useState(false);
+  // Changing page: the page goes soft, the next one comes in still soft and clears into focus, with no sharp frame
+  // in between (index.css .page-fx). One wrapper that stays mounted carries the effect: data-fx="out" is the soft
+  // state; the new page is shown before paint (layout effect) and then eases back to sharp.
+  const fxRef = useRef<HTMLDivElement>(null);
+  const fxPath = useRef(location.pathname);
+  useLayoutEffect(() => {
+    const el = fxRef.current;
+    const changed = fxPath.current !== location.pathname;
+    fxPath.current = location.pathname;
+    if (!el) return;
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) { el.dataset.fx = "in"; return; }
+    // Coming from the menu the page is already soft; any other change of page starts soft right away.
+    if (el.dataset.fx !== "out") {
+      if (!changed) return;
+      el.style.transition = "none";
+      el.dataset.fx = "out";
+      void el.offsetWidth;
+      el.style.transition = "";
+    }
+    const raf = requestAnimationFrame(() => requestAnimationFrame(() => { el.dataset.fx = "in"; }));
+    return () => cancelAnimationFrame(raf);
+  }, [location.key, location.pathname]);
   const go = (path: string) => {
     setMoreOpen(false);
+    const el = fxRef.current;
     const same = path === pathname;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-    if (same || still) { navigate(path); return; }
-    setLeaving(true);
-    window.setTimeout(() => { navigate(path); setLeaving(false); }, 250);
+    if (same || still || !el) { navigate(path); return; }
+    el.dataset.fx = "out";
+    // The old page stays soft while the next one loads, then the layout effect above brings it into focus.
+    window.setTimeout(() => startTransition(() => { navigate(path); }), 240);
+    // Never stay soft if nothing changed.
+    window.setTimeout(() => { if (el.dataset.fx === "out" && fxPath.current === pathname) el.dataset.fx = "in"; }, 3000);
   };
 
   const tabs = (memberRole === "staff" ? ["/pos", "/customers", "/expenses"] : TABS[userMode])
@@ -314,8 +338,10 @@ export function AppLayout() {
           <SubscriptionPageGate>
             {/* Pages are lazy-loaded; keep the menu while one loads */}
             <Suspense fallback={<div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div>}>
-              <div key={pathname} className={cn("page-in", leaving && "page-out")}>
-                <Outlet />
+              <div ref={fxRef} className="page-fx" data-fx="in">
+                <div key={pathname}>
+                  <Outlet />
+                </div>
               </div>
             </Suspense>
           </SubscriptionPageGate>
