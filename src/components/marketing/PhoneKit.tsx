@@ -21,16 +21,17 @@ const sideButton = "absolute w-[4px] bg-gradient-to-b from-slate-400 via-slate-6
 
 /**
  * The phone's body around a screen. `screen` is the white screen (its own height and contents);
- * the island and the home indicator sit on top of it.
+ * the island and the home indicator sit on top of it. `onDark`: on a near-black background the shadow is black,
+ * so it doesn't show as a lighter box around the phone.
  */
-export function PhoneCase({ label, viewRef, children }: { label: string; viewRef?: Ref<HTMLDivElement>; children: ReactNode }) {
+export function PhoneCase({ label, viewRef, onDark = false, children }: { label: string; viewRef?: Ref<HTMLDivElement>; onDark?: boolean; children: ReactNode }) {
   return (
     <div ref={viewRef} className="relative mx-auto w-[292px] sm:w-[312px]" role="img" aria-label={label}>
       <span aria-hidden className={`${sideButton} -left-[3px] top-[112px] h-7 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -left-[3px] top-[158px] h-12 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -left-[3px] top-[218px] h-12 rounded-l-md`} />
       <span aria-hidden className={`${sideButton} -right-[3px] top-[178px] h-[76px] rounded-r-md`} />
-      <div className="rounded-[3.3rem] bg-gradient-to-br from-slate-300 via-slate-600 to-slate-400 p-[2px] shadow-[0_45px_90px_-30px_rgba(15,23,42,0.65)]">
+      <div className={`rounded-[3.3rem] bg-gradient-to-br from-slate-300 via-slate-600 to-slate-400 p-[2px] ${onDark ? "shadow-[0_40px_70px_-28px_rgba(0,0,0,0.95)]" : "shadow-[0_45px_90px_-30px_rgba(15,23,42,0.65)]"}`}>
         <div className="rounded-[3.2rem] bg-[#0b0d12] p-[11px]">{children}</div>
       </div>
     </div>

@@ -170,17 +170,28 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
    The blur is gone when the animation ends (fill "backwards"), so nothing "fixed" inside a page is affected after. */
 .page-in { animation: page-in 650ms cubic-bezier(0.22, 1, 0.36, 1) backwards; }
 @keyframes page-in { from { opacity: 0.25; filter: blur(14px); } to { opacity: 1; filter: blur(0); } }
-/* "Un día con la app": each phone comes in from its side, tilted, then floats; the text slides in from the other side. */
-.day-phone { opacity: 0; transform: translateX(var(--from-x)) rotate(var(--from-r)); transition: transform 1000ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease; }
-.day-phone[data-in="true"] { opacity: 1; transform: translateX(0) rotate(var(--tilt)); }
+/* "Un día con la app": each phone comes in straight from its side, then floats; the text slides in from the other side. */
+.day-phone { opacity: 0; transform: translateX(var(--from-x)); transition: transform 1000ms cubic-bezier(0.22, 1, 0.36, 1), opacity 700ms ease; }
+.day-phone[data-in="true"] { opacity: 1; transform: none; }
 .day-text { opacity: 0; transform: translateX(var(--from-x)); transition: transform 900ms cubic-bezier(0.22, 1, 0.36, 1) 120ms, opacity 700ms ease 120ms; }
 .day-text[data-in="true"] { opacity: 1; transform: none; }
 .day-float { animation: day-float 6s ease-in-out infinite; }
 @keyframes day-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-12px); } }
+/* The scene on each phone's screen: a finger's tap, what pops in after it, the question being typed, the download's progress. */
+.tap-ripple { position: absolute; left: 50%; top: 50%; z-index: 5; width: 36px; height: 36px; border-radius: 9999px; pointer-events: none; background: rgba(15, 23, 42, 0.28); box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.95), 0 6px 14px -4px rgba(15, 23, 42, 0.45); animation: tap 650ms ease-out both; }
+@keyframes tap { 0% { opacity: 0; transform: translate(-50%, -50%) scale(1.6); } 35% { opacity: 1; transform: translate(-50%, -50%) scale(0.8); } 70% { opacity: 1; transform: translate(-50%, -50%) scale(0.9); } 100% { opacity: 0; transform: translate(-50%, -50%) scale(1.15); } }
+.day-pop { animation: day-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) both; }
+@keyframes day-pop { from { opacity: 0; transform: scale(0.6); } to { opacity: 1; transform: none; } }
+.day-rise { animation: day-rise 500ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes day-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.day-type { display: inline-block; vertical-align: bottom; animation: day-type 1100ms steps(22, end) both; }
+@keyframes day-type { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+.day-fill { animation: day-fill 950ms ease-in-out both; }
+@keyframes day-fill { from { width: 0; } to { width: 100%; } }
 @media (prefers-reduced-motion: reduce) {
-  .day-phone, .day-phone[data-in="true"] { opacity: 1; transform: rotate(var(--tilt)); transition: none; }
+  .day-phone, .day-phone[data-in="true"] { opacity: 1; transform: none; transition: none; }
   .day-text { opacity: 1; transform: none; transition: none; }
-  .day-float { animation: none; }
+  .day-float, .tap-ripple, .day-pop, .day-rise, .day-type, .day-fill { animation: none; }
 }
 .page-out { filter: blur(8px); opacity: 0.45; transition: filter 260ms ease-in-out, opacity 260ms ease-in-out; }
 
