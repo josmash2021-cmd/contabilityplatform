@@ -142,7 +142,7 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
 
   // Every plan column on computers; only the picked one on phones.
   const colVisibility = (p: LandingPlan) => (p.key === shown ? "" : "hidden md:table-cell");
-  const tint = (p: LandingPlan) => (p.featured ? "bg-blue-50/50" : "");
+  const tint = (p: LandingPlan) => (p.featured ? "bg-blue-100/35" : "");
 
   return (
     <section id="comparar" className="scroll-mt-nav bg-white py-24 sm:py-28" aria-labelledby="compare-title">
@@ -173,10 +173,11 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
             />
           </div>
 
-          {/* overflow-clip (not hidden) rounds the corners without breaking the sticky header. */}
+          {/* Set into the page: a slightly darker surface with its shadow inside, not a card floating above it.
+              overflow-clip (not hidden) rounds the corners without breaking the sticky header. */}
           <div
             key={group}
-            className="mt-3 overflow-clip rounded-3xl border border-slate-200 bg-white shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 md:mt-0"
+            className="relative mt-3 overflow-clip rounded-3xl border border-slate-300/50 bg-[#F1F4F9] motion-safe:animate-in motion-safe:fade-in motion-safe:duration-500 md:mt-0"
           >
             <table className="w-full table-fixed border-separate border-spacing-0 text-left">
               <caption className="sr-only">{c.caption(groupLabel)}</caption>
@@ -184,7 +185,7 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
                 <tr>
                   <th
                     scope="col"
-                    className={`relative w-[56%] border-b border-slate-200 bg-white px-4 pb-4 pt-5 align-bottom text-sm font-semibold text-slate-500 sm:px-6 md:sticky md:top-16 md:z-10 ${plans.length === 2 ? "md:w-[46%]" : "md:w-[37%]"}`}
+                    className={`relative w-[56%] border-b border-slate-300/60 bg-[#F1F4F9] px-4 pb-4 pt-5 align-bottom text-sm font-semibold text-slate-500 sm:px-6 md:sticky md:top-16 md:z-10 ${plans.length === 2 ? "md:w-[46%]" : "md:w-[37%]"}`}
                   >
                     {/* The brand fills the corner above the feature names. */}
                     <span className="absolute left-4 top-5 flex items-center gap-2.5 sm:left-6">
@@ -197,7 +198,7 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
                     <th
                       key={p.key}
                       scope="col"
-                      className={`${colVisibility(p)} border-b border-slate-200 px-3 pb-4 pt-5 align-bottom md:sticky md:top-16 md:z-10 ${p.featured ? "bg-blue-50" : "bg-white"}`}
+                      className={`${colVisibility(p)} border-b border-slate-300/60 px-3 pb-4 pt-5 align-bottom md:sticky md:top-16 md:z-10 ${p.featured ? "bg-[#E6EDF9]" : "bg-[#F1F4F9]"}`}
                     >
                       <PlanHead plan={p} name={pricing.plans[p.key].name} pricing={pricing} c={c} groupLabel={groupLabel} />
                     </th>
@@ -213,7 +214,7 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
                     <tr>
                       <th
                         scope="rowgroup"
-                        className={`bg-slate-50 px-4 py-3 text-left text-sm font-semibold text-slate-900 sm:px-6 ${si ? "border-t border-slate-200" : ""}`}
+                        className={`bg-slate-200/45 px-4 py-3 text-left text-sm font-semibold text-slate-900 sm:px-6 ${si ? "border-t border-slate-300/50" : ""}`}
                       >
                         <span className="inline-flex items-center gap-2">
                           <Icon className="h-4 w-4 shrink-0 text-blue-600" aria-hidden />
@@ -221,19 +222,19 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
                         </span>
                       </th>
                       {plans.map((p) => (
-                        <td key={p.key} className={`${colVisibility(p)} bg-slate-50 ${si ? "border-t border-slate-200" : ""}`} />
+                        <td key={p.key} className={`${colVisibility(p)} bg-slate-200/45 ${si ? "border-t border-slate-300/50" : ""}`} />
                       ))}
                     </tr>
                     {s.rows.map((r) => {
                       const row = c.rows[r.id];
                       return (
-                        <tr key={r.id} className="transition-colors md:hover:bg-slate-50/70">
-                          <th scope="row" className="border-t border-slate-100 px-4 py-4 align-middle text-sm font-normal text-slate-700 sm:px-6 sm:text-[15px]">
+                        <tr key={r.id} className="transition-colors md:hover:bg-white/50">
+                          <th scope="row" className="border-t border-slate-200/70 px-4 py-4 align-middle text-sm font-normal text-slate-700 sm:px-6 sm:text-[15px]">
                             {row.label}
                             {row.hint && <span className="mt-1 block text-xs leading-snug text-slate-500 sm:text-[13px]">{row.hint}</span>}
                           </th>
                           {plans.map((p) => (
-                            <td key={p.key} className={`${colVisibility(p)} ${tint(p)} border-t border-slate-100 px-3 py-4 text-center align-middle`}>
+                            <td key={p.key} className={`${colVisibility(p)} ${tint(p)} border-t border-slate-200/70 px-3 py-4 text-center align-middle`}>
                               <CellView value={r.cell(p.tier, c.values)} c={c} />
                             </td>
                           ))}
@@ -246,15 +247,17 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
 
               <tfoot>
                 <tr>
-                  <td className="border-t border-slate-200 px-4 py-5 sm:px-6" />
+                  <td className="border-t border-slate-300/50 px-4 py-5 sm:px-6" />
                   {plans.map((p) => (
-                    <td key={p.key} className={`${colVisibility(p)} ${tint(p)} border-t border-slate-200 px-3 py-5 text-center`}>
+                    <td key={p.key} className={`${colVisibility(p)} ${tint(p)} border-t border-slate-300/50 px-3 py-5 text-center`}>
                       <PlanCta plan={p} name={pricing.plans[p.key].name} c={c} groupLabel={groupLabel} />
                     </td>
                   ))}
                 </tr>
               </tfoot>
             </table>
+            {/* The inner shadow, drawn over the cells so the header's background doesn't hide it. */}
+            <div aria-hidden className="pointer-events-none absolute inset-0 z-[15] rounded-3xl shadow-[inset_0_2px_4px_rgba(15,23,42,0.12),inset_0_14px_32px_-10px_rgba(15,23,42,0.20),inset_0_-2px_0_rgba(255,255,255,0.9),inset_2px_0_6px_-4px_rgba(15,23,42,0.10),inset_-2px_0_6px_-4px_rgba(15,23,42,0.10)]" />
           </div>
         </div>
       </div>
