@@ -349,7 +349,7 @@ export default function Assistant() {
               {phone && <div aria-hidden style={{ height: Math.max(0, dockH + 8 - 112) }} />}
             </section>
             {phone ? createPortal(
-              <div ref={dockRef} data-chat-dock="" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/80 bg-slate-50 px-4 pb-[calc(78px+env(safe-area-inset-bottom,0px))] pt-3">
+              <div ref={dockRef} data-chat-dock="" className="fixed inset-x-0 bottom-0 z-30 border-t border-slate-200/80 bg-slate-50 px-4 pb-[calc(88px+env(safe-area-inset-bottom,0px))] pt-3">
                 <div className="mx-auto grid max-w-3xl gap-2">
                   {planNote}
                   {composer}

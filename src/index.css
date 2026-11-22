@@ -160,8 +160,8 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 :root { --toast-bottom: 24px; }
 @media (max-width: 1023px) {
   :root { --toast-bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
-  :root:has([data-tabbar]) { --toast-bottom: calc(80px + env(safe-area-inset-bottom, 0px)); }
-  :root:has([data-pos-bar]) { --toast-bottom: calc(144px + env(safe-area-inset-bottom, 0px)); }
+  :root:has([data-tabbar]) { --toast-bottom: calc(90px + env(safe-area-inset-bottom, 0px)); }
+  :root:has([data-pos-bar]) { --toast-bottom: calc(154px + env(safe-area-inset-bottom, 0px)); }
   /* Asistente: above the box to write, which sits on the tab bar (Assistant.tsx sets --chat-dock). */
   :root:has([data-chat-dock]) { --toast-bottom: calc(var(--chat-dock, 160px) + 12px); }
 }
@@ -192,6 +192,18 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 .tour-click { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 9999px; background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, rgba(59, 130, 246, 0.12) 60%, transparent 72%); box-shadow: 0 0 0 1.5px rgba(59, 130, 246, 0.55); animation: tour-click 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes tour-click { from { opacity: 1; transform: scale(0.2); } 60% { opacity: 0.9; } to { opacity: 0; transform: scale(1.5); } }
 .tour-scan { top: -28px; animation: tour-scan 1300ms ease-in-out infinite; }
+/* The tour's bank connection (DashboardTour ConnectView): the window, the locked line, the progress ring, each step's spinner. */
+.tour-veil { animation: tour-veil 300ms ease-out both; }
+@keyframes tour-veil { from { opacity: 0; } }
+.tour-modal { animation: tour-modal 420ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes tour-modal { from { opacity: 0; transform: translateY(10px) scale(0.97); } }
+.tour-wire { background: repeating-linear-gradient(90deg, #bfd3fb 0 5px, transparent 5px 9px); background-size: 18px 2px; animation: tour-wire 1s linear infinite; }
+@keyframes tour-wire { to { background-position: 18px 0; } }
+.tour-ring { stroke-dashoffset: 176; animation: tour-ring 2300ms cubic-bezier(0.3, 0.6, 0.3, 1) forwards; }
+@keyframes tour-ring { to { stroke-dashoffset: 6; } }
+.tour-wait { animation: tour-spin 800ms linear infinite, tour-out 200ms ease forwards; }
+@keyframes tour-spin { to { transform: rotate(360deg); } }
+@keyframes tour-out { to { opacity: 0; } }
 @keyframes tour-scan { to { top: 104px; } }
 .tour-grow { transform-origin: bottom; animation: tour-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes tour-grow { from { transform: scaleY(0); } to { transform: none; } }
@@ -224,7 +236,9 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 .sup-teaser-in { animation: sup-teaser-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes sup-teaser-in { from { opacity: 0; transform: translateX(12px) scale(0.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .tour-click, .tour-scan, .tour-grow { animation: none; }
+  .tour-click, .tour-scan, .tour-grow, .tour-veil, .tour-modal, .tour-wire { animation: none; }
+  .tour-ring { animation: none; stroke-dashoffset: 6; }
+  .tour-wait { animation: none; opacity: 0; }
   .sup-star { animation: none; opacity: 0; }
   .sup-face { animation: none; opacity: 1; }
   .sup-eyes, .sup-spark, .sup-ring, .sup-panel-in, .sup-teaser-in { animation: none; }

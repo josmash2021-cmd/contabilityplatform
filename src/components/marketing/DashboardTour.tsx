@@ -1,28 +1,43 @@
-// The home page's dashboard (hero, and /producto): a pointer goes through the app's sections and does one task
-// in each (a sale, a reminder, a receipt, the bank, the report), over and over while it's on screen.
+// The home page's dashboard (hero, and /producto): a pointer first connects a bank (the same window the app shows),
+// then goes through the app's sections and does one task in each (the bank's movements, a sale, a reminder, a
+// receipt, the report), over and over while it's on screen.
 // The side menu works: tapping a section jumps there and the tour goes on from it. With motion turned off
 // there's no pointer and each section shows its task already done. Sample data.
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import {
-  ArrowDownRight, ArrowUpRight, BarChart3, Bell, Camera, Check, CheckCircle2, FileText, Landmark, LayoutDashboard,
-  Plus, Receipt, Send, ShoppingCart, Sparkles, Users, type LucideIcon,
+  ArrowDownRight, ArrowRight, ArrowUpRight, BarChart3, Bell, Camera, Check, CheckCircle2, FileText, Landmark, LayoutDashboard,
+  Lock, Plus, Receipt, Search, Send, ShieldCheck, ShoppingCart, Sparkles, Users, type LucideIcon,
 } from "lucide-react";
 import { FileLogo } from "@/components/FileLogo";
+import { Logo } from "@/components/Logo";
+import { BankLogo } from "@/components/brand/BankLogo";
 import { useInView, useReducedMotion } from "@/hooks/useInView";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
 
 type P = MarketingCopy["previews"];
-type View = "home" | "sales" | "clients" | "expenses" | "bank" | "reports";
+type View = "connect" | "home" | "sales" | "clients" | "expenses" | "bank" | "reports";
+type NavView = Exclude<View, "connect">;
 type Toast = keyof P["tour"]["toasts"];
 /** One beat of the tour: how long it lasts, where the pointer goes, whether it clicks, and a notice it fires. */
 type Beat = { ms: number; at?: string; click?: boolean; toast?: Toast };
 
-const VIEWS: View[] = ["home", "sales", "clients", "expenses", "bank", "reports"];
+// The side menu, and the order the tour goes in: it starts by connecting the bank (shown under Banco).
+const NAV: NavView[] = ["home", "sales", "clients", "expenses", "bank", "reports"];
 const NAV_ICONS: LucideIcon[] = [LayoutDashboard, ShoppingCart, Users, Receipt, Landmark, BarChart3];
+const FLOW: View[] = ["connect", "bank", "home", "sales", "clients", "expenses", "reports"];
+const navOf = (v: View): NavView => (v === "connect" ? "bank" : v);
 
 // Each section's beats; its screen changes with the beat number (`step`). The last beats go to the next section.
 const BEATS: Record<View, Beat[]> = {
+  connect: [
+    { ms: 1300, at: "connect-btn" }, { ms: 450, click: true }, // the empty Banco page; "Conectar mi banco"
+    { ms: 1500, at: "connect-go" }, { ms: 450, click: true }, // the window: what will happen, and the banks
+    { ms: 1300, at: "pick-bank" }, { ms: 450, click: true }, // the secure window: the bank is picked
+    { ms: 2600 }, // the movements come in
+    { ms: 1500, toast: "connected" }, // connected: the accounts and their balance
+    { ms: 900, at: "connect-see" }, { ms: 450, click: true },
+  ],
   home: [{ ms: 2200 }, { ms: 900, at: "nav-sales" }, { ms: 450, click: true }],
   sales: [
     { ms: 900, at: "new-sale" }, { ms: 450, click: true }, // the list; "New sale"
@@ -44,24 +59,24 @@ const BEATS: Record<View, Beat[]> = {
     { ms: 1300, at: "save-exp" }, // store, total and category filled in
     { ms: 450, click: true },
     { ms: 1800, toast: "receipt" },
-    { ms: 900, at: "nav-bank" }, { ms: 450, click: true },
+    { ms: 900, at: "nav-reports" }, { ms: 450, click: true },
   ],
   bank: [
     { ms: 1200 }, // the categories are being put
     { ms: 1100, at: "approve-all" },
     { ms: 450, click: true },
     { ms: 2000, toast: "bank" },
-    { ms: 900, at: "nav-reports" }, { ms: 450, click: true },
+    { ms: 900, at: "nav-home" }, { ms: 450, click: true },
   ],
   reports: [
     { ms: 1500, at: "download" }, { ms: 450, click: true },
     { ms: 1000 }, // downloading
     { ms: 2200, toast: "report" },
-    { ms: 900, at: "nav-home" }, { ms: 450, click: true },
+    { ms: 900, at: "nav-bank" }, { ms: 450, click: true },
   ],
 };
-const FRAMES = VIEWS.flatMap((view) => BEATS[view].map((b, step) => ({ view, step, ...b })));
-const START = Object.fromEntries(VIEWS.map((v) => [v, FRAMES.findIndex((f) => f.view === v)])) as Record<View, number>;
+const FRAMES = FLOW.flatMap((view) => BEATS[view].map((b, step) => ({ view, step, ...b })));
+const START = Object.fromEntries(FLOW.map((v) => [v, FRAMES.findIndex((f) => f.view === v)])) as Record<View, number>;
 
 const money = (n: number) => n.toLocaleString("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
 const btn = "inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition-[background-color,transform] duration-200";
@@ -316,6 +331,118 @@ function ExpensesView({ p, step }: VP) {
   );
 }
 
+// ── Conectar el banco: the same window the app shows (the app's logo, the banks, the secure window, the movements coming in) ──
+const PICK = ["Chase", "Bank of America", "Wells Fargo", "Regions Bank", "Capital One", "Truist"];
+const CHOSEN = "Wells Fargo";
+
+function ConnectView({ p, step }: VP) {
+  const t = p.tour.connect;
+  const phase = step < 2 ? "page" : step < 4 ? "intro" : step < 6 ? "pick" : step < 7 ? "import" : "done";
+  return (
+    <>
+      <Head kicker={t.kicker} title={t.emptyTitle} />
+      <div className="mt-4 grid justify-items-center rounded-xl border border-dashed border-slate-200 px-3 py-6 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-50 text-blue-600"><Landmark className="h-5 w-5" /></span>
+        <p className="mt-2 text-xs font-semibold text-slate-900">{t.emptyTitle}</p>
+        <p className="mt-0.5 max-w-[30ch] text-[11px] text-slate-500">{t.emptyText}</p>
+        <span data-tour="connect-btn" className={`${btn} mt-3 bg-blue-600 text-white ${press(step === 1)}`}><Landmark className="h-3 w-3" />{t.button}</span>
+      </div>
+
+      {phase !== "page" && (
+        <div className="tour-veil pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-900/35 p-3 backdrop-blur-[2px]">
+          <div key={phase} className="tour-modal w-full max-w-[290px] rounded-2xl bg-white p-4 shadow-[0_30px_60px_-20px_rgba(2,6,23,0.6)]">
+            {phase === "intro" && (
+              <div className="grid gap-3 text-center">
+                <div className="flex items-center justify-center gap-2">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-600 shadow-[0_8px_16px_-8px_rgba(37,99,235,0.9)]"><Logo className="h-5 w-5 text-white" /></span>
+                  <span className="tour-wire relative h-0.5 w-12">
+                    <span className="absolute left-1/2 top-1/2 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-emerald-50 text-emerald-600 ring-2 ring-white"><Lock className="h-2.5 w-2.5" /></span>
+                  </span>
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-700"><Landmark className="h-4 w-4" /></span>
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{t.title}</p>
+                  <p className="text-[11px] text-slate-500">{t.text}</p>
+                </div>
+                <div className="flex items-center justify-center gap-1">
+                  {PICK.slice(0, 5).map((n) => <BankLogo key={n} name={n} size={20} />)}
+                  <span className="ml-1 text-[10px] text-slate-500">{t.more}</span>
+                </div>
+                <span data-tour="connect-go" className={`${btn} w-full bg-blue-600 py-2 text-white ${press(step === 3)}`}>{t.go}<ArrowRight className="h-3 w-3" /></span>
+                <p className="flex items-center justify-center gap-1 text-[10px] text-slate-500"><ShieldCheck className="h-3 w-3 text-emerald-600" />{t.secure}</p>
+              </div>
+            )}
+            {phase === "pick" && (
+              <div className="grid gap-2.5">
+                <p className="flex items-center gap-1 text-[10px] text-slate-500"><Lock className="h-3 w-3 text-emerald-600" />{t.window}</p>
+                <p className="text-sm font-bold text-slate-900">{t.pick}</p>
+                <span className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1.5 text-[11px] text-slate-400"><Search className="h-3 w-3" />{t.search}</span>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {PICK.map((n) => (
+                    <span key={n} data-tour={n === CHOSEN ? "pick-bank" : undefined}
+                      className={`grid justify-items-center gap-1 rounded-lg border px-1 py-2 text-center text-[9px] font-medium leading-tight text-slate-700 transition-[transform,border-color,box-shadow] duration-200 ${n === CHOSEN && step === 5 ? "scale-95 border-blue-500 shadow-[0_0_0_3px_rgba(37,99,235,0.15)]" : "border-slate-200"}`}>
+                      <BankLogo name={n} size={24} />
+                      <span className="w-full truncate">{n}</span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+            {phase === "import" && (
+              <div className="grid gap-3">
+                <div className="relative mx-auto flex h-16 w-16 items-center justify-center">
+                  <svg viewBox="0 0 64 64" className="absolute inset-0 h-full w-full -rotate-90">
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="#E8EEF8" strokeWidth="4.5" />
+                    <circle cx="32" cy="32" r="28" fill="none" stroke="#2563EB" strokeWidth="4.5" strokeLinecap="round" strokeDasharray="176" className="tour-ring" />
+                  </svg>
+                  <BankLogo name={CHOSEN} size={34} />
+                </div>
+                <p className="text-center text-sm font-bold text-slate-900">{t.importTitle}</p>
+                <ul className="grid gap-1.5 text-[11px] text-slate-800">
+                  {t.steps.map((label, i) => (
+                    <li key={label} className="flex items-center gap-2">
+                      <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+                        <span className="tour-wait absolute inset-0 rounded-full border-2 border-blue-200 border-t-blue-600" style={{ animationDelay: `0ms, ${250 + i * 520}ms` }} />
+                        <span className="day-pop absolute inset-0 flex items-center justify-center rounded-full bg-emerald-600 text-white" style={{ animationDelay: `${250 + i * 520}ms` }}>
+                          <Check className="h-2.5 w-2.5" strokeWidth={3.5} />
+                        </span>
+                      </span>
+                      {label}
+                      {i === 2 && <span className="day-pop ml-auto font-semibold tabular-nums text-slate-500" style={{ animationDelay: `${250 + i * 520}ms` }}>{t.count}</span>}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            {phase === "done" && (
+              <div className="grid gap-2.5 text-center">
+                <span className="day-pop mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-emerald-50 text-emerald-600"><Check className="h-5 w-5" strokeWidth={3} /></span>
+                <div>
+                  <p className="text-sm font-bold text-slate-900">{t.doneTitle}</p>
+                  <p className="text-[11px] text-slate-500">{t.doneText}</p>
+                </div>
+                <ul className="divide-y divide-slate-100 border-y border-slate-100 text-left">
+                  {t.accounts.map(([name, mask, amount], i) => (
+                    <li key={mask} className="day-rise flex items-center gap-2 py-1.5" style={{ animationDelay: `${150 + i * 110}ms` }}>
+                      <BankLogo name={CHOSEN} size={22} />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[11px] font-medium text-slate-900">{name}</span>
+                        <span className="block text-[9px] text-slate-500">•••• {mask}</span>
+                      </span>
+                      <span className="text-[11px] font-semibold tabular-nums text-slate-900">{money(amount)}</span>
+                    </li>
+                  ))}
+                </ul>
+                <span data-tour="connect-see" className={`${btn} w-full bg-blue-600 py-2 text-white ${press(step === 9)}`}>{t.see}<ArrowRight className="h-3 w-3" /></span>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ── Banco: the new transactions get their category, then approved ──
 function BankView({ p, step }: VP) {
   const t = p.tour.bank;
@@ -412,9 +539,10 @@ function ReportsView({ p, step }: VP) {
 }
 
 const SCREENS: Record<View, (p: VP) => ReactNode> = {
-  home: HomeView, sales: SalesView, clients: ClientsView, expenses: ExpensesView, bank: BankView, reports: ReportsView,
+  connect: ConnectView, home: HomeView, sales: SalesView, clients: ClientsView, expenses: ExpensesView, bank: BankView, reports: ReportsView,
 };
 const TOAST_ICONS: Record<Toast, { Icon: LucideIcon; tone: string }> = {
+  connected: { Icon: Landmark, tone: "bg-emerald-50 text-emerald-600" },
   sale: { Icon: Send, tone: "bg-blue-50 text-blue-600" },
   remind: { Icon: Bell, tone: "bg-amber-50 text-amber-600" },
   receipt: { Icon: Receipt, tone: "bg-violet-50 text-violet-600" },
@@ -453,20 +581,21 @@ export function DashboardTour() {
     return () => window.clearTimeout(t);
   }, [at, playing]);
 
-  // The pointer goes to what this beat is about, the way a hand moves a mouse: along a slight curve, speeding
-  // up and slowing down, a touch past the spot and back, never quite at the middle of a button; when it's
-  // still it drifts a little. Each beat sets where it's going; a loop draws it while the tour plays.
+  // The pointer goes to what this beat is about, the way a hand moves a mouse. A guide point travels a slight
+  // curve (quick to start, a long gentle slowdown), and the pointer follows it like a hand on a soft spring: it
+  // never starts or stops at once, keeps its speed when the next move begins, and settles with a touch of give.
+  // When it's still it sways a little. Each beat sets where it's going; a loop draws it while the tour plays.
   const boxRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
-  const motion = useRef({ placed: false, x: 0, y: 0, fx: 0, fy: 0, cx: 0, cy: 0, ox: 0, oy: 0, tx: 0, ty: 0, t0: 0, dur: 0 });
+  const motion = useRef({ placed: false, gx: 0, gy: 0, x: 0, y: 0, vx: 0, vy: 0, fx: 0, fy: 0, cx: 0, cy: 0, tx: 0, ty: 0, t0: 0, dur: 0 });
   useEffect(() => {
     const box = boxRef.current;
     if (!box) return;
     const m = motion.current;
     const b = box.getBoundingClientRect();
     if (!m.placed) {
-      m.x = b.width * 0.62;
-      m.y = b.height * 0.55;
+      m.x = m.gx = b.width * 0.62;
+      m.y = m.gy = b.height * 0.55;
       m.placed = true;
       cursorRef.current?.style.setProperty("transform", `translate(${m.x}px, ${m.y}px)`);
     }
@@ -478,50 +607,57 @@ export function DashboardTour() {
     const jy = (((at * 53) % 7) / 6 - 0.5) * Math.min(r.height * 0.3, 8);
     m.tx = r.left - b.left + r.width / 2 + jx;
     m.ty = r.top - b.top + r.height / 2 + jy;
-    m.fx = m.x;
-    m.fy = m.y;
+    m.fx = m.gx;
+    m.fy = m.gy;
     const dx = m.tx - m.fx;
     const dy = m.ty - m.fy;
     const d = Math.hypot(dx, dy) || 1;
     // The curve bows to one side (it changes from beat to beat), more on long moves.
-    const bend = Math.min(70, d * 0.2) * (at % 2 ? 1 : -1);
-    m.cx = m.fx + dx * 0.5 - (dy / d) * bend;
-    m.cy = m.fy + dy * 0.5 + (dx / d) * bend;
-    // It goes a touch past the spot, then comes back to it.
-    const over = Math.min(7, d * 0.035);
-    m.ox = m.tx + (dx / d) * over;
-    m.oy = m.ty + (dy / d) * over;
+    const bend = Math.min(60, d * 0.16) * (at % 2 ? 1 : -1);
+    m.cx = m.fx + dx * 0.45 - (dy / d) * bend;
+    m.cy = m.fy + dy * 0.45 + (dx / d) * bend;
     m.t0 = performance.now();
-    m.dur = Math.min(880, Math.max(460, 340 + d * 0.75));
+    // Longer moves take longer; it always arrives (and settles) before the click.
+    m.dur = Math.min(Math.min(1000, Math.max(520, 380 + d * 0.6)), Math.max(420, frame.ms - 320));
   }, [frame, at]);
 
   useEffect(() => {
     if (!playing) return;
-    const ease = (s: number) => s * s * s * (10 - 15 * s + 6 * s * s); // a hand's speed: up smoothly, down smoothly
+    const minJerk = (s: number) => s * s * s * (10 - 15 * s + 6 * s * s);
+    const W = 17; // how quickly the hand follows (rad/s)
+    const Z = 0.76; // a little give when it stops
     let raf = 0;
+    let last = performance.now();
+    let idle = 1;
     const tick = (now: number) => {
       const m = motion.current;
       const cur = cursorRef.current;
+      const dt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+      last = now;
       if (cur && m.placed) {
         if (m.dur) {
           const p = Math.min(1, (now - m.t0) / m.dur);
-          if (p < 0.82) {
-            const s = ease(p / 0.82);
-            const u = 1 - s;
-            m.x = u * u * m.fx + 2 * u * s * m.cx + s * s * m.ox;
-            m.y = u * u * m.fy + 2 * u * s * m.cy + s * s * m.oy;
-          } else {
-            const s = ease((p - 0.82) / 0.18);
-            m.x = m.ox + (m.tx - m.ox) * s;
-            m.y = m.oy + (m.ty - m.oy) * s;
-          }
+          const s = minJerk(Math.pow(p, 0.8)); // fast to start, long soft finish
+          const u = 1 - s;
+          m.gx = u * u * m.fx + 2 * u * s * m.cx + s * s * m.tx;
+          m.gy = u * u * m.fy + 2 * u * s * m.cy + s * s * m.ty;
           if (p >= 1) m.dur = 0;
         }
-        // A hand never holds perfectly still.
-        const rest = m.dur ? 0 : 1;
-        const wx = rest * (Math.sin(now / 820) * 0.9 + Math.sin(now / 310) * 0.35);
-        const wy = rest * (Math.cos(now / 960) * 0.8 + Math.sin(now / 410) * 0.3);
-        cur.style.transform = `translate(${(m.x + wx).toFixed(2)}px, ${(m.y + wy).toFixed(2)}px)`;
+        // A hand never holds perfectly still: a slow, small sway that fades in once it stops.
+        idle += ((m.dur ? 0.15 : 1) - idle) * Math.min(1, dt * 2.5);
+        const sx = idle * (Math.sin(now / 900) * 1.1 + Math.sin(now / 370 + 1.3) * 0.45);
+        const sy = idle * (Math.cos(now / 1050) * 0.9 + Math.sin(now / 430 + 0.4) * 0.35);
+        const goalX = m.gx + sx;
+        const goalY = m.gy + sy;
+        // The pointer follows the guide on a soft spring (small steps keep it steady at any frame rate).
+        for (let left = dt; left > 0; left -= 1 / 240) {
+          const h = Math.min(left, 1 / 240);
+          m.vx += (W * W * (goalX - m.x) - 2 * Z * W * m.vx) * h;
+          m.vy += (W * W * (goalY - m.y) - 2 * Z * W * m.vy) * h;
+          m.x += m.vx * h;
+          m.y += m.vy * h;
+        }
+        cur.style.transform = `translate(${m.x.toFixed(2)}px, ${m.y.toFixed(2)}px)`;
       }
       raf = requestAnimationFrame(tick);
     };
@@ -541,7 +677,7 @@ export function DashboardTour() {
   }
   if (still) here = null;
 
-  const go = (v: View) => setAt(START[v]);
+  const go = (v: NavView) => setAt(START[v === "bank" ? "connect" : v]);
   const Screen = SCREENS[view];
 
   return (
@@ -557,12 +693,12 @@ export function DashboardTour() {
           </span>
         </div>
 
-        <div className="flex h-[514px] sm:h-[550px]">
+        <div className="relative flex h-[514px] sm:h-[550px]">
           {/* The side menu: each icon opens its section. */}
           <nav aria-label={p.tour.navAria} className="flex w-11 shrink-0 flex-col items-center gap-2.5 border-r border-slate-100 py-3 sm:w-14 sm:gap-3 sm:py-4">
-            {VIEWS.map((v, k) => {
+            {NAV.map((v, k) => {
               const Icon = NAV_ICONS[k];
-              const on = v === view;
+              const on = v === navOf(view);
               return (
                 <button key={v} type="button" data-tour={`nav-${v}`} aria-label={p.tour.nav[k]} title={p.tour.nav[k]} aria-pressed={on} onClick={() => go(v)}
                   className={`flex h-8 w-8 items-center justify-center rounded-lg transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${on ? "bg-slate-900 text-white" : "text-slate-400 hover:bg-slate-100 hover:text-slate-700"}`}>
