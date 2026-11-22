@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from "react";
-import { AlertTriangle, CalendarDays, CheckCircle2, Download, FileText, Loader2, Upload, User } from "lucide-react";
+import { CalendarDays, CheckCircle2, Download, FileText, Loader2, Upload, User } from "lucide-react";
 import { toast } from "sonner";
 import { Dst, pbtnPrimary, pbtnSm } from "@/components/personal/planKit";
 import { trpc } from "@/providers/trpc";
@@ -74,8 +74,7 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow }: {
     const needsW2 = mode === "personal" && shownDocKinds(mode, ret.answers ?? {}).some((k) => k.id === "w2") && !mine.some((d) => d.kind === "w2");
     body = (
       <ul className="mt-2.5">
-        {redo.length ? <Row icon={<AlertTriangle className="h-[18px] w-[18px]" />} tone="warn" title={p.redo([...new Set(redo.map((d) => titleOf(d.kind)))].join(", "))} meta={p.redoText} />
-          : ok === mine.length && mine.length > 0 ? <Row icon={<CheckCircle2 className="h-[18px] w-[18px]" />} tone="good" title={p.allOk} meta={p.allOkText} />
+        {!redo.length && ok === mine.length && mine.length > 0 ? <Row icon={<CheckCircle2 className="h-[18px] w-[18px]" />} tone="good" title={p.allOk} meta={p.allOkText} />
           : <Row icon={<FileText className="h-[18px] w-[18px]" />} tone="info" title={p.reviewing} meta={p.reviewingText(ok, mine.length)} />}
         {needsW2 && <Row icon={<CalendarDays className="h-[18px] w-[18px]" />} tone="info" title={p.w2Missing} meta={p.w2MissingText} />}
       </ul>

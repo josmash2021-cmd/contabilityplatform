@@ -38,6 +38,7 @@ React 19 + Vite + Tailwind 3 + shadcn (`src/components/ui`) · tRPC on Hono · d
 - **Changing page in the app**: one persistent wrapper `.page-fx` in `AppLayout` (data-fx out/in, layout effect on the location) goes soft, swaps and eases back to sharp with no sharp frame in between; at rest it has no filter. Measure with `browser/cdp-pagefx-body.mjs` (phone, CPU x4, filter per frame).
 - **Motion**: `useInView`, `useReducedMotion` (`src/hooks/useInView.ts`), `useMedia`; keyframes in `src/index.css`, each with a `prefers-reduced-motion` fallback.
 - **Bank connection**: `src/components/PlaidLinkOverlay.tsx` (portal on `<body>`, bottom sheet on phones): intro → Plaid's own window (language follows `x-lang`) → live import (`bank.exchangePublicToken` returns `itemId` + accounts, then `banks.syncItem`, last 30 days) → Listo with each account, its bank logo (`BankLogo`) and balance.
+- **Impuestos page** (`src/pages/Taxes.tsx`): before sending, left column = 1 situación, 2 documentos, 3 autoriza (`TaxStepNum`), right = lo que falta (`todoSplit`: only what blocks sending; optional docs as "Si los tienes"), reembolso, preparador (name = the admin's first name, `tax.current.preparerName`), agencias. Each document has a drawn example (`TaxDocArt`, no government seals, sample data) that opens big with photo tips. Walk the whole flow with `browser/cdp-taxtour-body.mjs`.
 - Tax pages are behind an email-code gate (`api/lib/taxGate.ts`, header `x-tax-unlock`).
 
 ## Checks before pushing

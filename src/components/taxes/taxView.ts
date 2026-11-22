@@ -60,6 +60,34 @@ export function todoItems(mode: TaxMode, answers: Answers, docs: readonly Doc[],
   return out.sort((a, b) => (a.tone === "warn" ? 0 : 1) - (b.tone === "warn" ? 0 : 1));
 }
 
+export type MustItem = { kind: TaxDocKind | null; text: "need" | "redo" | "income" | "questions"; n?: number };
+/**
+ * "Lo que te falta", split in two so it never contradicts "Lista para enviar": `must` is what blocks sending
+ * (a required document, one that has to be uploaded again, one income document, unanswered questions);
+ * `maybe` is what helps but isn't required (shown apart as "Si los tienes").
+ */
+export function todoSplit(mode: TaxMode, answers: Answers, docs: readonly Doc[], unanswered: number, incomeMissing: boolean): { must: MustItem[]; maybe: TaxDocKind[] } {
+  const must: MustItem[] = [];
+  const maybe: TaxDocKind[] = [];
+  const kinds = shownDocKinds(mode, answers);
+  for (const k of kinds) {
+    const files = clientFiles(docs, k.id);
+    if (files.some((f) => f.status === "redo")) { must.push({ kind: k, text: "redo" }); continue; }
+    if (files.length) continue;
+    if (k.need === "yes") must.push({ kind: k, text: "need" });
+    else if (k.need !== "income") maybe.push(k);
+  }
+  if (incomeMissing) {
+    const first = kinds.find((k) => k.need === "income") ?? null;
+    must.push({ kind: first, text: "income" });
+  } else {
+    // Income documents beyond the first one are welcome, not required.
+    for (const k of kinds) if (k.need === "income" && clientFiles(docs, k.id).length === 0) maybe.push(k);
+  }
+  if (unanswered) must.push({ kind: null, text: "questions", n: unanswered });
+  return { must: must.sort((a, b) => (a.text === "redo" ? 0 : 1) - (b.text === "redo" ? 0 : 1)), maybe };
+}
+
 /** "19 nov" this year, "3 feb 2027" another year. */
 export function shortDate(iso: string | Date | null | undefined, locale: string, thisYear: number): string {
   if (!iso) return "";

@@ -106,7 +106,7 @@ export function TaxHistory({ past, onOpen }: { past: readonly Ret[]; onOpen: (id
  * "Tu preparador" (taxPrepCard): who prepares the return (the name the preparer signs messages with, once
  * they've written), the conversation, and "Escríbele" to send a message (tax.sendMessage).
  */
-export function TaxPreparer({ messages, compact }: { messages: readonly Msg[]; compact?: boolean }) {
+export function TaxPreparer({ messages, compact, fallbackName }: { messages: readonly Msg[]; compact?: boolean; fallbackName?: string | null }) {
   const t = useCopy(taxesCopy);
   const p = t.p.prep;
   const locale = intlLocale(useLang().lang);
@@ -120,7 +120,7 @@ export function TaxPreparer({ messages, compact }: { messages: readonly Msg[]; c
   const markRead = trpc.tax.markRead.useMutation();
   const unread = messages.some((m) => m.fromRole === "preparer" && !m.readAt);
   const read = () => { if (unread && !markRead.isPending) markRead.mutate(undefined, { onSuccess: () => void utils.tax.current.invalidate() }); };
-  const name = [...messages].reverse().find((m) => m.fromRole === "preparer" && m.authorName)?.authorName ?? p.name;
+  const name = [...messages].reverse().find((m) => m.fromRole === "preparer" && m.authorName)?.authorName ?? fallbackName ?? p.name;
   const initials = name === p.name ? null : name.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w[0]?.toUpperCase()).join("");
   const submit = (e: FormEvent) => { e.preventDefault(); if (body.trim()) send.mutate({ body: body.trim() }); };
 

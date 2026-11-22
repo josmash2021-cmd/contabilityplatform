@@ -7,7 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/personal/ConfirmDialog";
 import { TaxFileViewer } from "@/components/taxes/TaxFileViewer";
 import { TaxTrack } from "@/components/taxes/TaxTrack";
-import { TaxDocsCard, TaxDocsDone, type PickFn, type PickSource } from "@/components/taxes/TaxDocs";
+import { TaxDocsCard, TaxDocsDone, TaxPick, type PickFn, type PickSource } from "@/components/taxes/TaxDocs";
+import { useMedia } from "@/hooks/useMedia";
 import { TaxConsent, TaxQuestions, TaxRefund, TaxSendBar, TaxTodo } from "@/components/taxes/TaxDraft";
 import { TaxAgencies, TaxHistory, TaxPreparer } from "@/components/taxes/TaxSide";
 import { TaxStepPanel } from "@/components/taxes/TaxStepPanel";
@@ -145,6 +146,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
     onSettled: () => { clearTaxUnlock(); toast(p.gate.locked); void utils.tax.invalidate(); },
   });
   const titleOf = (k: string) => t.docs[mode][k]?.title ?? k;
+  const wide = useMedia("(min-width: 1024px)");
 
   // ── Upload: the menu picks the source, the matching hidden input opens the camera, gallery or files ──
   const upload = trpc.tax.upload.useMutation();
@@ -208,6 +210,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const ready = !!missing && canSend(missing);
   const hasW2 = mode === "personal" ? clientFiles(docs, "w2").length > 0 : null;
   const goQuestions = () => document.getElementById("tax-q")?.scrollIntoView({ block: "start", behavior: smooth() });
+  const goDocs = () => document.getElementById("tax-docs")?.scrollIntoView({ block: "start", behavior: smooth() });
   const goConsent = () => {
     const el = document.getElementById("tax-consent");
     el?.scrollIntoView({ block: "center", behavior: smooth() });
@@ -260,25 +263,32 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
 
   if (draft) {
     const unanswered = missing?.questions.length ?? 0;
+    const todo = (
+      <TaxTodo mode={mode} answers={answers} docs={docs} unanswered={unanswered} incomeMissing={!!missing?.income}
+        onPick={pick} busyKind={busyKind} onGoQuestions={goQuestions} onGoDocs={goDocs} />
+    );
     return (
       <div className="mx-auto max-w-6xl">
         {header}{keyWarn}
         <TaxTrack title={p.track.title(year)} step={DRAFT_STEP} stepDates={null} ready={ready} />
-        <div className={cols}>
-          <TaxTodo mode={mode} answers={answers} docs={docs} unanswered={unanswered} onPick={pick} busyKind={busyKind} onGoQuestions={goQuestions} />
-          <TaxRefund year={year} last={past[0] ?? null} />
+        {/* Phones: what's missing comes right under the track. */}
+        {!wide && <div className="mt-3.5">{todo}</div>}
+        {/* Left: the three parts in their order (1 situación, 2 documentos, 3 autoriza). Right: what's missing,
+            the deadline, your preparer and where it goes. */}
+        <div className="mt-3.5 grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_360px]">
+          <div className="grid min-w-0 gap-3.5">
+            <TaxQuestions n={1} id="tax-q" mode={mode} year={year} answers={answers} busy={saveAnswers.isPending} onAnswer={onAnswer} />
+            <TaxDocsCard n={2} id="tax-docs" mode={mode} answers={answers} docs={docs} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving} />
+            <TaxConsent n={3} id="tax-consent" consent={consent} terms={terms} onConsent={setConsent} onTerms={setTerms} onCare={onCare} />
+          </div>
+          <aside className="grid min-w-0 gap-3.5">
+            {wide && todo}
+            <TaxRefund year={year} last={past[0] ?? null} />
+            <TaxPreparer messages={messages} fallbackName={data.preparerName} />
+            <TaxAgencies year={year} stack />
+            {past.length ? <TaxHistory past={past} onOpen={onPast} /> : null}
+          </aside>
         </div>
-        <div className={cols}>
-          <TaxQuestions id="tax-q" mode={mode} year={year} answers={answers} busy={saveAnswers.isPending} onAnswer={onAnswer} />
-          <TaxPreparer messages={messages} />
-        </div>
-        <div className="mt-3.5">
-          <TaxDocsCard mode={mode} answers={answers} docs={docs} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving} />
-        </div>
-        <TaxConsent id="tax-consent" consent={consent} terms={terms} onConsent={setConsent} onTerms={setTerms} onCare={onCare} />
-        {past.length ? (
-          <div className={cols}><TaxAgencies year={year} /><div className="grid min-w-0 gap-3.5"><TaxHistory past={past} onOpen={onPast} /></div></div>
-        ) : <div className="mt-3.5"><TaxAgencies year={year} /></div>}
         {foot}
         <TaxSendBar missing={missingNames} consentOk={consent && terms} hasW2={hasW2} sending={submit.isPending}
           onSend={() => submit.mutate({ consent: true, terms: true })} onGoConsent={goConsent} />
@@ -295,11 +305,19 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
     <div className="mx-auto max-w-6xl">
       {header}{keyWarn}
       <TaxTrack title={p.track.title(year)} step={step} stepDates={ret?.stepDates} selected={sel} onSelect={(i) => setSelected(i === step ? null : i)} />
+      {/* What the preparer asked to upload again: once, here, each with its own button. */}
       {redo.length > 0 && editable && (
-        <section className="mt-3.5 rounded-[14px] border border-red-200 bg-red-50 p-4" aria-labelledby="tax-redo-h">
-          <h2 id="tax-redo-h" className="flex items-center gap-2 font-semibold text-red-800"><AlertCircle className="h-4 w-4" aria-hidden="true" />{t.todo.title}</h2>
-          <p className="mt-0.5 text-sm text-red-700">{t.todo.text}</p>
-          <ul className="mt-1.5 space-y-1 text-sm text-red-800">{redo.map((d) => <li key={d.id}>• <b>{titleOf(d.kind)}</b>{d.note ? `: ${d.note}` : ""}</li>)}</ul>
+        <section className="mt-3.5 rounded-[14px] border border-amber-200 bg-amber-50 p-4" aria-labelledby="tax-redo-h">
+          <h2 id="tax-redo-h" className="flex items-center gap-2 font-semibold text-amber-900"><AlertCircle className="h-4 w-4" aria-hidden="true" />{t.todo.title}</h2>
+          <p className="mt-0.5 text-sm text-amber-800">{t.todo.text}</p>
+          <ul className="mt-2.5 grid gap-2">
+            {redo.map((d) => (
+              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl bg-white/80 px-3 py-2.5 ring-1 ring-amber-100">
+                <span className="min-w-0 flex-[1_1_220px] text-sm text-amber-900"><b>{titleOf(d.kind)}</b>{d.note ? <span className="block text-[13px] text-amber-800">{d.note}</span> : null}</span>
+                <TaxPick kind={d.kind} title={titleOf(d.kind)} has replace={d} onPick={pick} busy={busyKind === d.kind} />
+              </li>
+            ))}
+          </ul>
         </section>
       )}
       <div className={cols}>
@@ -307,7 +325,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         <div className="grid min-w-0 gap-3.5">
           <TaxAgencies year={year} stack />
           <TaxHistory past={past} onOpen={onPast} />
-          <TaxPreparer messages={messages} compact />
+          <TaxPreparer messages={messages} compact fallbackName={data.preparerName} />
         </div>
       </div>
       <div className="mt-3.5 grid gap-3.5">

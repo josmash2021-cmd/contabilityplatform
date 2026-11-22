@@ -221,7 +221,7 @@ export const taxRouter = createRouter({
     const access = await taxAccess(db, ctx.user);
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
-    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null };
+    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null };
     const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
     if (!access.allowed) return { ...base, ...empty };
     const userId = Number(ctx.user.id);
@@ -235,7 +235,14 @@ export const taxRouter = createRouter({
       .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), lt(taxReturns.taxYear, year))).orderBy(desc(taxReturns.taxYear));
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
-    return { ...base, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
+    // "Tu preparador": the first name of whoever prepares the returns (the app's admin), not a second "Tu preparador".
+    let preparerName: string | null = null;
+    try {
+      const res = (await db.execute(sql`SELECT name FROM users WHERE role = 'admin' AND name IS NOT NULL AND name <> '' ORDER BY id LIMIT 1`)) as unknown as [Array<{ name: string }>] | Array<{ name: string }>;
+      const rows = (Array.isArray(res[0]) ? res[0] : res) as Array<{ name: string }>;
+      preparerName = rows[0]?.name?.trim().split(/\s+/)[0] || null;
+    } catch { preparerName = null; }
+    return { ...base, preparerName, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
   }),
 
   /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */

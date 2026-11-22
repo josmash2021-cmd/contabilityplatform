@@ -1,4 +1,5 @@
 import { AlertTriangle, CalendarDays, FileText, Landmark, ListChecks, Loader2, Send } from "lucide-react";
+import { TaxStepNum } from "./TaxStepNum";
 import { Dst, pbtnSm } from "@/components/personal/planKit";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
@@ -6,18 +7,22 @@ import { intlLocale } from "@/i18n/lang";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { TAX_QUESTIONS, filingDeadline, type Answers, type TaxMode } from "@contracts/taxRules";
 import { TaxPick, type PickFn } from "./TaxDocs";
-import { daysUntil, longDay, resultText, todoItems, type Doc, type Ret } from "./taxView";
+import { daysUntil, longDay, resultText, todoSplit, type Doc, type Ret } from "./taxView";
 
 const card = "rounded-[14px] border border-slate-200 bg-white p-4";
 
-/** "Te faltan N cosas" (taxTodo): what's still needed, each with its upload menu or "Contestar". */
-export function TaxTodo({ mode, answers, docs, unanswered, onPick, busyKind, onGoQuestions }: {
-  mode: TaxMode; answers: Answers; docs: readonly Doc[]; unanswered: number; onPick: PickFn; busyKind: string | null; onGoQuestions: () => void;
+/**
+ * "Lo que te falta" (taxTodo): only what blocks sending, each with its upload menu or "Contestar"; the documents
+ * that help but aren't required go apart, quietly, as "Si los tienes" (so it never says "falta" next to "Lista").
+ */
+export function TaxTodo({ mode, answers, docs, unanswered, incomeMissing, onPick, busyKind, onGoQuestions, onGoDocs }: {
+  mode: TaxMode; answers: Answers; docs: readonly Doc[]; unanswered: number; incomeMissing: boolean; onPick: PickFn; busyKind: string | null;
+  onGoQuestions: () => void; onGoDocs: () => void;
 }) {
   const t = useCopy(taxesCopy);
   const td = t.p.todo;
-  const items = todoItems(mode, answers, docs, unanswered);
-  const n = items.length;
+  const { must, maybe } = todoSplit(mode, answers, docs, unanswered, incomeMissing);
+  const n = must.length;
   return (
     <section className={card} aria-labelledby="tax-todo-h">
       <div className="flex items-center justify-between gap-3">
@@ -26,23 +31,39 @@ export function TaxTodo({ mode, answers, docs, unanswered, onPick, busyKind, onG
       </div>
       {n ? (
         <ul className="mt-1">
-          {items.map((x) => {
-            const Icon = x.text === "questions" ? ListChecks : x.tone === "warn" ? AlertTriangle : x.text === "becauseYes" ? FileText : CalendarDays;
-            const title = x.kind ? t.docs[mode][x.kind.id]?.title ?? x.kind.id : td.questions(x.n ?? 0);
-            const meta = x.text === "questions" ? td.questionsText : td[x.text];
+          {must.map((x) => {
+            const warn = x.text === "need" || x.text === "redo";
+            const Icon = x.text === "questions" ? ListChecks : warn ? AlertTriangle : FileText;
+            const title = x.text === "questions" ? td.questions(x.n ?? 0) : x.text === "income" ? td.income : t.docs[mode][x.kind?.id ?? ""]?.title ?? x.kind?.id ?? "";
+            const meta = x.text === "questions" ? td.questionsText : x.text === "income" ? td.incomeText : td[x.text];
+            const kind = x.kind;
             return (
-              <li key={x.kind?.id ?? "q"} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-slate-200 py-2.5 first:border-t-0">
-                <span className={cn("grid h-8 w-8 place-items-center rounded-[9px]", x.tone === "warn" ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-600")}><Icon className="h-4 w-4" aria-hidden="true" /></span>
+              <li key={`${x.text}-${kind?.id ?? "q"}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-t border-slate-200 py-2.5 first:border-t-0">
+                <span className={cn("grid h-8 w-8 place-items-center rounded-[9px]", warn ? "bg-amber-50 text-amber-700" : "bg-blue-50 text-blue-600")}><Icon className="h-4 w-4" aria-hidden="true" /></span>
                 <div className="min-w-0"><b className="block text-sm text-slate-900">{title}</b><span className="block text-xs text-slate-500">{meta}</span></div>
                 <div className="flex justify-end">
-                  {x.kind ? <TaxPick kind={x.kind.id} title={title} has={docs.some((d) => d.source === "client" && d.kind === x.kind!.id)} onPick={onPick} busy={busyKind === x.kind.id} />
-                    : <button type="button" onClick={onGoQuestions} className={pbtnSm}>{td.answer}</button>}
+                  {x.text === "questions" || !kind ? <button type="button" onClick={onGoQuestions} className={pbtnSm}>{td.answer}</button>
+                    : <TaxPick kind={kind.id} title={title} has={docs.some((d) => d.source === "client" && d.kind === kind.id)} onPick={onPick} busy={busyKind === kind.id} />}
                 </div>
               </li>
             );
           })}
         </ul>
       ) : <p className="mt-1 text-sm text-slate-500">{td.noneText}</p>}
+      {maybe.length > 0 && (
+        <div className="mt-2.5 border-t border-slate-200 pt-2.5">
+          <p className="text-[13px] font-semibold text-slate-700">{td.maybeTitle}</p>
+          <p className="text-xs text-slate-500">{td.maybeText}</p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {maybe.map((k) => (
+              <button key={k.id} type="button" onClick={onGoDocs}
+                className="rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 transition-colors hover:bg-slate-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                {t.docs[mode][k.id]?.title ?? k.id}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }
@@ -71,13 +92,20 @@ export function TaxRefund({ year, last }: { year: number; last: Ret | null }) {
 }
 
 /** "Tu situación en 2026" (taxQuestions): Sí / No for each question; tapping the chosen answer again clears it. */
-export function TaxQuestions({ mode, year, answers, busy, onAnswer, id }: {
+export function TaxQuestions({ mode, year, answers, busy, onAnswer, id, n }: {
   mode: TaxMode; year: number; answers: Answers; busy: boolean; onAnswer: (q: string, v: boolean | null) => void; id: string;
+  /** Before sending: this part's number (1). */
+  n?: number;
 }) {
   const t = useCopy(taxesCopy);
+  const total = TAX_QUESTIONS[mode].length;
+  const answered = TAX_QUESTIONS[mode].filter((q) => answers[q] === true || answers[q] === false).length;
   return (
     <section id={id} className={cn(card, "scroll-mt-4")} aria-labelledby="tax-q-h">
-      <h2 id="tax-q-h" className="font-semibold text-slate-900">{t.p.q.title(year)}</h2>
+      <div className="flex items-center justify-between gap-3">
+        <h2 id="tax-q-h" className="flex items-center gap-2.5 font-semibold text-slate-900">{n ? <TaxStepNum n={n} done={answered === total} /> : null}{t.p.q.title(year)}</h2>
+        {n ? <span className="shrink-0 text-xs tabular-nums text-slate-500">{t.p.docs.count(answered, total)}</span> : null}
+      </div>
       <p className="mt-0.5 text-sm text-slate-500">{t.p.q.text}</p>
       <ul className="mt-1.5">
         {TAX_QUESTIONS[mode].map((q) => {
@@ -104,14 +132,16 @@ export function TaxQuestions({ mode, year, answers, busy, onAnswer, id }: {
 }
 
 /** "Autoriza el envío" (taxConsentCard). */
-export function TaxConsent({ consent, terms, onConsent, onTerms, onCare, id }: {
+export function TaxConsent({ consent, terms, onConsent, onTerms, onCare, id, n }: {
   consent: boolean; terms: boolean; onConsent: (v: boolean) => void; onTerms: (v: boolean) => void; onCare: () => void; id: string;
+  /** Before sending: this part's number (3). */
+  n?: number;
 }) {
   const t = useCopy(taxesCopy).p.consent;
   const [a, link, b] = t.terms;
   return (
-    <section id={id} className={cn(card, "mt-3.5")} aria-labelledby="tax-consent-h">
-      <h2 id="tax-consent-h" className="font-semibold text-slate-900">{t.title}</h2>
+    <section id={id} className={cn(card, "scroll-mt-4")} aria-labelledby="tax-consent-h">
+      <h2 id="tax-consent-h" className="flex items-center gap-2.5 font-semibold text-slate-900">{n ? <TaxStepNum n={n} done={consent && terms} /> : null}{t.title}</h2>
       <label className="mt-2 flex min-h-11 cursor-pointer items-start gap-2.5 text-sm text-slate-800">
         <input type="checkbox" checked={consent} onChange={(e) => onConsent(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600" />
         <span>{t.consent}</span>
