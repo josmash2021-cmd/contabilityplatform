@@ -521,15 +521,14 @@ function CountUp({ value, format, still }: { value: number; format: (n: number) 
 
 function StepFrame({ label, children, decor, frameRef }: { label: string; children: ReactNode; decor?: ReactNode; frameRef?: Ref<HTMLDivElement> }) {
   return (
-    <div ref={frameRef} role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center overflow-hidden rounded-3xl border border-slate-200 bg-gradient-to-b from-slate-50 to-slate-100/70 p-5">
-      <div aria-hidden className="absolute inset-0 bg-[radial-gradient(circle_at_50%_0%,rgba(37,99,235,0.08),transparent_60%)]" />
+    <div ref={frameRef} role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center p-5">
       {decor}
       <div aria-hidden className="relative w-full max-w-[260px]">{children}</div>
     </div>
   );
 }
 
-const cardCls = "rounded-2xl bg-white p-4 shadow-[0_18px_40px_-20px_rgba(15,23,42,0.35)] ring-1 ring-slate-200/70";
+const cardCls = "rounded-2xl bg-white p-4 shadow-[0_2px_4px_rgba(15,23,42,0.06),0_22px_44px_-18px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/70";
 
 function Caret() {
   return <span className="ml-px inline-block h-3 w-px translate-y-0.5 bg-slate-900 motion-safe:animate-pulse" />;

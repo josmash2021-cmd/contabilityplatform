@@ -17,7 +17,6 @@ export default function AuthLayout() {
     <div className="font-brand min-h-screen bg-white lg:grid lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
       {/* Brand panel (desktop) */}
       <aside className="relative hidden h-screen overflow-hidden bg-[#060B18] lg:sticky lg:top-0 lg:flex lg:flex-col lg:justify-between lg:p-12 xl:p-16">
-        <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top_left,black_25%,transparent_70%)]" />
         <div className="pointer-events-none absolute -left-40 -top-40 h-[480px] w-[480px] rounded-full bg-blue-600/25 blur-[120px]" />
 
         <Link to="/" className="relative inline-flex w-fit items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">

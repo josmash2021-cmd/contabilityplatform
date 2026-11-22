@@ -237,7 +237,6 @@ const neverIcons: LucideIcon[] = [KeyRound, ArrowLeftRight, CreditCard, Calendar
 export function SeguridadNever({ c }: { c: C["never"] }) {
   return (
     <section className="relative overflow-hidden bg-[#060B18] py-24 sm:py-28" aria-labelledby="never-title">
-      <div aria-hidden className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
           <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-rose-500/10 text-rose-300 ring-1 ring-rose-400/20">

@@ -15,18 +15,17 @@ function useMock() {
   return useCopy(productoCopy).mock;
 }
 
-export const mockCard = "rounded-2xl bg-white shadow-[0_24px_60px_-24px_rgba(15,23,42,0.35)] ring-1 ring-slate-200";
+export const mockCard = "rounded-2xl bg-white shadow-[0_2px_4px_rgba(15,23,42,0.06),0_28px_60px_-22px_rgba(15,23,42,0.45)] ring-1 ring-slate-200";
 
 export function MockSample() {
   const m = useMock();
   return <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-500">{m.sample}</span>;
 }
 
-/** The soft stage every mockup sits on. A picture for screen readers: one label, nothing inside. */
+/** Where every mockup sits: no box behind it, only the cards and their shadow. A picture for screen readers: one label, nothing inside. */
 export function MockStage({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div role="img" aria-label={label} className="relative mx-auto w-full max-w-md overflow-hidden rounded-3xl bg-gradient-to-br from-blue-50 via-white to-slate-100 p-4 ring-1 ring-slate-200/70 sm:p-7 lg:max-w-lg">
-      <div aria-hidden className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-blue-400/15 blur-3xl" />
+    <div role="img" aria-label={label} className="relative mx-auto w-full max-w-md p-4 sm:p-7 lg:max-w-lg">
       <div aria-hidden className="relative">{children}</div>
     </div>
   );

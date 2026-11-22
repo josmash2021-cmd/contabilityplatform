@@ -156,7 +156,6 @@ export default function Onboarding() {
 
   return (
     <div className="font-brand relative flex min-h-screen items-start justify-center overflow-hidden bg-[#060B18] px-4 pb-10 pt-16 sm:items-center sm:py-12">
-      <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_top,black_25%,transparent_70%)]" />
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
       <LanguageSwitcher tone="dark" className="absolute right-4 top-4 z-10" />
       <div className="relative w-full max-w-lg animate-in fade-in slide-in-from-bottom-3 rounded-2xl bg-white p-5 shadow-[0_30px_80px_-20px_rgba(2,6,23,0.6)] duration-500 sm:p-7">

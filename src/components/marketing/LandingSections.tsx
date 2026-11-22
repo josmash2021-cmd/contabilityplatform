@@ -246,7 +246,6 @@ const securityIcons = [Landmark, Eye, CreditCard, Unplug];
 export function Security({ c }: { c: C["security"] }) {
   return (
     <section id="seguridad" className="scroll-mt-nav relative overflow-hidden bg-[#060B18] py-24 sm:py-28" aria-labelledby="security-title">
-      <div className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
       <div className="relative mx-auto grid max-w-7xl items-center gap-14 px-4 sm:px-6 lg:grid-cols-[0.9fr_1.1fr] lg:px-8">
         <Reveal>
           <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-400/20"><ShieldCheck className="h-7 w-7" /></span>
@@ -361,11 +360,13 @@ export function Pricing({ c }: { c: C["pricing"] }) {
             const icons = planIcons[plan.key];
             return (
               <Reveal key={plan.key} delay={i * 90} className={plans.length === 3 && i === 2 ? "md:col-span-2 md:mx-auto md:w-1/2 lg:col-span-1 lg:mx-0 lg:w-auto" : ""}>
+                {/* Set into the page like the plans table on Precios: the shadow falls inside, short and dark under
+                    the top edge, with a light line at the bottom. The recommended plan keeps its dark color. */}
                 <div
-                  className={`relative flex h-full flex-col rounded-3xl p-7 transition-all duration-300 hover:-translate-y-1 ${
+                  className={`relative flex h-full flex-col rounded-3xl border p-7 ${
                     featured
-                      ? "bg-[#0B1224] text-white shadow-[0_30px_70px_-25px_rgba(2,6,23,0.7)] ring-1 ring-white/10"
-                      : "bg-white text-slate-900 shadow-sm ring-1 ring-slate-200 hover:shadow-[0_18px_40px_-20px_rgba(15,23,42,0.25)]"
+                      ? "border-b-white/10 border-t-black/60 border-x-black/40 bg-[#0B1224] text-white shadow-[inset_0_12px_16px_-8px_rgba(0,0,0,0.75),inset_0_3px_4px_-1px_rgba(0,0,0,0.6),inset_4px_0_8px_-4px_rgba(0,0,0,0.5),inset_-4px_0_8px_-4px_rgba(0,0,0,0.5),inset_0_-1px_0_rgba(255,255,255,0.10)]"
+                      : "border-b-[#F1F4F8] border-t-[#BAC4D2] border-x-[#CFD7E2] bg-[#EBEFF5] text-slate-900 shadow-[inset_0_10px_14px_-8px_rgba(15,23,42,0.42),inset_0_3px_4px_-1px_rgba(15,23,42,0.26),inset_4px_0_6px_-4px_rgba(15,23,42,0.16),inset_-4px_0_6px_-4px_rgba(15,23,42,0.16),inset_0_-1px_0_rgba(255,255,255,1)]"
                   }`}
                 >
                   {featured && (

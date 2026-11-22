@@ -16,7 +16,6 @@ const madeIcons: LucideIcon[] = [Languages, Smartphone, Gift];
 function MadeForYou({ c }: { c: ProductoCopy["madeForYou"] }) {
   return (
     <section aria-labelledby="hecho-title" className="relative overflow-hidden bg-[#060B18] py-24 sm:py-28">
-      <div aria-hidden className="bg-grid-dark pointer-events-none absolute inset-0 [mask-image:radial-gradient(ellipse_at_center,black_20%,transparent_70%)]" />
       <div aria-hidden className="pointer-events-none absolute -bottom-40 left-1/2 h-80 w-[720px] max-w-full -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
       <div className="relative mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
         <Reveal className="mx-auto max-w-2xl text-center">
