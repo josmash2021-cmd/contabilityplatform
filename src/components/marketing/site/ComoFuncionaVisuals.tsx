@@ -1,9 +1,10 @@
 // /como-funciona: pictures for steps 4 and 5, the same size and frame as the home page's
 // step previews (SignupStepPreview, ConnectStepPreview, NumbersStepPreview). Sample data.
 import type { ReactNode } from "react";
-import { CheckCircle2, Download, FileSpreadsheet, FileText, Receipt, ShoppingCart } from "lucide-react";
+import { CheckCircle2, Download, FileText, Receipt, ShoppingCart } from "lucide-react";
 import { useCopy } from "@/i18n/useI18n";
 import { comoFuncionaCopy } from "@/i18n/copy/site/comoFunciona";
+import { FileLogo } from "@/components/FileLogo";
 
 const cardBase = "rounded-2xl bg-white shadow-[0_2px_4px_rgba(15,23,42,0.06),0_22px_44px_-18px_rgba(15,23,42,0.42)] ring-1 ring-slate-200/70";
 const cardCls = `${cardBase} p-4`;
@@ -15,8 +16,8 @@ function MockSample() {
 
 function StepFrame({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center p-5">
-      <div aria-hidden className="relative w-full max-w-[260px]">{children}</div>
+    <div role="img" aria-label={label} className="relative mx-auto flex h-[25rem] w-full max-w-md items-center justify-center p-5 sm:h-[28rem]">
+      <div aria-hidden className="relative w-full max-w-[260px] scale-[1.2] sm:scale-[1.32]">{children}</div>
     </div>
   );
 }
@@ -85,10 +86,10 @@ export function ReportsStepVisual() {
           <p className="mt-1 text-[10px] font-medium text-blue-700">{v.taxStep}</p>
         </div>
         <div className="mt-2.5 flex items-center gap-1.5">
-          <FileSpreadsheet className="h-3.5 w-3.5 shrink-0 text-emerald-700" />
+          <FileLogo kind="excel" className="h-4 w-4" />
           <span className="min-w-0 flex-1 truncate text-[11px] font-semibold text-slate-900">{v.accountant}</span>
           <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md bg-emerald-600 px-1.5 py-1 text-[9.5px] font-semibold text-white"><Download className="h-2.5 w-2.5" />{v.excel}</span>
-          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200 px-1.5 py-1 text-[9.5px] font-semibold text-slate-700"><Download className="h-2.5 w-2.5" />{v.pdf}</span>
+          <span className="inline-flex shrink-0 items-center gap-0.5 rounded-md border border-slate-200 px-1.5 py-1 text-[9.5px] font-semibold text-slate-700"><FileLogo kind="pdf" className="h-3 w-3" />{v.pdf}</span>
         </div>
       </div>
     </StepFrame>

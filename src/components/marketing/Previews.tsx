@@ -521,9 +521,9 @@ function CountUp({ value, format, still }: { value: number; format: (n: number) 
 
 function StepFrame({ label, children, decor, frameRef }: { label: string; children: ReactNode; decor?: ReactNode; frameRef?: Ref<HTMLDivElement> }) {
   return (
-    <div ref={frameRef} role="img" aria-label={label} className="relative mx-auto flex h-80 w-full max-w-sm items-center justify-center p-5">
+    <div ref={frameRef} role="img" aria-label={label} className="relative mx-auto flex h-[25rem] w-full max-w-md items-center justify-center p-5 sm:h-[28rem]">
       {decor}
-      <div aria-hidden className="relative w-full max-w-[260px]">{children}</div>
+      <div aria-hidden className="relative w-full max-w-[260px] scale-[1.2] sm:scale-[1.32]">{children}</div>
     </div>
   );
 }

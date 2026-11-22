@@ -1,17 +1,25 @@
+// The app's logo: a blue column chart (the same shape as the Reportes icon). The color comes from the text
+// color, blue by default; on dark backgrounds pass a lighter blue (e.g. "text-blue-400"). The favicon, the phone
+// icon and the image in the emails are drawn from this same shape (public/favicon.svg, public/*.png).
+import { cn } from "@/lib/utils";
+
 export function Logo({ className = "w-7 h-7" }: { className?: string }) {
   return (
     <svg
-      viewBox="0 0 180 180"
+      viewBox="0 0 24 24"
       fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
       xmlns="http://www.w3.org/2000/svg"
-      className={className}
+      className={cn("text-blue-600", className)}
+      aria-hidden="true"
     >
-      <rect width="180" height="180" rx="40" fill="#000000"/>
-      <line x1="45" y1="130" x2="140" y2="130" stroke="#ffffff" strokeWidth="6" strokeLinecap="round"/>
-      <line x1="45" y1="130" x2="45" y2="35" stroke="#ffffff" strokeWidth="6" strokeLinecap="round"/>
-      <rect x="62" y="70" width="16" height="60" rx="8" fill="#ffffff"/>
-      <rect x="96" y="50" width="16" height="80" rx="8" fill="#ffffff"/>
-      <rect x="130" y="30" width="16" height="100" rx="8" fill="#ffffff"/>
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="M18 17V9" />
+      <path d="M13 17V5" />
+      <path d="M8 17v-3" />
     </svg>
   );
 }

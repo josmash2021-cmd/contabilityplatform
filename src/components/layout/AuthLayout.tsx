@@ -20,7 +20,7 @@ export default function AuthLayout() {
         <div className="pointer-events-none absolute -left-40 -top-40 h-[480px] w-[480px] rounded-full bg-blue-600/25 blur-[120px]" />
 
         <Link to="/" className="relative inline-flex w-fit items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-          <Logo className="h-9 w-9" />
+          <Logo className="h-9 w-9 text-blue-400" />
           <span className="leading-tight">
             <span className="block text-base font-semibold text-white">Personal &amp; Business Solutions</span>
           </span>

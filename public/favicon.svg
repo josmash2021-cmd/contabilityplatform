@@ -1,8 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 180 180">
-  <rect width="180" height="180" rx="40" fill="#000000"/>
-  <line x1="45" y1="130" x2="140" y2="130" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
-  <line x1="45" y1="130" x2="45" y2="35" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
-  <rect x="62" y="70" width="16" height="60" rx="8" fill="#ffffff"/>
-  <rect x="96" y="50" width="16" height="80" rx="8" fill="#ffffff"/>
-  <rect x="130" y="30" width="16" height="100" rx="8" fill="#ffffff"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="#2563EB" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg>

@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { FileSpreadsheet, Loader2, Upload } from "lucide-react";
+import { Loader2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
@@ -9,6 +9,7 @@ import { IMPORT_FIELDS, guessField, splitFullName, type ImportField } from "../.
 import { PosSheet } from "@/components/pos/PosSheet";
 import { Note } from "@/components/pos/proto";
 import { FOCUS, LINK_BTN, MENU_TITLE, btn } from "@/components/pos/ui";
+import { FileLogo } from "@/components/FileLogo";
 
 type Sheet = { fileName: string; headers: string[]; data: string[][] };
 type Row = { name: string; lastName?: string; email?: string; phone?: string; address?: string; notes?: string };
@@ -126,7 +127,7 @@ export function ImportCustomersDialog({ open, onOpenChange }: { open: boolean; o
       {!sheet ? (
         <div className="grid justify-items-center gap-2 rounded-xl border border-dashed border-slate-200 bg-slate-100 px-4 py-6 text-center">
           <Upload className="h-6 w-6 text-blue-600" aria-hidden />
-          <button type="button" onClick={() => fileRef.current?.click()} className={btn("primary")}><FileSpreadsheet className="h-4 w-4" aria-hidden />{d.choose}</button>
+          <button type="button" onClick={() => fileRef.current?.click()} className={btn("primary")}><FileLogo kind="excel" className="h-4 w-4" />{d.choose}</button>
           <p className="text-xs text-slate-500">{d.chooseHint}</p>
         </div>
       ) : (

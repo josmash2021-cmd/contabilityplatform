@@ -1,15 +1,16 @@
-// "Un día con la app" (/como-funciona): María's and Ana's day, each moment shown on the app's own screen,
-// in a phone. Tap a moment to see it; the day also moves on by itself while it's on screen (it stops when
-// someone taps, or with "Pausar", and never moves for people who turn motion off). Sample data.
-import { useEffect, useState, type ReactNode } from "react";
+// "Un día con la app" (/como-funciona): María's and Ana's day, each moment with its own phone showing the
+// app's screen for it. The phones take turns on each side and come in as you scroll; nothing moves for people
+// who turn motion off. Sample data.
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   BarChart3, Building2, CalendarCheck, Camera, Check, CheckCircle2, Copy, Download, Dumbbell, FileText, Home,
-  LayoutGrid, List, MoreHorizontal, Moon, Pause, Pencil, Play, Plus, Send, ShoppingCart, Sparkles, Sun, Sunrise, Target, User,
+  LayoutGrid, List, MoreHorizontal, Moon, Pencil, Plus, Send, ShoppingCart, Sparkles, Sun, Sunrise, Target, User,
   type LucideIcon,
 } from "lucide-react";
 import { Reveal } from "@/components/marketing/Reveal";
 import { PhoneCase, PhoneChrome, PhoneStatusBar } from "@/components/marketing/PhoneKit";
 import { useInView, useReducedMotion } from "@/hooks/useInView";
+import { FileLogo } from "@/components/FileLogo";
 import type { ComoFuncionaCopy } from "@/i18n/copy/site/comoFunciona";
 
 type C = ComoFuncionaCopy["day"];
@@ -17,8 +18,6 @@ type A = C["app"];
 type Who = "business" | "personal";
 type Step = { part: string; time: string; title: string; text: string; screens?: string };
 
-/** How long each moment stays before the next one, while the day plays by itself. */
-const STEP_MS = 7000;
 const momentIcons: LucideIcon[] = [Sunrise, Sun, Moon, CalendarCheck];
 
 /** The three moments of the day, then the end of the month. */
@@ -155,7 +154,7 @@ function BizNight({ a }: { a: A }) {
           <span className="mt-2 flex"><Chip tone="blue"><BarChart3 className="h-2.5 w-2.5" />{m.source}</Chip></span>
         </div>
       </div>
-      <div className="mt-4 flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
+      <div className="mt-auto flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-400">
         <span className="flex-1">{m.placeholder}</span>
         <span className="grid h-6 w-6 place-items-center rounded-full bg-blue-600 text-white"><Send className="h-3 w-3" /></span>
       </div>
@@ -182,7 +181,7 @@ function BizEnd({ a }: { a: A }) {
       </div>
       <div className={`${card} mt-2.5 p-3`}>
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-[#16A34A] text-[10px] font-bold text-white">XLS</span>
+          <FileLogo kind="excel" className="h-9 w-9" />
           <div className="min-w-0 leading-tight">
             <p className="truncate text-[12px] font-semibold text-slate-900">{m.file}</p>
             <p className="text-[10px] text-slate-500">{m.fileNote}</p>
@@ -317,48 +316,68 @@ const SCREENS: Record<Who, Array<{ Screen: (p: { a: A }) => ReactNode; tab: numb
 };
 
 // ── The section ──
-/** The picked moment: when, what, the screens it uses, and how long until the next one. */
-function MomentText({ s, who, step, playing }: { s: Step; who: Who; step: number; playing: boolean }) {
+/**
+ * One moment of the day: what happens, and a phone with that screen. The phones take turns on each side
+ * (right, left, right, left) and come in from their side, tilted, as they reach the screen; then they float.
+ */
+function DayRow({ s, i, who, c }: { s: Step; i: number; who: Who; c: C }) {
+  const [ref, inView] = useInView<HTMLLIElement>({ once: true, threshold: 0.2 });
+  const still = useReducedMotion();
+  const left = i % 2 === 1; // the phone's side on computers
+  const Icon = momentIcons[i];
+  const { Screen, tab } = SCREENS[who][i];
+  const shown = inView || still;
+  const phoneVars = {
+    "--from-x": left ? "-70px" : "70px",
+    "--from-r": left ? "-9deg" : "9deg",
+    "--tilt": left ? "-3deg" : "3deg",
+  } as CSSProperties;
   return (
-    <>
-      <span className="block text-sm font-medium text-blue-300">{s.part} · <span className="tabular-nums">{s.time}</span></span>
-      <span className="mt-0.5 block text-lg font-semibold text-white">{s.title}</span>
-      <span className="mt-1.5 block leading-relaxed text-slate-300">{s.text}</span>
-      {s.screens && (
-        <span className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-slate-300">
-          <LayoutGrid aria-hidden className="h-3.5 w-3.5 text-slate-400" />{s.screens}
+    <li ref={ref} className="relative grid items-center gap-8 lg:grid-cols-2 lg:gap-20">
+      {/* The day's line passes through each moment's icon (computers). */}
+      <span aria-hidden className={`absolute left-1/2 top-1/2 z-10 hidden h-12 w-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-[#0B1224] text-amber-300 ring-1 ring-white/15 transition-transform duration-700 lg:grid ${shown ? "scale-100" : "scale-50"}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+
+      <div data-in={shown} className={`day-text min-w-0 ${left ? "lg:order-2" : ""}`} style={{ "--from-x": left ? "40px" : "-40px" } as CSSProperties}>
+        <span className="inline-flex items-center gap-2 rounded-full bg-white/[0.06] px-3 py-1.5 text-sm font-medium text-blue-300 ring-1 ring-white/10">
+          <Icon aria-hidden className="h-4 w-4 text-amber-300 lg:hidden" />
+          {s.part} · <span className="tabular-nums">{s.time}</span>
         </span>
-      )}
-      {playing && (
-        <span aria-hidden className="mt-3 block h-0.5 overflow-hidden rounded-full bg-white/10">
-          <span key={`${who}-${step}`} className="day-progress block h-full rounded-full bg-blue-400" style={{ animationDuration: `${STEP_MS}ms` }} />
-        </span>
-      )}
-    </>
+        <h4 className="mt-4 text-2xl font-semibold tracking-tight text-white sm:text-3xl">{s.title}</h4>
+        <p className="mt-3 max-w-xl text-lg leading-relaxed text-slate-300">{s.text}</p>
+        {s.screens && (
+          <p className="mt-4 inline-flex items-center gap-1.5 rounded-lg bg-white/[0.06] px-2.5 py-1 text-xs font-medium text-slate-300">
+            <LayoutGrid aria-hidden className="h-3.5 w-3.5 text-slate-400" />{s.screens}
+          </p>
+        )}
+      </div>
+
+      <div className={`flex justify-center ${left ? "lg:order-1 lg:justify-end" : "lg:justify-start"}`}>
+        <div data-in={shown} className="day-phone" style={phoneVars}>
+          <div className="day-float" style={{ animationDelay: `${i * -1.5}s` }}>
+            <PhoneCase label={c.app.phoneAria(c[who].name, s.part, s.title)}>
+              <div className="relative h-[540px] overflow-hidden rounded-[2.6rem] bg-slate-50 [contain:paint] sm:h-[560px]">
+                <PhoneChrome />
+                <PhoneStatusBar />
+                {/* The screen between the status bar and the tab bar, so something can sit at its bottom (the chat box). */}
+                <div className={`absolute inset-x-0 bottom-[84px] top-[46px] flex flex-col px-4 pb-3 pt-1 ${shown ? "page-in" : "opacity-0"}`} aria-hidden>
+                  <Screen a={c.app} />
+                </div>
+                <TabBar who={who} labels={c.app.tabs[who]} active={tab} />
+              </div>
+            </PhoneCase>
+          </div>
+        </div>
+      </div>
+    </li>
   );
 }
 
 export function DayWithApp({ c }: { c: C }) {
   const [who, setWho] = useState<Who>("business");
-  const [step, setStep] = useState(0);
-  const [auto, setAuto] = useState(true);
-  const still = useReducedMotion();
-  const [viewRef, inView] = useInView<HTMLDivElement>();
   const steps = stepsOf(c, who);
-  const playing = auto && inView && !still;
-
-  // The day moves on by itself while it's on screen.
-  useEffect(() => {
-    if (!playing) return;
-    const id = window.setTimeout(() => setStep((s) => (s + 1) % steps.length), STEP_MS);
-    return () => window.clearTimeout(id);
-  }, [playing, step, who, steps.length]);
-
-  const pickWho = (w: Who) => { setWho(w); setStep(0); };
-  const pickStep = (i: number) => { setStep(i); setAuto(false); };
-  const { Screen, tab } = SCREENS[who][step];
   const person = c[who];
-  const current = steps[step];
 
   return (
     <section aria-labelledby="day-title" className="relative overflow-hidden bg-[#060B18] py-24 sm:py-28">
@@ -376,7 +395,7 @@ export function DayWithApp({ c }: { c: C }) {
               const Icon = w === "business" ? Building2 : User;
               const on = w === who;
               return (
-                <button key={w} type="button" aria-pressed={on} onClick={() => pickWho(w)}
+                <button key={w} type="button" aria-pressed={on} onClick={() => setWho(w)}
                   className={`inline-flex min-w-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 sm:px-5 ${on ? "bg-white text-slate-900" : "text-slate-300 hover:text-white"}`}>
                   <Icon aria-hidden className="h-4 w-4 shrink-0" />
                   <span className="truncate">{c[w].name}<span className="hidden font-normal opacity-70 sm:inline"> · {c[w].who}</span></span>
@@ -386,79 +405,16 @@ export function DayWithApp({ c }: { c: C }) {
           </div>
         </Reveal>
 
-        <div ref={viewRef} className="mx-auto mt-10 grid max-w-6xl items-center gap-10 lg:mt-14 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-16">
-          <div className="min-w-0">
-            <div className="flex items-start gap-3.5 px-1">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-xl font-semibold text-white">{person.name}</h3>
-                <p className="text-[15px] text-slate-400">{person.who}</p>
-              </div>
-              <span className="shrink-0 rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-slate-300">{c.example}</span>
-              {!still && (
-                <button type="button" onClick={() => setAuto((x) => !x)} aria-label={auto ? c.app.pause : c.app.play} title={auto ? c.app.pause : c.app.play}
-                  className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-white/10 text-slate-200 transition-colors hover:bg-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400">
-                  {auto ? <Pause aria-hidden className="h-3.5 w-3.5" /> : <Play aria-hidden className="h-3.5 w-3.5" />}
-                </button>
-              )}
-            </div>
-            {/* Phones: the four moments as buttons right above the phone, then the one picked. */}
-            <div className="mt-5 lg:hidden">
-              <div role="tablist" aria-label={c.app.momentsAria} className="grid grid-cols-4 gap-1.5">
-                {steps.map((s, i) => {
-                  const Icon = momentIcons[i];
-                  const on = i === step;
-                  return (
-                    <button key={s.part} type="button" role="tab" id={`day-chip-${i}`} aria-selected={on} aria-controls="day-panel" onClick={() => pickStep(i)}
-                      className={`grid min-w-0 justify-items-center gap-1 rounded-xl px-1 py-2.5 text-[11px] font-semibold transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${on ? "bg-white text-slate-900" : "bg-white/[0.05] text-slate-300 ring-1 ring-white/10"}`}>
-                      <Icon aria-hidden className={`h-4 w-4 ${on ? "text-amber-500" : "text-slate-400"}`} />
-                      <span className="max-w-full truncate">{s.part}</span>
-                    </button>
-                  );
-                })}
-              </div>
-              <div className="mt-3 rounded-2xl bg-white/[0.07] p-4 ring-1 ring-white/15">
-                <MomentText s={current} who={who} step={step} playing={playing} />
-              </div>
-            </div>
-
-            {/* Computers: the day as a list, the picked moment open. */}
-            <ol role="tablist" aria-label={c.app.momentsAria} className="mt-5 hidden space-y-1.5 lg:block">
-              {steps.map((s, i) => {
-                const Icon = momentIcons[i];
-                const on = i === step;
-                return (
-                  <li key={s.part} role="presentation">
-                    <button type="button" role="tab" id={`day-tab-${i}`} aria-selected={on} aria-controls="day-panel" onClick={() => pickStep(i)}
-                      className={`flex w-full gap-4 rounded-2xl p-4 text-left transition-colors duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400 ${on ? "bg-white/[0.07] ring-1 ring-white/15" : "hover:bg-white/[0.03]"}`}>
-                      <span aria-hidden className={`grid h-10 w-10 shrink-0 place-items-center rounded-full ring-1 ring-white/10 transition-colors ${on ? "bg-amber-400/15 text-amber-300" : "bg-white/[0.05] text-slate-400"}`}><Icon className="h-5 w-5" /></span>
-                      <span className="min-w-0 flex-1 pt-0.5">
-                        {on ? <MomentText s={s} who={who} step={step} playing={playing} /> : (
-                          <>
-                            <span className="block text-sm font-medium text-blue-300">{s.part} · <span className="tabular-nums">{s.time}</span></span>
-                            <span className="mt-0.5 block text-lg font-semibold text-slate-300">{s.title}</span>
-                          </>
-                        )}
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-          </div>
-
-          <div id="day-panel" role="tabpanel" aria-labelledby={`day-tab-${step}`}>
-            <PhoneCase label={c.app.phoneAria(person.name, current.part, current.title)}>
-              <div className="relative h-[600px] overflow-hidden rounded-[2.6rem] bg-slate-50 [contain:paint] sm:h-[640px]">
-                <PhoneChrome />
-                <PhoneStatusBar />
-                <div key={`${who}-${step}`} className="page-in px-4 pb-24 pt-1" aria-hidden>
-                  <Screen a={c.app} />
-                </div>
-                <TabBar who={who} labels={c.app.tabs[who]} active={tab} />
-              </div>
-            </PhoneCase>
-          </div>
+        <div className="mt-6 flex items-center justify-center gap-2 text-center">
+          <span className="text-[15px] text-slate-400">{person.who}</span>
+          <span className="rounded-full bg-white/10 px-2.5 py-1 text-xs font-medium text-slate-300">{c.example}</span>
         </div>
+
+        {/* A new key per person: their day comes in from the start. */}
+        <ol key={who} className="relative mx-auto mt-16 max-w-6xl space-y-20 sm:space-y-24 lg:space-y-28">
+          <span aria-hidden className="absolute bottom-0 left-1/2 top-0 hidden w-px -translate-x-1/2 bg-gradient-to-b from-transparent via-white/15 to-transparent lg:block" />
+          {steps.map((s, i) => <DayRow key={s.part} s={s} i={i} who={who} c={c} />)}
+        </ol>
       </div>
     </section>
   );

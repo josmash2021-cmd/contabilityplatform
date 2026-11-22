@@ -15,16 +15,23 @@ export function useReducedMotion(): boolean {
   return reduced;
 }
 
-/** A ref to attach, and whether that element is (at least a quarter) on screen. */
-export function useInView<T extends Element>() {
+/**
+ * A ref to attach, and whether that element is (at least a quarter) on screen.
+ * With `once`, it stays true after the first time (for entrances that shouldn't play again).
+ */
+export function useInView<T extends Element>(opts: { once?: boolean; threshold?: number } = {}) {
+  const { once = false, threshold = 0.25 } = opts;
   const ref = useRef<T | null>(null);
   const [inView, setInView] = useState(() => typeof IntersectionObserver === "undefined");
   useEffect(() => {
     const el = ref.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setInView(e.isIntersecting), { threshold: 0.25 });
+    const io = new IntersectionObserver(([e]) => {
+      if (!once) { setInView(e.isIntersecting); return; }
+      if (e.isIntersecting) { setInView(true); io.disconnect(); }
+    }, { threshold });
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [once, threshold]);
   return [ref, inView] as const;
 }

@@ -61,7 +61,7 @@ const es = {
   resultsLabel: "Preguntas y respuestas",
   count: (n: number) => (n === 1 ? "1 pregunta" : `${n} preguntas`),
   empty: {
-    title: (q: string) => `No encontramos nada sobre «${q}»`,
+    title: (q: string) => `No encontramos nada sobre: ${q}`,
     text: "Prueba con otra palabra o con una de estas:",
     suggestions: ["precio", "Plaid", "impuestos", "contador"],
     clear: "Borrar búsqueda",
@@ -285,7 +285,7 @@ const es = {
         {
           q: "¿Cuántas preguntas puedo hacer al mes?",
           a: [
-            `Cada «x» de tu plan son ${f.questions.perX} preguntas al mes:`,
+            `Cada x de tu plan son ${f.questions.perX} preguntas al mes:`,
             [
               `Para ti: Básico ${xOf(f.questions.personalBasic, f.questions.perX)} (${f.questions.personalBasic} preguntas) y Pro ${xOf(f.questions.personalPro, f.questions.perX)} (${f.questions.personalPro}).`,
               `Para tu negocio: Básico ${xOf(f.questions.basic, f.questions.perX)} (${f.questions.basic}), Pro ${xOf(f.questions.pro, f.questions.perX)} (${f.questions.pro}) y Negocio ${xOf(f.questions.business, f.questions.perX)} (${f.questions.business}).`,
@@ -479,7 +479,7 @@ const en: PreguntasCopy = {
   resultsLabel: "Questions and answers",
   count: (n: number) => (n === 1 ? "1 question" : `${n} questions`),
   empty: {
-    title: (q: string) => `We couldn't find anything about “${q}”`,
+    title: (q: string) => `We couldn't find anything about: ${q}`,
     text: "Try another word, or one of these:",
     suggestions: ["price", "Plaid", "taxes", "accountant"],
     clear: "Clear search",

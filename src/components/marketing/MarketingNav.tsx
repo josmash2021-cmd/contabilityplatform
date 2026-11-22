@@ -43,7 +43,7 @@ export function MarketingNav() {
     >
       <nav aria-label={nav.label} className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
         <Link to="/" className="flex items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" onClick={() => setOpen(false)}>
-          <Logo className="h-8 w-8" />
+          <Logo className={`h-8 w-8 transition-colors ${solid ? "text-blue-600" : "text-blue-400"}`} />
           <span className="leading-tight">
             <span className={`block text-[15px] font-semibold tracking-tight transition-colors ${solid ? "text-slate-900" : "text-white"}`}>Personal &amp; Business Solutions</span>
           </span>

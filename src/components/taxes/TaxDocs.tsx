@@ -7,6 +7,7 @@ import { useCopy } from "@/i18n/useI18n";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { shownDocKinds, type Answers, type TaxDocKind, type TaxMode } from "@contracts/taxRules";
 import { GROUP_ORDER, MAX_FILES, clientFiles, docState, fileSize, groupOf, isMulti, type Doc, type DocState } from "./taxView";
+import { FileLogo } from "@/components/FileLogo";
 
 export type PickSource = "camera" | "gallery" | "pdf";
 export type PickFn = (kind: string, source: PickSource, replace?: Doc) => void;
@@ -29,7 +30,7 @@ export function TaxPick({ kind, title, has, replace, onPick, busy }: { kind: str
       <DropdownMenuContent align="end" className="w-52 rounded-[14px] p-1.5">
         <DropdownMenuItem onSelect={() => onPick(kind, "camera", replace)} className="min-h-10 gap-2.5 rounded-[10px]"><Camera className="h-4 w-4 text-slate-500" aria-hidden="true" />{d.camera}</DropdownMenuItem>
         <DropdownMenuItem onSelect={() => onPick(kind, "gallery", replace)} className="min-h-10 gap-2.5 rounded-[10px]"><Upload className="h-4 w-4 text-slate-500" aria-hidden="true" />{d.gallery}</DropdownMenuItem>
-        <DropdownMenuItem onSelect={() => onPick(kind, "pdf", replace)} className="min-h-10 gap-2.5 rounded-[10px]"><FileText className="h-4 w-4 text-slate-500" aria-hidden="true" />{d.pdf}</DropdownMenuItem>
+        <DropdownMenuItem onSelect={() => onPick(kind, "pdf", replace)} className="min-h-10 gap-2.5 rounded-[10px]"><FileLogo kind="pdf" className="h-4 w-4" />{d.pdf}</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -46,9 +47,7 @@ export function TaxThumb({ file, kind, mini, count }: { file?: Doc; kind: string
   return (
     <span className={cn("relative grid shrink-0 place-items-center", pdf ? "bg-gradient-to-b from-slate-50 to-slate-100" : "bg-slate-200 text-slate-600", size)} aria-hidden="true">
       {pdf ? (
-        <span className={cn("relative grid place-items-end rounded-[3px] border border-slate-300 bg-white", mini ? "h-[27px] w-[22px]" : "h-9 w-[30px]")}>
-          <span className={cn("absolute -left-1 rounded-[3px] bg-red-600 px-0.5 font-extrabold leading-none text-white", mini ? "bottom-1 text-[6px]" : "bottom-1.5 text-[7.5px]")}>PDF</span>
-        </span>
+        <FileLogo kind="pdf" className={mini ? "h-7 w-7" : "h-9 w-9"} />
       ) : <ImageIcon className={mini ? "h-4 w-4" : "h-5 w-5"} />}
       {count && count > 1 ? <i className="absolute bottom-[3px] right-[3px] min-w-[18px] rounded-full bg-slate-900 px-1.5 text-center text-[10px] font-bold not-italic leading-[18px] text-white">{count}</i> : null}
     </span>

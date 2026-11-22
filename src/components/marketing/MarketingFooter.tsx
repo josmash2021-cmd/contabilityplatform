@@ -17,7 +17,7 @@ export function MarketingFooter() {
         <div className="grid gap-12 lg:grid-cols-[1.4fr_2fr]">
           <div className="max-w-sm">
             <Link to="/" className="inline-flex items-center gap-2.5">
-              <Logo className="h-9 w-9" />
+              <Logo className="h-9 w-9 text-blue-400" />
               <span className="leading-tight">
                 <span className="block text-base font-semibold text-white">Personal &amp; Business Solutions</span>
               </span>

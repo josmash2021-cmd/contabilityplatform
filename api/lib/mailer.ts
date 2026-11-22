@@ -92,7 +92,7 @@ export function mailFiles(title: string, files: Array<{ kind: "PDF" | "XLS"; nam
   return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:4px 0 18px;border:1px solid ${LINE};border-radius:12px">` +
     `<tr><td colspan="2" style="padding:12px 14px 4px;font-size:13px;font-weight:600;color:${INK}">${escapeHtml(title)}</td></tr>` +
     files.map((f) => `<tr><td width="52" valign="middle" style="padding:8px 0 10px 14px">` +
-      `<div style="width:38px;height:38px;line-height:38px;border-radius:8px;text-align:center;font-size:11px;font-weight:700;color:#ffffff;background:${f.kind === "PDF" ? "#dc2626" : "#16a34a"}">${f.kind}</div></td>` +
+      `<img src="${escapeHtml(appBaseUrl())}/brands/files/${f.kind === "PDF" ? "pdf" : "excel"}.png" width="38" height="38" alt="${f.kind === "PDF" ? "PDF" : "Excel"}" style="display:block;border:0"></td>` +
       `<td valign="middle" style="padding:8px 14px 10px 4px"><div style="font-size:14px;font-weight:600;color:${INK};word-break:break-all">${escapeHtml(f.name)}</div>` +
       `<div style="font-size:12px;color:${MUTED}">${escapeHtml(f.note)}</div></td></tr>`).join("") +
     `</table>`;

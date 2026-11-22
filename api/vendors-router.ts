@@ -36,7 +36,7 @@ const MESSAGES = {
     billNotFound: "No encontramos esa factura.",
     vendorMissing: "Elige un proveedor o escribe el nombre de uno nuevo.",
     vendorDuplicate: "Ya tienes un proveedor con ese nombre.",
-    vendorDuplicateArchived: "Ya tienes un proveedor archivado con ese nombre. Búscalo en «Ver archivados» y reactívalo.",
+    vendorDuplicateArchived: "Ya tienes un proveedor archivado con ese nombre. Búscalo en Ver archivados y reactívalo.",
     paidLocked: "Esta factura ya está pagada. Márcala como no pagada si necesitas cambiarla.",
     deletePaid: "Solo puedes borrar facturas por pagar. Primero márcala como no pagada.",
     alreadyPaid: "Esta factura ya está marcada como pagada.",

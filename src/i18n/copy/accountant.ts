@@ -13,7 +13,7 @@ const es = {
   excelDone: "Excel descargado",
   excelError: "No pudimos crear el Excel. Inténtalo de nuevo.",
   pdf: "Descargar PDF",
-  pdfHint: "Se abre la ventana de impresión: elige «Guardar como PDF».",
+  pdfHint: "Se abre la ventana de impresión: elige Guardar como PDF.",
   periodLabel: "Periodo",
   presets: {
     thisMonth: "Este mes",
@@ -26,7 +26,7 @@ const es = {
   to: "Hasta",
   rangeErrors: {
     invalid: "Escribe dos fechas válidas.",
-    order: "La fecha «Desde» debe ser antes de «Hasta».",
+    order: "La fecha de inicio debe ser antes de la fecha final.",
     tooLong: "El rango puede ser de hasta 2 años.",
   },
   range: (from: string, to: string) => (from === to ? from : `${from} – ${to}`),

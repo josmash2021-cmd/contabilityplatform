@@ -89,7 +89,7 @@ const es = {
       title: "Pregunta en palabras normales y te contesta con tus números",
       text: "El asistente de inteligencia artificial lee las ventas, los gastos y el banco de tu negocio para contestarte. Solo lee: no cambia nada.",
       bullets: [
-        { t: "Pregúntale «¿Cuánto vendí este mes?», «¿En qué gasté más?» o «¿Quiénes son mis mejores clientes?»" },
+        { t: "Pregúntale cuánto vendiste este mes, en qué gastaste más o quiénes son tus mejores clientes" },
         { t: "Te contesta con tus propios números, no con ejemplos generales" },
         { t: "Solo lee tu información: no mueve dinero ni cambia tus registros" },
         { t: "Cada plan trae su cupo de preguntas al mes", plan: "Básico x5 · Pro x10 · Negocio x20" },
@@ -157,7 +157,7 @@ const es = {
       title: "Pregunta por tu dinero y recibe una respuesta clara",
       text: "El asistente de inteligencia artificial lee tus gastos, tu banco y tus metas para contestarte en palabras sencillas.",
       bullets: [
-        { t: "Pregúntale «¿En qué gasté más este mes?» o «¿Cuánto pago en suscripciones?»" },
+        { t: "Pregúntale en qué gastaste más este mes o cuánto pagas en suscripciones" },
         { t: "Te contesta con tus propios números" },
         { t: "Solo lee tu información: no cambia ni mueve nada" },
         { t: "Cada plan trae su cupo de preguntas al mes", plan: "Básico x5 · Pro x15" },
@@ -398,7 +398,7 @@ const en: ProductoCopy = {
       title: "Ask in plain words and get answers from your own numbers",
       text: "The artificial intelligence assistant reads your business's sales, expenses and bank activity to answer you. It only reads: it never changes anything.",
       bullets: [
-        { t: "Ask it “How much did I sell this month?”, “What did I spend the most on?” or “Who are my best clients?”" },
+        { t: "Ask it how much you sold this month, what you spent the most on or who your best clients are" },
         { t: "It answers with your own numbers, not generic examples" },
         { t: "It only reads your information: it doesn't move money or change your records" },
         { t: "Each plan comes with its monthly question allowance", plan: "Basic x5 · Pro x10 · Business x20" },
@@ -466,7 +466,7 @@ const en: ProductoCopy = {
       title: "Ask about your money and get a clear answer",
       text: "The artificial intelligence assistant reads your spending, your bank and your goals to answer you in plain words.",
       bullets: [
-        { t: "Ask it “What did I spend the most on this month?” or “How much do I pay in subscriptions?”" },
+        { t: "Ask it what you spent the most on this month or how much you pay in subscriptions" },
         { t: "It answers with your own numbers" },
         { t: "It only reads your information: it doesn't change or move anything" },
         { t: "Each plan comes with its monthly question allowance", plan: "Basic x5 · Pro x15" },

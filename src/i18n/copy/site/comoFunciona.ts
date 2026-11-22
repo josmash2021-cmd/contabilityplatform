@@ -198,9 +198,9 @@ const es = {
       name: "María",
       who: "Negocio de pintura y remodelación",
       moments: [
-        { time: "7:30 a. m.", part: "Mañana", title: "Revisa su banco con el café", text: "En «Para hoy» ve los movimientos nuevos del banco. Ya vienen con categoría: aprueba los que están bien y corrige uno.", screens: "Inicio · Banco" },
+        { time: "7:30 a. m.", part: "Mañana", title: "Revisa su banco con el café", text: "En la sección Para hoy ve los movimientos nuevos del banco. Ya vienen con categoría: aprueba los que están bien y corrige uno.", screens: "Inicio · Banco" },
         { time: "1:00 p. m.", part: "Mediodía", title: "Cobra y guarda el recibo", text: "Termina un trabajo y cobra $630 por Zelle desde el punto de venta. De regreso pasa por material y le toma foto al recibo: queda como gasto de Materiales.", screens: "Cobrar · Recibos" },
-        { time: "8:00 p. m.", part: "Noche", title: "Mira cómo va el mes", text: "Un cliente aceptó su cotización y la convierte en venta. Luego le pregunta al asistente «¿Cuánto vendí este mes?» y revisa su ganancia.", screens: "Cotizaciones · Asistente · Reportes" },
+        { time: "8:00 p. m.", part: "Noche", title: "Mira cómo va el mes", text: "Un cliente aceptó su cotización y la convierte en venta. Luego le pregunta al asistente cuánto vendió este mes y revisa su ganancia.", screens: "Cotizaciones · Asistente · Reportes" },
       ] as ComoFuncionaMoment[],
       end: "Descarga el Excel del mes y se lo manda a su contador.",
     },
@@ -438,9 +438,9 @@ const en: ComoFuncionaCopy = {
       name: "María",
       who: "Painting and remodeling business",
       moments: [
-        { time: "7:30 a.m.", part: "Morning", title: "Checks her bank over coffee", text: "In “Today” she sees the new bank transactions. They already have categories: she approves the right ones and fixes one.", screens: "Home · Bank" },
+        { time: "7:30 a.m.", part: "Morning", title: "Checks her bank over coffee", text: "In the Today section she sees the new bank transactions. They already have categories: she approves the right ones and fixes one.", screens: "Home · Bank" },
         { time: "1:00 p.m.", part: "Midday", title: "Gets paid and saves the receipt", text: "She finishes a job and takes $630 by Zelle from the point of sale. On the way back she buys supplies and snaps the receipt: it's saved as a Materials expense.", screens: "Point of sale · Receipts" },
-        { time: "8:00 p.m.", part: "Evening", title: "Sees how the month is going", text: "A client accepted her quote, so she turns it into a sale. Then she asks the assistant “How much did I sell this month?” and checks her profit.", screens: "Quotes · Assistant · Reports" },
+        { time: "8:00 p.m.", part: "Evening", title: "Sees how the month is going", text: "A client accepted her quote, so she turns it into a sale. Then she asks the assistant how much she sold this month and checks her profit.", screens: "Quotes · Assistant · Reports" },
       ],
       end: "She downloads the month's Excel file and sends it to her accountant.",
     },

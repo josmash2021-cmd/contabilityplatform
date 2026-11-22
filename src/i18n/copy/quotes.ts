@@ -197,7 +197,7 @@ const es = {
     share: "Compartir…",
     message: "Mensaje",
     honest: "La app no manda correos por su cuenta: se abre tu WhatsApp o tu correo con el mensaje listo y tú lo envías.",
-    pdfHint: "Se abre la ventana de imprimir: elige «Guardar como PDF».",
+    pdfHint: "Se abre la ventana de imprimir: elige Guardar como PDF.",
     copied: "Texto copiado",
     copyFailed: "No pudimos copiar el texto.",
     done: "Listo",

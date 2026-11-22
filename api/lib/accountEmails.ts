@@ -52,7 +52,7 @@ export function resetCodeMail(to: string, lang: "es" | "en", firstName: string, 
       body:
         mailP(`${escapeHtml(hi)}, ${es ? "escribe este código en la app para crear una contraseña nueva:" : "enter this code in the app to create a new password:"}`) +
         mailCode(code) +
-        mailP(es ? "Vence en <b>30 minutos</b>. Si se te pasa, pide otro en «Olvidé mi contraseña»." : "It expires in <b>30 minutes</b>. If it does, ask for another one in “Forgot my password”.") +
+        mailP(es ? "Vence en <b>30 minutos</b>. Si se te pasa, pide otro en Olvidé mi contraseña." : "It expires in <b>30 minutes</b>. If it does, ask for another one in Forgot my password.") +
         mailNote(`<b>${es ? "Cuida tu cuenta." : "Keep your account safe."}</b> ${escapeHtml(security)}`),
     }),
   };

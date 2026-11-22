@@ -4,12 +4,13 @@
 import type { ReactNode } from "react";
 import {
   ShoppingCart, FileText, Repeat, Landmark, Tag, CheckCircle2, Sparkles, Receipt, CalendarClock,
-  FileSpreadsheet, Download, Camera, Check, Circle, Lock, Send, Users, MessageCircle, Eye, X,
+  Download, Camera, Check, Circle, Lock, Send, Users, MessageCircle, Eye, X,
   Briefcase, Car, Home, Bell, Target, Plus, Dumbbell, Tv, Music, Cloud,
 } from "lucide-react";
 import { ReportPreview } from "@/components/marketing/Previews";
 import { useCopy } from "@/i18n/useI18n";
 import { productoCopy } from "@/i18n/copy/site/producto";
+import { FileLogo } from "@/components/FileLogo";
 
 function useMock() {
   return useCopy(productoCopy).mock;
@@ -172,7 +173,7 @@ export function ReportsMock() {
       <Overlap>
         <div className={`${mockCard} p-3.5`}>
           <div className="flex items-center gap-2">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-emerald-50 text-emerald-700"><FileSpreadsheet className="h-4 w-4" /></span>
+            <FileLogo kind="excel" className="h-8 w-8" />
             <div className="min-w-0 leading-tight">
               <p className="text-[12px] font-bold text-slate-900">{m.title}</p>
               <p className="truncate text-[10px] text-slate-500">{m.period} · {m.text}</p>
@@ -180,7 +181,7 @@ export function ReportsMock() {
           </div>
           <div className="mt-2.5 grid grid-cols-2 gap-1.5">
             <span className="inline-flex items-center justify-center gap-1 rounded-lg bg-emerald-600 py-1.5 text-[11px] font-semibold text-white"><Download className="h-3 w-3" />{m.excel}</span>
-            <span className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-[11px] font-semibold text-slate-800"><Download className="h-3 w-3" />{m.pdf}</span>
+            <span className="inline-flex items-center justify-center gap-1 rounded-lg border border-slate-200 py-1.5 text-[11px] font-semibold text-slate-800"><FileLogo kind="pdf" className="h-3.5 w-3.5" />{m.pdf}</span>
           </div>
         </div>
       </Overlap>

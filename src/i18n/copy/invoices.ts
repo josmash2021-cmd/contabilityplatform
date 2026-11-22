@@ -44,7 +44,7 @@ const es = {
     toSend: (n: number) => (n === 1 ? "Hoy toca recordar 1 factura" : `Hoy toca recordar ${n} facturas`),
     change: "Cambiar",
     title: "Recordatorios de pago",
-    honest: "La app no manda correos ni mensajes por su cuenta. En estas fechas la factura te muestra «Recordar» y, con un toque, se abre tu WhatsApp o tu correo con el mensaje listo para el cliente.",
+    honest: "La app no manda correos ni mensajes por su cuenta. En estas fechas la factura te muestra el botón Recordar y, con un toque, se abre tu WhatsApp o tu correo con el mensaje listo para el cliente.",
     options: {
       before: "3 días antes de que venza",
       onDue: "El día que vence",
@@ -264,7 +264,7 @@ const es = {
     share: "Compartir…",
     message: "Mensaje",
     honest: "La app no manda correos por su cuenta: se abre tu WhatsApp o tu correo con el mensaje listo y tú lo envías. Queda anotado en el historial por qué medio la mandaste.",
-    pdfHint: "Se abre la ventana de imprimir: elige «Guardar como PDF» y adjúntalo donde quieras.",
+    pdfHint: "Se abre la ventana de imprimir: elige Guardar como PDF y adjúntalo donde quieras.",
     copied: "Texto copiado",
     copyFailed: "No pudimos copiar el texto.",
     done: "Listo",
@@ -272,7 +272,7 @@ const es = {
 
   print: {
     title: "Vista para imprimir",
-    hint: "En la ventana de impresión elige «Guardar como PDF» para mandarla por correo o WhatsApp.",
+    hint: "En la ventana de impresión elige Guardar como PDF para mandarla por correo o WhatsApp.",
     print: "Imprimir o guardar PDF",
     back: "Volver",
   },

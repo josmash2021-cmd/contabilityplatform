@@ -56,14 +56,16 @@ function Timeline({ c }: { c: C["steps"] }) {
           <span aria-hidden className="absolute bottom-10 left-5 top-10 w-px bg-gradient-to-b from-blue-300 via-slate-200 to-slate-200 sm:left-6" />
           {c.items.map((s, i) => {
             const Visual = stepVisuals[i];
+            // Steps take turns: 1, 3 and 5 show their picture on the left; 2 and 4 on the right (computers).
+            const pictureLeft = i % 2 === 0;
             return (
               <li key={s.title} id={`paso-${i + 1}`} className="relative scroll-mt-28 pb-16 pl-14 last:pb-0 sm:pb-24 sm:pl-20">
                 <span aria-hidden className="absolute left-0 top-0 grid h-10 w-10 place-items-center rounded-2xl bg-slate-900 text-base font-bold text-white shadow-lg shadow-slate-900/20 ring-8 ring-white sm:h-12 sm:w-12 sm:text-lg">
                   {i + 1}
                 </span>
                 <Reveal>
-                  <div className="grid items-center gap-10 lg:grid-cols-[1.1fr_1fr] lg:gap-14">
-                    <div>
+                  <div className={`grid items-center gap-10 lg:gap-14 ${pictureLeft ? "lg:grid-cols-[1fr_1.1fr]" : "lg:grid-cols-[1.1fr_1fr]"}`}>
+                    <div className={pictureLeft ? "lg:order-2" : ""}>
                       <p className="pt-1.5 text-sm font-semibold text-blue-600 sm:pt-3">{c.stepLabel(i + 1)}</p>
                       <h3 className="mt-1.5 text-2xl font-bold tracking-tight text-slate-900 sm:text-[1.75rem] sm:leading-tight">{s.title}</h3>
                       <p className="mt-3 text-lg leading-relaxed text-slate-600">{s.text}</p>
@@ -88,7 +90,7 @@ function Timeline({ c }: { c: C["steps"] }) {
                         </p>
                       )}
                     </div>
-                    <Visual />
+                    <div className={pictureLeft ? "lg:order-1" : ""}><Visual /></div>
                   </div>
                 </Reveal>
               </li>

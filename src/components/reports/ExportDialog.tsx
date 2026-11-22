@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
-import { AlertCircle, Download, FileText, List, Loader2 } from "lucide-react";
+import { AlertCircle, Download, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import type { ReportesCopy } from "@/i18n/copy/reportes";
@@ -8,6 +8,7 @@ import { Panel } from "./Panel";
 import { BTN, BTN_PRIMARY, SEG, SEG_BTN, saveFile } from "./ui";
 import { printable, renderPdf, textLeft, PAGE_H, PAGE_W, type Page } from "./export/pdf";
 import { layoutWorkbook, colName, shownValue, writeXlsx, type CfbLike, type GridCell, type SheetGrid, type SheetSpec } from "./export/xlsx";
+import { FileLogo } from "@/components/FileLogo";
 
 export type ExportTab = "pdf" | "xlsx";
 
@@ -167,8 +168,8 @@ export function ExportDialog({ open, onOpenChange, tab, onTab, title, doc, loadi
     <Panel open={open} onOpenChange={onOpenChange} title={title} closeLabel={c.drill.close} wide="xwide">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2.5">
         <div className={SEG} role="group" aria-label={c.export.format}>
-          <button type="button" aria-pressed={tab === "pdf"} className={SEG_BTN} onClick={() => onTab("pdf")}><FileText className="h-[15px] w-[15px]" aria-hidden="true" />{c.export.pdf}</button>
-          <button type="button" aria-pressed={tab === "xlsx"} className={SEG_BTN} onClick={() => onTab("xlsx")}><List className="h-[15px] w-[15px]" aria-hidden="true" />{c.export.excel}</button>
+          <button type="button" aria-pressed={tab === "pdf"} className={SEG_BTN} onClick={() => onTab("pdf")}><FileLogo kind="pdf" className="h-4 w-4" />{c.export.pdf}</button>
+          <button type="button" aria-pressed={tab === "xlsx"} className={SEG_BTN} onClick={() => onTab("xlsx")}><FileLogo kind="excel" className="h-4 w-4" />{c.export.excel}</button>
         </div>
         <div className="flex flex-wrap items-center gap-2.5">
           {doc && !loading && <span className="text-xs text-slate-500">{tab === "pdf" ? c.export.pdfNote(pages.length) : c.export.xlsxNote(grids.length)}</span>}
