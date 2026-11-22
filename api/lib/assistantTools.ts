@@ -3,7 +3,7 @@
 // Each call is recorded (name, input, result) so the answer can say where its numbers came from:
 // sourcesFromCalls() turns those calls into links to the app's screens and records.
 import { z } from "zod";
-import { and, desc, eq, gte, isNotNull, like, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, like, lt, sql } from "drizzle-orm";
 import type { AnyMySqlColumn } from "drizzle-orm/mysql-core";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { bankTransactions, expenses, personalCategories, personalGoals, sales } from "@db/schema";
@@ -11,6 +11,13 @@ import { bills, vendors } from "@db/vendorsSchema";
 import type { getDb } from "../queries/connection";
 import { isMissingTable } from "./dbErrors";
 import { budgetPercent, budgetStatus, spendingByCategory } from "./budgets";
+import { startOfDayIn, addDays as addDaysIso } from "./ventas";
+import { BUSINESS_TIME_ZONE } from "./quotes";
+
+/** A sale belongs to the day it was made in Alabama (like Ventas), not to the UTC day: [from 00:00, to+1 00:00) Central. */
+export function salesWindow(from: string, to: string): { start: Date; end: Date } {
+  return { start: startOfDayIn(from, BUSINESS_TIME_ZONE), end: startOfDayIn(addDaysIso(to, 1), BUSINESS_TIME_ZONE) };
+}
 
 type Db = ReturnType<typeof getDb>;
 export type AssistantMode = "business" | "personal";
@@ -165,9 +172,10 @@ function businessTools(db: Db, userId: number, today: string, record?: CallRecor
       description: "Completed sales recorded in the app for a date range: total, number of sales, average ticket, by payment method, and the top clients.",
       inputSchema: range,
       run: async ({ from, to }) => {
+        const win = salesWindow(from, to);
         const where = and(
           eq(sales.createdBy, userId), eq(sales.status, "completed"),
-          gte(sales.createdAt, new Date(`${from}T00:00:00`)), lte(sales.createdAt, new Date(`${to}T23:59:59`)),
+          gte(sales.createdAt, win.start), lt(sales.createdAt, win.end),
         );
         type ByMethod = { method: string; total: string; n: number };
         const byMethod: ByMethod[] = await db.select({ method: sales.paymentMethod, total: sql<string>`sum(${sales.total})`, n: sql<number>`count(*)` })

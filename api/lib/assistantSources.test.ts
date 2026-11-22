@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_SOURCES, addDays, lastWeek, parseSources, sourcesFromCalls, type ToolCall } from "./assistantTools";
+import { MAX_SOURCES, addDays, lastWeek, parseSources, salesWindow, sourcesFromCalls, type ToolCall } from "./assistantTools";
 
 const call = (name: string, input: Record<string, unknown>, output: unknown): ToolCall => ({ name, input, output });
 
@@ -88,5 +88,20 @@ describe("lastWeek", () => {
   it("addDays crosses months without time zones moving the day", () => {
     expect(addDays("2026-11-30", 1)).toBe("2026-12-01");
     expect(addDays("2026-03-08", -1)).toBe("2026-03-07");
+  });
+});
+
+describe("salesWindow", () => {
+  it("counts a sale on the day it was made in Alabama, not the UTC day", () => {
+    const w = salesWindow("2026-11-01", "2026-11-21");
+    expect(w.start.toISOString()).toBe("2026-11-01T05:00:00.000Z"); // still daylight time on Nov 1 at midnight
+    expect(w.end.toISOString()).toBe("2026-11-22T06:00:00.000Z");
+    // A sale at 7 pm on the 21st (Central) is 1 am on the 22nd in UTC: it belongs to the 21st.
+    const evening = new Date("2026-11-22T01:00:00Z");
+    expect(evening >= w.start && evening < w.end).toBe(true);
+  });
+  it("follows daylight saving time", () => {
+    expect(salesWindow("2026-07-04", "2026-07-04").start.toISOString()).toBe("2026-07-04T05:00:00.000Z");
+    expect(salesWindow("2026-12-25", "2026-12-25").end.toISOString()).toBe("2026-12-26T06:00:00.000Z");
   });
 });

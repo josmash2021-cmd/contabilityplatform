@@ -8,7 +8,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { and, eq, gte, isNotNull, sql } from "drizzle-orm";
+import { and, eq, gte, isNotNull, lt, sql } from "drizzle-orm";
 import { createRouter, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { assistantMessages, bankAccounts, bankTransactions, expenses, personalCategories, personalGoals, sales } from "@db/schema";
@@ -18,7 +18,7 @@ import { pendingCount } from "./review-router";
 import { assistantMonthlyLimit } from "@contracts/planFeatures";
 import { getPlanContext } from "./lib/planAccess";
 import {
-  addDays, assistantTools, billsDueOf, lastWeek, parseSources, receivablesOf, sourcesFromCalls, type AssistantSource, type ToolCall,
+  addDays, assistantTools, billsDueOf, lastWeek, parseSources, receivablesOf, salesWindow, sourcesFromCalls, type AssistantSource, type ToolCall,
 } from "./lib/assistantTools";
 import { budgetStatus, spendingByCategory } from "./lib/budgets";
 import { msg } from "./lib/i18n";
@@ -436,7 +436,7 @@ export async function weeklyOf(db: Db, user: NonNullable<TrpcContext["user"]>) {
   }
 
   const salesWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${sales.total}), 0)`, n: sql<number>`COUNT(*)` }).from(sales)
-    .where(and(eq(sales.createdBy, userId), eq(sales.status, "completed"), sql`DATE(${sales.createdAt}) >= ${week.from}`, sql`DATE(${sales.createdAt}) <= ${week.to}`));
+    .where(and(eq(sales.createdBy, userId), eq(sales.status, "completed"), gte(sales.createdAt, salesWindow(week.from, week.to).start), lt(sales.createdAt, salesWindow(week.from, week.to).end)));
   const expWeek: Array<{ total: string; n: number }> = await db.select({ total: sql<string>`COALESCE(SUM(${expenses.amount}), 0)`, n: sql<number>`COUNT(*)` }).from(expenses)
     .where(and(sql`${expenses.createdBy} = ${userId}`, sql`${expenses.date} >= ${week.from}`, sql`${expenses.date} <= ${week.to}`));
   const owed = await receivablesOf(db, userId, today);
