@@ -199,7 +199,7 @@ export function PlaidLinkOverlay({ onSuccess, onClose }: PlaidLinkOverlayProps) 
   const overlay = (
     <div className="fixed inset-0 z-[70] flex items-end justify-center sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="pl-title">
       <div className="pl-veil absolute inset-0 bg-slate-950/45 backdrop-blur-[3px]" onClick={closable ? close : undefined} aria-hidden="true" />
-      <div className="pl-sheet relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-[26px] bg-white pb-[calc(14px+env(safe-area-inset-bottom,0px))] shadow-[0_-20px_50px_-20px_rgba(11,18,32,0.5)] sm:max-w-[420px] sm:rounded-[22px] sm:pb-0 sm:shadow-[0_40px_80px_-28px_rgba(11,18,32,0.55)]">
+      <div className="pl-sheet relative max-h-[92dvh] w-full overflow-y-auto overscroll-contain rounded-t-[26px] bg-white pb-[calc(14px+env(safe-area-inset-bottom,0px))] shadow-[0_-20px_50px_-20px_rgba(11,18,32,0.5)] sm:max-w-[420px] sm:rounded-[22px] sm:pb-0 sm:shadow-[0_1px_2px_rgba(2,6,23,0.06),0_10px_28px_-8px_rgba(2,6,23,0.18),0_30px_70px_-12px_rgba(2,6,23,0.26)]">
         <div className="mx-auto mt-2 h-[5px] w-[38px] rounded-full bg-slate-300 sm:hidden" aria-hidden="true" />
         {closable && (
           <button type="button" onClick={close} aria-label={t.close}

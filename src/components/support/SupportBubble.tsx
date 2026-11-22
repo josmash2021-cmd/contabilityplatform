@@ -246,7 +246,7 @@ export function SupportBubble() {
           "fixed z-[70] flex flex-col overflow-hidden bg-slate-50",
           phone
             ? "inset-0 pb-[env(safe-area-inset-bottom,0px)] pt-[env(safe-area-inset-top,0px)]"
-            : "bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))] right-5 h-[min(640px,calc(100dvh-8rem))] w-[390px] rounded-[28px] shadow-[0_40px_90px_-30px_rgba(2,6,23,0.55)] ring-1 ring-slate-900/10",
+            : "bottom-[calc(6.25rem+env(safe-area-inset-bottom,0px))] right-5 h-[min(640px,calc(100dvh-8rem))] w-[390px] rounded-[28px] shadow-[0_1px_2px_rgba(2,6,23,0.06),0_10px_28px_-8px_rgba(2,6,23,0.18),0_30px_70px_-12px_rgba(2,6,23,0.26)] ring-1 ring-slate-900/10",
         )}
       >
         {/* Header */}

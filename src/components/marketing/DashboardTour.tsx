@@ -350,7 +350,7 @@ function ConnectView({ p, step }: VP) {
 
       {phase !== "page" && (
         <div className="tour-veil pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-900/35 p-3 backdrop-blur-[2px]">
-          <div key={phase} className="tour-modal w-full max-w-[290px] rounded-2xl bg-white p-4 shadow-[0_30px_60px_-20px_rgba(2,6,23,0.6)]">
+          <div key={phase} className="tour-modal w-full max-w-[290px] rounded-2xl bg-white p-4 shadow-[0_1px_2px_rgba(2,6,23,0.06),0_10px_28px_-8px_rgba(2,6,23,0.18),0_30px_70px_-12px_rgba(2,6,23,0.26)]">
             {phase === "intro" && (
               <div className="grid gap-3 text-center">
                 <div className="flex items-center justify-center gap-2">
