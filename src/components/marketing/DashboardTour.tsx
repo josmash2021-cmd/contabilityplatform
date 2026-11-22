@@ -525,13 +525,20 @@ export function DashboardTour() {
           </div>
         )}
 
-        {/* The pointer (its tip is the top-left corner). */}
+        {/* The pointer: a rounded arrow in the brand's blue with its name tag, like the cursors in today's
+            design and collaboration apps. Its tip is the top-left corner; it presses in on a click. */}
         {!still && (
-          <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-30 transition-transform duration-700 ease-[cubic-bezier(0.45,0,0.2,1)]">
+          <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-30 transition-transform duration-[850ms] ease-[cubic-bezier(0.65,0,0.35,1)]">
             {frame.click && <span key={at} className="tour-click" />}
-            <svg width="20" height="20" viewBox="0 0 20 20" className={`-ml-[3px] -mt-[2px] drop-shadow-[0_2px_3px_rgba(15,23,42,0.35)] transition-transform duration-150 ${frame.click ? "scale-90" : ""}`}>
-              <path d="M3 2l13 6.6-5.6 1.6 3.3 6.4-2.4 1.2-3.3-6.4L3.3 15.6z" fill="#0f172a" stroke="#fff" strokeWidth="1.4" strokeLinejoin="round" />
-            </svg>
+            <div className={`origin-top-left transition-transform duration-200 ease-out ${frame.click ? "scale-[0.82]" : ""}`}>
+              <svg width="22" height="22" viewBox="0 0 22 22" className="-ml-[4px] -mt-[3px] drop-shadow-[0_4px_10px_rgba(37,99,235,0.45)]">
+                <path d="M4.3 3.7c-.25-.85.6-1.55 1.38-1.12l13.2 7.32c.75.42.63 1.53-.2 1.75l-5.6 1.5-2.7 5.25c-.4.77-1.53.65-1.75-.18z"
+                  fill="#2563EB" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
+              </svg>
+              <span className="absolute left-[15px] top-[17px] whitespace-nowrap rounded-md rounded-tl-sm bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-[0_4px_12px_-2px_rgba(37,99,235,0.55)] ring-1 ring-white/70">
+                {p.tour.pointer}
+              </span>
+            </div>
           </div>
         )}
       </div>

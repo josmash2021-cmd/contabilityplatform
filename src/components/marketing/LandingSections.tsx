@@ -92,11 +92,12 @@ export function TrustStrip({ c }: { c: C["trust"] }) {
           const m = trustMarks[i];
           return (
             <Reveal key={it.title} delay={i * 70} className="flex items-start gap-3">
-              <span className="flex h-11 min-w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 px-2 text-slate-700">
+              {/* The banks' logos go one under the other on phones, side by side from tablets up. */}
+              <span className={`flex min-w-11 shrink-0 items-center justify-center rounded-xl bg-slate-100 px-2 text-slate-700 ${"banks" in m ? "py-2 sm:h-11 sm:py-0" : "h-11"}`}>
                 {"logo" in m ? (
                   <img src={m.logo} alt="" width={m.w} height={m.h} className="block" style={{ width: m.w, height: m.h }} />
                 ) : "banks" in m ? (
-                  <span className="flex items-center gap-1">
+                  <span className="flex flex-col items-center gap-1 sm:flex-row">
                     {TRUST_BANKS.map((src) => (
                       <img key={src} src={src} alt="" width={22} height={22} className="h-[22px] w-[22px] rounded-md bg-white object-contain" />
                     ))}

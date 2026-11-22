@@ -189,8 +189,8 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 .day-fill { animation: day-fill 950ms ease-in-out both; }
 @keyframes day-fill { from { width: 0; } to { width: 100%; } }
 /* The home page's dashboard tour (DashboardTour.tsx): the pointer's click, the receipt being read, the chart coming up. */
-.tour-click { position: absolute; left: -13px; top: -13px; width: 26px; height: 26px; border-radius: 9999px; background: rgba(37, 99, 235, 0.22); border: 2px solid rgba(37, 99, 235, 0.65); animation: tour-click 450ms ease-out both; }
-@keyframes tour-click { from { opacity: 1; transform: scale(0.3); } to { opacity: 0; transform: scale(1.4); } }
+.tour-click { position: absolute; left: -16px; top: -16px; width: 32px; height: 32px; border-radius: 9999px; background: radial-gradient(circle, rgba(59, 130, 246, 0.35) 0%, rgba(59, 130, 246, 0.12) 60%, transparent 72%); box-shadow: 0 0 0 1.5px rgba(59, 130, 246, 0.55); animation: tour-click 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes tour-click { from { opacity: 1; transform: scale(0.2); } 60% { opacity: 0.9; } to { opacity: 0; transform: scale(1.5); } }
 .tour-scan { top: -28px; animation: tour-scan 1300ms ease-in-out infinite; }
 @keyframes tour-scan { to { top: 104px; } }
 .tour-grow { transform-origin: bottom; animation: tour-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
