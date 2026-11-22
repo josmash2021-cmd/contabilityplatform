@@ -1,4 +1,4 @@
-// ── Equipo (Negocio plan): up to 10 users plus the accountant ──
+// ── Equipo (Pro: up to 5 users, Negocio: up to 20, the owner included) plus the accountant ──
 // The owner invites people by link. Each person keeps their own login; while they
 // are on the team, the server works on the owner's data with their role's limits
 // (api/context.ts swaps the user, api/middleware.ts enforces api/lib/team.ts).
@@ -11,7 +11,7 @@ import { getDb } from "./queries/connection";
 import { companySettings, users } from "@db/schema";
 import { teamInvites, teamMembers } from "@db/teamSchema";
 import { requireFeature } from "./lib/planAccess";
-import { TEAM_STAFF_SEATS, type TeamRole } from "./lib/team";
+import { staffSeatsFor, type TeamRole } from "./lib/team";
 import { teamTablesExist } from "./lib/teamContext";
 import { companyLogoDataUrl } from "./settings-router";
 import type { Lang } from "./lib/i18n";
@@ -21,7 +21,7 @@ const INVITE_DAYS = 7;
 
 const M = {
   es: {
-    seats: "Ya usaste los lugares de tu plan (10 usuarios). Quita a alguien para invitar a otra persona.",
+    seats: "Ya usaste los lugares de tu plan. Quita a alguien o cambia a un plan con más usuarios.",
     oneAccountant: "Ya tienes un contador en tu equipo.",
     already: "Esa persona ya está en tu equipo.",
     badInvite: "Esta invitación no es válida o ya venció. Pide una nueva.",
@@ -31,7 +31,7 @@ const M = {
     notFound: "No lo encontramos.",
   },
   en: {
-    seats: "You've used your plan's seats (10 users). Remove someone to invite another person.",
+    seats: "You've used your plan's seats. Remove someone or move to a plan with more users.",
     oneAccountant: "You already have an accountant on your team.",
     already: "That person is already on your team.",
     badInvite: "This invitation isn't valid or has expired. Ask for a new one.",
@@ -107,7 +107,7 @@ function appUrl() {
 export type TeamActivity = { kind: "invited" | "joined" | "signedIn"; at: Date; name: string | null; email: string | null; role: TeamRole };
 
 /** The owner's team: members with their names and last sign-in, open invitations, seats and recent activity. */
-async function teamOf(db: Db, ownerId: number) {
+async function teamOf(db: Db, ownerId: number, staffSeats: number) {
   type Member = { id: number; userId: number; role: TeamRole; name: string | null; email: string | null; createdAt: Date; lastSignInAt: Date | null };
   const members: Member[] = await db.select({ id: teamMembers.id, userId: teamMembers.memberUserId, role: teamMembers.role, name: users.name, email: users.email, createdAt: teamMembers.createdAt, lastSignInAt: users.lastSignInAt })
     .from(teamMembers).leftJoin(users, eq(users.id, teamMembers.memberUserId)).where(eq(teamMembers.ownerId, ownerId));
@@ -138,7 +138,7 @@ async function teamOf(db: Db, ownerId: number) {
 
   return {
     members: members.map((m) => ({ ...m, id: Number(m.id), userId: Number(m.userId) })),
-    invites, staffSeats: TEAM_STAFF_SEATS, staffUsed, accountantUsed, activity: activity.slice(0, 8),
+    invites, staffSeats, staffUsed, accountantUsed, activity: activity.slice(0, 8),
   };
 }
 
@@ -146,27 +146,27 @@ export const teamRouter = createRouter({
   // ── Owner ──
   list: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
-    await requireFeature(db, ctx.user, "team", ctx.lang);
+    const plan = await requireFeature(db, ctx.user, "team", ctx.lang);
     await ensureTeamTables(db);
-    return teamOf(db, Number(ctx.user.id));
+    return teamOf(db, Number(ctx.user.id), staffSeatsFor(plan.tier));
   }),
 
   invite: authedQuery
     .input(z.object({ email: z.string().trim().email().max(320), role: z.enum(["staff", "accountant"]), name: z.string().trim().max(255).optional() }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      await requireFeature(db, ctx.user, "team", ctx.lang);
+      const plan = await requireFeature(db, ctx.user, "team", ctx.lang);
       await ensureTeamTables(db);
       const ownerId = Number(ctx.user.id);
       const email = norm(input.email);
       if (email === norm(ctx.user.email ?? "")) throw fail(ctx.lang, "ownTeam");
-      const team = await teamOf(db, ownerId);
+      const team = await teamOf(db, ownerId, staffSeatsFor(plan.tier));
       if (team.members.some((m) => norm(m.email ?? "") === email)) throw fail(ctx.lang, "already");
       // A new link for someone already invited replaces theirs: their open invitation doesn't count against the seat.
       const open = team.invites.find((i) => norm(i.email) === email);
       const staffUsed = team.staffUsed - (open?.role === "staff" ? 1 : 0);
       const accountantTaken = team.members.some((m) => m.role === "accountant") || team.invites.some((i) => i.role === "accountant" && norm(i.email) !== email);
-      if (input.role === "staff" && staffUsed >= TEAM_STAFF_SEATS) throw fail(ctx.lang, "seats", "FORBIDDEN");
+      if (input.role === "staff" && staffUsed >= team.staffSeats) throw fail(ctx.lang, "seats", "FORBIDDEN");
       if (input.role === "accountant" && accountantTaken) throw fail(ctx.lang, "oneAccountant", "FORBIDDEN");
       // A new link replaces any open invitation for the same email.
       await db.delete(teamInvites).where(and(eq(teamInvites.ownerId, ownerId), eq(teamInvites.email, email), isNull(teamInvites.acceptedAt)));
@@ -199,15 +199,15 @@ export const teamRouter = createRouter({
     .input(z.object({ id: z.number().int().positive(), role: z.enum(["staff", "accountant"]) }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
-      await requireFeature(db, ctx.user, "team", ctx.lang);
+      const plan = await requireFeature(db, ctx.user, "team", ctx.lang);
       await ensureTeamTables(db);
       const ownerId = Number(ctx.user.id);
-      const team = await teamOf(db, ownerId);
+      const team = await teamOf(db, ownerId, staffSeatsFor(plan.tier));
       const member = team.members.find((m) => m.id === input.id);
       if (!member) throw fail(ctx.lang, "notFound", "NOT_FOUND");
       if (member.role !== input.role) {
         if (input.role === "accountant" && team.accountantUsed) throw fail(ctx.lang, "oneAccountant", "FORBIDDEN");
-        if (input.role === "staff" && team.staffUsed >= TEAM_STAFF_SEATS) throw fail(ctx.lang, "seats", "FORBIDDEN");
+        if (input.role === "staff" && team.staffUsed >= team.staffSeats) throw fail(ctx.lang, "seats", "FORBIDDEN");
         await db.update(teamMembers).set({ role: input.role }).where(and(eq(teamMembers.id, input.id), eq(teamMembers.ownerId, ownerId)));
       }
       return { ok: true };

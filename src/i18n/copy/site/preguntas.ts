@@ -15,7 +15,7 @@ export type PreguntasFacts = {
   /** Banks a business plan can connect (personal has no limit). */
   banks: { basic: number; pro: number; business: number };
   /** Users on the Negocio plan, the owner included (the accountant is extra). */
-  seats: number;
+  seats: { pro: number; business: number };
   maxFileMb: number;
   inviteDays: number;
 };
@@ -319,7 +319,7 @@ const es = {
         {
           q: "¿Puedo darle acceso a mi equipo?",
           a: [
-            `Sí, con el plan Negocio: hasta ${f.seats} usuarios contándote a ti, más tu contador, que no ocupa lugar.`,
+            `Sí, con Pro o Negocio: hasta ${f.seats.pro} usuarios con Pro y hasta ${f.seats.business} con Negocio, contándote a ti, más tu contador, que no ocupa lugar.`,
             "Cada persona entra con su propia cuenta y su propia contraseña.",
           ],
           k: "usuarios empleados equipo",
@@ -737,7 +737,7 @@ const en: PreguntasCopy = {
         {
           q: "Can I give my team access?",
           a: [
-            `Yes, with the Business plan: up to ${f.seats} users counting you, plus your accountant, who doesn't take a seat.`,
+            `Yes, with Pro or Business: up to ${f.seats.pro} users with Pro and up to ${f.seats.business} with Business, counting you, plus your accountant, who doesn't take a seat.`,
             "Each person logs in with their own account and their own password.",
           ],
           k: "users employees team",

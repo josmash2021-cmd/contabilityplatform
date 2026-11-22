@@ -20,7 +20,7 @@ describe("what each plan includes", () => {
     expect(planHas("business", "pro", "clientReports")).toBe(false);
     expect(planHas("business", "business", "clientReports")).toBe(true);
     expect(cheapestTierWith("business", "vendors")).toBe("pro");
-    expect(cheapestTierWith("business", "team")).toBe("business");
+    expect(cheapestTierWith("business", "team")).toBe("pro");
   });
 
   it("receipt photos: 20 a month on Básico, no limit above", () => {

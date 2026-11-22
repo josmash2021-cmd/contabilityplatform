@@ -1333,7 +1333,7 @@ export const bankRouter = createRouter({
               success: false,
               code: "bank_limit" as const,
               limit,
-              error: `Tu plan permite ${limit} ${limit === 1 ? "banco conectado" : "bancos conectados"}. Para conectar otro, cambia de plan en Ajustes.`,
+              error: `Tu plan permite ${limit} ${limit === 1 ? "banco conectado" : "bancos conectados"}. ${mode === "personal" ? "Para conectar otro, quita uno en Banco." : "Para conectar otro, cambia de plan en Ajustes."}`,
             };
           }
         }

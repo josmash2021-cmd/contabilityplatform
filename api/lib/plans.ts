@@ -8,6 +8,8 @@
 //
 // Keep src/components/marketing/content.ts (landing prices) in step with this file.
 
+import { PERSONAL_BANK_LIMITS } from "@contracts/planFeatures";
+
 export type Plan = "monthly" | "annual";
 export type AccountMode = "business" | "personal";
 export type Tier = "basic" | "pro" | "business";
@@ -56,12 +58,12 @@ export function tierFromAmountCents(cents: number, plan: Plan, mode: AccountMode
 const BANK_LIMITS: Record<Tier, number> = { basic: 1, pro: 3, business: 6 };
 
 /**
- * How many banks this account may connect. Null means no limit (personal accounts).
- * With no known paid plan (free trial, or an old payment we can't match) a business
- * account gets the most any plan allows, so nobody loses a bank they already use.
+ * How many banks this account may connect. Personal: Pro up to 4.
+ * With no known paid plan (free trial, or an old payment we can't match) the account
+ * gets the most its mode allows, so nobody loses a bank they already use.
  */
 export function bankLimit(mode: AccountMode, tier: Tier | null): number | null {
-  if (mode === "personal") return null;
+  if (mode === "personal") return PERSONAL_BANK_LIMITS.pro;
   return tier ? BANK_LIMITS[tier] : BANK_LIMITS.business;
 }
 

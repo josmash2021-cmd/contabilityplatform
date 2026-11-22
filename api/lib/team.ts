@@ -1,7 +1,9 @@
-// ── Team access (Negocio plan): who can call what ──
+// ── Team access (Pro and Negocio plans): who can call what ──
 // A team member logs in with their own account; the server then works on the
 // owner's data (see api/context.ts). These rules decide which API procedures
 // each role may call. Anything not allowed here is refused.
+
+import { teamSeats, type PlanTier } from "@contracts/planFeatures";
 
 export type TeamRole = "staff" | "accountant";
 export type ProcType = "query" | "mutation" | "subscription";
@@ -48,5 +50,7 @@ export function memberCan(role: TeamRole, path: string, type: ProcType): boolean
   return STAFF_MUTATIONS.has(path);
 }
 
-/** Seats on the Negocio plan: 10 users counting the owner; the accountant doesn't take a seat. */
-export const TEAM_STAFF_SEATS = 9;
+/** Seats for employees: the plan's users minus the owner (Pro 5 → 4, Negocio 20 → 19). The accountant doesn't take one. */
+export function staffSeatsFor(tier: PlanTier | null): number {
+  return Math.max(0, teamSeats(tier ?? "business") - 1);
+}

@@ -12,13 +12,14 @@ export type PreciosFaqData = {
   personalFree: string;
   personalTop: string;
   businessTop: string;
-  /** Assistant questions a month on the free personal plan. */
-  freeQuestions: number;
   /** Which plans include Impuestos, already worded (see `taxPlans`). */
   taxPlans: string;
   basic: { name: string; monthly: number; banks: number };
   pro: { name: string; monthly: number; annual: number; banks: number };
   team: { name: string; monthly: number; banks: number; users: number };
+  /** Users on the business Pro plan, and the free personal plan's assistant limit (x5…). */
+  proUsers: number;
+  freeX: number;
 };
 
 const usd = (n: number) => `$${n.toLocaleString("en-US")}`;
@@ -53,6 +54,7 @@ const es = {
     title: "Compara los planes",
     text: "Todo lo que incluye cada plan, función por función.",
     caption: (group: string) => `Qué incluye cada plan ${group.toLowerCase()}`,
+    brand: "P&BS Plans",
     featureCol: "Funciones",
     planPicker: "Plan que quieres ver",
     included: "Incluido",
@@ -64,7 +66,7 @@ const es = {
       banks: (n: number) => (n === 1 ? "1 banco" : `Hasta ${n} bancos`),
       unlimited: "Sin límite",
       perMonth: (n: number) => `${n} al mes`,
-      questions: (n: number) => `${n} preguntas al mes`,
+      questions: (x: number) => `Límite x${x}`,
       users: (n: number) => (n === 1 ? "1 usuario" : `Hasta ${n} usuarios`),
     },
     sections: {
@@ -103,10 +105,10 @@ const es = {
       taxTracking: { label: "Sigue tu declaración paso a paso", hint: "" },
       taxPast: { label: "Tus declaraciones de años pasados, siempre a la mano", hint: "" },
       // Asistente de IA
-      questions: { label: "Preguntas al asistente", hint: "El conteo empieza de nuevo cada mes." },
+      questions: { label: "Límite del asistente", hint: "El conteo empieza de nuevo cada mes." },
       // Equipo
       users: { label: "Usuarios", hint: "Cada persona entra con su propio usuario." },
-      accountantAccess: { label: "Acceso para tu contador", hint: "Tu contador entra con su propio usuario, aparte de los 10." },
+      accountantAccess: { label: "Acceso para tu contador", hint: "Tu contador entra con su propio usuario y no ocupa lugar." },
       // Soporte
       prioritySupport: { label: "Soporte prioritario", hint: "" },
     },
@@ -148,7 +150,7 @@ const es = {
       },
       {
         q: `¿El plan ${d.personalFree} para ti es gratis de verdad?`,
-        a: `Sí. ${d.personalFree} para ti cuesta $0, para siempre, y no te pide tarjeta. Incluye Impuestos (subes tus documentos, tu preparador hace tu declaración y la sigues desde la app) y el asistente de IA con ${d.freeQuestions} preguntas al mes.`,
+        a: `Sí. ${d.personalFree} para ti cuesta $0, para siempre, y no te pide tarjeta. Incluye Impuestos (subes tus documentos, tu preparador hace tu declaración y la sigues desde la app) y el asistente de IA con límite x${d.freeX}.`,
       },
       {
         q: "¿Cuánto cuesta preparar mi declaración de impuestos?",
@@ -156,7 +158,7 @@ const es = {
       },
       {
         q: "¿Qué plan me conviene si trabajo solo o si tengo un equipo?",
-        a: `Si trabajas solo y estás empezando, ${d.basic.name} (${usd(d.basic.monthly)} al mes) te da punto de venta, clientes y ${d.basic.banks === 1 ? "1 banco" : `hasta ${d.basic.banks} bancos`}. Si además quieres impuestos, proveedores, cotizaciones y la vista para tu contador, ${d.pro.name} (${usd(d.pro.monthly)} al mes, hasta ${d.pro.banks} bancos). Si tienes un equipo, ${d.team.name} (${usd(d.team.monthly)} al mes) suma hasta ${d.team.users} usuarios, acceso para tu contador, hasta ${d.team.banks} bancos y reportes por cliente y por servicio.`,
+        a: `Si trabajas solo y estás empezando, ${d.basic.name} (${usd(d.basic.monthly)} al mes) te da punto de venta, clientes y ${d.basic.banks === 1 ? "1 banco" : `hasta ${d.basic.banks} bancos`}. Si además quieres impuestos, proveedores, cotizaciones y la vista para tu contador, ${d.pro.name} (${usd(d.pro.monthly)} al mes, hasta ${d.pro.banks} bancos y hasta ${d.proUsers} usuarios, más tu contador). Si tu equipo es más grande, ${d.team.name} (${usd(d.team.monthly)} al mes) suma hasta ${d.team.users} usuarios, hasta ${d.team.banks} bancos y reportes por cliente y por servicio.`,
       },
       {
         q: "¿Puedo cancelar cuando quiera?",
@@ -196,6 +198,7 @@ const en: PreciosCopy = {
     title: "Compare plans",
     text: "Everything each plan includes, feature by feature.",
     caption: (group: string) => `What each plan includes, ${group.toLowerCase()}`,
+    brand: "P&BS Plans",
     featureCol: "Features",
     planPicker: "Plan to show",
     included: "Included",
@@ -207,7 +210,7 @@ const en: PreciosCopy = {
       banks: (n: number) => (n === 1 ? "1 bank" : `Up to ${n} banks`),
       unlimited: "Unlimited",
       perMonth: (n: number) => `${n} a month`,
-      questions: (n: number) => `${n} questions a month`,
+      questions: (x: number) => `Limit x${x}`,
       users: (n: number) => (n === 1 ? "1 user" : `Up to ${n} users`),
     },
     sections: {
@@ -241,9 +244,9 @@ const en: PreciosCopy = {
       taxPrep: { label: "Your tax preparer files your return, federal and state", hint: "No extra cost: preparation is included in the plan." },
       taxTracking: { label: "Follow your return step by step", hint: "" },
       taxPast: { label: "Your past years' returns, always at hand", hint: "" },
-      questions: { label: "Questions to the assistant", hint: "The count starts over every month." },
+      questions: { label: "Assistant limit", hint: "The count starts over every month." },
       users: { label: "Users", hint: "Each person logs in with their own account." },
-      accountantAccess: { label: "Access for your accountant", hint: "Your accountant logs in with their own account, on top of the 10." },
+      accountantAccess: { label: "Access for your accountant", hint: "Your accountant logs in with their own account and doesn't take a seat." },
       prioritySupport: { label: "Priority support", hint: "" },
     },
   },
@@ -283,7 +286,7 @@ const en: PreciosCopy = {
       },
       {
         q: `Is the ${d.personalFree} plan for you really free?`,
-        a: `Yes. ${d.personalFree} for you costs $0, forever, and doesn't ask for a card. It includes Taxes (you upload your documents, your tax preparer files your return and you follow it in the app) and the AI assistant with ${d.freeQuestions} questions a month.`,
+        a: `Yes. ${d.personalFree} for you costs $0, forever, and doesn't ask for a card. It includes Taxes (you upload your documents, your tax preparer files your return and you follow it in the app) and the AI assistant with a x${d.freeX} limit.`,
       },
       {
         q: "How much does it cost to have my tax return prepared?",
@@ -291,7 +294,7 @@ const en: PreciosCopy = {
       },
       {
         q: "Which plan fits me if I work alone or have a team?",
-        a: `If you work alone and are getting started, ${d.basic.name} (${usd(d.basic.monthly)} a month) gives you point of sale, clients and ${d.basic.banks === 1 ? "1 bank" : `up to ${d.basic.banks} banks`}. If you also want taxes, vendors, quotes and the accountant view, ${d.pro.name} (${usd(d.pro.monthly)} a month, up to ${d.pro.banks} banks). If you have a team, ${d.team.name} (${usd(d.team.monthly)} a month) adds up to ${d.team.users} users, access for your accountant, up to ${d.team.banks} banks and reports by client and by service.`,
+        a: `If you work alone and are getting started, ${d.basic.name} (${usd(d.basic.monthly)} a month) gives you point of sale, clients and ${d.basic.banks === 1 ? "1 bank" : `up to ${d.basic.banks} banks`}. If you also want taxes, vendors, quotes and the accountant view, ${d.pro.name} (${usd(d.pro.monthly)} a month, up to ${d.pro.banks} banks and up to ${d.proUsers} users, plus your accountant). If your team is bigger, ${d.team.name} (${usd(d.team.monthly)} a month) adds up to ${d.team.users} users, up to ${d.team.banks} banks and reports by client and by service.`,
       },
       {
         q: "Can I cancel anytime?",

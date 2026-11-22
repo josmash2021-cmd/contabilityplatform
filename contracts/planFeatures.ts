@@ -13,7 +13,7 @@ export type Feature =
   | "quotes" // business: quotes and recurring invoices
   | "accountant" // business: accountant view, Excel and PDF
   | "clientReports" // business: reports by client and by service
-  | "team"; // business: up to 10 users plus the accountant
+  | "team"; // business: users (Pro 5, Negocio 20, the owner included) plus the accountant
 
 const FEATURES: Record<PlanMode, Partial<Record<PlanTier, readonly Feature[]>>> = {
   personal: {
@@ -22,7 +22,7 @@ const FEATURES: Record<PlanMode, Partial<Record<PlanTier, readonly Feature[]>>> 
   },
   business: {
     basic: ["receipts"],
-    pro: ["receipts", "taxes", "vendors", "quotes", "accountant"],
+    pro: ["receipts", "taxes", "vendors", "quotes", "accountant", "team"],
     business: ["receipts", "taxes", "vendors", "quotes", "accountant", "clientReports", "team"],
   },
 };
@@ -49,9 +49,14 @@ const ASSISTANT_X: Record<PlanMode, Partial<Record<PlanTier, number>>> = {
   business: { basic: 5, pro: 10, business: 20 },
 };
 
+/** The plan's assistant limit as it's sold: "límite x5", "x10"… */
+export function assistantX(mode: PlanMode, tier: PlanTier): number {
+  return ASSISTANT_X[mode][tier] ?? 0;
+}
+
 /** Questions per calendar month for this plan (e.g. business Pro: x10 = 200). */
 export function assistantMonthlyLimit(mode: PlanMode, tier: PlanTier): number {
-  return (ASSISTANT_X[mode][tier] ?? 0) * QUESTIONS_PER_X;
+  return assistantX(mode, tier) * QUESTIONS_PER_X;
 }
 
 /** Receipt photos per calendar month; null = no limit. */
@@ -59,10 +64,18 @@ export function receiptPhotosPerMonth(tier: PlanTier): number | null {
   return tier === "basic" ? 20 : null;
 }
 
-/** Banks (Plaid connections) per business plan. Personal has no limit. */
+/** Banks (Plaid connections) per business plan. */
 export const BUSINESS_BANK_LIMITS: Record<PlanTier, number> = { basic: 1, pro: 3, business: 6 };
+/** Banks per personal plan: Básico (free) connects none; Pro up to 4. */
+export const PERSONAL_BANK_LIMITS: Record<"basic" | "pro", number> = { basic: 0, pro: 4 };
 
 /** Users per business plan (the owner included); the accountant is extra. */
+const TEAM_SEATS: Record<PlanTier, number> = { basic: 1, pro: 5, business: 20 };
 export function teamSeats(tier: PlanTier): number {
-  return tier === "business" ? 10 : 1;
+  return TEAM_SEATS[tier];
+}
+
+/** Priority support: business Pro and Negocio. */
+export function prioritySupport(mode: PlanMode, tier: PlanTier): boolean {
+  return mode === "business" && tier !== "basic";
 }

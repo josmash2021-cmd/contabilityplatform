@@ -125,8 +125,8 @@ describe("banks per plan", () => {
     expect(bankLimit("business", null)).toBe(6);
   });
 
-  it("personal accounts have no bank limit", () => {
-    expect(bankLimit("personal", "pro")).toBeNull();
-    expect(bankLimit("personal", null)).toBeNull();
+  it("personal accounts connect up to 4 banks (Pro; also during the trial)", () => {
+    expect(bankLimit("personal", "pro")).toBe(4);
+    expect(bankLimit("personal", null)).toBe(4);
   });
 });

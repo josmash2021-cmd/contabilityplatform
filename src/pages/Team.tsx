@@ -234,7 +234,7 @@ export default function Team() {
                     <h2 id="tm-seats" className="text-[15px] font-bold text-slate-900">{t.seatsCard.title}</h2>
                     {data && <Dst tone={staffFull ? "warn" : "good"}>{staffFull ? t.seatsCard.full : t.seatsCard.left(data.staffSeats - data.staffUsed)}</Dst>}
                   </div>
-                  <p className="text-[13px] text-slate-500">{t.seatsCard.text}</p>
+                  {data && <p className="text-[13px] text-slate-500">{t.seatsCard.text(data.staffSeats + 1)}</p>}
                   {data && (
                     <>
                       <div className="mt-2.5 flex gap-1" aria-hidden>

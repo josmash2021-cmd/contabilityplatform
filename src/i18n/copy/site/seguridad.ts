@@ -86,7 +86,7 @@ const es = {
       },
       {
         title: "Tu equipo, con permisos",
-        text: "En el plan Negocio cada persona entra con su propia cuenta y solo ve lo que su rol le permite.",
+        text: "En los planes Pro y Negocio cada persona entra con su propia cuenta y solo ve lo que su rol le permite.",
         points: [
           "Empleado: cobra, atiende a tus clientes y sube recibos.",
           "Contador: ve tus números y reportes, pero no puede cambiar nada.",
@@ -108,7 +108,7 @@ const es = {
   access: {
     eyebrow: "Permisos",
     title: "Qué puede ver cada quien",
-    text: "Con el plan Negocio puedes invitar a tus empleados y a tu contador. Así queda repartido el acceso:",
+    text: "Con los planes Pro y Negocio puedes invitar a tus empleados y a tu contador. Así queda repartido el acceso:",
     caption: "Qué puede ver y hacer el dueño, un empleado y el contador en cada parte de la app",
     colArea: "Parte de la app",
     roles: [
@@ -129,7 +129,7 @@ const es = {
     ],
     legendLabel: "Qué significa cada símbolo",
     legend: { yes: "Puede usarlo", read: "Solo puede ver, no cambia nada", no: "No tiene acceso" } as Record<SeguridadLevel, string>,
-    footnote: "Equipo está en el plan Negocio: hasta 10 usuarios contándote a ti, más tu contador. Estos permisos los aplica nuestro servidor en cada solicitud: si alguien no tiene acceso a algo, no lo recibe aunque intente abrirlo.",
+    footnote: "Equipo está en Pro (hasta 5 usuarios) y en Negocio (hasta 20), contándote a ti, más tu contador. Estos permisos los aplica nuestro servidor en cada solicitud: si alguien no tiene acceso a algo, no lo recibe aunque intente abrirlo.",
   },
   never: {
     eyebrow: "Nuestro compromiso",
@@ -263,7 +263,7 @@ const en: SeguridadCopy = {
       },
       {
         title: "Your team, with permissions",
-        text: "On the Business plan, each person logs in with their own account and only sees what their role allows.",
+        text: "On the Pro and Business plans, each person logs in with their own account and only sees what their role allows.",
         points: [
           "Employee: makes sales, looks after your clients and uploads receipts.",
           "Accountant: sees your numbers and reports, but can't change anything.",
@@ -285,7 +285,7 @@ const en: SeguridadCopy = {
   access: {
     eyebrow: "Permissions",
     title: "Who can see what",
-    text: "With the Business plan you can invite your employees and your accountant. This is how access is split:",
+    text: "With the Pro and Business plans you can invite your employees and your accountant. This is how access is split:",
     caption: "What the owner, an employee and the accountant can see and do in each part of the app",
     colArea: "Part of the app",
     roles: [
@@ -306,7 +306,7 @@ const en: SeguridadCopy = {
     ],
     legendLabel: "What each symbol means",
     legend: { yes: "Can use it", read: "Can only look, changes nothing", no: "No access" },
-    footnote: "Team is part of the Business plan: up to 10 users counting you, plus your accountant. Our server applies these permissions on every request: if someone doesn't have access to something, they don't get it, even if they try to open it.",
+    footnote: "Team is part of Pro (up to 5 users) and Business (up to 20), counting you, plus your accountant. Our server applies these permissions on every request: if someone doesn't have access to something, they don't get it, even if they try to open it.",
   },
   never: {
     eyebrow: "Our commitment",

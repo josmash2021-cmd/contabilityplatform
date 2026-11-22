@@ -10,11 +10,11 @@ const es = {
   title: "Equipo",
   subtitle: "Quién entra a tu cuenta y qué puede hacer.",
   locked: {
-    title: "Equipo está en el plan Negocio",
-    text: "Con Negocio puedes tener hasta 10 usuarios y darle acceso a tu contador.",
+    title: "Equipo está en Pro y Negocio",
+    text: "Con Pro tienes hasta 5 usuarios y con Negocio hasta 20, y le das acceso a tu contador.",
     cta: "Ver planes",
     points: [
-      "Hasta 10 usuarios, contándote a ti.",
+      "Pro: hasta 5 usuarios. Negocio: hasta 20. Contándote a ti.",
       "Tu contador entra aparte: no ocupa lugar.",
       "Cada quien entra con su propio correo y contraseña.",
     ],
@@ -100,7 +100,7 @@ const es = {
     title: "Lugares",
     left: (n: number) => (n === 1 ? "Te queda 1" : `Te quedan ${n}`),
     full: "Sin lugares",
-    text: "Tu plan incluye 10 usuarios contándote a ti. Las invitaciones sin aceptar también ocupan lugar.",
+    text: (n: number) => `Tu plan incluye ${n} usuarios contándote a ti. Las invitaciones sin aceptar también ocupan lugar.`,
     accountant: (taken: boolean): string => (taken ? "Contador: ya tienes uno. No ocupa lugar." : "Contador: disponible. No ocupa lugar."),
   },
   // Activity
@@ -241,11 +241,11 @@ const en: TeamCopy = {
   title: "Team",
   subtitle: "Who gets into your account and what they can do.",
   locked: {
-    title: "Team is in the Business plan",
-    text: "With Business you can have up to 10 users and give your accountant access.",
+    title: "Team is in Pro and Business",
+    text: "With Pro you get up to 5 users and with Business up to 20, and you give your accountant access.",
     cta: "See plans",
     points: [
-      "Up to 10 users, counting you.",
+      "Pro: up to 5 users. Business: up to 20. Counting you.",
       "Your accountant joins separately: no seat used.",
       "Everyone logs in with their own email and password.",
     ],
@@ -326,7 +326,7 @@ const en: TeamCopy = {
     title: "Seats",
     left: (n: number) => `${n} left`,
     full: "No seats left",
-    text: "Your plan includes 10 users counting you. Invitations not accepted yet also take a seat.",
+    text: (n: number) => `Your plan includes ${n} users counting you. Invitations not accepted yet also take a seat.`,
     accountant: (taken: boolean) => (taken ? "Accountant: you have one. Doesn't take a seat." : "Accountant: available. Doesn't take a seat."),
   },
   activity: {

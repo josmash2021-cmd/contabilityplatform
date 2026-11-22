@@ -100,7 +100,7 @@ const es = {
       title: "Tu equipo trabaja contigo, y cada quien ve solo lo suyo",
       text: "Invita a tus empleados y a tu contador. Cada uno entra con su propia cuenta y con permisos claros.",
       bullets: [
-        { t: "Hasta 10 usuarios, y además el acceso para tu contador" },
+        { t: "Usuarios para tu equipo, y además el acceso para tu contador", plan: "Pro 5 · Negocio 20" },
         { t: "Empleado: cobra, atiende clientes y sube recibos; no ve el banco, los reportes ni los impuestos" },
         { t: "Contador: ve todos tus números y reportes, pero no puede cambiar nada" },
         { t: "Invitas con un enlace que puedes mandar por WhatsApp, y quitas a alguien cuando quieras" },
@@ -184,10 +184,10 @@ const es = {
     names: { personal: "Básico", personalPro: "Pro", basic: "Básico", pro: "Pro", business: "Negocio" },
     summaries: {
       personal: "Tus impuestos con un preparador y el asistente.",
-      personalPro: "Además, tu banco, tus gastos, tus suscripciones, tus metas y tus presupuestos.",
+      personalPro: "Además, hasta 4 bancos, tus gastos, tus suscripciones, tus metas y tus presupuestos.",
       basic: "Punto de venta, clientes, 1 banco, recibos y estado de resultados simple.",
-      pro: "Además, 3 bancos, reportes completos, impuestos, proveedores, cotizaciones y la vista para tu contador.",
-      business: "Además, 6 bancos, equipo de hasta 10 personas, tu contador y reportes por cliente y por servicio.",
+      pro: "Además, 3 bancos, equipo de hasta 5 personas, reportes completos, impuestos, proveedores, cotizaciones, la vista para tu contador y soporte prioritario.",
+      business: "Además, 6 bancos, equipo de hasta 20 personas y reportes por cliente y por servicio.",
     },
     featured: "Recomendado",
     cta: "Ver todos los detalles",
@@ -269,7 +269,7 @@ const es = {
     team: {
       aria: "Ejemplo de un equipo: la dueña, dos empleados y un contador con acceso de solo lectura.",
       title: "Tu equipo",
-      seats: "3 de 10 lugares",
+      seats: "3 de 20 lugares",
       members: [["María López", "Tú · dueña", "owner"], ["Luis Ortega", "Empleado", "staff"], ["Rosa Díaz", "Empleada", "staff"], ["Jorge Pérez", "Contador · solo lectura", "accountant"]] as [string, string, string][],
       invite: "Invitar a alguien",
       whatsapp: "Enviar por WhatsApp",
@@ -409,7 +409,7 @@ const en: ProductoCopy = {
       title: "Your team works with you, and each person sees only their part",
       text: "Invite your employees and your accountant. Each one logs in with their own account and clear permissions.",
       bullets: [
-        { t: "Up to 10 users, plus access for your accountant" },
+        { t: "Users for your team, plus access for your accountant", plan: "Pro 5 · Business 20" },
         { t: "Employee: takes payments, serves clients and uploads receipts; doesn't see the bank, reports or taxes" },
         { t: "Accountant: sees all your numbers and reports, but can't change anything" },
         { t: "Invite with a link you can send by WhatsApp, and remove someone whenever you want" },
@@ -493,10 +493,10 @@ const en: ProductoCopy = {
     names: { personal: "Basic", personalPro: "Pro", basic: "Basic", pro: "Pro", business: "Business" },
     summaries: {
       personal: "Your taxes with a preparer, plus the assistant.",
-      personalPro: "Plus your bank, spending, subscriptions, goals and budgets.",
+      personalPro: "Plus up to 4 banks, spending, subscriptions, goals and budgets.",
       basic: "Point of sale, clients, 1 bank, receipts and a simple income statement.",
-      pro: "Plus 3 banks, full reports, taxes, vendors, quotes and the accountant view.",
-      business: "Plus 6 banks, a team of up to 10 people, your accountant and reports by client and by service.",
+      pro: "Plus 3 banks, a team of up to 5 people, full reports, taxes, vendors, quotes, the accountant view and priority support.",
+      business: "Plus 6 banks, a team of up to 20 people and reports by client and by service.",
     },
     featured: "Recommended",
     cta: "See all the details",
@@ -578,7 +578,7 @@ const en: ProductoCopy = {
     team: {
       aria: "Example of a team: the owner, two employees and an accountant with read-only access.",
       title: "Your team",
-      seats: "3 of 10 seats",
+      seats: "3 of 20 seats",
       members: [["María López", "You · owner", "owner"], ["Luis Ortega", "Employee", "staff"], ["Rosa Díaz", "Employee", "staff"], ["Jorge Pérez", "Accountant · read-only", "accountant"]],
       invite: "Invite someone",
       whatsapp: "Send by WhatsApp",

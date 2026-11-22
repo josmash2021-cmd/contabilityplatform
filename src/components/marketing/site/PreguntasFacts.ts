@@ -26,7 +26,7 @@ export const PREGUNTAS_FACTS: PreguntasFacts = {
     business: assistantMonthlyLimit("business", "business"),
   },
   banks: { basic: BUSINESS_BANK_LIMITS.basic, pro: BUSINESS_BANK_LIMITS.pro, business: BUSINESS_BANK_LIMITS.business },
-  seats: teamSeats("business"),
+  seats: { pro: teamSeats("pro"), business: teamSeats("business") },
   maxFileMb: Math.round(TAX_MAX_FILE_BYTES / (1024 * 1024)),
   inviteDays: INVITE_DAYS,
 };

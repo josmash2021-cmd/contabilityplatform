@@ -14,9 +14,10 @@ import { SectionHeading } from "@/components/marketing/LandingSections";
 import { Reveal } from "@/components/marketing/Reveal";
 import { LANDING_PLAN_GROUPS, type LandingGroup, type LandingPlan, type LandingPlanKey } from "@/components/marketing/content";
 import {
-  BUSINESS_BANK_LIMITS, assistantMonthlyLimit, planHas, receiptPhotosPerMonth, teamSeats,
+  BUSINESS_BANK_LIMITS, PERSONAL_BANK_LIMITS, assistantX, planHas, prioritySupport, receiptPhotosPerMonth, teamSeats,
   type Feature, type PlanMode, type PlanTier,
 } from "@contracts/planFeatures";
+import { Logo } from "@/components/Logo";
 import type { MarketingCopy } from "@/i18n/copy/marketing";
 import type { PreciosCopy } from "@/i18n/copy/site/precios";
 import { PreciosSwitch } from "./PreciosSwitch";
@@ -52,8 +53,8 @@ const SECTIONS: Record<LandingGroup, Section[]> = {
     {
       id: "bank",
       rows: [
-        // Personal accounts have no bank limit (api/lib/plans.ts bankLimit).
-        { id: "banks", cell: (t, v) => personalPro(t) && v.unlimited },
+        // Básico connects no bank; Pro up to 4 (api/lib/plans.ts bankLimit).
+        { id: "banks", cell: (t, v) => personalPro(t) && v.banks(PERSONAL_BANK_LIMITS.pro) },
         { id: "autoCategories", cell: personalPro },
         { id: "subscriptions", cell: personalPro },
         { id: "budgets", cell: has("personal", "budgets") },
@@ -61,7 +62,7 @@ const SECTIONS: Record<LandingGroup, Section[]> = {
       ],
     },
     { id: "reports", rows: [{ id: "monthlySummary", cell: personalPro }] },
-    { id: "assistant", rows: [{ id: "questions", cell: (t, v) => v.questions(assistantMonthlyLimit("personal", t)) }] },
+    { id: "assistant", rows: [{ id: "questions", cell: (t, v) => v.questions(assistantX("personal", t)) }] },
   ],
   business: [
     {
@@ -99,7 +100,7 @@ const SECTIONS: Record<LandingGroup, Section[]> = {
         { id: "taxTracking", cell: has("business", "taxes") },
       ],
     },
-    { id: "assistant", rows: [{ id: "questions", cell: (t, v) => v.questions(assistantMonthlyLimit("business", t)) }] },
+    { id: "assistant", rows: [{ id: "questions", cell: (t, v) => v.questions(assistantX("business", t)) }] },
     {
       id: "team",
       rows: [
@@ -107,8 +108,8 @@ const SECTIONS: Record<LandingGroup, Section[]> = {
         { id: "accountantAccess", cell: has("business", "team") },
       ],
     },
-    // From the Negocio card ("Soporte prioritario").
-    { id: "support", rows: [{ id: "prioritySupport", cell: (t) => t === "business" }] },
+    // From the Pro and Negocio cards ("Soporte prioritario").
+    { id: "support", rows: [{ id: "prioritySupport", cell: (t) => prioritySupport("business", t) }] },
   ],
 };
 
@@ -183,9 +184,14 @@ export function PreciosCompare({ c, pricing }: { c: C; pricing: MarketingCopy["p
                 <tr>
                   <th
                     scope="col"
-                    className={`w-[56%] border-b border-slate-200 bg-white px-4 pb-4 pt-5 align-bottom text-sm font-semibold text-slate-500 sm:px-6 md:sticky md:top-16 md:z-10 ${plans.length === 2 ? "md:w-[46%]" : "md:w-[37%]"}`}
+                    className={`relative w-[56%] border-b border-slate-200 bg-white px-4 pb-4 pt-5 align-bottom text-sm font-semibold text-slate-500 sm:px-6 md:sticky md:top-16 md:z-10 ${plans.length === 2 ? "md:w-[46%]" : "md:w-[37%]"}`}
                   >
-                    {c.featureCol}
+                    {/* The brand fills the corner above the feature names. */}
+                    <span className="absolute left-4 top-5 flex items-center gap-2.5 sm:left-6">
+                      <Logo className="h-8 w-8 shrink-0 sm:h-9 sm:w-9" />
+                      <span className="text-base font-bold tracking-tight text-slate-900 sm:text-lg">{c.brand}</span>
+                    </span>
+                    <span className="block pt-14">{c.featureCol}</span>
                   </th>
                   {plans.map((p) => (
                     <th

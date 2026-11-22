@@ -8,7 +8,7 @@ import { PreciosCompare } from "@/components/marketing/site/PreciosCompare";
 import { PreciosIncluded } from "@/components/marketing/site/PreciosIncluded";
 import { PreciosFaq } from "@/components/marketing/site/PreciosFaq";
 import { LANDING_PLAN_GROUPS, TRIAL_DAYS, type LandingGroup, type LandingPlan, type PlanTier } from "@/components/marketing/content";
-import { BUSINESS_BANK_LIMITS, assistantMonthlyLimit, planHas, teamSeats, topTier } from "@contracts/planFeatures";
+import { BUSINESS_BANK_LIMITS, assistantX, planHas, teamSeats, topTier } from "@contracts/planFeatures";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy, type MarketingCopy } from "@/i18n/copy/marketing";
 import { preciosCopy, type PreciosCopy, type PreciosFaqData } from "@/i18n/copy/site/precios";
@@ -39,7 +39,8 @@ function pricingFacts(pricing: MarketingCopy["pricing"], c: PreciosCopy): { free
       personalFree: name(PERSONAL_FREE),
       personalTop: name(PERSONAL_TOP),
       businessTop: name(BUSINESS_TOP),
-      freeQuestions: assistantMonthlyLimit("personal", PERSONAL_FREE.tier),
+      freeX: assistantX("personal", PERSONAL_FREE.tier),
+      proUsers: teamSeats(BUSINESS_PRO.tier),
       taxPlans,
       basic: { name: name(BUSINESS_BASIC), monthly: BUSINESS_BASIC.monthly, banks: BUSINESS_BANK_LIMITS.basic },
       pro: { name: name(BUSINESS_PRO), monthly: BUSINESS_PRO.monthly, annual: BUSINESS_PRO.annual, banks: BUSINESS_BANK_LIMITS.pro },
