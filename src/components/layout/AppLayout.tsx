@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState, Suspense } from "react";
+import { useEffect, useMemo, useRef, useState, Suspense } from "react";
+import { toast } from "sonner";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
@@ -15,6 +16,7 @@ import { useEffectiveRole } from "@/components/team/viewAs";
 import { ViewAsBanner } from "@/components/team/ViewAsBanner";
 import { appCopy, type AppCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
+import { supportCopy } from "@/i18n/copy/support";
 import type { Feature } from "@contracts/planFeatures";
 import {
   Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Wallet, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
@@ -225,7 +227,19 @@ export function AppLayout() {
     return g;
   }, [userMode, memberRole, isAdmin]);
   const { data: review } = trpc.review.count.useQuery(undefined, { enabled: !!user && userMode === "business" && memberRole !== "staff", staleTime: 60_000, refetchInterval: 120_000 });
-  const counts: Record<string, number> = { "/transactions": review?.count ?? 0 };
+  // Admins: a count on Admin for support chats with unread lines, and a notice when a visitor writes (api/support-router.ts).
+  const supportT = useCopy(supportCopy).admin;
+  const { data: support } = trpc.support.adminUnread.useQuery(undefined, { enabled: !!user && isAdmin && !memberRole, refetchInterval: 15_000, refetchOnWindowFocus: true });
+  const lastSupport = useRef<number | null>(null);
+  useEffect(() => {
+    const latest = support?.latest;
+    if (latest === undefined) return;
+    if (lastSupport.current !== null && latest > lastSupport.current && !pathname.startsWith("/admin/soporte")) {
+      toast(supportT.newToast, { action: { label: supportT.openChat, onClick: () => navigate("/admin/soporte") } });
+    }
+    lastSupport.current = latest;
+  }, [support?.latest, pathname, navigate, supportT]);
+  const counts: Record<string, number> = { "/transactions": review?.count ?? 0, "/admin": support?.unread ?? 0 };
   const allItems = groups.flatMap((g) => g.items);
   const label = (path: string) => (path === "/settings" && userMode === "personal" ? t.nav.settingsPersonal : t.shell.labels[path] ?? path);
   const locked = (i: Item) => !!i.feature && !!plan && !plan.features.includes(i.feature);

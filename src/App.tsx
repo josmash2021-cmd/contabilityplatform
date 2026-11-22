@@ -61,6 +61,7 @@ const Admin = lazyPage(() => import("@/pages/Admin"));
 const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
 const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
+const AdminSupport = lazyPage(() => import("@/pages/AdminSupport"));
 const Taxes = lazyPage(() => import("@/pages/Taxes"));
 const Assistant = lazyPage(() => import("@/pages/Assistant"));
 const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"));
@@ -168,6 +169,8 @@ export default function App() {
           <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
           <Route path="/admin/impuestos" element={<AdminTaxes />} />
           <Route path="/admin/impuestos/:id" element={<AdminTaxes />} />
+          <Route path="/admin/soporte" element={<AdminSupport />} />
+          <Route path="/admin/soporte/:id" element={<AdminSupport />} />
           {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
           <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
           <Route path="/personal/bank" element={<PersonalBank />} />

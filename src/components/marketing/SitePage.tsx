@@ -10,6 +10,7 @@ import { TRIAL_DAYS } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
 import { useNoZoom } from "@/hooks/useNoZoom";
+import { SupportBubble } from "@/components/support/SupportBubble";
 
 type Cta = { label: string; to: string };
 
@@ -77,6 +78,7 @@ export function SitePage({ children, title }: { children: ReactNode; /** Browser
         <FinalCta c={c.finalCta} />
       </main>
       <MarketingFooter />
+      <SupportBubble />
     </div>
   );
 }

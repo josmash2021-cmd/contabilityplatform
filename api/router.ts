@@ -32,6 +32,7 @@ import { homeRouter } from "./home-router";
 import { subscriptionsRouter } from "./subscriptions-router";
 import { searchRouter } from "./search-router";
 import { noticesRouter } from "./notices-router";
+import { supportRouter } from "./support-router";
 import { createRouter, publicQuery, authedQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { sales } from "@db/schema";
@@ -69,6 +70,7 @@ export const appRouter = createRouter({
   review: reviewRouter,
   search: searchRouter,
   notices: noticesRouter,
+  support: supportRouter,
   brand: brandRouter,
   reconcile: reconcileRouter,
   home: homeRouter,

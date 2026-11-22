@@ -195,8 +195,39 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 @keyframes tour-scan { to { top: 104px; } }
 .tour-grow { transform-origin: bottom; animation: tour-grow 700ms cubic-bezier(0.22, 1, 0.36, 1) both; }
 @keyframes tour-grow { from { transform: scaleY(0); } to { transform: none; } }
+/* Soporte 24/7 (SupportBubble.tsx): the star turns into the support face and back, the bubble's soft ring, the panel coming in. */
+.sup-star, .sup-face, .sup-eyes, .sup-spark { transform-box: fill-box; transform-origin: center; }
+.sup-star { animation: sup-star 7s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.sup-face { animation: sup-face 7s cubic-bezier(0.65, 0, 0.35, 1) infinite; }
+.sup-eyes { animation: sup-blink 7s ease-in-out infinite; }
+.sup-spark { animation: sup-spark 1.75s ease-in-out infinite; }
+@keyframes sup-star {
+  0% { opacity: 1; transform: scale(1) rotate(0deg); }
+  20% { opacity: 1; transform: scale(1.12) rotate(45deg); }
+  40% { opacity: 1; transform: scale(1) rotate(90deg); }
+  50% { opacity: 0; transform: scale(0.15) rotate(220deg); }
+  88% { opacity: 0; transform: scale(0.15) rotate(-140deg); }
+  100% { opacity: 1; transform: scale(1) rotate(0deg); }
+}
+@keyframes sup-face {
+  0%, 42% { opacity: 0; transform: scale(0.3) rotate(-25deg); }
+  52% { opacity: 1; transform: scale(1.12) rotate(0deg); }
+  58%, 86% { opacity: 1; transform: scale(1) rotate(0deg); }
+  95%, 100% { opacity: 0; transform: scale(0.3) rotate(25deg); }
+}
+@keyframes sup-blink { 0%, 68%, 73%, 100% { transform: scaleY(1); } 70.5% { transform: scaleY(0.1); } }
+@keyframes sup-spark { 0%, 100% { opacity: 0.35; transform: scale(0.6); } 50% { opacity: 1; transform: scale(1.15); } }
+.sup-ring { animation: sup-ring 3.5s cubic-bezier(0.22, 1, 0.36, 1) infinite; }
+@keyframes sup-ring { 0% { opacity: 0.5; transform: scale(1); } 70%, 100% { opacity: 0; transform: scale(1.6); } }
+.sup-panel-in { transform-origin: bottom right; animation: sup-panel-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes sup-panel-in { from { opacity: 0; transform: translateY(14px) scale(0.96); } to { opacity: 1; transform: none; } }
+.sup-teaser-in { animation: sup-teaser-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes sup-teaser-in { from { opacity: 0; transform: translateX(12px) scale(0.96); } to { opacity: 1; transform: none; } }
 @media (prefers-reduced-motion: reduce) {
   .tour-click, .tour-scan, .tour-grow { animation: none; }
+  .sup-star { animation: none; opacity: 0; }
+  .sup-face { animation: none; opacity: 1; }
+  .sup-eyes, .sup-spark, .sup-ring, .sup-panel-in, .sup-teaser-in { animation: none; }
   .day-phone, .day-phone[data-in="true"] { opacity: 1; transform: none; transition: none; }
   .day-text { opacity: 1; transform: none; transition: none; }
   .day-float, .tap-ripple, .day-pop, .day-rise, .day-type, .day-fill { animation: none; }

@@ -5,6 +5,7 @@ import { Hero, TrustStrip, ValueProps, Product, HowItWorks, Security, Pricing, F
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
 import { useNoZoom } from "@/hooks/useNoZoom";
+import { SupportBubble } from "@/components/support/SupportBubble";
 
 function usePauseOffscreenSections() {
   useEffect(() => {
@@ -41,6 +42,7 @@ export default function Landing() {
         <FinalCta c={c.finalCta} />
       </main>
       <MarketingFooter />
+      <SupportBubble />
     </div>
   );
 }
