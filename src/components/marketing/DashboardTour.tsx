@@ -453,22 +453,81 @@ export function DashboardTour() {
     return () => window.clearTimeout(t);
   }, [at, playing]);
 
-  // The pointer goes to what this beat is about.
+  // The pointer goes to what this beat is about, the way a hand moves a mouse: along a slight curve, speeding
+  // up and slowing down, a touch past the spot and back, never quite at the middle of a button; when it's
+  // still it drifts a little. Each beat sets where it's going; a loop draws it while the tour plays.
   const boxRef = useRef<HTMLDivElement>(null);
   const cursorRef = useRef<HTMLDivElement>(null);
+  const motion = useRef({ placed: false, x: 0, y: 0, fx: 0, fy: 0, cx: 0, cy: 0, ox: 0, oy: 0, tx: 0, ty: 0, t0: 0, dur: 0 });
   useEffect(() => {
     const box = boxRef.current;
-    const cur = cursorRef.current;
-    if (!box || !cur) return;
+    if (!box) return;
+    const m = motion.current;
     const b = box.getBoundingClientRect();
-    const target = frame.at ? box.querySelector<HTMLElement>(`[data-tour="${frame.at}"]`) : null;
-    if (target) {
-      const r = target.getBoundingClientRect();
-      cur.style.transform = `translate(${Math.round(r.left - b.left + r.width / 2)}px, ${Math.round(r.top - b.top + r.height / 2)}px)`;
-    } else if (!cur.style.transform) {
-      cur.style.transform = `translate(${Math.round(b.width * 0.62)}px, ${Math.round(b.height * 0.55)}px)`;
+    if (!m.placed) {
+      m.x = b.width * 0.62;
+      m.y = b.height * 0.55;
+      m.placed = true;
+      cursorRef.current?.style.setProperty("transform", `translate(${m.x}px, ${m.y}px)`);
     }
-  }, [frame]);
+    const target = frame.at ? box.querySelector<HTMLElement>(`[data-tour="${frame.at}"]`) : null;
+    if (!target) return;
+    const r = target.getBoundingClientRect();
+    // A spot near the middle, a little off it, different on each beat.
+    const jx = (((at * 37) % 11) / 10 - 0.5) * Math.min(r.width * 0.35, 40);
+    const jy = (((at * 53) % 7) / 6 - 0.5) * Math.min(r.height * 0.3, 8);
+    m.tx = r.left - b.left + r.width / 2 + jx;
+    m.ty = r.top - b.top + r.height / 2 + jy;
+    m.fx = m.x;
+    m.fy = m.y;
+    const dx = m.tx - m.fx;
+    const dy = m.ty - m.fy;
+    const d = Math.hypot(dx, dy) || 1;
+    // The curve bows to one side (it changes from beat to beat), more on long moves.
+    const bend = Math.min(70, d * 0.2) * (at % 2 ? 1 : -1);
+    m.cx = m.fx + dx * 0.5 - (dy / d) * bend;
+    m.cy = m.fy + dy * 0.5 + (dx / d) * bend;
+    // It goes a touch past the spot, then comes back to it.
+    const over = Math.min(7, d * 0.035);
+    m.ox = m.tx + (dx / d) * over;
+    m.oy = m.ty + (dy / d) * over;
+    m.t0 = performance.now();
+    m.dur = Math.min(880, Math.max(460, 340 + d * 0.75));
+  }, [frame, at]);
+
+  useEffect(() => {
+    if (!playing) return;
+    const ease = (s: number) => s * s * s * (10 - 15 * s + 6 * s * s); // a hand's speed: up smoothly, down smoothly
+    let raf = 0;
+    const tick = (now: number) => {
+      const m = motion.current;
+      const cur = cursorRef.current;
+      if (cur && m.placed) {
+        if (m.dur) {
+          const p = Math.min(1, (now - m.t0) / m.dur);
+          if (p < 0.82) {
+            const s = ease(p / 0.82);
+            const u = 1 - s;
+            m.x = u * u * m.fx + 2 * u * s * m.cx + s * s * m.ox;
+            m.y = u * u * m.fy + 2 * u * s * m.cy + s * s * m.oy;
+          } else {
+            const s = ease((p - 0.82) / 0.18);
+            m.x = m.ox + (m.tx - m.ox) * s;
+            m.y = m.oy + (m.ty - m.oy) * s;
+          }
+          if (p >= 1) m.dur = 0;
+        }
+        // A hand never holds perfectly still.
+        const rest = m.dur ? 0 : 1;
+        const wx = rest * (Math.sin(now / 820) * 0.9 + Math.sin(now / 310) * 0.35);
+        const wy = rest * (Math.cos(now / 960) * 0.8 + Math.sin(now / 410) * 0.3);
+        cur.style.transform = `translate(${(m.x + wx).toFixed(2)}px, ${(m.y + wy).toFixed(2)}px)`;
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
 
   // The newest notice (the bank's one before any), and the one this section just fired (for small screens).
   let latest: Toast = "bank";
@@ -525,19 +584,16 @@ export function DashboardTour() {
           </div>
         )}
 
-        {/* The pointer: a rounded arrow in the brand's blue with its name tag, like the cursors in today's
-            design and collaboration apps. Its tip is the top-left corner; it presses in on a click. */}
+        {/* The pointer: a rounded arrow in the brand's blue. Its tip is the top-left corner; it presses in on a click.
+            Where it is comes from the motion loop above (not a CSS transition, so it can curve). */}
         {!still && (
-          <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-30 transition-transform duration-[850ms] ease-[cubic-bezier(0.65,0,0.35,1)]">
+          <div ref={cursorRef} aria-hidden className="pointer-events-none absolute left-0 top-0 z-30 will-change-transform">
             {frame.click && <span key={at} className="tour-click" />}
             <div className={`origin-top-left transition-transform duration-200 ease-out ${frame.click ? "scale-[0.82]" : ""}`}>
               <svg width="22" height="22" viewBox="0 0 22 22" className="-ml-[4px] -mt-[3px] drop-shadow-[0_4px_10px_rgba(37,99,235,0.45)]">
                 <path d="M4.3 3.7c-.25-.85.6-1.55 1.38-1.12l13.2 7.32c.75.42.63 1.53-.2 1.75l-5.6 1.5-2.7 5.25c-.4.77-1.53.65-1.75-.18z"
                   fill="#2563EB" stroke="#fff" strokeWidth="1.6" strokeLinejoin="round" />
               </svg>
-              <span className="absolute left-[15px] top-[17px] whitespace-nowrap rounded-md rounded-tl-sm bg-blue-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white shadow-[0_4px_12px_-2px_rgba(37,99,235,0.55)] ring-1 ring-white/70">
-                {p.tour.pointer}
-              </span>
             </div>
           </div>
         )}

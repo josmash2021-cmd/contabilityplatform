@@ -296,7 +296,6 @@ const es = {
     // The hero's dashboard tour (DashboardTour.tsx): a pointer goes through each section and does one task. Sample data.
     tour: {
       navAria: "Secciones de la app (ejemplo): toca una para verla",
-      pointer: "Tú",
       nav: ["Resumen", "Ventas", "Clientes", "Gastos", "Banco", "Reportes"],
       sales: {
         title: "Ventas",
@@ -762,7 +761,6 @@ const en: MarketingCopy = {
     // The hero's dashboard tour (DashboardTour.tsx): a pointer goes through each section and does one task. Sample data.
     tour: {
       navAria: "App sections (sample): tap one to see it",
-      pointer: "You",
       nav: ["Overview", "Sales", "Customers", "Expenses", "Bank", "Reports"],
       sales: {
         title: "Sales",
