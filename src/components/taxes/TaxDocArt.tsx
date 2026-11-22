@@ -125,3 +125,12 @@ export function TaxDocArt({ kind, className, title }: { kind: string; className?
     </svg>
   );
 }
+
+/** Kinds with a photo of a sample document (public/tax-examples/<kind>.webp; real form layouts, sample data, MUESTRA). */
+const PHOTOS = new Set(["id", "ssn", "spouse", "deps", "w2", "k1099", "pay", "int", "home", "mkt", "other", "ein", "payroll", "vehicle", "assets", "prior"]);
+
+/** The example of a document as a photo of a sample (the drawing when there's no photo for that kind). */
+export function TaxDocPhoto({ kind, className, title }: { kind: string; className?: string; title?: string }) {
+  if (!PHOTOS.has(kind)) return <TaxDocArt kind={kind} className={className} title={title} />;
+  return <img src={`/tax-examples/${kind}.webp`} alt={title ?? ""} loading="lazy" decoding="async" draggable={false} className={className} />;
+}

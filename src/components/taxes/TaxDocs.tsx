@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Camera, Check, CheckCircle2, FileText, Image as ImageIcon, Loader2, Lock, Plus, RefreshCw, Search, Trash2, Upload, User } from "lucide-react";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
-import { TaxDocArt } from "./TaxDocArt";
+import { TaxDocPhoto } from "./TaxDocArt";
 import { TaxStepNum } from "./TaxStepNum";
 import { Dst, pbtnSm, type Tone } from "@/components/personal/planKit";
 import { cn } from "@/lib/utils";
@@ -99,8 +99,8 @@ export function TaxDocsCard({ mode, answers, docs, onPick, busyKind, onOpen, onR
     // No file yet: the example picture (it opens big); with a file: the file's square.
     const thumb = (file?: Doc, count?: number) => file ? <TaxThumb file={file} kind={k.id} count={count} /> : (
       <button type="button" onClick={() => setExample(k.id)} aria-label={d.exampleSee(copy.title)}
-        className="group relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[10px] bg-slate-50 ring-1 ring-slate-200 transition hover:ring-2 hover:ring-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-        <TaxDocArt kind={k.id} className="h-full w-full scale-[1.18] transition-transform duration-300 group-hover:scale-[1.28]" />
+        className="group relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[10px] bg-slate-100 ring-1 ring-slate-200 transition hover:ring-2 hover:ring-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+        <TaxDocPhoto kind={k.id} className="h-full w-full scale-[1.25] object-cover transition-transform duration-300 group-hover:scale-[1.4]" />
         <span className="absolute inset-x-0 bottom-0 bg-white/90 py-px text-center text-[8px] font-bold uppercase tracking-wide text-slate-500">{d.exampleTag}</span>
       </button>
     );
@@ -190,9 +190,9 @@ export function TaxDocsCard({ mode, answers, docs, onPick, busyKind, onOpen, onR
         <DialogContent className="top-auto bottom-0 h-auto max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:bottom-auto sm:max-w-[440px] sm:rounded-[20px]">
           {ex && (
             <>
-              <div className="relative bg-gradient-to-b from-slate-50 to-slate-100 px-6 pb-4 pt-6">
-                <span className="absolute left-4 top-4 rounded-full bg-white px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-500 shadow-sm ring-1 ring-slate-200">{d.exampleTag}</span>
-                <TaxDocArt kind={ex.kind} title={ex.copy.title} className="tax-ex-art mx-auto mt-4 w-full max-w-[340px] drop-shadow-[0_14px_22px_rgba(15,23,42,0.16)]" />
+              <div className="relative">
+                <TaxDocPhoto kind={ex.kind} title={ex.copy.title} className="block aspect-[4/3] w-full bg-slate-100 object-cover" />
+                <span className="absolute left-4 top-4 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 shadow-sm ring-1 ring-slate-200">{d.exampleTag}</span>
               </div>
               <div className="grid gap-3 px-6 pb-6 pt-4">
                 <div className="grid gap-1 pr-6">
