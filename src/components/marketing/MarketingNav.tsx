@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
 import { Link, NavLink } from "react-router";
 import { Menu, X, ArrowRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -95,20 +95,24 @@ export function MarketingNav() {
           aria-controls="mobile-menu"
           onClick={() => setOpen((v) => !v)}
         >
-          {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          {/* The three lines turn into the X (and back), never a jump. */}
+          <span className="relative h-5 w-5" aria-hidden>
+            <Menu className={`absolute inset-0 h-5 w-5 transition-[transform,opacity] duration-300 ease-out ${open ? "rotate-90 scale-50 opacity-0" : "opacity-100"}`} />
+            <X className={`absolute inset-0 h-5 w-5 transition-[transform,opacity] duration-300 ease-out ${open ? "opacity-100" : "-rotate-90 scale-50 opacity-0"}`} />
+          </span>
         </button>
       </nav>
 
-      {/* Mobile menu */}
-      <div
-        id="mobile-menu"
-        className={`overflow-hidden border-t border-slate-200 bg-white transition-[max-height,opacity] duration-300 ease-out xl:hidden ${
-          open ? "max-h-[calc(100vh-4rem)] opacity-100" : "max-h-0 opacity-0 border-transparent"
-        }`}
-      >
+      {/* Behind the open menu the page dims and blurs a little; tapping it closes the menu. */}
+      <div aria-hidden onClick={() => setOpen(false)} className={`mm-veil xl:hidden ${open ? "mm-on" : ""}`} />
+
+      {/* Mobile menu: it grows to its own height and back (index.css .mm-panel), the options come in one by one. */}
+      <div id="mobile-menu" inert={!open} className={`mm-panel relative xl:hidden ${open ? "mm-open" : ""}`}>
+        <div className="min-h-0 overflow-hidden">
+        <div className="max-h-[calc(100dvh-4rem)] overflow-y-auto overscroll-contain border-t border-slate-200 bg-white">
         <ul className="space-y-1 px-4 pb-4 pt-3">
-          {nav.links.map((l) => (
-            <li key={l.href}>
+          {nav.links.map((l, i) => (
+            <li key={l.href} className="mm-item" style={{ "--i": i } as CSSProperties}>
               <NavLink
                 to={l.href}
                 onClick={() => setOpen(false)}
@@ -119,7 +123,7 @@ export function MarketingNav() {
             </li>
           ))}
         </ul>
-        <div className="grid gap-2 border-t border-slate-100 px-4 py-4">
+        <div className="mm-item grid gap-2 border-t border-slate-100 px-4 py-4" style={{ "--i": nav.links.length } as CSSProperties}>
           <Link to="/register" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-blue-600 text-base font-semibold text-white hover:bg-blue-500">
             {nav.cta(TRIAL_DAYS)} <ArrowRight className="h-4 w-4" />
           </Link>
@@ -127,6 +131,8 @@ export function MarketingNav() {
             {nav.login}
           </Link>
           <LanguageSwitcher className="mt-1 justify-self-center" />
+        </div>
+        </div>
         </div>
       </div>
     </header>

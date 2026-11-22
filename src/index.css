@@ -249,6 +249,15 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
   .day-text { opacity: 1; transform: none; transition: none; }
   .day-float, .tap-ripple, .day-pop, .day-rise, .day-type, .day-fill { animation: none; }
 }
+/* The site's phone menu (MarketingNav): grows to its real height and back (grid rows 0fr <-> 1fr), the options slide
+   in one after another, and the page behind dims. Closing is a little quicker than opening. */
+.mm-panel { display: grid; grid-template-rows: 0fr; opacity: 0; transition: grid-template-rows 320ms cubic-bezier(0.4, 0, 0.2, 1), opacity 260ms ease; }
+.mm-panel.mm-open { grid-template-rows: 1fr; opacity: 1; transition: grid-template-rows 480ms cubic-bezier(0.22, 1, 0.36, 1), opacity 320ms ease; }
+.mm-item { opacity: 0; transform: translateY(-6px); transition: opacity 180ms ease, transform 220ms ease; }
+.mm-open .mm-item { opacity: 1; transform: none; transition: opacity 360ms ease, transform 460ms cubic-bezier(0.22, 1, 0.36, 1); transition-delay: calc(70ms + var(--i, 0) * 38ms); }
+.mm-veil { position: fixed; inset: 4rem 0 0; background: rgba(2, 6, 23, 0.32); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); opacity: 0; pointer-events: none; transition: opacity 320ms ease; }
+.mm-veil.mm-on { opacity: 1; pointer-events: auto; }
+
 /* Changing page in the app (AppLayout): soft on the way out, then the new page eases into focus. At rest there is no
    filter at all, so nothing "fixed" inside a page is affected. */
 .page-fx { transition: filter 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity 620ms cubic-bezier(0.22, 1, 0.36, 1); }
@@ -263,6 +272,7 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 @media (prefers-reduced-motion: reduce) {
   .page-in { animation: none; }
   .page-fx, .page-fx[data-fx="out"] { filter: none; opacity: 1; transition: none; }
+  .mm-panel, .mm-panel.mm-open, .mm-item, .mm-open .mm-item, .mm-veil { transition: none; }
   .typing-caret, .typing-dot { animation: none; }
 }
 

@@ -7,6 +7,7 @@ import {
   Download, Camera, Check, Circle, Lock, Send, Users, MessageCircle, Eye, X,
   Briefcase, Car, Home, Bell, Target, Plus, Dumbbell, Tv, Music, Cloud,
 } from "lucide-react";
+import { MerchantLogo } from "@/components/brand/MerchantLogo";
 import { ReportPreview } from "@/components/marketing/Previews";
 import { useCopy } from "@/i18n/useI18n";
 import { productoCopy } from "@/i18n/copy/site/producto";
@@ -120,8 +121,9 @@ export function BankMock() {
           {m.rows.map(([who, amt, cat]) => {
             const income = amt.startsWith("+");
             return (
-              <li key={who} className="flex items-center justify-between gap-2 py-2">
-                <div className="min-w-0">
+              <li key={who} className="flex items-center justify-between gap-2.5 py-2">
+                <MerchantLogo name={who} size={30} />
+                <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-semibold text-slate-900">{who}</p>
                   <span className="mt-1 inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600"><Tag className="h-2.5 w-2.5" />{cat}</span>
                 </div>
@@ -138,8 +140,9 @@ export function BankMock() {
       <div className="relative -mt-4 grid gap-2.5 px-2 sm:grid-cols-2 sm:px-3">
         <div className={`${mockCard} flex gap-2.5 p-3`}>
           {/* A paper receipt, drawn */}
-          <div className="relative h-[66px] w-[46px] shrink-0 rounded-sm bg-white px-1.5 pt-2 shadow-sm ring-1 ring-slate-200">
-            <span className="block h-1 w-6 rounded bg-slate-300" />
+          <div className="relative h-[66px] w-[46px] shrink-0 rounded-sm bg-white px-1.5 pt-1.5 shadow-sm ring-1 ring-slate-200">
+            {/* The store's logo at the top of the paper, like a real receipt. */}
+            <MerchantLogo name={m.receiptWho} size={16} className="mx-auto" />
             <span className="mt-1.5 block h-0.5 w-8 rounded bg-slate-200" />
             <span className="mt-1 block h-0.5 w-7 rounded bg-slate-200" />
             <span className="mt-1 block h-0.5 w-8 rounded bg-slate-200" />
@@ -359,7 +362,8 @@ export function PersonalBankMock() {
             const income = amt.startsWith("+");
             return (
               <li key={who} className="flex items-center gap-2.5 py-2">
-                <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><Icon className="h-4 w-4" /></span>
+                <MerchantLogo name={who} size={32}
+                  fallback={<span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><Icon className="h-4 w-4" /></span>} />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-[12px] font-semibold text-slate-900">{who}</p>
                   <span className="inline-flex items-center gap-1 text-[10px] text-slate-500"><Tag className="h-2.5 w-2.5" />{cat}</span>
