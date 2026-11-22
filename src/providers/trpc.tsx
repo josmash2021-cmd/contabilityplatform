@@ -5,6 +5,7 @@ import { createTRPCReact } from "@trpc/react-query";
 import superjson from "superjson";
 import type { AppRouter } from "../../api/router";
 import { getLang } from "@/i18n/lang";
+import { getTaxUnlock } from "@/lib/taxUnlock";
 
 // The session token lasts 30 days, but the app decides "logged in" from localStorage.
 // When the token expires every request fails with UNAUTHORIZED and pages showed empty
@@ -19,6 +20,8 @@ function handleUnauthorized(error: unknown) {
   if (window.location.pathname !== "/login") window.location.href = "/login?expired=1";
 }
 
+// The app's one client, shared by every page (not a component).
+// eslint-disable-next-line react-refresh/only-export-components
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({ onError: handleUnauthorized }),
   mutationCache: new MutationCache({ onError: handleUnauthorized }),
@@ -32,6 +35,8 @@ export const queryClient = new QueryClient({
   },
 });
 
+// The app's one client, shared by every page (not a component).
+// eslint-disable-next-line react-refresh/only-export-components
 export const trpc = createTRPCReact<AppRouter>();
 
 export function TRPCProvider({ children }: { children: React.ReactNode }) {
@@ -41,11 +46,14 @@ export function TRPCProvider({ children }: { children: React.ReactNode }) {
         httpBatchLink({
           url: "/api/trpc",
           transformer: superjson,
-          headers() {
+          headers({ opList }) {
             // x-lang lets the server answer in the user's language (es/en).
             const headers: Record<string, string> = { "x-lang": getLang() };
             const token = localStorage.getItem("auth_token");
             if (token) headers["x-auth-token"] = token;
+            // Impuestos, once opened with the code in this tab (api/lib/taxGate.ts).
+            const unlock = getTaxUnlock();
+            if (unlock && opList.some((op) => op.path.startsWith("tax."))) headers["x-tax-unlock"] = unlock;
             return headers;
           },
         }),

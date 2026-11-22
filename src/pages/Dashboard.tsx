@@ -102,7 +102,7 @@ function OwnerHome() {
   const has = (f: Feature) => !!plan?.features.includes(f);
   const { data: review } = trpc.review.count.useQuery(undefined, { staleTime: 60_000 });
   const { data: billList } = trpc.vendors.bills.list.useQuery({ filter: "unpaid", today: dates.today, limit: 500 }, { enabled: has("vendors") });
-  const { data: tax } = trpc.tax.current.useQuery(undefined, { enabled: has("taxes") });
+  const { data: tax } = trpc.tax.reminders.useQuery(undefined, { enabled: has("taxes") });
   const { data: receiptUse } = trpc.receipts.usage.useQuery(undefined, { enabled: has("receipts") });
   const { data: reconcile } = trpc.reconcile.overview.useQuery(undefined, { staleTime: 60_000 });
 
@@ -151,11 +151,11 @@ function OwnerHome() {
     const [a, b] = t.tasks.close(periodLabel(reconcile.suggestion, t, locale));
     tasks.push({ tone: "info", icon: ListChecks, title: a, text: b, action: { label: t.tasks.open, to: "/bank" } });
   }
-  const redo = tax?.docs.filter((d) => d.source === "client" && d.status === "redo").length ?? 0;
+  const redo = tax?.redo ?? 0;
   if (redo > 0) {
     const [a, b] = t.tasks.taxRedo(redo);
     tasks.push({ tone: "bad", icon: FileText, title: a, text: b, action: { label: t.tasks.open, to: "/taxes" } });
-  } else if (tax?.access.allowed && (tax.ret?.step ?? DRAFT_STEP) === DRAFT_STEP && tax.missing && (tax.missing.docs.length > 0 || tax.missing.income)) {
+  } else if (tax?.allowed && (tax.step ?? DRAFT_STEP) === DRAFT_STEP && tax.needsDocs) {
     tasks.push({ tone: "info", icon: FileText, title: t.tasks.taxDocs[0], text: t.tasks.taxDocs[1], action: { label: t.tasks.upload, to: "/taxes" } });
   }
   if (receiptUse && receiptUse.cap !== null && receiptUse.remaining !== null && receiptUse.remaining <= 5) {

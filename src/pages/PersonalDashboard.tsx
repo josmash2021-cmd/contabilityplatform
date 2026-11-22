@@ -79,7 +79,7 @@ export default function PersonalDashboard() {
   const monthQ = trpc.bank.getMonthData.useQuery({ year: when.year, month: when.month }, { enabled: hasBank, staleTime: 60_000, refetchInterval: 2 * 60_000 });
   const { data: budgets } = trpc.personal.listBudgets.useQuery({ year: when.year, month: when.month }, { enabled: hasBank && canBudget, staleTime: 5 * 60_000, retry: false });
   const { data: goals } = trpc.personal.listGoals.useQuery(undefined, { staleTime: 5 * 60_000 });
-  const { data: tax } = trpc.tax.current.useQuery(undefined, { staleTime: 5 * 60_000 });
+  const { data: tax } = trpc.tax.reminders.useQuery(undefined, { staleTime: 5 * 60_000 });
   const { data: review } = trpc.review.count.useQuery(undefined, { enabled: hasBank, staleTime: 60_000 });
   const { data: subsData } = trpc.subs.list.useQuery({ today: when.days.today }, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
   const { data: institutions } = trpc.brand.institutions.useQuery(undefined, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
@@ -108,11 +108,11 @@ export default function PersonalDashboard() {
 
   // ── Tax items show for everyone (both personal plans include the return) ──
   const taxItems: Item[] = [];
-  const redo = tax?.docs.filter((d) => d.source === "client" && d.status === "redo").length ?? 0;
+  const redo = tax?.redo ?? 0;
   if (redo > 0) {
     const [a, b] = t.today.taxRedo(redo);
     taxItems.push({ key: "tax-redo", tone: "bad", icon: FileText, title: a, text: b, action: { label: t.today.open, to: "/personal/taxes" } });
-  } else if (tax?.access.allowed && (tax.ret?.step ?? DRAFT_STEP) === DRAFT_STEP && tax.missing && (tax.missing.docs.length > 0 || tax.missing.income)) {
+  } else if (tax?.allowed && (tax.step ?? DRAFT_STEP) === DRAFT_STEP && tax.needsDocs) {
     taxItems.push({ key: "tax-docs", tone: "info", icon: FileText, title: t.today.taxDocs[0], text: t.today.taxDocs[1], action: { label: t.today.open, to: "/personal/taxes" } });
   }
   const goalList = ((goals ?? []) as Goal[]).filter((g) => g.isActive !== false).slice(0, 3);

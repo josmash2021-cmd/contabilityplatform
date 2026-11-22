@@ -1,5 +1,6 @@
 import { useCallback, useState, useMemo, useEffect, useRef } from "react";
 import { queryClient } from "@/providers/trpc";
+import { clearTaxUnlock } from "@/lib/taxUnlock";
 
 interface AuthUser {
   id: number;
@@ -81,6 +82,7 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
+    clearTaxUnlock();
     hasSyncedRef.current = false;
     const token = localStorage.getItem("auth_token");
     const finish = () => {

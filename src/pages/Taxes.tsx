@@ -12,6 +12,8 @@ import { TaxConsent, TaxQuestions, TaxRefund, TaxSendBar, TaxTodo } from "@/comp
 import { TaxAgencies, TaxHistory, TaxPreparer } from "@/components/taxes/TaxSide";
 import { TaxStepPanel } from "@/components/taxes/TaxStepPanel";
 import { TaxCare, TaxPast } from "@/components/taxes/TaxPages";
+import { TaxGate } from "@/components/taxes/TaxGate";
+import { clearTaxUnlock } from "@/lib/taxUnlock";
 import { FILED_STEP, clientFiles, type Current, type Doc } from "@/components/taxes/taxView";
 import { listNames } from "@/components/personal/txKit";
 import { trpc } from "@/providers/trpc";
@@ -97,6 +99,20 @@ export default function Taxes() {
     );
   }
 
+  if (data.locked) {
+    return (
+      <AnimatedPage className="p-4 lg:p-8">
+        <div className="mx-auto max-w-6xl">
+          <header className="mb-3.5">
+            <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-[22px]">{t.p.title}</h1>
+            <p className="mt-0.5 text-sm text-slate-500">{t.p.gate.sub}</p>
+          </header>
+          <TaxGate email={data.maskedEmail} />
+        </div>
+      </AnimatedPage>
+    );
+  }
+
   const open = (d: Doc) => setViewing({ id: d.id, title: d.source === "preparer" ? t.preparerDocs[d.kind] ?? d.fileName : t.docs[data.mode][d.kind]?.title ?? d.fileName });
 
   return (
@@ -125,6 +141,9 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const inputs = { camera: useRef<HTMLInputElement>(null), gallery: useRef<HTMLInputElement>(null), pdf: useRef<HTMLInputElement>(null) };
   const target = useRef<{ kind: string; replace?: Doc } | null>(null);
   const refresh = () => utils.tax.current.invalidate();
+  const lock = trpc.tax.lock.useMutation({
+    onSettled: () => { clearTaxUnlock(); toast(p.gate.locked); void utils.tax.invalidate(); },
+  });
   const titleOf = (k: string) => t.docs[mode][k]?.title ?? k;
 
   // ── Upload: the menu picks the source, the matching hidden input opens the camera, gallery or files ──
@@ -201,9 +220,17 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         <h1 className="text-xl font-bold tracking-tight text-slate-900 sm:text-[22px]">{p.title}</h1>
         <p className="mt-0.5 text-sm text-slate-500">{p.subtitle(year)}</p>
       </div>
-      <span title={t.free} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
-        <Check className="h-3.5 w-3.5" aria-hidden="true" />{p.free}<span className="sr-only">: {t.free}</span>
-      </span>
+      <div className="flex flex-wrap items-center gap-2">
+        <span title={t.free} className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 ring-1 ring-emerald-100">
+          <Check className="h-3.5 w-3.5" aria-hidden="true" />{p.free}<span className="sr-only">: {t.free}</span>
+        </span>
+        {data.gate && (
+          <button type="button" onClick={() => lock.mutate()} disabled={lock.isPending} title={p.gate.lockHint}
+            className={`inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50 disabled:opacity-60 ${FOCUS}`}>
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />{p.gate.lock}<span className="sr-only">: {p.gate.lockHint}</span>
+          </button>
+        )}
+      </div>
     </header>
   );
   const keyWarn = !data.keyReady && (

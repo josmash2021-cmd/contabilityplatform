@@ -14,6 +14,7 @@ import { accountMode } from "./lib/plans";
 import { contextHas, getPlanContext } from "./lib/planAccess";
 import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
+import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
   canSend, currentTaxYear, isClientDocKind, missingToSend,
@@ -206,6 +207,12 @@ function stepDatesWith(dates: (string | null)[] | null | undefined, step: number
 
 const resultInput = z.object({ kind: z.enum(["refund", "owe"]), amount: z.number().min(0).max(10_000_000) }).nullable().optional();
 
+/** Client calls that read or change the return and its documents: only with Impuestos open in this tab (lib/taxGate). */
+const unlockedQuery = authedQuery.use(async ({ ctx, next }) => {
+  await requireTaxUnlocked(getDb(), Number(ctx.user.id), ctx.req, ctx.lang);
+  return next();
+});
+
 export const taxRouter = createRouter({
   // ── Client ──
   /** Everything the Impuestos page shows for this year, plus the years before. */
@@ -214,10 +221,13 @@ export const taxRouter = createRouter({
     const access = await taxAccess(db, ctx.user);
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
-    const base = { access, mode, year, keyReady: hasTaxKey() };
-    if (!access.allowed) return { ...base, ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
-    await ensureTaxTables(db);
+    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null };
+    const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
+    if (!access.allowed) return { ...base, ...empty };
     const userId = Number(ctx.user.id);
+    // "Primero, confirma que eres tú": nothing of the return until this tab has the code.
+    if (!(await taxUnlocked(db, userId, ctx.req))) return { ...base, ...empty, locked: true, maskedEmail: maskEmail(ctx.user.email || "") };
+    await ensureTaxTables(db);
     const ret = await findReturn(db, userId, mode, year);
     const docs: TaxDocMeta[] = ret ? await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt) : [];
     const messages: TaxMessage[] = ret ? await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt) : [];
@@ -228,8 +238,48 @@ export const taxRouter = createRouter({
     return { ...base, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
   }),
 
+  /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */
+  reminders: authedQuery.query(async ({ ctx }) => {
+    const db = getDb();
+    if (!(await taxAccess(db, ctx.user)).allowed) return { allowed: false, step: null as number | null, redo: 0, needsDocs: false };
+    await ensureTaxTables(db);
+    const userId = Number(ctx.user.id);
+    const mode = modeOf(ctx.user);
+    const ret = await findReturn(db, userId, mode, currentTaxYear());
+    type DocState = { kind: string; source: string; status: string | null };
+    const docs: DocState[] = ret ? await db.select({ kind: taxDocuments.kind, source: taxDocuments.source, status: taxDocuments.status }).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)) : [];
+    const counts: Record<string, number> = {};
+    for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
+    const missing = missingToSend(mode, ret?.answers ?? {}, counts);
+    return {
+      allowed: true, step: ret?.step ?? DRAFT_STEP,
+      redo: docs.filter((d) => d.source === "client" && d.status === "redo").length,
+      needsDocs: missing.docs.length > 0 || !!missing.income,
+    };
+  }),
+
+  /** "Mandarme el código": a 6-digit code to the account's email. */
+  sendCode: authedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    await requireAccess(db, ctx.user, ctx.lang);
+    return sendTaxCode(db, ctx.user, ctx.lang);
+  }),
+
+  /** The code: when it's right, the key that keeps Impuestos open in this tab for 30 minutes. */
+  verifyCode: authedQuery.input(z.object({ code: z.string().trim().min(1).max(12) })).mutation(async ({ ctx, input }) => {
+    const db = getDb();
+    await requireAccess(db, ctx.user, ctx.lang);
+    return verifyTaxCode(db, ctx.user, input.code, ctx.lang);
+  }),
+
+  /** "Cerrar Impuestos": this tab's key stops working. */
+  lock: authedQuery.mutation(async ({ ctx }) => {
+    await lockTax(getDb(), Number(ctx.user.id), ctx.req);
+    return { ok: true };
+  }),
+
   /** A past year's return: its summary and documents. */
-  pastYear: authedQuery.input(z.object({ returnId: z.number().int().positive() })).query(async ({ ctx, input }) => {
+  pastYear: unlockedQuery.input(z.object({ returnId: z.number().int().positive() })).query(async ({ ctx, input }) => {
     const db = getDb();
     await ensureTaxTables(db);
     const ret: TaxReturnMeta | undefined = (await db.select(retMeta).from(taxReturns).where(and(eq(taxReturns.id, input.returnId), eq(taxReturns.userId, Number(ctx.user.id)))).limit(1))[0];
@@ -238,7 +288,7 @@ export const taxRouter = createRouter({
     return { ret, docs };
   }),
 
-  saveAnswers: authedQuery
+  saveAnswers: unlockedQuery
     .input(z.object({ answers: z.record(z.string().max(20), z.boolean().nullable()) }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
@@ -254,7 +304,7 @@ export const taxRouter = createRouter({
       return { answers };
     }),
 
-  upload: authedQuery
+  upload: unlockedQuery
     .input(z.object({ kind: z.string().max(30), ...fileInput }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
@@ -277,7 +327,7 @@ export const taxRouter = createRouter({
     }),
 
   /** Removes a file the client uploaded, unless the preparer already approved it. */
-  deleteDoc: authedQuery.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
+  deleteDoc: unlockedQuery.input(z.object({ id: z.number().int().positive() })).mutation(async ({ ctx, input }) => {
     const db = getDb();
     await ensureTaxTables(db);
     const userId = Number(ctx.user.id);
@@ -291,7 +341,7 @@ export const taxRouter = createRouter({
   }),
 
   /** One file, decrypted. Its owner or a preparer only. */
-  file: authedQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+  file: unlockedQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
     const db = getDb();
     await ensureTaxTables(db);
     const isAdmin = ctx.user.role === "admin";
@@ -302,7 +352,7 @@ export const taxRouter = createRouter({
   }),
 
   /** Sends the documents to the preparer. */
-  submit: authedQuery
+  submit: unlockedQuery
     .input(z.object({ consent: z.literal(true), terms: z.literal(true) }))
     .mutation(async ({ ctx }) => {
       const db = getDb();
@@ -323,7 +373,7 @@ export const taxRouter = createRouter({
    * "Revisé mi declaración y los datos son correctos": the client approves the finished return at the
    * "Revisa y firma" step. The preparer gets it as a message and then files it (and handles the 8879).
    */
-  approve: authedQuery.mutation(async ({ ctx }) => {
+  approve: unlockedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
     await requireAccess(db, ctx.user, ctx.lang);
     await ensureTaxTables(db);
@@ -340,7 +390,7 @@ export const taxRouter = createRouter({
     return { ok: true };
   }),
 
-  sendMessage: authedQuery.input(z.object({ body: z.string().trim().min(1).max(2000) })).mutation(async ({ ctx, input }) => {
+  sendMessage: unlockedQuery.input(z.object({ body: z.string().trim().min(1).max(2000) })).mutation(async ({ ctx, input }) => {
     const db = getDb();
     await requireAccess(db, ctx.user, ctx.lang);
     await ensureTaxTables(db);
@@ -351,7 +401,7 @@ export const taxRouter = createRouter({
   }),
 
   /** The client read the preparer's messages. */
-  markRead: authedQuery.mutation(async ({ ctx }) => {
+  markRead: unlockedQuery.mutation(async ({ ctx }) => {
     const db = getDb();
     await ensureTaxTables(db);
     const ret = await findReturn(db, Number(ctx.user.id), modeOf(ctx.user), currentTaxYear());
