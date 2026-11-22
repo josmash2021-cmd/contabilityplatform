@@ -96,12 +96,18 @@ export function TaxDocsCard({ mode, answers, docs, onPick, busyKind, onOpen, onR
         </button>
       </>
     );
-    // No file yet: the example picture (it opens big); with a file: the file's square.
-    const thumb = (file?: Doc, count?: number) => file ? <TaxThumb file={file} kind={k.id} count={count} /> : (
+    // Always the example photo (it opens big). Once uploaded, a check on it (and how many files); the client's own
+    // files stay encrypted, so they're listed by name below, never previewed here.
+    const thumb = (file?: Doc, count?: number) => (
       <button type="button" onClick={() => setExample(k.id)} aria-label={d.exampleSee(copy.title)}
         className="group relative h-[52px] w-[52px] shrink-0 overflow-hidden rounded-[10px] bg-slate-100 ring-1 ring-slate-200 transition hover:ring-2 hover:ring-blue-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
-        <TaxDocPhoto kind={k.id} className="h-full w-full scale-[1.25] object-cover transition-transform duration-300 group-hover:scale-[1.4]" />
-        <span className="absolute inset-x-0 bottom-0 bg-white/90 py-px text-center text-[8px] font-bold uppercase tracking-wide text-slate-500">{d.exampleTag}</span>
+        <TaxDocPhoto kind={k.id} className={cn("h-full w-full scale-[1.25] object-cover transition-transform duration-300 group-hover:scale-[1.4]", file && "opacity-80")} />
+        {file ? (
+          <span className={cn("absolute bottom-1 right-1 grid h-[18px] min-w-[18px] place-items-center rounded-full px-1 text-[10px] font-bold text-white ring-2 ring-white",
+            file.status === "ok" ? "bg-emerald-600" : file.status === "redo" ? "bg-amber-600" : "bg-blue-600")}>
+            {count && count > 1 ? count : <Check className="h-2.5 w-2.5" strokeWidth={3.5} aria-hidden="true" />}
+          </span>
+        ) : <span className="absolute inset-x-0 bottom-0 bg-white/90 py-px text-center text-[8px] font-bold uppercase tracking-wide text-slate-500">{d.exampleTag}</span>}
       </button>
     );
     const status = <Dst tone={STATE_TONE[state]} className="text-[12px]">{["ok", "got"].includes(state) ? many : ""}{d.status[state]}</Dst>;
