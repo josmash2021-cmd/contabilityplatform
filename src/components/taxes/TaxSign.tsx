@@ -55,7 +55,9 @@ export function TaxSignForm({ ret, docs, preparerName, onOpen }: { ret: Ret; doc
           <h3 className="text-[14.5px] font-bold text-slate-900">{s.reviewTitle}</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             {files.map((d) => (
-              <TaxPdfPreview key={d.id} doc={d} title={t.preparerDocs[d.kind] ?? d.fileName} previewLabel={s.preview} openLabel={s.openFull} loadingLabel={s.loading} onOpen={onOpen} />
+              <TaxPdfPreview key={d.id} doc={d} title={t.preparerDocs[d.kind] ?? d.fileName} previewLabel={s.preview} openLabel={s.openFull} loadingLabel={s.loading} onOpen={onOpen}
+                // An odd one out (the 8879, the one to sign) takes the whole row instead of sitting alone.
+                className={files.length % 2 === 1 && d.id === files[files.length - 1].id ? "sm:col-span-2" : undefined} />
             ))}
           </div>
         </section>
