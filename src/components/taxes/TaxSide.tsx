@@ -106,7 +106,7 @@ export function TaxHistory({ past, onOpen }: { past: readonly Ret[]; onOpen: (id
  * "Tu preparador" (taxPrepCard): who prepares the return (the name the preparer signs messages with, once
  * they've written), the conversation, and "Escríbele" to send a message (tax.sendMessage).
  */
-export function TaxPreparer({ messages, compact, fallbackName }: { messages: readonly Msg[]; compact?: boolean; fallbackName?: string | null }) {
+export function TaxPreparer({ messages, compact, fallbackName, assignedOn }: { messages: readonly Msg[]; compact?: boolean; fallbackName?: string | null; assignedOn?: string | null }) {
   const t = useCopy(taxesCopy);
   const p = t.p.prep;
   const locale = intlLocale(useLang().lang);
@@ -131,7 +131,7 @@ export function TaxPreparer({ messages, compact, fallbackName }: { messages: rea
         <span className="grid h-[42px] w-[42px] shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-blue-600" aria-hidden="true">
           {initials || <MessageCircle className="h-5 w-5" />}
         </span>
-        <div className="min-w-0"><b className="block text-[15px] text-slate-900">{name}</b><span className="block text-[13px] text-slate-500">{p.meta}</span></div>
+        <div className="min-w-0"><b className="block text-[15px] text-slate-900">{assignedOn ? t.p.flow.assigned(name) : name}</b><span className="block text-[13px] text-slate-500">{assignedOn ? `${t.p.flow.assignedOn(assignedOn)} · ` : ""}{p.meta}</span></div>
       </div>
       {!compact && <p className="mt-2.5 text-sm text-slate-500">{p.text}</p>}
       {messages.length > 0 && (

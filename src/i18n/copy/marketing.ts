@@ -271,6 +271,7 @@ const es = {
         links: [
           { label: "Preguntas frecuentes", href: "/preguntas", internal: true },
           { label: "Política de privacidad", href: "/privacy", internal: true },
+          { label: "Términos del servicio de impuestos", href: "/terminos", internal: true },
         ],
       },
     ] as Array<{ title: string; links: Array<{ label: string; href: string; internal?: boolean }> }>,
@@ -758,6 +759,7 @@ const en: MarketingCopy = {
         links: [
           { label: "FAQ", href: "/preguntas", internal: true },
           { label: "Privacy Policy", href: "/privacy", internal: true },
+          { label: "Tax Service Terms", href: "/terminos", internal: true },
         ],
       },
     ],

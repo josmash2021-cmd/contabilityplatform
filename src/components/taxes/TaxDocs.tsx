@@ -18,7 +18,7 @@ export type PickFn = (kind: string, source: PickSource, replace?: Doc) => void;
 const STATE_TONE: Record<DocState, Tone> = { missing: "warn", jan31: "open", whenYes: "open", optional: "muted", redo: "bad", ok: "good", got: "open" };
 
 /** "Subir / Cambiar / Agregar otro" with its menu: take a photo, from the gallery, or a PDF (the prototype's taxPickMenu). */
-export function TaxPick({ kind, title, has, replace, onPick, busy }: { kind: string; title: string; has: boolean; replace?: Doc; onPick: PickFn; busy: boolean }) {
+export function TaxPick({ kind, title, has, replace, onPick, busy, className }: { kind: string; title: string; has: boolean; replace?: Doc; onPick: PickFn; busy: boolean; className?: string }) {
   const d = useCopy(taxesCopy).p.docs;
   const add = has && !replace;
   const label = replace ? d.change : add ? d.addAnother : d.upload;
@@ -26,7 +26,7 @@ export function TaxPick({ kind, title, has, replace, onPick, busy }: { kind: str
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button type="button" disabled={busy} aria-label={d.pickAria(label, title)} className={pbtnSm}>
+        <button type="button" disabled={busy} aria-label={d.pickAria(label, title)} className={cn(pbtnSm, className)}>
           {busy ? <Loader2 className="h-[15px] w-[15px] animate-spin" aria-hidden="true" /> : <Icon className="h-[15px] w-[15px]" aria-hidden="true" />}{busy ? d.uploading : label}
         </button>
       </DropdownMenuTrigger>
@@ -160,7 +160,6 @@ export function TaxDocsCard({ mode, answers, docs, onPick, busyKind, onOpen, onR
 
   const groups = GROUP_ORDER.map((g) => ({ g, list: kinds.filter((k) => groupOf(mode, k.id, t.docGroup) === g) })).filter((x) => x.list.length);
   const requiredIn = kinds.filter((k) => k.need === "yes").every((k) => { const f = clientFiles(docs, k.id); return f.length > 0 && !f.some((x) => x.status === "redo"); });
-  const ex = example ? { kind: example, copy: t.docs[mode][example] ?? { title: example, sub: "" }, files: clientFiles(docs, example) } : null;
   return (
     <section id={id} className="scroll-mt-4 rounded-[14px] border border-slate-200 bg-white p-4" aria-labelledby="tax-docs-h">
       <div className="flex items-center justify-between gap-3">
@@ -191,39 +190,7 @@ export function TaxDocsCard({ mode, answers, docs, onPick, busyKind, onOpen, onR
       })}
       <p className="mt-3.5 flex items-start gap-2 text-xs text-slate-500"><Lock className="mt-px h-3.5 w-3.5 shrink-0" aria-hidden="true" /><span>{t.privacy}</span></p>
 
-      {/* "Así se ve": the document big, what it is, tips for the photo, and upload right from here. */}
-      <Dialog open={!!ex} onOpenChange={(o) => { if (!o) setExample(null); }}>
-        <DialogContent className="top-auto bottom-0 h-auto max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:bottom-auto sm:max-w-[440px] sm:rounded-[20px]">
-          {ex && (
-            <>
-              <div className="relative">
-                <TaxDocPhoto kind={ex.kind} title={ex.copy.title} className="block aspect-[4/3] w-full bg-slate-100 object-cover" />
-                <span className="absolute left-4 top-4 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 shadow-sm ring-1 ring-slate-200">{d.exampleTag}</span>
-              </div>
-              <div className="grid gap-3 px-6 pb-6 pt-4">
-                <div className="grid gap-1 pr-6">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{d.exampleTitle}</p>
-                  <DialogTitle className="text-lg font-bold leading-tight text-slate-900">{ex.copy.title}</DialogTitle>
-                  <DialogDescription className="text-sm text-slate-500">{ex.copy.sub}</DialogDescription>
-                </div>
-                <div className="rounded-xl bg-slate-50 p-3">
-                  <p className="text-[13px] font-semibold text-slate-900">{d.exampleTips}</p>
-                  <ul className="mt-1.5 grid gap-1">
-                    {d.exampleTipList.map((tip) => <li key={tip} className="flex items-start gap-2 text-[13px] text-slate-600"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />{tip}</li>)}
-                  </ul>
-                </div>
-                <p className="text-xs text-slate-400">{d.exampleSample}</p>
-                <div className="flex flex-wrap items-center justify-end gap-2">
-                  <button type="button" onClick={() => setExample(null)} className="h-10 rounded-[10px] px-4 text-sm font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{d.exampleClose}</button>
-                  {!(ex.files.length && ex.files.every((f) => f.status === "ok")) && (
-                    <TaxPick kind={ex.kind} title={ex.copy.title} has={ex.files.length > 0} replace={isMulti(ex.kind) ? undefined : ex.files[0]} onPick={(kind, source, replace) => { setExample(null); onPick(kind, source, replace); }} busy={busyKind === ex.kind} />
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </DialogContent>
-      </Dialog>
+      <TaxExampleDialog mode={mode} kind={example} docs={docs} busyKind={busyKind} onPick={onPick} onClose={() => setExample(null)} />
     </section>
   );
 }
@@ -257,5 +224,49 @@ export function TaxDocsDone({ mode, docs, onOpen, preparerOnly }: { mode: TaxMod
       {preparerOnly && <ul className="mt-2.5 grid gap-1.5">{prep.map((f) => item(f, t.preparerDocs[f.kind] ?? f.fileName))}</ul>}
       {mine.length > 0 && <ul className="mt-3 grid gap-1.5">{mine.map((f) => item(f, t.docs[mode][f.kind]?.title ?? f.kind))}</ul>}
     </section>
+  );
+}
+
+/** "Así se ve": the example photo big, what the document is, tips for the photo, and upload right from here. */
+export function TaxExampleDialog({ mode, kind, docs, busyKind, onPick, onClose }: {
+  mode: TaxMode; kind: string | null; docs: readonly Doc[]; busyKind: string | null; onPick: PickFn; onClose: () => void;
+}) {
+  const t = useCopy(taxesCopy);
+  const d = t.p.docs;
+  const setExample = (v: null) => { if (v === null) onClose(); };
+  const ex = kind ? { kind, copy: t.docs[mode][kind] ?? { title: kind, sub: "" }, files: clientFiles(docs, kind) } : null;
+  return (
+    <Dialog open={!!ex} onOpenChange={(o) => { if (!o) setExample(null); }}>
+      <DialogContent className="top-auto bottom-0 h-auto max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:bottom-auto sm:max-w-[440px] sm:rounded-[20px]">
+        {ex && (
+          <>
+            <div className="relative">
+              <TaxDocPhoto kind={ex.kind} title={ex.copy.title} className="block aspect-[4/3] w-full bg-slate-100 object-cover" />
+              <span className="absolute left-4 top-4 rounded-full bg-white/95 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 shadow-sm ring-1 ring-slate-200">{d.exampleTag}</span>
+            </div>
+            <div className="grid gap-3 px-6 pb-6 pt-4">
+              <div className="grid gap-1 pr-6">
+                <p className="text-xs font-semibold uppercase tracking-wide text-blue-600">{d.exampleTitle}</p>
+                <DialogTitle className="text-lg font-bold leading-tight text-slate-900">{ex.copy.title}</DialogTitle>
+                <DialogDescription className="text-sm text-slate-500">{ex.copy.sub}</DialogDescription>
+              </div>
+              <div className="rounded-xl bg-slate-50 p-3">
+                <p className="text-[13px] font-semibold text-slate-900">{d.exampleTips}</p>
+                <ul className="mt-1.5 grid gap-1">
+                  {d.exampleTipList.map((tip) => <li key={tip} className="flex items-start gap-2 text-[13px] text-slate-600"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" aria-hidden="true" />{tip}</li>)}
+                </ul>
+              </div>
+              <p className="text-xs text-slate-400">{d.exampleSample}</p>
+              <div className="flex flex-wrap items-center justify-end gap-2">
+                <button type="button" onClick={() => setExample(null)} className="h-10 rounded-[10px] px-4 text-sm font-semibold text-slate-600 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">{d.exampleClose}</button>
+                {!(ex.files.length && ex.files.every((f) => f.status === "ok")) && (
+                  <TaxPick kind={ex.kind} title={ex.copy.title} has={ex.files.length > 0} replace={isMulti(ex.kind) ? undefined : ex.files[0]} onPick={(kind, source, replace) => { setExample(null); onPick(kind, source, replace); }} busy={busyKind === ex.kind} />
+                )}
+              </div>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

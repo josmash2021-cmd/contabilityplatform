@@ -1,14 +1,13 @@
-import { useState, type ReactNode } from "react";
-import { CalendarDays, CheckCircle2, Download, FileText, Loader2, Upload, User } from "lucide-react";
-import { toast } from "sonner";
-import { Dst, pbtnPrimary, pbtnSm } from "@/components/personal/planKit";
-import { trpc } from "@/providers/trpc";
+import type { ReactNode } from "react";
+import { CalendarDays, CheckCircle2, Download, FileText, Upload, User } from "lucide-react";
+import { Dst, pbtnSm } from "@/components/personal/planKit";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { TAX_STEP, TAX_STEP_COUNT, shownDocKinds, type TaxMode } from "@contracts/taxRules";
 import { TaxLink } from "./TaxSide";
+import { TaxSignForm } from "./TaxSign";
 import { shortDate, taxMoney, type Doc, type Ret, type TaxResult } from "./taxView";
 
 function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "good" | "warn"; title: ReactNode; meta: ReactNode }) {
@@ -23,20 +22,14 @@ function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "goo
 /**
  * What's happening at one step of a sent return (taxStepPanel / taxStepBody), from the real return: the
  * files sent, the preparer's review, the results and documents the preparer sent, the client's approval
- * at "Revisa y firma" (tax.approve), the e-file and acceptance dates, and where to follow the refund.
+ * at "Revisa y firma" (tax.sign, our own e-signature), the e-file and acceptance dates, and where to follow the refund.
  */
-export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow }: {
-  i: number; ret: Ret; mode: TaxMode; docs: readonly Doc[]; onOpen: (d: Doc) => void; onSeeNow: () => void;
+export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName }: {
+  i: number; ret: Ret; mode: TaxMode; docs: readonly Doc[]; onOpen: (d: Doc) => void; onSeeNow: () => void; preparerName: string;
 }) {
   const t = useCopy(taxesCopy);
   const p = t.p.panel;
   const locale = intlLocale(useLang().lang);
-  const utils = trpc.useUtils();
-  const [checked, setChecked] = useState(false);
-  const approve = trpc.tax.approve.useMutation({
-    onSuccess: () => { toast.success(p.approvedToast); void utils.tax.current.invalidate(); },
-    onError: (e) => toast.error(e.message || t.errors.generic),
-  });
   const thisYear = new Date().getFullYear();
   const st = ret.step;
   const now = i === st;
@@ -90,31 +83,25 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow }: {
     );
   } else if (i === TAX_STEP.sign) {
     const approvedOn = ret.approvedAt ? shortDate(ret.approvedAt, locale, thisYear) : "";
-    body = (
+    const signedDoc = prep("f8879_signed")[0];
+    // Still to sign: option A's form (total, previews, our own signature of the 8879).
+    body = st === TAX_STEP.sign && !ret.approvedAt ? <TaxSignForm ret={ret} docs={docs} preparerName={preparerName} onOpen={onOpen} /> : (
       <>
         {results(st > TAX_STEP.sign ? "" : p.estimated)}
         {(finalFed || finalState || f8879) && (
           <div className="mt-2.5 flex flex-wrap gap-2">
             {(finalFed ?? finalState) && <button type="button" onClick={() => onOpen((finalFed ?? finalState)!)} className={pbtnSm}><FileText className="h-[15px] w-[15px]" aria-hidden="true" />{p.seeFull}</button>}
             {f8879 && <button type="button" onClick={() => onOpen(f8879)} className={pbtnSm}><FileText className="h-[15px] w-[15px]" aria-hidden="true" />{p.see8879}</button>}
+            {signedDoc && <button type="button" onClick={() => onOpen(signedDoc)} className={pbtnSm}><FileText className="h-[15px] w-[15px]" aria-hidden="true" />{t.p.sign.seeSigned}</button>}
           </div>
+        )}
+        {!(finalFed || finalState || f8879) && signedDoc && (
+          <div className="mt-2.5"><button type="button" onClick={() => onOpen(signedDoc)} className={pbtnSm}><FileText className="h-[15px] w-[15px]" aria-hidden="true" />{t.p.sign.seeSigned}</button></div>
         )}
         {st > TAX_STEP.sign ? (
           <p className="mt-2.5 text-sm text-slate-500">{p.approvedPast(approvedOn || date(TAX_STEP.sign))}</p>
-        ) : ret.approvedAt ? (
-          <p className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-emerald-50 px-3 py-2.5 text-sm text-slate-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />{p.approved(approvedOn)}</p>
         ) : (
-          <>
-            <p className="mt-2.5 text-[13px] text-slate-500">{p.signNote}</p>
-            <label className="mt-2 flex min-h-11 cursor-pointer items-start gap-2.5 text-sm text-slate-800">
-              <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600" />{p.check}
-            </label>
-            <div className="mt-2">
-              <button type="button" onClick={() => approve.mutate()} disabled={!checked || approve.isPending} className={pbtnPrimary}>
-                {approve.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{approve.isPending ? p.approving : p.approve}
-              </button>
-            </div>
-          </>
+          <p className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-emerald-50 px-3 py-2.5 text-sm text-slate-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />{p.approved(approvedOn)}</p>
         )}
       </>
     );

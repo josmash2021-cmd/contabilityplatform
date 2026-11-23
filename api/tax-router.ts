@@ -5,7 +5,7 @@
 // Federal + Alabama. Preparation is free for the client. Files are encrypted (taxCrypto).
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { and, desc, eq, inArray, isNull, lt, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, sql } from "drizzle-orm";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
 import { isMissingTable } from "./lib/dbErrors";
@@ -14,6 +14,7 @@ import { accountMode } from "./lib/plans";
 import { contextHas, getPlanContext } from "./lib/planAccess";
 import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
+import { decodeSignature, sha256, signedPdf } from "./lib/taxSign";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
@@ -82,6 +83,23 @@ export function ensureTaxTables(db: Db): Promise<void> {
         createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
         INDEX taxMessages_returnId_idx (returnId)
       )
+    `);
+    // Our own e-signature of the 8879: the drawn signature (encrypted) and what proves who signed what, when.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS taxSignatures (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        returnId BIGINT UNSIGNED NOT NULL,
+        userId BIGINT UNSIGNED NOT NULL,
+        name VARCHAR(160) NOT NULL,
+        signature LONGBLOB NOT NULL,
+        signedAt TIMESTAMP NOT NULL,
+        ip VARCHAR(80),
+        userAgent VARCHAR(300),
+        docId BIGINT UNSIGNED,
+        docSha256 CHAR(64),
+        createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
+        INDEX taxSignatures_returnId_idx (returnId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     // Added later: when the client said the finished return is correct ("Revisa y firma").
     await db.execute(sql`ALTER TABLE taxReturns ADD COLUMN approvedAt TIMESTAMP NULL`).catch((e: unknown) => {
@@ -377,25 +395,56 @@ export const taxRouter = createRouter({
     }),
 
   /**
-   * "Revisé mi declaración y los datos son correctos": the client approves the finished return at the
-   * "Revisa y firma" step. The preparer gets it as a message and then files it (and handles the 8879).
+   * "Firmar y autorizar el envío": our own e-signature of the 8879 at "Revisa y firma". Keeps the drawn
+   * signature (encrypted), the typed name, time, IP, device and the SHA-256 of the 8879 the client had; adds
+   * the signed 8879 (the preparer's file plus a signature page) to the return and tells the preparer.
    */
-  approve: unlockedQuery.mutation(async ({ ctx }) => {
-    const db = getDb();
-    await requireAccess(db, ctx.user, ctx.lang);
-    await ensureTaxTables(db);
-    const ret = await findReturn(db, Number(ctx.user.id), modeOf(ctx.user), currentTaxYear());
-    if (!ret || ret.step !== SIGN_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNotReady") });
-    if (!ret.approvedAt) {
-      await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id}`);
-      const body = ctx.lang === "en"
-        ? "I reviewed my return and the information is correct. I authorize you to file it."
-        : "Revisé mi declaración y los datos son correctos. Autorizo el envío.";
+  sign: unlockedQuery
+    .input(z.object({ name: z.string().trim().min(3).max(120), signature: z.string().max(420_000), agree: z.literal(true) }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await requireAccess(db, ctx.user, ctx.lang);
+      await ensureTaxTables(db);
+      const userId = Number(ctx.user.id);
+      const year = currentTaxYear();
+      const ret = await findReturn(db, userId, modeOf(ctx.user), year);
+      if (!ret || ret.step !== SIGN_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNotReady") });
+      if (ret.approvedAt) return { ok: true, already: true };
+      const png = decodeSignature(input.signature);
+      if (!png) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxBadSignature") });
+      if (!hasTaxKey()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: msg(ctx.lang, "taxNoKey") });
+      const f8879 = (await db.select({ id: taxDocuments.id, data: taxDocuments.data, mimeType: taxDocuments.mimeType, fileName: taxDocuments.fileName })
+        .from(taxDocuments)
+        .where(and(eq(taxDocuments.returnId, ret.id), eq(taxDocuments.source, "preparer"), eq(taxDocuments.kind, "f8879")))
+        .orderBy(desc(taxDocuments.createdAt)).limit(1))[0];
+      const original = f8879 ? decryptTaxFile(Buffer.from(f8879.data)) : null;
+      const signedAt = new Date();
+      const ip = (ctx.req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ctx.req.headers.get("x-real-ip") || "").slice(0, 80) || null;
+      const userAgent = (ctx.req.headers.get("user-agent") || "").slice(0, 300) || null;
+      const docSha256 = original ? sha256(original) : null;
+      const lang = ctx.lang === "en" ? "en" : "es";
+      // The signed 8879 is built first; only then is the approval claimed, once (a double tap signs once).
+      const pdfBytes = await signedPdf(original && f8879 ? { bytes: original, mimeType: f8879.mimeType } : null, png, {
+        name: input.name, email: (ctx.user as { email?: string | null }).email ?? null, signedAt, ip, userAgent, docSha256,
+        docName: f8879?.fileName ?? null, taxYear: year, lang,
+      });
+      const signed = Buffer.from(pdfBytes);
+      const claim = await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id} AND step = ${SIGN_STEP} AND approvedAt IS NULL`);
+      if (Number((claim as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) === 0) return { ok: true, already: true };
+      await db.execute(sql`INSERT INTO taxSignatures (returnId, userId, name, signature, signedAt, ip, userAgent, docId, docSha256)
+        VALUES (${ret.id}, ${userId}, ${input.name}, ${encryptTaxFile(png)}, ${signedAt}, ${ip}, ${userAgent}, ${f8879?.id ?? null}, ${docSha256})`);
+      await db.insert(taxDocuments).values({
+        returnId: ret.id, userId, kind: "f8879_signed", source: "preparer",
+        fileName: lang === "en" ? `Signed 8879 ${year}.pdf` : `8879 firmado ${year}.pdf`,
+        mimeType: "application/pdf", size: signed.length, data: encryptTaxFile(signed), status: "ok",
+      });
+      const body = lang === "en"
+        ? "I signed the e-file authorization (Form 8879). I reviewed my return and the information is correct. You can file it."
+        : "Firmé la autorización de e-file (Formulario 8879). Revisé mi declaración y los datos son correctos. Ya la puedes presentar.";
       await db.insert(taxMessages).values({ returnId: ret.id, fromRole: "client", authorName: ctx.user.name ?? null, body });
       await touch(db, ret.id);
-    }
-    return { ok: true };
-  }),
+      return { ok: true, already: false };
+    }),
 
   sendMessage: unlockedQuery.input(z.object({ body: z.string().trim().min(1).max(2000) })).mutation(async ({ ctx, input }) => {
     const db = getDb();
@@ -512,7 +561,8 @@ export const taxRouter = createRouter({
   adminDeleteDoc: adminQuery.input(z.object({ docId: z.number().int().positive() })).mutation(async ({ input }) => {
     const db = getDb();
     await ensureTaxTables(db);
-    await db.delete(taxDocuments).where(and(eq(taxDocuments.id, input.docId), eq(taxDocuments.source, "preparer")));
+    // The signed 8879 is the record of the client's signature: it stays.
+    await db.delete(taxDocuments).where(and(eq(taxDocuments.id, input.docId), eq(taxDocuments.source, "preparer"), ne(taxDocuments.kind, "f8879_signed")));
     return { ok: true };
   }),
 

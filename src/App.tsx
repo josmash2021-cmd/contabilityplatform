@@ -13,6 +13,7 @@ import Register from "@/pages/Register";
 import ForgotPassword from "@/pages/ForgotPassword";
 import NotFound from "@/pages/NotFound";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsOfService from "@/pages/TermsOfService";
 import AuthLayout from "@/components/layout/AuthLayout";
 
 /**
@@ -131,6 +132,9 @@ export default function App() {
 
         {/* Privacy Policy - public, required by Plaid */}
         <Route path="/privacy" element={<PrivacyPolicy />} />
+        {/* Tax service terms - accepted before sending a return */}
+        <Route path="/terminos" element={<TermsOfService />} />
+        <Route path="/terms" element={<TermsOfService />} />
 
         {/* Public site pages (the marketing menu) */}
         <Route path="/producto" element={<SiteProducto />} />

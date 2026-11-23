@@ -13,6 +13,7 @@ export const USER_TABLES: ReadonlyArray<readonly [string, readonly string[]]> = 
   ["assistantPrefs", ["userId"]],
   ["taxAccessCodes", ["userId"]],
   ["taxUnlocks", ["userId"]],
+  ["taxSignatures", ["userId"]],
   ["bankReviewLog", ["userId"]],
   ["bankReviewMatches", ["userId"]],
   ["bankTransactionSplits", ["userId"]],

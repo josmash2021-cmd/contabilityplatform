@@ -845,16 +845,18 @@ function PreparerDocs({ returnId, docs, onView }: { returnId: number; docs: TaxD
                     <Button type="button" variant="outline" size="sm" onClick={() => onView({ id: d.id, title })}>
                       <Eye aria-hidden /> {t.view}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={removing}
-                      onClick={() => { if (window.confirm(t.removeConfirm)) del.mutate({ docId: d.id }); }}
-                      className="text-red-600 hover:bg-red-50 hover:text-red-700"
-                    >
-                      {removing ? <Loader2 className="animate-spin" aria-hidden /> : <Trash2 aria-hidden />} {t.remove}
-                    </Button>
+                    {d.kind !== "f8879_signed" && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={removing}
+                        onClick={() => { if (window.confirm(t.removeConfirm)) del.mutate({ docId: d.id }); }}
+                        className="text-red-600 hover:bg-red-50 hover:text-red-700"
+                      >
+                        {removing ? <Loader2 className="animate-spin" aria-hidden /> : <Trash2 aria-hidden />} {t.remove}
+                      </Button>
+                    )}
                   </div>
                 </li>
               );

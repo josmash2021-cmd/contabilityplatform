@@ -8,21 +8,22 @@ import { ConfirmDialog } from "@/components/personal/ConfirmDialog";
 import { TaxFileViewer } from "@/components/taxes/TaxFileViewer";
 import { TaxTrack } from "@/components/taxes/TaxTrack";
 import { TaxDocsCard, TaxDocsDone, TaxPick, type PickFn, type PickSource } from "@/components/taxes/TaxDocs";
-import { useMedia } from "@/hooks/useMedia";
-import { TaxConsent, TaxQuestions, TaxRefund, TaxSendBar, TaxTodo } from "@/components/taxes/TaxDraft";
+import { TaxFlowA } from "@/components/taxes/TaxFlowA";
+import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
+import { intlLocale } from "@/i18n/lang";
 import { TaxAgencies, TaxHistory, TaxPreparer } from "@/components/taxes/TaxSide";
 import { TaxStepPanel } from "@/components/taxes/TaxStepPanel";
 import { TaxCare, TaxPast } from "@/components/taxes/TaxPages";
 import { TaxGate } from "@/components/taxes/TaxGate";
 import { clearTaxUnlock } from "@/lib/taxUnlock";
-import { FILED_STEP, clientFiles, type Current, type Doc } from "@/components/taxes/taxView";
+import { FILED_STEP, clientFiles, daysUntil, longDay, shortDate, type Current, type Doc } from "@/components/taxes/taxView";
 import { listNames } from "@/components/personal/txKit";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
-import { useCopy } from "@/i18n/useI18n";
+import { useCopy, useLang } from "@/i18n/useI18n";
 import { taxesCopy, type TaxesCopy } from "@/i18n/copy/taxes";
 import { TaxFileError, prepareTaxUpload } from "@/lib/taxFiles";
-import { DRAFT_STEP, canSend, shownDocKinds, type Answers } from "@contracts/taxRules";
+import { DRAFT_STEP, filingDeadline, shownDocKinds, type Answers } from "@contracts/taxRules";
 
 const card = "rounded-[14px] border border-slate-200 bg-white p-4";
 const cols = "mt-3.5 grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]";
@@ -37,7 +38,6 @@ function errorText(t: TaxesCopy, e: unknown): string {
 function scrollPageTop() {
   document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" });
 }
-const smooth = (): ScrollBehavior => (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth");
 
 type View = { kind: "main" } | { kind: "care" } | { kind: "past"; id: number };
 
@@ -134,8 +134,8 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const step = ret?.step ?? DRAFT_STEP;
   const draft = step === DRAFT_STEP;
   const answers: Answers = ret?.answers ?? {};
-  const [consent, setConsent] = useState(false);
-  const [terms, setTerms] = useState(false);
+  const [askOpen, setAskOpen] = useState(false);
+  const locale = intlLocale(useLang().lang);
   const [selected, setSelected] = useState<number | null>(null);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Doc | null>(null);
@@ -146,7 +146,6 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
     onSettled: () => { clearTaxUnlock(); toast(p.gate.locked); void utils.tax.invalidate(); },
   });
   const titleOf = (k: string) => t.docs[mode][k]?.title ?? k;
-  const wide = useMedia("(min-width: 1024px)");
 
   // ── Upload: the menu picks the source, the matching hidden input opens the camera, gallery or files ──
   const upload = trpc.tax.upload.useMutation();
@@ -202,20 +201,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
     onSuccess: () => { toast.success(p.send.sent); void refresh(); scrollPageTop(); },
     onError: (e) => toast.error(errorText(t, e)),
   });
-  const missingNames = [
-    ...(missing?.questions.length ? [p.send.answer] : []),
-    ...(missing?.docs ?? []).map(titleOf),
-    ...(missing?.income ? [p.send.income] : []),
-  ];
-  const ready = !!missing && canSend(missing);
-  const hasW2 = mode === "personal" ? clientFiles(docs, "w2").length > 0 : null;
-  const goQuestions = () => document.getElementById("tax-q")?.scrollIntoView({ block: "start", behavior: smooth() });
-  const goDocs = () => document.getElementById("tax-docs")?.scrollIntoView({ block: "start", behavior: smooth() });
-  const goConsent = () => {
-    const el = document.getElementById("tax-consent");
-    el?.scrollIntoView({ block: "center", behavior: smooth() });
-    el?.querySelector("input")?.focus({ preventScroll: true });
-  };
+  const preparerName = data.preparerName ?? p.prep.name;
 
   const header = (
     <header className="mb-3.5 flex flex-wrap items-end justify-between gap-3">
@@ -255,6 +241,20 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
       <input ref={inputs.pdf} type="file" accept="application/pdf" multiple className="hidden" tabIndex={-1} aria-hidden="true" onChange={(e) => void onFiles(e, "pdf")} />
     </>
   );
+  const ask = (
+    <>
+      <button type="button" onClick={() => setAskOpen(true)}
+        className={`fixed bottom-[calc(96px+env(safe-area-inset-bottom,0px))] right-4 z-30 inline-flex items-center gap-2 rounded-full bg-slate-900 py-2 pl-2 pr-4 text-[13px] font-semibold text-white shadow-[0_14px_30px_-12px_rgba(2,6,23,0.6)] transition hover:bg-slate-800 active:scale-[0.97] lg:bottom-6 lg:right-6 ${FOCUS}`}>
+        <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600 text-xs font-bold">{preparerName.charAt(0).toUpperCase()}</span>{p.flow.ask(preparerName)}
+      </button>
+      <Dialog open={askOpen} onOpenChange={setAskOpen}>
+        <DialogContent className="top-auto bottom-0 h-auto max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:bottom-auto sm:max-w-[460px] sm:rounded-[20px]">
+          <DialogTitle className="sr-only">{p.prep.title}</DialogTitle>
+          <div className="p-2"><TaxPreparer messages={messages} fallbackName={data.preparerName} assignedOn={draft ? null : shortDate(ret?.submittedAt, locale, new Date().getFullYear())} /></div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
   const removeDialog = (
     <ConfirmDialog open={removing !== null} onOpenChange={(o) => { if (!o) setRemoving(null); }}
       title={p.docs.removeTitle(removing?.fileName ?? "")} text={p.docs.removeText} confirmLabel={p.docs.removeOk} cancelLabel={p.prep.cancel}
@@ -263,36 +263,21 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
 
   if (draft) {
     const unanswered = missing?.questions.length ?? 0;
-    const todo = (
-      <TaxTodo mode={mode} answers={answers} docs={docs} unanswered={unanswered} incomeMissing={!!missing?.income}
-        onPick={pick} busyKind={busyKind} onGoQuestions={goQuestions} onGoDocs={goDocs} />
-    );
+    const deadline = filingDeadline(year);
     return (
-      <div className="mx-auto max-w-6xl">
+      <div className="mx-auto max-w-5xl pb-28 lg:pb-16">
         {header}{keyWarn}
-        <TaxTrack title={p.track.title(year)} step={DRAFT_STEP} stepDates={null} ready={ready} />
-        {/* Phones: what's missing comes right under the track. */}
-        {!wide && <div className="mt-3.5">{todo}</div>}
-        {/* Left: the three parts in their order (1 situación, 2 documentos, 3 autoriza). Right: what's missing,
-            the deadline, your preparer and where it goes. */}
-        <div className="mt-3.5 grid items-start gap-3.5 lg:grid-cols-[minmax(0,1fr)_360px]">
-          <div className="grid min-w-0 gap-3.5">
-            <TaxQuestions n={1} id="tax-q" mode={mode} year={year} answers={answers} busy={saveAnswers.isPending} onAnswer={onAnswer} />
-            <TaxDocsCard n={2} id="tax-docs" mode={mode} answers={answers} docs={docs} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving} />
-            <TaxConsent n={3} id="tax-consent" consent={consent} terms={terms} onConsent={setConsent} onTerms={setTerms} onCare={onCare} />
-          </div>
-          <aside className="grid min-w-0 gap-3.5">
-            {wide && todo}
-            <TaxRefund year={year} last={past[0] ?? null} />
-            <TaxPreparer messages={messages} fallbackName={data.preparerName} />
-            <TaxAgencies year={year} stack />
-            {past.length ? <TaxHistory past={past} onOpen={onPast} /> : null}
-          </aside>
+        <TaxTrack title={p.track.title(year)} step={DRAFT_STEP} stepDates={null} ready={!!missing && !missing.questions.length && !missing.docs.length && !missing.income} />
+        <TaxFlowA mode={mode} year={year} answers={answers} docs={docs} unanswered={unanswered} incomeMissing={!!missing?.income}
+          busyAnswers={saveAnswers.isPending} onAnswer={onAnswer} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving}
+          preparerName={preparerName} deadline={longDay(deadline, locale)} daysLeft={daysUntil(deadline, new Date())}
+          sending={submit.isPending} onSend={() => submit.mutate({ consent: true, terms: true })} onAsk={() => setAskOpen(true)} />
+        <div className={cols}>
+          <TaxAgencies year={year} />
+          {past.length ? <div className="grid min-w-0 gap-3.5"><TaxHistory past={past} onOpen={onPast} /></div> : null}
         </div>
         {foot}
-        <TaxSendBar missing={missingNames} consentOk={consent && terms} hasW2={hasW2} sending={submit.isPending}
-          onSend={() => submit.mutate({ consent: true, terms: true })} onGoConsent={goConsent} />
-        {fileInputs}{removeDialog}
+        {fileInputs}{removeDialog}{ask}
       </div>
     );
   }
@@ -302,7 +287,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const redo = docs.filter((d) => d.source === "client" && d.status === "redo");
   const prepDocs = docs.filter((d) => d.source === "preparer");
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-6xl pb-28 lg:pb-16">
       {header}{keyWarn}
       <TaxTrack title={p.track.title(year)} step={step} stepDates={ret?.stepDates} selected={sel} onSelect={(i) => setSelected(i === step ? null : i)} />
       {/* What the preparer asked to upload again: once, here, each with its own button. */}
@@ -321,11 +306,11 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         </section>
       )}
       <div className={cols}>
-        {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} />}
+        {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName} />}
         <div className="grid min-w-0 gap-3.5">
           <TaxAgencies year={year} stack />
           <TaxHistory past={past} onOpen={onPast} />
-          <TaxPreparer messages={messages} compact fallbackName={data.preparerName} />
+          <TaxPreparer messages={messages} compact fallbackName={data.preparerName} assignedOn={shortDate(ret?.submittedAt, locale, new Date().getFullYear())} />
         </div>
       </div>
       <div className="mt-3.5 grid gap-3.5">
@@ -337,7 +322,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         ) : <TaxDocsDone mode={mode} docs={docs} onOpen={onOpen} />}
       </div>
       {foot}
-      {fileInputs}{removeDialog}
+      {fileInputs}{removeDialog}{ask}
     </div>
   );
 }
