@@ -319,7 +319,7 @@ function ReturnDetail({ returnId }: { returnId: number }) {
   const { ret, docs, messages, missing } = data;
   const mode: TaxMode = ret.mode;
   const name = ret.name || ret.email || t.admin.noName;
-  const resultsKey = JSON.stringify([ret.filingStatus, ret.fedResult, ret.stateResult]);
+  const resultsKey = JSON.stringify([ret.filingStatus, ret.fedResult, ret.stateResult, ret.legalName]);
 
   return (
     <div className="mx-auto max-w-5xl space-y-6 p-4 lg:p-6">
@@ -355,7 +355,7 @@ function ReturnDetail({ returnId }: { returnId: number }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <AnswersCard mode={mode} answers={ret.answers} missing={missing} />
-        <ResultsForm key={resultsKey} returnId={ret.id} filingStatus={ret.filingStatus} fed={ret.fedResult} state={ret.stateResult} />
+        <ResultsForm key={resultsKey} returnId={ret.id} filingStatus={ret.filingStatus} fed={ret.fedResult} state={ret.stateResult} legalName={ret.legalName ?? ret.name ?? ""} />
       </div>
 
       <ClientDocs mode={mode} docs={docs} onView={setViewing} />
@@ -522,12 +522,15 @@ function parseAmount(s: string): number | null {
   return Number.isFinite(n) && n >= 0 && n <= MAX_AMOUNT ? Math.round(n * 100) / 100 : null;
 }
 
-function ResultsForm({ returnId, filingStatus, fed, state }: { returnId: number; filingStatus: string | null; fed: TaxResult; state: TaxResult }) {
+function ResultsForm({ returnId, filingStatus, fed, state, legalName }: { returnId: number; filingStatus: string | null; fed: TaxResult; state: TaxResult; legalName: string }) {
   const t = useCopy(taxesCopy);
   const refresh = useRefresh();
   const onError = useErrorToast();
   const filingId = useId();
+  const nameId = useId();
   const [filing, setFiling] = useState(filingStatus ?? "");
+  // Starts as the account's name; the preparer corrects it from the ID (middle name, both last names).
+  const [fullName, setFullName] = useState(legalName);
   const [fedChoice, setFedChoice] = useState<Choice>(fed?.kind ?? "none");
   const [fedAmount, setFedAmount] = useState(fed ? String(fed.amount) : "");
   const [stateChoice, setStateChoice] = useState<Choice>(state?.kind ?? "none");
@@ -551,6 +554,7 @@ function ResultsForm({ returnId, filingStatus, fed, state }: { returnId: number;
     save.mutate({
       returnId,
       filingStatus: filing.trim() || null,
+      legalName: fullName.trim() || null,
       fed: fedChoice === "none" || fedN === null ? null : { kind: fedChoice, amount: fedN },
       state: stateChoice === "none" || stateN === null ? null : { kind: stateChoice, amount: stateN },
     });
@@ -563,6 +567,11 @@ function ResultsForm({ returnId, filingStatus, fed, state }: { returnId: number;
       </CardHeader>
       <CardContent>
         <form onSubmit={submit} className="space-y-5">
+          <div className="space-y-1.5">
+            <Label htmlFor={nameId} className="text-xs text-neutral-500">{t.results.legalName}</Label>
+            <Input id={nameId} value={fullName} onChange={(e) => setFullName(e.target.value)} maxLength={160} autoComplete="off" />
+            <p className="text-xs text-neutral-500">{t.results.legalHelp}</p>
+          </div>
           <div className="space-y-1.5">
             <Label htmlFor={filingId} className="text-xs text-neutral-500">{t.results.filing}</Label>
             <Input id={filingId} value={filing} onChange={(e) => setFiling(e.target.value)} maxLength={40} autoComplete="off" />

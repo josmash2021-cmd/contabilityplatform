@@ -306,7 +306,8 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         </section>
       )}
       <div className={cols}>
-        {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName} />}
+        {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName}
+          signName={data.signName ?? null} onAsk={() => setAskOpen(true)} />}
         <div className="grid min-w-0 gap-3.5">
           <TaxAgencies year={year} stack />
           <TaxHistory past={past} onOpen={onPast} />

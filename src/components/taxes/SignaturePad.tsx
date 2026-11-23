@@ -24,7 +24,8 @@ const piece = (ctx: CanvasRenderingContext2D, pts: Pt[], i: number) => {
  * midpoints), sharp on any screen (drawn at the device's pixel ratio), and the result as a PNG data URL with a
  * transparent background, cropped to the ink. The strokes are kept, so when the box changes size (turning the
  * phone, a scrollbar showing up) the same signature is drawn again at the new size instead of being lost.
- * `onChange(null)` when it's empty again.
+ * `onChange` also runs while drawing (a few times a second) so the document can show it live; `onChange(null)`
+ * when it's empty again.
  */
 export function SignaturePad({ onChange, label, clearLabel, className }: {
   onChange: (png: string | null) => void;
@@ -35,6 +36,7 @@ export function SignaturePad({ onChange, label, clearLabel, className }: {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const state = useRef<PadState>(fresh());
   const changeRef = useRef(onChange);
+  const lastLive = useRef(0);
   useEffect(() => { changeRef.current = onChange; }, [onChange]);
 
   /** The ink only (plus a margin), as PNG. */
@@ -116,6 +118,12 @@ export function SignaturePad({ onChange, label, clearLabel, className }: {
     pts.push(p);
     mark(s, p);
     if (pts.length >= 3) piece(ctx, pts, pts.length - 1);
+    // Live: once there's real ink, the picture so far, about 12 times a second.
+    const t = performance.now();
+    if ((s.ink || s.maxX - s.minX >= 24 || s.maxY - s.minY >= 12) && t - lastLive.current > 80) {
+      lastLive.current = t;
+      changeRef.current(crop());
+    }
   };
   const up = () => {
     const s = state.current;

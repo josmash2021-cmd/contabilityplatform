@@ -1,9 +1,11 @@
 // Our own e-signature for the e-file authorization (Form 8879). The client draws the signature and types their
 // name at "Revisa y firma" (Impuestos open with the emailed code). Kept: the signature (encrypted), name, time,
 // IP, device and the SHA-256 of the 8879 they had in front of them. The signed copy is the 8879 the preparer
-// uploaded plus one "Firma electrónica" page with all of that, so the preparer keeps it with the return.
+// uploaded with the signature on its "Your signature" line (the name, date and time beside it, the date in
+// "Date"), plus one "Firma electrónica" page with all of that, so the preparer keeps it with the return.
 import { createHash } from "node:crypto";
-import { PDFDocument, StandardFonts, rgb, type PDFFont } from "pdf-lib";
+import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage } from "pdf-lib";
+import { STAMP, signMoment, stampHead, type SignSpot } from "@contracts/taxRules";
 
 export type SignAudit = {
   name: string;
@@ -51,8 +53,43 @@ function wrap(font: PDFFont, text: string, size: number, width: number): string[
   return out;
 }
 
-/** The 8879 (PDF or photo) with the signature page added at the end. Without an 8879, just the signature page. */
-export async function signedPdf(original: { bytes: Uint8Array; mimeType: string } | null, signaturePng: Uint8Array, a: SignAudit): Promise<Uint8Array> {
+const clamp = (n: number, lo: number, hi: number) => Math.min(Math.max(n, lo), Math.max(lo, hi));
+
+/**
+ * The signature on the 8879's "Your signature" line (the same box the page shows live), with "Firmado
+ * electrónicamente por", the name, and the Alabama date and time beside it; the date also goes in "Date".
+ * The spot comes from the page, so it is kept on the page. Returns the page it went on, or null.
+ */
+function stampSignature(pdf: PDFDocument, spot: SignSpot, sig: PDFImage, font: PDFFont, bold: PDFFont, a: SignAudit): number | null {
+  const page = pdf.getPages()[spot.page - 1];
+  if (!page) return null;
+  const box = page.getMediaBox();
+  const x = clamp(spot.x, box.x, box.x + box.width - 80);
+  const y = clamp(spot.y, box.y + 10, box.y + box.height - 40);
+  const w = clamp(spot.w, 60, box.x + box.width - x);
+  const k = Math.min(STAMP.sigMaxW / sig.width, STAMP.sigH / sig.height);
+  const sw = sig.width * k;
+  page.drawImage(sig, { x: x + STAMP.sigLeft, y: y - STAMP.sigBelow, width: sw, height: sig.height * k });
+  const tx = x + STAMP.sigLeft + sw + STAMP.gap;
+  const room = Math.max(36, x + w - tx);
+  const size = (f: PDFFont, s: string, max: number) => Math.min(max, room / Math.max(1, f.widthOfTextAtSize(s, 1)));
+  const navy = rgb(0.09, 0.2, 0.55);
+  const { date, time } = signMoment(a.signedAt);
+  const head = safe(font, stampHead(a.lang));
+  const name = safe(bold, a.name);
+  const when = safe(font, `${date} ${time}`);
+  page.drawText(head, { x: tx, y: y + 16, size: size(font, head, STAMP.headSize), font, color: navy });
+  page.drawText(name, { x: tx, y: y + 8, size: size(bold, name, STAMP.nameSize), font: bold, color: navy });
+  page.drawText(when, { x: tx, y: y + 1, size: size(font, when, STAMP.timeSize), font, color: navy });
+  if (spot.dateX !== null) page.drawText(date, { x: clamp(spot.dateX, x, box.x + box.width - 50), y: y + 1, size: STAMP.dateSize, font, color: navy });
+  return spot.page;
+}
+
+/**
+ * The 8879 (PDF or photo) with the signature page added at the end; a PDF 8879 also gets the signature on its
+ * line (`spot`). Without an 8879, just the signature page.
+ */
+export async function signedPdf(original: { bytes: Uint8Array; mimeType: string } | null, signaturePng: Uint8Array, a: SignAudit, spot: SignSpot | null = null): Promise<Uint8Array> {
   let pdf: PDFDocument;
   if (original?.mimeType === "application/pdf") {
     try { pdf = await PDFDocument.load(original.bytes, { ignoreEncryption: true }); } catch { pdf = await PDFDocument.create(); }
@@ -68,6 +105,7 @@ export async function signedPdf(original: { bytes: Uint8Array; mimeType: string 
   const font = await pdf.embedFont(StandardFonts.Helvetica);
   const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
   const sig = await pdf.embedPng(signaturePng);
+  const onPage = spot && original?.mimeType === "application/pdf" && pdf.getPageCount() > 0 ? stampSignature(pdf, spot, sig, font, bold, a) : null;
   const page = pdf.addPage([612, 792]);
   const es = a.lang === "es";
   const ink = rgb(0.06, 0.09, 0.16);
@@ -102,6 +140,7 @@ export async function signedPdf(original: { bytes: Uint8Array; mimeType: string 
     [es ? "Dirección IP" : "IP address", a.ip ?? "—"],
     [es ? "Dispositivo" : "Device", (a.userAgent ?? "—").slice(0, 300)],
     [es ? "Documento firmado" : "Signed document", a.docName ?? (es ? "Formulario 8879" : "Form 8879")],
+    ...(onPage ? [[es ? "Firma en el 8879" : "Signature on the 8879", es ? `Página ${onPage}, línea Your signature` : `Page ${onPage}, Your signature line`] as [string, string]] : []),
     ["SHA-256", a.docSha256 ?? "—"],
   ];
   for (const [k, v] of rows) {

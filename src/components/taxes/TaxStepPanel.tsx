@@ -24,8 +24,9 @@ function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "goo
  * files sent, the preparer's review, the results and documents the preparer sent, the client's approval
  * at "Revisa y firma" (tax.sign, our own e-signature), the e-file and acceptance dates, and where to follow the refund.
  */
-export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName }: {
+export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName, signName, onAsk }: {
   i: number; ret: Ret; mode: TaxMode; docs: readonly Doc[]; onOpen: (d: Doc) => void; onSeeNow: () => void; preparerName: string;
+  signName: string | null; onAsk: () => void;
 }) {
   const t = useCopy(taxesCopy);
   const p = t.p.panel;
@@ -85,7 +86,7 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerNam
     const approvedOn = ret.approvedAt ? shortDate(ret.approvedAt, locale, thisYear) : "";
     const signedDoc = prep("f8879_signed")[0];
     // Still to sign: option A's form (total, previews, our own signature of the 8879).
-    body = st === TAX_STEP.sign && !ret.approvedAt ? <TaxSignForm ret={ret} docs={docs} preparerName={preparerName} onOpen={onOpen} /> : (
+    body = st === TAX_STEP.sign && !ret.approvedAt ? <TaxSignForm ret={ret} docs={docs} preparerName={preparerName} signName={signName} onOpen={onOpen} onAsk={onAsk} /> : (
       <>
         {results(st > TAX_STEP.sign ? "" : p.estimated)}
         {(finalFed || finalState || f8879) && (

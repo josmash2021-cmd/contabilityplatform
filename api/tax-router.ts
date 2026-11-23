@@ -18,7 +18,7 @@ import { decodeSignature, sha256, signedPdf } from "./lib/taxSign";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
-  canSend, currentTaxYear, isClientDocKind, missingToSend,
+  canSend, currentTaxYear, isClientDocKind, missingToSend, sameName,
   type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
 } from "@contracts/taxRules";
 
@@ -101,10 +101,13 @@ export function ensureTaxTables(db: Db): Promise<void> {
         INDEX taxSignatures_returnId_idx (returnId)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
-    // Added later: when the client said the finished return is correct ("Revisa y firma").
-    await db.execute(sql`ALTER TABLE taxReturns ADD COLUMN approvedAt TIMESTAMP NULL`).catch((e: unknown) => {
+    // Added later (additive, nullable): when the client approved the finished return ("Revisa y firma"), and the
+    // client's full name as on their ID (the preparer sets it; the client types it the same to sign).
+    const addColumn = (q: ReturnType<typeof sql>) => db.execute(q).catch((e: unknown) => {
       if (!/Duplicate column|ER_DUP_FIELDNAME|1060/i.test(e instanceof Error ? `${e.message} ${String((e as { cause?: unknown }).cause ?? "")}` : String(e))) throw e;
     });
+    await addColumn(sql`ALTER TABLE taxReturns ADD COLUMN approvedAt TIMESTAMP NULL`);
+    await addColumn(sql`ALTER TABLE taxReturns ADD COLUMN legalName VARCHAR(160) NULL`);
   })().catch((e) => {
     tablesReady = null;
     throw e;
@@ -183,6 +186,7 @@ const retMeta = {
   stateResult: taxReturns.stateResult, submittedAt: taxReturns.submittedAt, updatedAt: taxReturns.updatedAt,
   // Not in db/schema.ts (added by ensureTaxTables).
   approvedAt: sql<Date | string | null>`approvedAt`,
+  legalName: sql<string | null>`legalName`,
 };
 
 function modeOf(user: CtxUser): TaxMode {
@@ -239,7 +243,7 @@ export const taxRouter = createRouter({
     const access = await taxAccess(db, ctx.user);
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
-    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null };
+    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null, signName: null as string | null };
     const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
     if (!access.allowed) return { ...base, ...empty };
     const userId = Number(ctx.user.id);
@@ -260,7 +264,9 @@ export const taxRouter = createRouter({
       const rows = (Array.isArray(res[0]) ? res[0] : res) as Array<{ name: string }>;
       preparerName = rows[0]?.name?.trim().split(/\s+/)[0] || null;
     } catch { preparerName = null; }
-    return { ...base, preparerName, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
+    // The name to type to sign: the one the preparer confirmed from the ID, else the account's.
+    const signName = ret?.legalName?.trim() || ctx.user.name?.trim() || null;
+    return { ...base, preparerName, signName, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
   }),
 
   /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */
@@ -395,12 +401,21 @@ export const taxRouter = createRouter({
     }),
 
   /**
-   * "Firmar y autorizar el envío": our own e-signature of the 8879 at "Revisa y firma". Keeps the drawn
-   * signature (encrypted), the typed name, time, IP, device and the SHA-256 of the 8879 the client had; adds
-   * the signed 8879 (the preparer's file plus a signature page) to the return and tells the preparer.
+   * "Firmar y autorizar el envío": our own e-signature of the 8879 at "Revisa y firma". The typed name must be
+   * the full name on the return. Keeps the drawn signature (encrypted), the name, time, IP, device and the
+   * SHA-256 of the 8879 the client had; adds the signed 8879 (the preparer's file with the signature, name, date
+   * and time on its "Your signature" line, plus a signature page) to the return and tells the preparer.
    */
   sign: unlockedQuery
-    .input(z.object({ name: z.string().trim().min(3).max(120), signature: z.string().max(420_000), agree: z.literal(true) }))
+    .input(z.object({
+      name: z.string().trim().min(3).max(120), signature: z.string().max(420_000), agree: z.literal(true),
+      // The 8879 the client saw, and where its "Your signature" line is (found by the page in the PDF's text).
+      docId: z.number().int().positive().optional(),
+      spot: z.object({
+        page: z.number().int().min(1).max(50), labelX: z.number().finite(), x: z.number().finite(), y: z.number().finite(),
+        w: z.number().finite(), dateX: z.number().finite().nullable(),
+      }).optional(),
+    }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       await requireAccess(db, ctx.user, ctx.lang);
@@ -410,13 +425,17 @@ export const taxRouter = createRouter({
       const ret = await findReturn(db, userId, modeOf(ctx.user), year);
       if (!ret || ret.step !== SIGN_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNotReady") });
       if (ret.approvedAt) return { ok: true, already: true };
+      const legalName = ret.legalName?.trim() || ctx.user.name?.trim() || "";
+      if (legalName && !sameName(input.name, legalName)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNameMismatch") });
       const png = decodeSignature(input.signature);
       if (!png) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxBadSignature") });
       if (!hasTaxKey()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: msg(ctx.lang, "taxNoKey") });
+      // The 8879 the client had in front of them (else the newest one).
       const f8879 = (await db.select({ id: taxDocuments.id, data: taxDocuments.data, mimeType: taxDocuments.mimeType, fileName: taxDocuments.fileName })
         .from(taxDocuments)
-        .where(and(eq(taxDocuments.returnId, ret.id), eq(taxDocuments.source, "preparer"), eq(taxDocuments.kind, "f8879")))
-        .orderBy(desc(taxDocuments.createdAt)).limit(1))[0];
+        .where(and(eq(taxDocuments.returnId, ret.id), eq(taxDocuments.source, "preparer"), eq(taxDocuments.kind, "f8879"),
+          input.docId ? eq(taxDocuments.id, input.docId) : undefined))
+        .orderBy(desc(taxDocuments.createdAt), desc(taxDocuments.id)).limit(1))[0];
       const original = f8879 ? decryptTaxFile(Buffer.from(f8879.data)) : null;
       const signedAt = new Date();
       const ip = (ctx.req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ctx.req.headers.get("x-real-ip") || "").slice(0, 80) || null;
@@ -424,10 +443,11 @@ export const taxRouter = createRouter({
       const docSha256 = original ? sha256(original) : null;
       const lang = ctx.lang === "en" ? "en" : "es";
       // The signed 8879 is built first; only then is the approval claimed, once (a double tap signs once).
+      // On the document: the name as on the return (the typed one matches it, maybe without accents or capitals).
       const pdfBytes = await signedPdf(original && f8879 ? { bytes: original, mimeType: f8879.mimeType } : null, png, {
-        name: input.name, email: (ctx.user as { email?: string | null }).email ?? null, signedAt, ip, userAgent, docSha256,
+        name: legalName || input.name, email: (ctx.user as { email?: string | null }).email ?? null, signedAt, ip, userAgent, docSha256,
         docName: f8879?.fileName ?? null, taxYear: year, lang,
-      });
+      }, input.spot ?? null);
       const signed = Buffer.from(pdfBytes);
       const claim = await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id} AND step = ${SIGN_STEP} AND approvedAt IS NULL`);
       if (Number((claim as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) === 0) return { ok: true, already: true };
@@ -530,10 +550,14 @@ export const taxRouter = createRouter({
     }),
 
   adminSetResults: adminQuery
-    .input(z.object({ returnId: z.number().int().positive(), filingStatus: z.string().trim().max(40).nullable().optional(), fed: resultInput, state: resultInput }))
+    .input(z.object({
+      returnId: z.number().int().positive(), filingStatus: z.string().trim().max(40).nullable().optional(), fed: resultInput, state: resultInput,
+      legalName: z.string().trim().max(160).nullable().optional(),
+    }))
     .mutation(async ({ input }) => {
       const db = getDb();
       await ensureTaxTables(db);
+      if (input.legalName !== undefined) await db.execute(sql`UPDATE taxReturns SET legalName = ${input.legalName || null} WHERE id = ${input.returnId}`);
       const set: Partial<typeof taxReturns.$inferInsert> = {};
       if (input.filingStatus !== undefined) set.filingStatus = input.filingStatus || null;
       if (input.fed !== undefined) set.fedResult = input.fed;
