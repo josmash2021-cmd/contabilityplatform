@@ -10,6 +10,11 @@ import { deleteUserFirstUseData } from "./lib/userDataCleanup";
 import { deleteUserSupportData } from "./lib/support";
 import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
+import { buildOverview, isGiftPayment, userStatus, type AdminSubRow, type AdminPayRow, type StatusKind, type TaxRow } from "./lib/adminOverview";
+import { allTrialUntil, setTrialUntil, trialUntil } from "./lib/trialExtensions";
+import { getTrialInfo } from "./lib/trial";
+import { accountMode } from "./lib/plans";
+import { rowsOf, utcDate } from "./lib/support";
 
 // ── DB-based Maintenance Mode (persists across restarts) ──
 const MAINTENANCE_KEY = "maintenance_mode";
@@ -29,7 +34,106 @@ async function setSetting(db: any, key: string, value: string) {
   } catch { /* table may not exist yet */ }
 }
 
+type Db = ReturnType<typeof getDb>;
+// getDb() is untyped here: the rows are typed by hand.
+type UserRow = typeof users.$inferSelect;
+type PayRow = typeof subscriptionPayments.$inferSelect;
+
+/** Everyone, their subscriptions and payments, and the extra free days: what userStatus needs. */
+async function loadPeople(db: Db) {
+  const [us, subs, pays, until] = await Promise.all([
+    db.select().from(users) as Promise<UserRow[]>,
+    db.select().from(subscriptions) as Promise<AdminSubRow[]>,
+    db.select().from(subscriptionPayments) as Promise<PayRow[]>,
+    allTrialUntil(db).catch(() => new Map<number, Date>()),
+  ]);
+  return { us, subs, pays, until };
+}
+
+/** The filter of the users list ("En prueba", "Pagan"...). */
+const STATUS_FILTER: Record<string, StatusKind[]> = {
+  trial: ["trial"], paying: ["paying", "gift"], failed: ["failed"], canceled: ["canceled", "ended"], blocked: ["blocked"], free: ["free"],
+};
+
 export const adminRouter = createRouter({
+  // ── Resumen: the four numbers, the weeks, what's for today, recent activity and the system ──
+  overview: adminQuery.query(async () => {
+    const db = getDb();
+    const { us, subs, pays, until } = await loadPeople(db);
+    let taxes: TaxRow[] = [];
+    try {
+      taxes = rowsOf<{ id: number; userId: number; step: number; submittedAt: string | null; name: string | null; unread: number; pendingDocs: number }>(await db.execute(sql`
+        SELECT r.id, r.userId, r.step, r.submittedAt, u.name,
+          (SELECT COUNT(*) FROM taxMessages m WHERE m.returnId = r.id AND m.fromRole = 'client' AND m.readAt IS NULL) AS unread,
+          (SELECT COUNT(*) FROM taxDocuments d WHERE d.returnId = r.id AND d.source = 'client' AND d.status = 'pending') AS pendingDocs
+        FROM taxReturns r LEFT JOIN users u ON u.id = r.userId
+        ORDER BY r.submittedAt IS NULL, r.submittedAt ASC, r.id ASC`)).map((r) => ({
+        id: Number(r.id), userId: Number(r.userId), name: r.name, step: Number(r.step), submittedAt: utcDate(r.submittedAt), unread: Number(r.unread), pendingDocs: Number(r.pendingDocs),
+      }));
+    } catch { /* no tax tables yet */ }
+    let support = { chats: 0, oldestAt: null as Date | null };
+    try {
+      const row = rowsOf<{ chats: number; oldest: string | null }>(await db.execute(sql`
+        SELECT COUNT(DISTINCT c.id) AS chats, MIN(m.createdAt) AS oldest
+        FROM supportChats c JOIN supportMessages m ON m.chatId = c.id AND m.fromRole = 'visitor' AND m.id > c.adminReadId`))[0];
+      support = { chats: Number(row?.chats ?? 0), oldestAt: utcDate(row?.oldest) };
+    } catch { /* no support tables yet */ }
+    const system = {
+      maintenance: (await getSetting(db, MAINTENANCE_KEY)) === "true",
+      email: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
+      bank: !!(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET),
+      payments: !!process.env.STRIPE_SECRET_KEY,
+    };
+    return { ...buildOverview({ users: us, subs, pays, trialUntil: until, taxes, support }), system };
+  }),
+
+  // ── One person's card ("Ver"): their status, payments, banks, team, taxes ──
+  userDetail: adminQuery
+    .input(z.object({ userId: z.number().int().positive() }))
+    .query(async ({ input }) => {
+      const db = getDb();
+      const u = ((await db.select().from(users).where(eq(users.id, input.userId)).limit(1)) as UserRow[])[0];
+      if (!u) return null;
+      const subs = await db.select().from(subscriptions).where(eq(subscriptions.userId, u.id)) as AdminSubRow[];
+      const pays = await db.select().from(subscriptionPayments).where(eq(subscriptionPayments.userId, u.id)).orderBy(desc(subscriptionPayments.paidAt)) as PayRow[];
+      const until = await trialUntil(db, u.id).catch(() => null);
+      const status = userStatus(u, subs, pays as AdminPayRow[], until);
+      const banks = await db.select({ bankName: bankAccounts.bankName, isActive: bankAccounts.isActive }).from(bankAccounts).where(eq(bankAccounts.userId, u.id)) as { bankName: string; isActive: boolean | null }[];
+      let team = 0;
+      try { team = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE ownerId = ${u.id}`))[0]?.n ?? 0); } catch { /* no team table */ }
+      let tax: { id: number; year: number; step: number; submitted: boolean } | null = null;
+      try {
+        const r = rowsOf<{ id: number; taxYear: number; step: number; submittedAt: string | null }>(await db.execute(sql`SELECT id, taxYear, step, submittedAt FROM taxReturns WHERE userId = ${u.id} ORDER BY taxYear DESC, id DESC LIMIT 1`))[0];
+        if (r) tax = { id: Number(r.id), year: Number(r.taxYear), step: Number(r.step), submitted: !!r.submittedAt };
+      } catch { /* no tax tables */ }
+      const paidTotal = pays.filter((p) => p.status === "succeeded" && !isGiftPayment(p as AdminPayRow, subs)).reduce((n, p) => n + Number(p.amount), 0);
+      return {
+        user: { id: u.id, name: u.name, email: u.email, role: u.role, mode: accountMode(u.modePreference), createdAt: u.createdAt, lastSignInAt: u.lastSignInAt },
+        status,
+        trialUntil: until ? until.toISOString() : null,
+        payments: pays.slice(0, 24).map((p) => ({ id: p.id, amount: Number(p.amount), plan: p.plan, status: p.status, paidAt: p.paidAt, gift: isGiftPayment(p as AdminPayRow, subs), receiptUrl: p.receiptUrl })),
+        paidTotal: Math.round(paidTotal * 100) / 100,
+        banks: [...new Set(banks.filter((b) => b.isActive !== false).map((b) => b.bankName))],
+        team,
+        tax,
+      };
+    }),
+
+  // ── "Dar más días gratis": the trial runs N more days (from today, or from when it would end) ──
+  extendTrial: adminQuery
+    .input(z.object({ userId: z.number().int().positive(), days: z.number().int().min(1).max(60) }))
+    .mutation(async ({ input, ctx }) => {
+      const db = getDb();
+      const u = ((await db.select().from(users).where(eq(users.id, input.userId)).limit(1)) as UserRow[])[0];
+      if (!u) return { success: false as const, error: "notFound" as const };
+      if (u.role === "admin") return { success: false as const, error: "admin" as const };
+      const cur = getTrialInfo(u.createdAt, new Date(), await trialUntil(db, u.id).catch(() => null));
+      const from = Math.max(Date.now(), cur?.active ? new Date(cur.endsAt).getTime() : 0);
+      const until = new Date(from + input.days * 86_400_000);
+      await setTrialUntil(db, u.id, until, Number(ctx.user.id));
+      return { success: true as const, until: until.toISOString() };
+    }),
+
   // ── List all users with pagination, search, and mode filter ──
   listUsers: adminQuery
     .input(z.object({
@@ -37,6 +141,7 @@ export const adminRouter = createRouter({
       limit: z.number().min(1).max(100).default(50),
       search: z.string().optional(),
       mode: z.enum(["all", "business", "personal"]).default("all"),
+      status: z.enum(["all", "trial", "paying", "failed", "canceled", "blocked", "free"]).default("all"),
     }).optional())
     .query(async ({ input }) => {
       const db = getDb();
@@ -56,21 +161,19 @@ export const adminRouter = createRouter({
 
       const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
 
-      // Get total count for pagination
-      const countResult = await db.select({ count: sql<number>`COUNT(*)` })
-        .from(users)
-        .where(whereClause);
-      const total = countResult[0]?.count ?? 0;
-
-      // Get paginated users
-      const allUsers = await db.select().from(users)
-        .where(whereClause)
-        .orderBy(desc(users.createdAt))
-        .limit(limit)
-        .offset(offset);
+      // Everyone who matches, with their status (the same rule as the Resumen), then the filter, then the page.
+      const matching = await db.select().from(users).where(whereClause).orderBy(desc(users.createdAt)) as UserRow[];
+      const { subs: subRows, pays: payRows, until } = await loadPeople(db);
+      const withStatus = matching.map((u) => ({ u, status: userStatus(u, subRows, payRows, until.get(u.id) ?? null) }));
+      const wanted = input?.status && input.status !== "all" ? STATUS_FILTER[input.status] : null;
+      const filtered = wanted ? withStatus.filter((x) => wanted.includes(x.status.kind)) : withStatus;
+      const total = filtered.length;
+      const pageRows = filtered.slice(offset, offset + limit);
+      const allUsers = pageRows.map((x) => x.u);
+      const statusOf = new Map(pageRows.map((x) => [x.u.id, x.status]));
 
     // Get all subscriptions
-    const allSubs = await db.select().from(subscriptions);
+    const allSubs = subRows;
     const subMap = new Map<number, typeof allSubs[0]>();
     for (const s of allSubs) {
       subMap.set(s.userId, s);
@@ -94,7 +197,7 @@ export const adminRouter = createRouter({
         name: u.name,
         email: u.email,
         role: u.role,
-        isBlocked: u.role === "blocked",
+        isBlocked: (u.role as string) === "blocked",
         isAdmin: u.role === "admin",
         modePreference: u.modePreference,
         hasPersonalMode: u.hasPersonalMode,
@@ -107,6 +210,7 @@ export const adminRouter = createRouter({
           cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
         } : null,
         bankAccountCount: bankCountMap.get(u.id) || 0,
+        status: statusOf.get(u.id)!,
       };
     });
 
@@ -239,15 +343,17 @@ export const adminRouter = createRouter({
   stats: adminQuery.query(async () => {
     const db = getDb();
 
-    const allUsers = await db.select().from(users);
+    const { us: allUsers, subs: subRows, pays: payRows, until } = await loadPeople(db);
     const totalUsers = allUsers.length;
-    const blockedUsers = allUsers.filter((u) => u.role === "blocked").length;
+    const blockedUsers = allUsers.filter((u) => (u.role as string) === "blocked").length;
     const adminUsers = allUsers.filter((u) => u.role === "admin").length;
 
-    const allSubs = await db.select().from(subscriptions);
-    const activeSubs = allSubs.filter((s) => s.status === "active" || s.status === "trialing").length;
-    const monthlySubs = allSubs.filter((s) => s.plan === "monthly").length;
-    const annualSubs = allSubs.filter((s) => s.plan === "annual").length;
+    // Paying now (the same rule as the Resumen): no free trials, no canceled, no access given as a gift.
+    const statuses = allUsers.map((u) => userStatus(u, subRows, payRows, until.get(u.id) ?? null));
+    const payingNow = statuses.filter((st) => st.kind === "paying");
+    const activeSubs = payingNow.length;
+    const monthlySubs = payingNow.filter((st) => st.kind === "paying" && st.plan === "monthly").length;
+    const annualSubs = payingNow.filter((st) => st.kind === "paying" && st.plan === "annual").length;
 
     const bankAccountsCount = await db.select({ count: sql<number>`COUNT(*)` }).from(bankAccounts);
 

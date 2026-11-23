@@ -40,6 +40,7 @@ function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T
 
 // App pages are split out of the landing bundle.
 const AppLayout = lazyPage(() => import("@/components/layout/AppLayout").then((m) => ({ default: m.AppLayout })));
+const AdminLayout = lazyPage(() => import("@/components/layout/AdminLayout"));
 const Dashboard = lazyPage(() => import("@/pages/Dashboard"));
 const POS = lazyPage(() => import("@/pages/POS"));
 const Services = lazyPage(() => import("@/pages/Services"));
@@ -59,7 +60,9 @@ const PersonalCategoryDetail = lazyPage(() => import("@/pages/PersonalCategoryDe
 const Onboarding = lazyPage(() => import("@/pages/Onboarding"));
 const Setup = lazyPage(() => import("@/pages/Setup"));
 const Diagnostico = lazyPage(() => import("@/pages/Diagnostico"));
-const Admin = lazyPage(() => import("@/pages/Admin"));
+const AdminHome = lazyPage(() => import("@/pages/AdminHome"));
+const AdminUsers = lazyPage(() => import("@/pages/AdminUsers"));
+const AdminSystem = lazyPage(() => import("@/pages/AdminSystem"));
 const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
 const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
@@ -169,16 +172,6 @@ export default function App() {
           <Route path="/accountant" element={<Accountant />} />
           <Route path="/team" element={<Team />} />
           <Route path="/settings" element={<Settings />} />
-          <Route path="/admin" element={<Admin />} />
-          <Route path="/admin/usuarios" element={<AdminDetail section="users" />} />
-          <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
-          <Route path="/admin/bloqueados" element={<AdminDetail section="blocked" />} />
-          <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
-          <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
-          <Route path="/admin/impuestos" element={<AdminTaxes />} />
-          <Route path="/admin/impuestos/:id" element={<AdminTaxes />} />
-          <Route path="/admin/soporte" element={<AdminSupport />} />
-          <Route path="/admin/soporte/:id" element={<AdminSupport />} />
           {/* Personal routes - wrapped with bank gate (menu stays usable, only content area blocked) */}
           <Route path="/personal" element={<PersonalBankGate><PersonalDashboard /></PersonalBankGate>} />
           <Route path="/personal/bank" element={<PersonalBank />} />
@@ -190,6 +183,21 @@ export default function App() {
           {/* Impuestos: no bank needed (personal Básico is free and only has taxes) */}
           <Route path="/personal/taxes" element={<Taxes />} />
           <Route path="/personal/assistant" element={<Assistant />} />
+        </Route>
+
+        {/* Admin: its own menu, apart from the business app (src/components/layout/AdminLayout.tsx) */}
+        <Route element={<AuthGuard><ModeProvider><AdminLayout /></ModeProvider></AuthGuard>}>
+          <Route path="/admin" element={<AdminHome />} />
+          <Route path="/admin/usuarios" element={<AdminUsers />} />
+          <Route path="/admin/bloqueados" element={<AdminUsers blocked />} />
+          <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
+          <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
+          <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
+          <Route path="/admin/impuestos" element={<AdminTaxes />} />
+          <Route path="/admin/impuestos/:id" element={<AdminTaxes />} />
+          <Route path="/admin/soporte" element={<AdminSupport />} />
+          <Route path="/admin/soporte/:id" element={<AdminSupport />} />
+          <Route path="/admin/sistema" element={<AdminSystem />} />
         </Route>
 
         <Route path="*" element={<NotFound />} />

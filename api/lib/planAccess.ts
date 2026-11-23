@@ -5,6 +5,7 @@ import { planHas, topTier, type Feature, type PlanTier } from "@contracts/planFe
 import { getDb } from "../queries/connection";
 import { accountMode, defaultTier, tierFromAmountCents, type AccountMode, type Plan, type Tier } from "./plans";
 import { getTrialInfo } from "./trial";
+import { trialUntil } from "./trialExtensions";
 import { msg, type Lang } from "./i18n";
 
 type Db = ReturnType<typeof getDb>;
@@ -49,8 +50,8 @@ export async function getPlanContext(db: Db, user: PlanUser): Promise<PlanContex
   const mode = accountMode(user.modePreference);
   const admin = user.role === "admin";
   if (admin) return { mode, tier: topTier(mode), trial: false, admin };
-  if (getTrialInfo(user.createdAt)?.active) return { mode, tier: topTier(mode), trial: true, admin };
   const userId = Number(user.id);
+  if (getTrialInfo(user.createdAt, new Date(), await trialUntil(db, userId).catch(() => null))?.active) return { mode, tier: topTier(mode), trial: true, admin };
   if (await hasActiveSubscription(db, userId)) {
     return { mode, tier: (await lastPaidTier(db, userId, mode)) ?? defaultTier(), trial: false, admin };
   }

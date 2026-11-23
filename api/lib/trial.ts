@@ -17,16 +17,24 @@ export type TrialInfo = {
   daysLeft: number;
 };
 
-/** Returns the trial for an account, or null if the account doesn't qualify. */
+/**
+ * Returns the trial for an account, or null if the account doesn't qualify.
+ * `until`: the admin gave more free days (api/lib/trialExtensions.ts); the trial runs at least until then,
+ * also for an account older than the trial itself.
+ */
 export function getTrialInfo(
   createdAt: Date | string | null | undefined,
   now: Date = new Date(),
+  until?: Date | string | null,
 ): TrialInfo | null {
-  if (!createdAt) return null;
-  const created = new Date(createdAt);
-  if (Number.isNaN(created.getTime()) || created.getTime() < TRIAL_LAUNCH.getTime()) return null;
+  const extra = until ? new Date(until) : null;
+  const hasExtra = !!extra && !Number.isNaN(extra.getTime());
+  const created = createdAt ? new Date(createdAt) : null;
+  const qualifies = !!created && !Number.isNaN(created.getTime()) && created.getTime() >= TRIAL_LAUNCH.getTime();
+  if (!qualifies && !hasExtra) return null;
 
-  const endsAt = new Date(created.getTime() + TRIAL_DAYS * DAY_MS);
+  const base = qualifies ? created!.getTime() + TRIAL_DAYS * DAY_MS : 0;
+  const endsAt = new Date(Math.max(base, hasExtra ? extra!.getTime() : 0));
   const msLeft = endsAt.getTime() - now.getTime();
   return {
     active: msLeft > 0,

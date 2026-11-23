@@ -6,6 +6,7 @@ import { eq, desc } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
 import { getTrialInfo, type TrialInfo } from "./lib/trial";
+import { trialUntil } from "./lib/trialExtensions";
 import { accountMode, defaultTier, isPaidTier, planAmountCents, priceLookupKey, tierName, type AccountMode, type Plan, type Tier } from "./lib/plans";
 import { subscriptionPeriod } from "./lib/stripePeriod";
 import { contextHas, getPlanContext, lastPaidTier } from "./lib/planAccess";
@@ -171,7 +172,7 @@ export const subscriptionRouter = createRouter({
   // ── Get subscription status ──
   status: authedQuery.query(async ({ ctx }) => {
     // Free trial for new accounts (see lib/trial.ts). Admins don't need one.
-    const trial = ctx.user.role === "admin" ? null : getTrialInfo(ctx.user.createdAt);
+    const trial = ctx.user.role === "admin" ? null : getTrialInfo(ctx.user.createdAt, new Date(), await trialUntil(getDb(), Number(ctx.user.id)).catch(() => null));
     // The paid-status logic below is unchanged; withTrial() is applied to its result.
     const result = await (async () => {
     if (!ctx.user) return { active: false, plan: null, status: "no_user", currentPeriodEnd: null };
