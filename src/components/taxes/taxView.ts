@@ -91,8 +91,9 @@ export function todoSplit(mode: TaxMode, answers: Answers, docs: readonly Doc[],
 /** "19 nov" this year, "3 feb 2027" another year. */
 export function shortDate(iso: string | Date | null | undefined, locale: string, thisYear: number): string {
   if (!iso) return "";
-  // MySQL can send "2026-11-21 14:15:55": Safari only reads it with a "T".
-  const d = iso instanceof Date ? iso : new Date(/^\d{4}-\d{2}-\d{2} \d/.test(iso) ? iso.replace(" ", "T") : iso);
+  // MySQL can send "2026-11-21 14:15:55": that text is UTC (server and database run in UTC), and Safari
+  // only reads it with a "T", so it becomes "2026-11-21T14:15:55Z" and shows in the person's own time.
+  const d = iso instanceof Date ? iso : new Date(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(iso) ? iso.replace(" ", "T") + "Z" : iso);
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(locale, { day: "numeric", month: "short", ...(d.getFullYear() !== thisYear ? { year: "numeric" } : {}) }).replace(".", "");
 }

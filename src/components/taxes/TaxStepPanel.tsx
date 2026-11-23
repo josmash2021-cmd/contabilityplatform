@@ -101,7 +101,7 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerNam
         {st > TAX_STEP.sign ? (
           <p className="mt-2.5 text-sm text-slate-500">{p.approvedPast(approvedOn || date(TAX_STEP.sign))}</p>
         ) : (
-          <p className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-emerald-50 px-3 py-2.5 text-sm text-slate-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />{p.approved(approvedOn)}</p>
+          <p className="mt-2.5 flex items-start gap-2 rounded-[10px] bg-emerald-50 px-3 py-2.5 text-sm text-slate-800"><CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden="true" />{p.approved(approvedOn, preparerName)}</p>
         )}
       </>
     );
