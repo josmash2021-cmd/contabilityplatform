@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, CheckCircle2, Eye, Loader2, Send, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
@@ -11,6 +11,7 @@ import { TaxQuestions } from "./TaxDraft";
 import { clientFiles, type Doc } from "./taxView";
 
 type Legal = "terms" | "privacy" | "use";
+type Agree = "legal" | "use";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500";
 const btnPrimary = `inline-flex h-11 items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 text-sm font-semibold text-white shadow-[0_10px_22px_-12px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 active:scale-[0.98] disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none ${FOCUS}`;
 const btnGhost = `inline-flex h-11 items-center justify-center gap-2 rounded-xl px-4 text-sm font-semibold text-slate-600 transition hover:bg-slate-100 hover:text-slate-900 ${FOCUS}`;
@@ -18,7 +19,7 @@ const btnGhost = `inline-flex h-11 items-center justify-center gap-2 rounded-xl 
 /**
  * Option A ("un paso a la vez"), before sending: the three parts as tabs (Tu situación, Tus documentos,
  * Enviar), one at a time. Documents are big tiles with the example photo; optional ones go below as "Si los
- * tienes". Sending asks for three checkboxes (terms, privacy, use of the information), each readable first.
+ * tienes". Sending asks for two checkboxes (terms + privacy together, use of the information), each readable first.
  */
 export function TaxFlowA({ mode, year, answers, docs, unanswered, incomeMissing, busyAnswers, onAnswer, onPick, busyKind, onOpen, onRemove,
   preparerName, deadline, daysLeft, sending, onSend, onAsk }: {
@@ -41,11 +42,11 @@ export function TaxFlowA({ mode, year, answers, docs, unanswered, incomeMissing,
   const [part, setPart] = useState(() => (!situationDone ? 0 : !docsDone ? 1 : 2));
   const [example, setExample] = useState<string | null>(null);
   const [legal, setLegal] = useState<Legal | null>(null);
-  const [agree, setAgree] = useState<Record<Legal, boolean>>({ terms: false, privacy: false, use: false });
+  const [agree, setAgree] = useState<Record<Agree, boolean>>({ legal: false, use: false });
   const go = (n: number) => { setPart(n); document.querySelector("main")?.scrollTo({ top: 0, behavior: "smooth" }); };
   const partDone = [situationDone, docsDone, false];
   const uploaded = kinds.filter((k) => clientFiles(docs, k.id).length > 0);
-  const canSend = situationDone && docsDone && agree.terms && agree.privacy && agree.use;
+  const canSend = situationDone && docsDone && agree.legal && agree.use;
 
   const tile = (k: TaxDocKind) => {
     const files = clientFiles(docs, k.id);
@@ -92,10 +93,14 @@ export function TaxFlowA({ mode, year, answers, docs, unanswered, incomeMissing,
 
   const legalCopy = legal ? t.p.legal[legal] : null;
   const legalHref = legal === "privacy" ? "/privacy" : "/terminos";
-  const box = (key: Legal, [a, link, b]: [string, string, string]) => (
+  // A link inside a checkbox label opens its summary window without ticking the box.
+  const link = (key: Legal, text: string) => (
+    <button type="button" onClick={(e) => { e.preventDefault(); setLegal(key); }} className="font-semibold text-blue-600 underline underline-offset-2 hover:text-blue-700">{text}</button>
+  );
+  const box = (key: Agree, body: ReactNode) => (
     <label className={cn("flex cursor-pointer items-start gap-3 rounded-[14px] border px-3.5 py-3 text-[13.5px] leading-relaxed text-slate-700 transition-colors", agree[key] ? "border-blue-200 bg-blue-50/50" : "border-slate-200 bg-white hover:border-slate-300")}>
       <input type="checkbox" checked={agree[key]} onChange={(e) => setAgree((g) => ({ ...g, [key]: e.target.checked }))} className="mt-0.5 h-5 w-5 shrink-0 accent-blue-600" />
-      <span>{a}<button type="button" onClick={(e) => { e.preventDefault(); setLegal(key); }} className="font-semibold text-blue-600 underline underline-offset-2 hover:text-blue-700">{link}</button>{b}</span>
+      <span>{body}</span>
     </label>
   );
 
@@ -189,9 +194,8 @@ export function TaxFlowA({ mode, year, answers, docs, unanswered, incomeMissing,
               </p>
             )}
             <p className="mt-1 text-[14px] font-bold text-slate-900">{f.markAll}</p>
-            {box("terms", f.terms)}
-            {box("privacy", f.privacy)}
-            {box("use", f.use)}
+            {box("legal", <>{f.legal[0]}{link("terms", f.legal[1])}{f.legal[2]}{link("privacy", f.legal[3])}{f.legal[4]}</>)}
+            {box("use", <>{f.use[0]}{link("use", f.use[1])}{f.use[2]}</>)}
             <button type="button" onClick={onSend} disabled={!canSend || sending} className={cn(btnPrimary, "h-12 w-full text-[15px]")}>
               {sending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <Send className="h-4 w-4" aria-hidden="true" />}{f.send(preparerName)}
             </button>
