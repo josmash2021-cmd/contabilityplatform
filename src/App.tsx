@@ -60,6 +60,7 @@ const Diagnostico = lazyPage(() => import("@/pages/Diagnostico"));
 const AdminHome = lazyPage(() => import("@/pages/AdminHome"), "admin");
 const AdminUsers = lazyPage(() => import("@/pages/AdminUsers"), "admin");
 const AdminSystem = lazyPage(() => import("@/pages/AdminSystem"), "admin");
+const AdminPayments = lazyPage(() => import("@/pages/AdminPayments"), "admin");
 const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"), "admin");
 const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"), "admin");
 const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"), "admin");
@@ -192,7 +193,7 @@ export default function App() {
           <Route path="/admin/usuarios" element={<AdminUsers />} />
           <Route path="/admin/bloqueados" element={<AdminUsers blocked />} />
           <Route path="/admin/suscripciones" element={<AdminDetail section="subs" />} />
-          <Route path="/admin/ingresos" element={<AdminDetail section="revenue" />} />
+          <Route path="/admin/ingresos" element={<AdminPayments />} />
           <Route path="/admin/actividad/:userId" element={<AdminUserActivity />} />
           <Route path="/admin/impuestos" element={<AdminTaxes />} />
           <Route path="/admin/impuestos/:id" element={<AdminTaxes />} />

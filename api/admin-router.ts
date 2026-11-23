@@ -10,7 +10,7 @@ import { deleteUserFirstUseData } from "./lib/userDataCleanup";
 import { deleteUserSupportData } from "./lib/support";
 import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
-import { buildOverview, isGiftPayment, userStatus, type AdminSubRow, type AdminPayRow, type StatusKind, type TaxRow } from "./lib/adminOverview";
+import { buildOverview, buildPayments, editablePayment, isGiftPayment, paymentSource, userStatus, type AdminSubRow, type AdminPayRow, type StatusKind, type TaxRow } from "./lib/adminOverview";
 import { allTrialUntil, setTrialUntil, trialUntil } from "./lib/trialExtensions";
 import { getTrialInfo } from "./lib/trial";
 import { accountMode } from "./lib/plans";
@@ -48,6 +48,14 @@ async function loadPeople(db: Db) {
     allTrialUntil(db).catch(() => new Map<number, Date>()),
   ]);
   return { us, subs, pays, until };
+}
+
+/** A payment the admin wrote down (or an old test): the only kind that can be edited or deleted. */
+async function canEditPayment(db: Db, id: number): Promise<boolean> {
+  const p = ((await db.select().from(subscriptionPayments).where(eq(subscriptionPayments.id, id)).limit(1)) as PayRow[])[0];
+  if (!p) return false;
+  const subs = await db.select().from(subscriptions).where(eq(subscriptions.userId, p.userId)) as AdminSubRow[];
+  return editablePayment(paymentSource(p as AdminPayRow, subs));
 }
 
 /** The filter of the users list ("En prueba", "Pagan"...). */
@@ -145,6 +153,13 @@ export const adminRouter = createRouter({
       await db.update(users).set({ modePreference: input.mode, hasPersonalMode: true }).where(eq(users.id, u.id));
       return { success: true as const, mode: input.mode };
     }),
+
+  // ── Pagos: every payment, where it came from (Stripe, A mano, Regalo, Prueba), the four numbers ──
+  payments: adminQuery.query(async () => {
+    const db = getDb();
+    const { us, subs, pays, until } = await loadPeople(db);
+    return buildPayments({ users: us, subs, pays: pays as (AdminPayRow & { id: number })[], trialUntil: until });
+  }),
 
   // ── "Dar más días gratis": the trial runs N more days (from today, or from when it would end) ──
   extendTrial: adminQuery
@@ -571,6 +586,7 @@ export const adminRouter = createRouter({
     }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      if (!(await canEditPayment(db, input.id))) return { success: false, error: "Ese pago lo cobró Stripe o es un regalo: no se edita" };
       const set: any = {};
       if (input.amount != null) set.amount = input.amount.toFixed(2);
       if (input.paidAt) set.paidAt = new Date(input.paidAt);
@@ -584,6 +600,7 @@ export const adminRouter = createRouter({
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
       const db = getDb();
+      if (!(await canEditPayment(db, input.id))) return { success: false, error: "Ese pago lo cobró Stripe o es un regalo: no se borra" };
       await db.delete(subscriptionPayments).where(eq(subscriptionPayments.id, input.id));
       return { success: true, message: "Pago eliminado" };
     }),

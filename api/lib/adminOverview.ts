@@ -17,7 +17,10 @@ export type AdminSubRow = {
   userId: number; plan: Plan; status: string; currentPeriodStart?: Date | string | null; currentPeriodEnd: Date | string | null;
   cancelAtPeriodEnd: boolean | null; stripeSubscriptionId: string | null; createdAt: Date | string; updatedAt: Date | string;
 };
-export type AdminPayRow = { id?: number; userId: number; amount: string | number; plan: Plan; status: string; paidAt: Date | string };
+export type AdminPayRow = {
+  id?: number; userId: number; amount: string | number; plan: Plan; status: string; paidAt: Date | string;
+  stripeInvoiceId?: string | null; stripePaymentIntentId?: string | null; receiptUrl?: string | null;
+};
 
 export type UserStatus =
   | { kind: "admin" }
@@ -119,6 +122,65 @@ export type ActivityItem = {
 };
 
 export type Overview = ReturnType<typeof buildOverview>;
+
+/**
+ * Where a payment came from: Stripe charged it, the admin wrote it down ("A mano": Zelle, cash), it's the row the
+ * admin's "grant access" writes ("Regalo"), or it's from before REVENUE_SINCE ("Prueba", the owner's tests).
+ * Only Stripe and A mano, when paid, count as income.
+ */
+export type PaySource = "stripe" | "manual" | "gift" | "test";
+export function paymentSource(p: AdminPayRow, subs: readonly AdminSubRow[]): PaySource {
+  if (isGiftPayment(p, subs)) return "gift";
+  if (time(p.paidAt) < REVENUE_SINCE.getTime()) return "test";
+  if (p.stripeInvoiceId || p.stripePaymentIntentId) return "stripe";
+  return "manual";
+}
+/** Only what the admin wrote down (or an old test) can be edited or deleted: Stripe's and gifts stay as they are. */
+export const editablePayment = (src: PaySource) => src === "manual" || src === "test";
+
+/** The Pagos page: every payment with its source and month, the four numbers and the counts of each filter. */
+export function buildPayments(input: {
+  users: readonly AdminUserRow[]; subs: readonly AdminSubRow[]; pays: readonly (AdminPayRow & { id: number })[];
+  trialUntil: ReadonlyMap<number, Date>; now?: Date;
+}) {
+  const now = input.now ?? new Date();
+  const byId = new Map(input.users.map((u) => [u.id, u]));
+  const rows = input.pays
+    .map((p) => {
+      const u = byId.get(p.userId);
+      const source = paymentSource(p, input.subs);
+      const amount = money(p.amount);
+      const mode = accountMode(u?.modePreference);
+      return {
+        id: p.id, userId: p.userId, name: u?.name ?? null, email: u?.email ?? null, mode,
+        amount, plan: p.plan, status: p.status, paidAt: new Date(p.paidAt).toISOString(), month: zonedDay(p.paidAt).slice(0, 7),
+        source, counts: p.status === "succeeded" && (source === "stripe" || source === "manual"),
+        tier: tierFromAmountCents(Math.round(amount * 100), p.plan, mode),
+        receiptUrl: source === "stripe" ? p.receiptUrl ?? null : null,
+        editable: editablePayment(source),
+      };
+    })
+    .sort((a, b) => time(b.paidAt) - time(a.paidAt));
+  const o = buildOverview({ users: input.users, subs: input.subs, pays: input.pays, trialUntil: input.trialUntil, taxes: [], support: { chats: 0, oldestAt: null }, now });
+  const counted = rows.filter((r) => r.counts);
+  const first = counted.length ? counted[counted.length - 1].paidAt : null;
+  return {
+    rows,
+    money: {
+      thisMonth: o.money.collectedThisMonth, lastMonth: o.money.collectedLastMonth, mrr: o.money.mrr,
+      total: Math.round(counted.reduce((n, r) => n + r.amount, 0) * 100) / 100, since: first,
+      thisMonthCount: counted.filter((r) => r.month === zonedDay(now).slice(0, 7)).length,
+    },
+    counts: {
+      all: rows.length,
+      paid: counted.length,
+      failed: rows.filter((r) => r.status === "failed" && r.source !== "test").length,
+      gift: rows.filter((r) => r.source === "gift").length,
+      manual: rows.filter((r) => r.source === "manual").length,
+      test: rows.filter((r) => r.source === "test").length,
+    },
+  };
+}
 
 /** Everything on the Resumen page. */
 export function buildOverview(input: {

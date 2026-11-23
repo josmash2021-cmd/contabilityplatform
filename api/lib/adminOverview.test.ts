@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildOverview, monthlyValue, userStatus, weekStart, zonedDay, type AdminPayRow, type AdminSubRow, type AdminUserRow } from "./adminOverview";
+import { buildOverview, buildPayments, monthlyValue, userStatus, weekStart, zonedDay, type AdminPayRow, type AdminSubRow, type AdminUserRow } from "./adminOverview";
 import { getTrialInfo } from "./trial";
 
 const NOW = new Date("2026-11-23T16:00:00Z"); // Monday 10 a.m. in Alabama
@@ -124,5 +124,35 @@ describe("buildOverview: the numbers add up", () => {
   });
   it("recent activity is newest first", () => {
     expect(o.activity[0]).toMatchObject({ kind: "signup", userId: 9 });
+  });
+});
+
+describe("buildPayments: where each payment came from, and what counts", () => {
+  const users = [user(1, { name: "Ana" }), user(2, { name: "Beto" }), user(3, { name: "Carla" }), user(4, { name: "Dario" })];
+  const subs = [sub(1), sub(2, { stripeSubscriptionId: "ADMIN_GRANT_9", plan: "annual", currentPeriodStart: day("2026-11-21T10:00:00Z") }), sub(3, { status: "past_due" })];
+  const pays = [
+    { ...pay(1, 80, "2026-11-10T15:00:00Z"), id: 1, stripeInvoiceId: "in_1", receiptUrl: "https://pay.stripe.com/r/1" },
+    { ...pay(2, 800, "2026-11-21T10:00:20Z", { plan: "annual" }), id: 2 },
+    { ...pay(3, 80, "2026-11-12T15:00:00Z", { status: "failed" }), id: 3, stripeInvoiceId: "in_3" },
+    { ...pay(4, 150, "2026-10-15T15:00:00Z"), id: 4 },
+    { ...pay(4, 80, "2026-06-05T15:00:00Z"), id: 5 },
+  ];
+  const r = buildPayments({ users, subs, pays, trialUntil: new Map(), now: NOW });
+  const src = Object.fromEntries(r.rows.map((x) => [x.id, x.source]));
+  it("Stripe, A mano, Regalo, Prueba", () => {
+    expect(src).toEqual({ 1: "stripe", 2: "gift", 3: "stripe", 4: "manual", 5: "test" });
+  });
+  it("only paid Stripe and A mano count; only A mano and Prueba can be edited", () => {
+    expect(r.rows.filter((x) => x.counts).map((x) => x.id).sort()).toEqual([1, 4]);
+    expect(r.rows.filter((x) => x.editable).map((x) => x.id).sort()).toEqual([4, 5]);
+    expect(r.rows.find((x) => x.id === 1)?.receiptUrl).toBe("https://pay.stripe.com/r/1");
+  });
+  it("the numbers: this month $80, last month $150, total $230 (no gift, no test, no failed)", () => {
+    expect(r.money).toMatchObject({ thisMonth: 80, lastMonth: 150, total: 230, thisMonthCount: 1 });
+    expect(r.counts).toEqual({ all: 5, paid: 2, failed: 1, gift: 1, manual: 1, test: 1 });
+  });
+  it("newest first, with its Alabama month", () => {
+    expect(r.rows[0].id).toBe(2);
+    expect(r.rows.find((x) => x.id === 4)?.month).toBe("2026-10");
   });
 });
