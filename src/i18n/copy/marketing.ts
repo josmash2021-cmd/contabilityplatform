@@ -233,7 +233,7 @@ const es = {
       { q: "¿Qué bancos puedo conectar?", a: "Puedes conectar la mayoría de bancos y cooperativas de crédito de Estados Unidos a través de Plaid." },
       { q: "¿Cuál es la diferencia entre Negocio y Personal?", a: "Negocio incluye punto de venta, clientes, servicios, gastos y reportes de ingresos, gastos y utilidad. Personal está pensado para tus finanzas del día a día: movimientos, categorías, suscripciones y metas de ahorro." },
       { q: "¿Necesito saber de contabilidad?", a: "No. Personal & Business Solutions organiza tus números por ti y te los muestra en reportes fáciles de leer." },
-      { q: "¿Está disponible en inglés?", a: "Sí. Personal & Business Solutions se muestra en el idioma de tu dispositivo, español o inglés, y puedes cambiarlo cuando quieras." },
+      { q: "¿Está disponible en inglés?", a: "Sí. Personal & Business Solutions sale en el idioma de tu teléfono o computadora, español o inglés. Dentro de la app lo puedes cambiar en Perfil." },
       { q: "¿Puedo cancelar cuando quiera?", a: "Sí. Puedes cancelar tu suscripción en cualquier momento desde Ajustes, sin llamadas ni trámites." },
     ],
   },
@@ -271,6 +271,7 @@ const es = {
         links: [
           { label: "Preguntas frecuentes", href: "/preguntas", internal: true },
           { label: "Política de privacidad", href: "/privacy", internal: true },
+          { label: "Términos de uso", href: "/terminos-de-uso", internal: true },
           { label: "Términos del servicio de impuestos", href: "/terminos", internal: true },
         ],
       },
@@ -484,6 +485,16 @@ const es = {
       title: "Utilidad de noviembre",
       delta: "12.4% más que octubre",
       note: "128 movimientos clasificados automáticamente este mes",
+    },
+    miniPersonal: {
+      title: "Te quedan este mes",
+      delta: "Vas 12% abajo de tu presupuesto",
+      rows: [["Comida", 72], ["Casa", 90], ["Transporte", 45]] as [string, number][],
+      note: "Tus gastos se clasifican solos",
+    },
+    // The sign-up showcase (real screens of the app on a computer and a phone).
+    show: {
+      aria: "La app en el teléfono y en la computadora, con datos de ejemplo",
     },
   },
 };
@@ -721,7 +732,7 @@ const en: MarketingCopy = {
       { q: "Which banks can I connect?", a: "You can connect most banks and credit unions in the United States through Plaid." },
       { q: "What's the difference between Business and Personal?", a: "Business includes point of sale, clients, services, expenses and income, expense and profit reports. Personal is designed for your day-to-day finances: transactions, categories, subscriptions and savings goals." },
       { q: "Do I need to know accounting?", a: "No. Personal & Business Solutions organizes your numbers for you and shows them in easy-to-read reports." },
-      { q: "Is it available in Spanish?", a: "Yes. Personal & Business Solutions follows your device's language, English or Spanish, and you can switch it anytime." },
+      { q: "Is it available in Spanish?", a: "Yes. Personal & Business Solutions follows your phone or computer's language, English or Spanish. Inside the app you can change it in Profile." },
       { q: "Can I cancel anytime?", a: "Yes. You can cancel your subscription anytime from Settings, no calls or paperwork." },
     ],
   },
@@ -759,6 +770,7 @@ const en: MarketingCopy = {
         links: [
           { label: "FAQ", href: "/preguntas", internal: true },
           { label: "Privacy Policy", href: "/privacy", internal: true },
+          { label: "Terms of Use", href: "/terminos-de-uso", internal: true },
           { label: "Tax Service Terms", href: "/terminos", internal: true },
         ],
       },
@@ -972,6 +984,15 @@ const en: MarketingCopy = {
       title: "November profit",
       delta: "12.4% more than October",
       note: "128 transactions categorized automatically this month",
+    },
+    miniPersonal: {
+      title: "Left this month",
+      delta: "You're 12% under your budget",
+      rows: [["Food", 72], ["Home", 90], ["Transportation", 45]],
+      note: "Your expenses categorize themselves",
+    },
+    show: {
+      aria: "The app on a phone and a computer, with sample data",
     },
   },
 };

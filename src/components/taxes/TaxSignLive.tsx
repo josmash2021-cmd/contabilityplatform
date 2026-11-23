@@ -150,9 +150,9 @@ export function TaxSignLive({ doc, signature, name, labels, onSpot }: {
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500 motion-reduce:animate-none" aria-hidden="true" />{labels.live}
         </span>
       </div>
-      <div ref={boxRef} data-sign-live="" className="relative overflow-hidden bg-slate-100 transition-[height] duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+      <div ref={boxRef} data-sign-live="" className="relative overflow-hidden bg-slate-100 transition-[height] duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
         style={{ height: k ? view.h * k : 120 }}>
-        <div className="absolute left-0 top-0 origin-top-left transition-transform duration-500 ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
+        <div className="absolute left-0 top-0 origin-top-left transition-transform duration-500 [transition-timing-function:cubic-bezier(0.22,1,0.36,1)] motion-reduce:transition-none"
           style={{ width: sheet?.vpW ?? 612, height: sheet?.vpH ?? 792, transform: `translate(${-view.x * k}px, ${-view.y * k}px) scale(${k || 1})`, opacity: sheet && k ? 1 : 0 }}>
           <canvas ref={canvasRef} className="block h-full w-full bg-white" />
           {sheet && sp && (

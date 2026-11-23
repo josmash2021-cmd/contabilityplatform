@@ -167,185 +167,205 @@ const MERCHANT_MARKS: Record<string, { img?: string; text?: string; bg?: string;
   "H-E-B": { text: "H-E-B", bg: "#DC291E", fg: "#FFFFFF" },
 };
 
+/** The personal Home screen of the app (what's inside the phone): the home page's phone and the sign-up showcase. */
+export function PersonalHomeScreen() {
+  const { personalApp: a } = usePreviewCopy();
+  return (
+    <>
+        <div className="space-y-3 px-4 pt-1">
+          <div className="flex items-center gap-2.5">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-[12px] font-bold text-blue-600">AR</span>
+            <div className="min-w-0 flex-1 leading-tight">
+              <p className="text-[16px] font-bold tracking-tight text-slate-900">{a.hello}</p>
+              <p className="text-[10.5px] text-slate-500">{a.date}</p>
+            </div>
+            <span className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-800"><Search className="h-4 w-4" /></span>
+            <span className="relative grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-800">
+              <Bell className="h-4 w-4" />
+              <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">2</span>
+            </span>
+          </div>
+
+          <div className={`${box} p-3.5`}>
+            <p className="text-[10.5px] text-slate-500">{a.leftTitle}</p>
+            <p className="text-[28px] font-extrabold leading-tight tracking-tight tabular-nums text-slate-900">$245.00</p>
+            <p className="text-[10.5px] leading-snug text-slate-500">{a.leftNote}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[89.7%] rounded-full bg-emerald-600" /></div>
+            <p className="mt-1.5 text-[10.5px] leading-snug text-slate-500">{a.spent}</p>
+          </div>
+
+          <div className="-mx-4 flex gap-2 overflow-hidden px-4">
+            {a.cards.map(([k, v, s, tone]) => (
+              <div key={k} className={`${box} w-[64%] shrink-0 px-3 py-2.5`}>
+                <p className="text-[10.5px] text-slate-500">{k}</p>
+                <p className="text-[17px] font-extrabold tracking-tight tabular-nums text-slate-900">{v}</p>
+                <p className={`text-[10px] ${tone === "bad" ? "text-red-600" : "text-slate-500"}`}>{s}</p>
+              </div>
+            ))}
+          </div>
+
+          <div className={`${box} p-3`}>
+            <p className="text-[13px] font-bold text-slate-900">{a.today}</p>
+            <div className="mt-2 space-y-1.5">
+              {a.todo.map((t, i) => (
+                <div key={t.t} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
+                  {i === 0 ? <CreditCard className="h-4 w-4 text-amber-600" /> : <Inbox className="h-4 w-4 text-blue-600" />}
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold leading-snug text-slate-900">{t.t}</p>
+                    <p className="text-[9.5px] leading-snug text-slate-500">{t.m}</p>
+                  </div>
+                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{t.b}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className={`${box} p-3`}>
+            <div className="flex items-center justify-between">
+              <p className="text-[13px] font-bold text-slate-900">{a.recentTitle}</p>
+              <span className="rounded-lg border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{a.seeAll}</span>
+            </div>
+            <div className="mt-1.5 divide-y divide-slate-100">
+              {a.recent.map((r) => {
+                const RIcon = { car: Car, coffee: Coffee, cart: ShoppingCart, work: Briefcase }[r.kind as "car" | "coffee" | "cart" | "work"];
+                const mark = MERCHANT_MARKS[r.who];
+                return (
+                  <div key={r.who} className="flex items-center gap-2.5 py-2">
+                    {mark?.img ? (
+                      <img src={mark.img} alt="" width={32} height={32} loading="lazy" className="h-8 w-8 shrink-0 rounded-full object-cover" />
+                    ) : mark?.text ? (
+                      <span className="grid h-8 w-8 shrink-0 place-items-center whitespace-nowrap rounded-full text-[8.5px] font-extrabold tracking-tight" style={{ background: mark.bg, color: mark.fg }}>{mark.text}</span>
+                    ) : (
+                      <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${r.income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><RIcon className="h-4 w-4" /></span>
+                    )}
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-[11.5px] font-semibold text-slate-900">{r.who}</p>
+                      <p className="text-[9.5px] text-slate-500">{r.cat}</p>
+                    </div>
+                    <span className={`text-[11.5px] font-semibold tabular-nums ${r.income ? "text-emerald-600" : "text-slate-900"}`}>{r.amt}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={`${box} p-3`}>
+            <p className="flex items-center gap-1.5 text-[12px] font-bold text-slate-900"><Target className="h-3.5 w-3.5 text-blue-600" />{a.goalTitle}</p>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[68%] rounded-full bg-blue-600" /></div>
+            <p className="mt-1.5 text-[10px] text-slate-500">{a.goalText}</p>
+          </div>
+        </div>
+    </>
+  );
+}
+
 /** "For you": the personal Home screen of the app on a phone. */
 export function PhonePreview() {
   const { phone: ph, personalApp: a } = usePreviewCopy();
   return (
     <PhoneFrame label={ph.aria} tabs={[{ Icon: Home, label: a.tabs[0] }, { Icon: List, label: a.tabs[1] }, { Icon: Target, label: a.tabs[2] }, { Icon: MoreHorizontal, label: a.tabs[3] }]}>
-      <div className="space-y-3 px-4 pt-1">
-        <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-[12px] font-bold text-blue-600">AR</span>
-          <div className="min-w-0 flex-1 leading-tight">
-            <p className="text-[16px] font-bold tracking-tight text-slate-900">{a.hello}</p>
-            <p className="text-[10.5px] text-slate-500">{a.date}</p>
-          </div>
-          <span className="grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-800"><Search className="h-4 w-4" /></span>
-          <span className="relative grid h-9 w-9 place-items-center rounded-xl border border-slate-200 text-slate-800">
-            <Bell className="h-4 w-4" />
-            <span className="absolute -right-1.5 -top-1.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">2</span>
+      <PersonalHomeScreen />
+    </PhoneFrame>
+  );
+}
+
+/** The business Home screen of the app (what's inside the phone): the home page's phone and the sign-up showcase. */
+export function BusinessHomeScreen() {
+  const { businessApp: b } = usePreviewCopy();
+  const actionIcons = [ShoppingCart, FileText, Wallet, Camera];
+  return (
+    <>
+        <div className="flex items-center gap-2 border-b border-slate-200 px-3 pb-2.5">
+          <span className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[10.5px] text-slate-400">
+            <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" /><span className="truncate">{b.search}</span>
           </span>
+          <span className="relative grid h-8 w-8 place-items-center text-slate-800">
+            <Bell className="h-4 w-4" />
+            <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">2</span>
+          </span>
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-[10.5px] font-bold text-blue-600">ML</span>
         </div>
-
-        <div className={`${box} p-3.5`}>
-          <p className="text-[10.5px] text-slate-500">{a.leftTitle}</p>
-          <p className="text-[28px] font-extrabold leading-tight tracking-tight tabular-nums text-slate-900">$245.00</p>
-          <p className="text-[10.5px] leading-snug text-slate-500">{a.leftNote}</p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[89.7%] rounded-full bg-emerald-600" /></div>
-          <p className="mt-1.5 text-[10.5px] leading-snug text-slate-500">{a.spent}</p>
-        </div>
-
-        <div className="-mx-4 flex gap-2 overflow-hidden px-4">
-          {a.cards.map(([k, v, s, tone]) => (
-            <div key={k} className={`${box} w-[64%] shrink-0 px-3 py-2.5`}>
-              <p className="text-[10.5px] text-slate-500">{k}</p>
-              <p className="text-[17px] font-extrabold tracking-tight tabular-nums text-slate-900">{v}</p>
-              <p className={`text-[10px] ${tone === "bad" ? "text-red-600" : "text-slate-500"}`}>{s}</p>
-            </div>
-          ))}
-        </div>
-
-        <div className={`${box} p-3`}>
-          <p className="text-[13px] font-bold text-slate-900">{a.today}</p>
-          <div className="mt-2 space-y-1.5">
-            {a.todo.map((t, i) => (
-              <div key={t.t} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
-                {i === 0 ? <CreditCard className="h-4 w-4 text-amber-600" /> : <Inbox className="h-4 w-4 text-blue-600" />}
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold leading-snug text-slate-900">{t.t}</p>
-                  <p className="text-[9.5px] leading-snug text-slate-500">{t.m}</p>
-                </div>
-                <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{t.b}</span>
+        <div className="space-y-2.5 px-3 pt-3">
+          <div>
+            <p className="text-[17px] font-bold tracking-tight text-slate-900">{b.hello}</p>
+            <p className="text-[11px] text-slate-500">{b.date}</p>
+          </div>
+          <div className="flex gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-[11px] leading-snug text-slate-800">
+            <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
+            <span>{b.banner[0]}<b>{b.banner[1]}</b>{b.banner[2]}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-2">
+            {b.cards.map(([k, v, s, tone]) => (
+              <div key={k} className={`${box} px-3 py-2.5`}>
+                <p className="text-[10.5px] leading-snug text-slate-500">{k}</p>
+                <p className="text-[17px] font-extrabold tracking-tight tabular-nums text-slate-900">{v}</p>
+                <p className={`text-[10px] leading-snug ${tone === "bad" ? "text-red-600" : tone === "good" ? "text-emerald-600" : "text-slate-500"}`}>{s}</p>
               </div>
             ))}
           </div>
-        </div>
-
-        <div className={`${box} p-3`}>
-          <div className="flex items-center justify-between">
-            <p className="text-[13px] font-bold text-slate-900">{a.recentTitle}</p>
-            <span className="rounded-lg border border-slate-200 px-2 py-0.5 text-[10px] font-semibold text-slate-700">{a.seeAll}</span>
-          </div>
-          <div className="mt-1.5 divide-y divide-slate-100">
-            {a.recent.map((r) => {
-              const RIcon = { car: Car, coffee: Coffee, cart: ShoppingCart, work: Briefcase }[r.kind as "car" | "coffee" | "cart" | "work"];
-              const mark = MERCHANT_MARKS[r.who];
+          <div className="grid grid-cols-4 gap-1.5">
+            {b.actions.map((t, i) => {
+              const Icon = actionIcons[i];
               return (
-                <div key={r.who} className="flex items-center gap-2.5 py-2">
-                  {mark?.img ? (
-                    <img src={mark.img} alt="" width={32} height={32} loading="lazy" className="h-8 w-8 shrink-0 rounded-full object-cover" />
-                  ) : mark?.text ? (
-                    <span className="grid h-8 w-8 shrink-0 place-items-center whitespace-nowrap rounded-full text-[8.5px] font-extrabold tracking-tight" style={{ background: mark.bg, color: mark.fg }}>{mark.text}</span>
-                  ) : (
-                    <span className={`grid h-8 w-8 shrink-0 place-items-center rounded-full ${r.income ? "bg-emerald-100 text-emerald-700" : "bg-slate-100 text-slate-700"}`}><RIcon className="h-4 w-4" /></span>
-                  )}
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[11.5px] font-semibold text-slate-900">{r.who}</p>
-                    <p className="text-[9.5px] text-slate-500">{r.cat}</p>
-                  </div>
-                  <span className={`text-[11.5px] font-semibold tabular-nums ${r.income ? "text-emerald-600" : "text-slate-900"}`}>{r.amt}</span>
+                <div key={t} className={`${box} grid justify-items-center gap-1 px-1 py-2 text-center`}>
+                  <Icon className="h-4 w-4 text-blue-600" />
+                  <span className="text-[9.5px] font-semibold leading-tight text-slate-800">{t}</span>
                 </div>
               );
             })}
           </div>
+          <div className={`${box} p-3`}>
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[13px] font-bold text-slate-900">{b.today}</p>
+              <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500">{b.urgent}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
+              <Inbox className="mt-0.5 h-4 w-4 text-blue-600" />
+              <div>
+                <p className="text-[11px] font-semibold text-slate-900">{b.todo.t}</p>
+                <p className="text-[9.5px] text-slate-500">{b.todo.m}</p>
+                <span className="mt-1.5 inline-block rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{b.todo.b}</span>
+              </div>
+            </div>
+            {b.todoMore.map((t) => {
+              const TIcon = { bell: Bell, cal: CalendarDays, list: ListChecks }[t.kind as "bell" | "cal" | "list"];
+              return (
+                <div key={t.t} className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
+                  <TIcon className={`h-4 w-4 ${t.kind === "bell" ? "text-red-500" : t.kind === "cal" ? "text-amber-600" : "text-blue-600"}`} />
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-semibold text-slate-900">{t.t}</p>
+                    <p className="truncate text-[9.5px] text-slate-500">{t.m}</p>
+                  </div>
+                  <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{t.b}</span>
+                </div>
+              );
+            })}
+          </div>
+          <div className={`${box} p-3`}>
+            <p className="text-[13px] font-bold text-slate-900">{b.forecastTitle}</p>
+            <p className="text-[22px] font-extrabold tracking-tight tabular-nums text-slate-900">{b.forecastTotal}</p>
+            <p className="text-[10px] text-slate-500">{b.forecastIn} <b className="text-slate-800">$2,400</b> · {b.forecastOut} <b className="text-slate-800">$5,860</b></p>
+            <div className="mt-1.5 divide-y divide-slate-100">
+              {b.forecast.map(([dte, who, amt, inc]) => (
+                <div key={who} className="flex items-center gap-2 py-1.5 text-[10.5px]">
+                  <span className="w-11 shrink-0 text-slate-400">{dte}</span>
+                  <span className="min-w-0 flex-1 truncate text-slate-700">{who}</span>
+                  <span className={`font-semibold tabular-nums ${inc ? "text-emerald-600" : "text-slate-900"}`}>{amt}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
-
-        <div className={`${box} p-3`}>
-          <p className="flex items-center gap-1.5 text-[12px] font-bold text-slate-900"><Target className="h-3.5 w-3.5 text-blue-600" />{a.goalTitle}</p>
-          <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-[68%] rounded-full bg-blue-600" /></div>
-          <p className="mt-1.5 text-[10px] text-slate-500">{a.goalText}</p>
-        </div>
-      </div>
-    </PhoneFrame>
+    </>
   );
 }
 
 /** "For business": the business Home screen of the app on a phone. */
 export function BusinessPhonePreview() {
   const { businessApp: b } = usePreviewCopy();
-  const actionIcons = [ShoppingCart, FileText, Wallet, Camera];
   return (
     <PhoneFrame label={b.aria} tabs={[{ Icon: Home, label: b.tabs[0] }, { Icon: Inbox, label: b.tabs[1], badge: 9 }, { Icon: FileText, label: b.tabs[2] }, { Icon: MoreHorizontal, label: b.tabs[3] }]}>
-      <div className="flex items-center gap-2 border-b border-slate-200 px-3 pb-2.5">
-        <span className="flex h-9 min-w-0 flex-1 items-center gap-1.5 rounded-xl border border-slate-200 bg-slate-50 px-2.5 text-[10.5px] text-slate-400">
-          <Search className="h-3.5 w-3.5 shrink-0 text-slate-500" /><span className="truncate">{b.search}</span>
-        </span>
-        <span className="relative grid h-8 w-8 place-items-center text-slate-800">
-          <Bell className="h-4 w-4" />
-          <span className="absolute -right-0.5 -top-0.5 grid h-4 min-w-4 place-items-center rounded-full bg-red-600 px-1 text-[9px] font-bold text-white">2</span>
-        </span>
-        <span className="grid h-8 w-8 place-items-center rounded-full bg-blue-50 text-[10.5px] font-bold text-blue-600">ML</span>
-      </div>
-      <div className="space-y-2.5 px-3 pt-3">
-        <div>
-          <p className="text-[17px] font-bold tracking-tight text-slate-900">{b.hello}</p>
-          <p className="text-[11px] text-slate-500">{b.date}</p>
-        </div>
-        <div className="flex gap-2 rounded-xl bg-emerald-50 px-3 py-2.5 text-[11px] leading-snug text-slate-800">
-          <TrendingUp className="mt-0.5 h-3.5 w-3.5 shrink-0 text-emerald-600" />
-          <span>{b.banner[0]}<b>{b.banner[1]}</b>{b.banner[2]}</span>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {b.cards.map(([k, v, s, tone]) => (
-            <div key={k} className={`${box} px-3 py-2.5`}>
-              <p className="text-[10.5px] leading-snug text-slate-500">{k}</p>
-              <p className="text-[17px] font-extrabold tracking-tight tabular-nums text-slate-900">{v}</p>
-              <p className={`text-[10px] leading-snug ${tone === "bad" ? "text-red-600" : tone === "good" ? "text-emerald-600" : "text-slate-500"}`}>{s}</p>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-4 gap-1.5">
-          {b.actions.map((t, i) => {
-            const Icon = actionIcons[i];
-            return (
-              <div key={t} className={`${box} grid justify-items-center gap-1 px-1 py-2 text-center`}>
-                <Icon className="h-4 w-4 text-blue-600" />
-                <span className="text-[9.5px] font-semibold leading-tight text-slate-800">{t}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className={`${box} p-3`}>
-          <div className="flex items-center justify-between gap-2">
-            <p className="text-[13px] font-bold text-slate-900">{b.today}</p>
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[9px] font-semibold text-slate-500">{b.urgent}</span>
-          </div>
-          <div className="mt-2 grid grid-cols-[auto_minmax(0,1fr)] items-start gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
-            <Inbox className="mt-0.5 h-4 w-4 text-blue-600" />
-            <div>
-              <p className="text-[11px] font-semibold text-slate-900">{b.todo.t}</p>
-              <p className="text-[9.5px] text-slate-500">{b.todo.m}</p>
-              <span className="mt-1.5 inline-block rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{b.todo.b}</span>
-            </div>
-          </div>
-          {b.todoMore.map((t) => {
-            const TIcon = { bell: Bell, cal: CalendarDays, list: ListChecks }[t.kind as "bell" | "cal" | "list"];
-            return (
-              <div key={t.t} className="mt-1.5 grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 rounded-xl bg-slate-100/80 px-2.5 py-2">
-                <TIcon className={`h-4 w-4 ${t.kind === "bell" ? "text-red-500" : t.kind === "cal" ? "text-amber-600" : "text-blue-600"}`} />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-semibold text-slate-900">{t.t}</p>
-                  <p className="truncate text-[9.5px] text-slate-500">{t.m}</p>
-                </div>
-                <span className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-800">{t.b}</span>
-              </div>
-            );
-          })}
-        </div>
-        <div className={`${box} p-3`}>
-          <p className="text-[13px] font-bold text-slate-900">{b.forecastTitle}</p>
-          <p className="text-[22px] font-extrabold tracking-tight tabular-nums text-slate-900">{b.forecastTotal}</p>
-          <p className="text-[10px] text-slate-500">{b.forecastIn} <b className="text-slate-800">$2,400</b> · {b.forecastOut} <b className="text-slate-800">$5,860</b></p>
-          <div className="mt-1.5 divide-y divide-slate-100">
-            {b.forecast.map(([dte, who, amt, inc]) => (
-              <div key={who} className="flex items-center gap-2 py-1.5 text-[10.5px]">
-                <span className="w-11 shrink-0 text-slate-400">{dte}</span>
-                <span className="min-w-0 flex-1 truncate text-slate-700">{who}</span>
-                <span className={`font-semibold tabular-nums ${inc ? "text-emerald-600" : "text-slate-900"}`}>{amt}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      <BusinessHomeScreen />
     </PhoneFrame>
   );
 }
@@ -579,9 +599,33 @@ export function NumbersStepPreview() {
   );
 }
 
-// ── Auth screens: compact KPI card ──
-export function MiniInsightCard() {
-  const { mini } = usePreviewCopy();
+// ── Auth screens: compact KPI card (the business profit, or for a personal account what's left of the budget) ──
+export function MiniInsightCard({ mode = "business" }: { mode?: "business" | "personal" }) {
+  const { mini, miniPersonal: mp } = usePreviewCopy();
+  if (mode === "personal") {
+    return (
+      <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-slate-400">{mp.title}</p>
+          <SampleBadge dark />
+        </div>
+        <p className="mt-1 text-2xl font-semibold tabular-nums text-white">$640.00</p>
+        <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-400"><ArrowUpRight className="h-3.5 w-3.5 rotate-90" /> {mp.delta}</p>
+        <div className="mt-4 grid gap-2.5">
+          {mp.rows.map(([label, pct], i) => (
+            <div key={label} className="grid gap-1">
+              <div className="flex justify-between text-[11px] text-slate-400"><span>{label}</span><span className="tabular-nums">{pct}%</span></div>
+              <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+                <span className={`block h-full origin-left animate-bar-fill rounded-full ${pct >= 85 ? "bg-amber-400" : "bg-gradient-to-r from-blue-600 to-blue-400"}`}
+                  style={{ width: `${pct}%`, animationDelay: `${150 + i * 120}ms` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 flex items-center gap-1.5 text-[11px] text-slate-400"><Sparkles className="h-3.5 w-3.5 text-blue-400" /> {mp.note}</p>
+      </div>
+    );
+  }
   return (
     <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur">
       <div className="flex items-center justify-between">
@@ -592,7 +636,7 @@ export function MiniInsightCard() {
       <p className="mt-1 inline-flex items-center gap-1 text-xs font-medium text-emerald-400"><ArrowUpRight className="h-3.5 w-3.5" /> {mini.delta}</p>
       <div className="mt-4 flex h-14 items-end gap-1.5">
         {[38, 46, 41, 55, 63, 74, 70, 82, 88, 96].map((h, i) => (
-          <span key={i} className="flex-1 rounded-t bg-gradient-to-t from-blue-600/40 to-blue-400" style={{ height: `${h}%` }} />
+          <span key={i} className="flex-1 origin-bottom animate-bar-grow rounded-t bg-gradient-to-t from-blue-600/40 to-blue-400" style={{ height: `${h}%`, animationDelay: `${120 + i * 55}ms` }} />
         ))}
       </div>
       <p className="mt-4 flex items-center gap-1.5 text-[11px] text-slate-400"><Sparkles className="h-3.5 w-3.5 text-blue-400" /> {mini.note}</p>

@@ -3,7 +3,6 @@ import { Lock, ShieldCheck } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
 export function MarketingFooter() {
   const { footer } = useCopy(marketingCopy);
@@ -27,7 +26,6 @@ export function MarketingFooter() {
               <span className="inline-flex items-center gap-1.5"><ShieldCheck className="h-3.5 w-3.5 text-emerald-400" /> {footer.plaid}</span>
               <span className="inline-flex items-center gap-1.5"><Lock className="h-3.5 w-3.5 text-emerald-400" /> {footer.stripe}</span>
             </div>
-            <LanguageSwitcher tone="dark" className="mt-6" />
           </div>
 
           <div className="grid grid-cols-2 gap-8 sm:grid-cols-3">

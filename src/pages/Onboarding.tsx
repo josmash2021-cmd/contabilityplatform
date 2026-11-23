@@ -7,9 +7,8 @@ import { toast } from "sonner";
 import { useCopy } from "@/i18n/useI18n";
 import { authCopy } from "@/i18n/copy/auth";
 import { settingsCopy } from "@/i18n/copy/settings";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 
-type Pending = { email: string; password: string; name: string; mode: "business" | "personal" };
+type Pending = { email: string; password: string; name: string; mode: "business" | "personal"; acceptTerms?: boolean; marketing?: boolean };
 
 // The bits of Google Places this page uses (the script is loaded at runtime).
 type PlaceComponent = { types: string[]; long_name: string; short_name: string };
@@ -157,7 +156,6 @@ export default function Onboarding() {
   return (
     <div className="font-brand relative flex min-h-screen items-start justify-center overflow-hidden bg-[#060B18] px-4 pb-10 pt-16 sm:items-center sm:py-12">
       <div className="pointer-events-none absolute -top-40 left-1/2 h-[420px] w-[720px] -translate-x-1/2 rounded-full bg-blue-600/20 blur-[120px]" />
-      <LanguageSwitcher tone="dark" className="absolute right-4 top-4 z-10" />
       <div className="relative w-full max-w-lg animate-in fade-in slide-in-from-bottom-3 rounded-2xl bg-white p-5 shadow-[0_30px_80px_-20px_rgba(2,6,23,0.6)] duration-500 sm:p-7">
         <button
           type="button"

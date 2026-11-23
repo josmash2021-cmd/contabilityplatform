@@ -12,3 +12,6 @@ export const Paths = {
   login: "/login",
   oauthCallback: "/api/oauth/callback",
 } as const;
+
+/** The version of the Terms of Use and Privacy Policy a new account accepts (saved in userConsents). Change it with the text. */
+export const TERMS_VERSION = "2026-11-23";

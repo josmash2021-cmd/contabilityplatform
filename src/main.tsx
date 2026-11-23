@@ -20,6 +20,13 @@ if (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as N
   if (vp && !content.includes("viewport-fit")) vp.setAttribute("content", `${content}, viewport-fit=cover`)
 }
 
+// Page changes that cross-fade (Link viewTransition): when the browser skips one (another tap while it runs,
+// the tab hidden), its promise is rejected with "Transition was skipped". Nothing is wrong: keep it out of the console.
+window.addEventListener("unhandledrejection", (e) => {
+  const r = e.reason as { name?: string; message?: string } | undefined
+  if (r?.name === "AbortError" && /transition was skipped/i.test(r.message ?? "")) e.preventDefault()
+})
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>

@@ -1,9 +1,11 @@
 import { useState } from "react";
+import { fx } from "@/lib/fx";
 import { Link, Navigate, useNavigate, useSearchParams } from "react-router";
 import { CHOSEN_PLAN_KEY, LANDING_PLAN_GROUPS } from "@/components/marketing/content";
-import { Check, Gift } from "lucide-react";
+import { Check } from "lucide-react";
 import { toast } from "sonner";
 import { useFieldIds } from "@/components/auth/useFieldIds";
+import { AgreeBoxes } from "@/components/auth/AgreeBoxes";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
 import {
@@ -16,13 +18,25 @@ import { authCopy } from "@/i18n/copy/auth";
 export default function Register() {
   const { register: t } = useCopy(authCopy);
   const navigate = useNavigate();
-  const [params] = useSearchParams();
+  const [params, setParams] = useSearchParams();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  // "Acepto los Términos de uso y la Política de privacidad" (required) and tips by email (optional).
+  const [agree, setAgree] = useState(false);
+  const [marketing, setMarketing] = useState(false);
+  const [tried, setTried] = useState(false);
+  // After the first Negocio / Personal change, what comes back enters at once (no first-load delays).
+  const [switched, setSwitched] = useState(false);
   // Pricing cards link here with ?mode=personal|business
-  const [mode, setMode] = useState<AccountMode>(params.get("mode") === "personal" ? "personal" : "business");
+  const [mode, setModeState] = useState<AccountMode>(params.get("mode") === "personal" ? "personal" : "business");
+  // The mode also goes in the address (?mode=), so the side panel shows the matching example.
+  const setMode = (m: AccountMode) => {
+    setModeState(m);
+    setSwitched(true);
+    setParams((p) => { const n = new URLSearchParams(p); n.set("mode", m); return n; }, { replace: true });
+  };
   const ids = useFieldIds("name", "email", "password", "confirm");
   const { isAuthenticated, user } = useAuth();
 
@@ -34,7 +48,8 @@ export default function Register() {
     /[0-9]/.test(password),
     /[!@#$%^&*(),.?":{}|<>]/.test(password),
   ];
-  const isPasswordValid = mode === "business" ? passwordReqs.every(Boolean) : password.length >= 6;
+  // The same safe password for both modes.
+  const isPasswordValid = passwordReqs.every(Boolean);
   const confirmMismatch = confirmPassword.length > 0 && confirmPassword !== password;
 
   const personalRegisterMut = trpc.auth.register.useMutation({
@@ -72,11 +87,16 @@ export default function Register() {
       return;
     }
     if (!isPasswordValid) {
-      toast.error(mode === "business" ? t.pwBusiness : t.pwPersonal);
+      toast.error(t.pwBusiness);
       return;
     }
     if (password !== confirmPassword) {
       toast.error(t.mismatch);
+      return;
+    }
+    if (!agree) {
+      // The message shows right under the box (no toast on top of it).
+      setTried(true);
       return;
     }
 
@@ -89,36 +109,38 @@ export default function Register() {
 
     if (mode === "business") {
       // Save pending registration (this tab only) and continue to onboarding
-      sessionStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode }));
+      sessionStorage.setItem("register_pending", JSON.stringify({ email, password, name, mode, acceptTerms: true, marketing }));
       navigate("/onboarding");
       return;
     }
 
     // Personal mode: create account immediately
-    personalRegisterMut.mutate({ email, password, name, mode });
+    personalRegisterMut.mutate({ email, password, name, mode, acceptTerms: true, marketing });
   };
 
   return (
-    <div>
-      <AuthHeading
-        eyebrow={mode === "business" ? t.step : undefined}
-        title={t.title}
-        subtitle={mode === "business" ? t.subtitleBusiness : t.subtitlePersonal}
-      />
-
-      <div className="mt-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3">
-        <Gift className="h-5 w-5 shrink-0 text-emerald-600" />
-        <p className="text-sm text-emerald-900">
-          <span className="font-semibold">{t.trialBold(TRIAL_DAYS)}</span>{t.trialRest}
-        </p>
+    <div data-switched={switched || undefined}>
+      <div key={`h-${mode}`} data-fx-group>
+        <AuthHeading
+          eyebrow={mode === "business" ? t.step : undefined}
+          title={t.title}
+          subtitle={mode === "business" ? t.subtitleBusiness : t.subtitlePersonal}
+        />
       </div>
 
-      <div className="mt-6">
+      {/* What you get, in three checks (no box): it changes with Negocio / Personal. */}
+      <ul key={mode} data-fx-group className="mt-4 flex flex-wrap gap-x-4 gap-y-1.5 text-[13.5px] font-medium text-slate-700" data-trial={mode}>
+        {(mode === "personal" ? t.ticksPersonal(TRIAL_DAYS) : t.ticks(TRIAL_DAYS)).map((x, i) => (
+          <li key={x} data-fx="slide" style={fx(400 + i * 85, 2 + i)} className="flex items-center gap-1.5"><Check data-fx="pop" style={fx(490 + i * 85, 3 + i)} className="h-4 w-4 shrink-0 text-emerald-600" strokeWidth={2.6} aria-hidden="true" />{x}</li>
+        ))}
+      </ul>
+
+      <div className="mt-6" data-fx-group>
         <ModeToggle value={mode} onChange={setMode} />
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
-        <Field label={mode === "business" ? t.nameBusiness : t.namePersonal} htmlFor={ids.name}>
+        <Field key={`n-${mode}`} label={mode === "business" ? t.nameBusiness : t.namePersonal} htmlFor={ids.name}>
           <TextInput
             id={ids.name}
             autoComplete="name"
@@ -141,23 +163,21 @@ export default function Register() {
           />
         </Field>
 
-        <Field label={t.password} htmlFor={ids.password} hint={mode === "personal" ? t.passwordHintPersonal : undefined}>
+        <Field label={t.password} htmlFor={ids.password}>
           <PasswordInput
             id={ids.password}
             autoComplete="new-password"
-            placeholder={mode === "business" ? t.passwordPhBusiness : t.passwordPhPersonal}
+            placeholder={t.passwordPhBusiness}
             value={password}
             onChange={(e) => setPassword(e.target.value)}
           />
-          {mode === "business" && (
+          {(
             <ul className="mt-3 grid grid-cols-2 gap-x-3 gap-y-1.5" aria-label={t.reqsLabel}>
               {t.reqs.map((label, i) => {
                 const met = passwordReqs[i];
                 return (
                   <li key={label} className={`flex items-center gap-1.5 text-[13px] transition-colors ${met ? "text-emerald-700" : "text-slate-500"}`}>
-                    <span className={`flex h-4 w-4 items-center justify-center rounded-full transition-colors ${met ? "bg-emerald-500 text-white" : "border border-slate-300"}`}>
-                      {met && <Check className="h-3 w-3" />}
-                    </span>
+                    <Check className={`h-4 w-4 shrink-0 transition-colors duration-300 ${met ? "text-emerald-600" : "text-slate-300"}`} strokeWidth={2.6} aria-hidden="true" />
                     {label}
                   </li>
                 );
@@ -177,19 +197,16 @@ export default function Register() {
           />
         </Field>
 
-        <SubmitButton loading={personalRegisterMut.isPending}>
+        <AgreeBoxes agree={agree} onAgree={setAgree} marketing={marketing} onMarketing={setMarketing} showNeed={tried} />
+
+        <SubmitButton key={`b-${mode}`} loading={personalRegisterMut.isPending}>
           {mode === "business" ? t.submitBusiness : t.submitPersonal}
         </SubmitButton>
-
-        <p className="text-center text-[13px] text-slate-500">
-          {t.privacyPrefix}{" "}
-          <Link to="/privacy" className="font-medium text-slate-700 underline-offset-2 hover:underline">{t.privacy}</Link>.
-        </p>
       </form>
 
       <p className="mt-8 text-center text-sm text-slate-600">
         {t.haveAccount}{" "}
-        <Link to="/login" className="font-semibold text-slate-900 hover:underline">{t.login}</Link>
+        <Link to="/login" viewTransition className="font-semibold text-slate-900 hover:underline">{t.login}</Link>
       </p>
     </div>
   );

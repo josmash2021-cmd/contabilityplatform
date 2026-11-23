@@ -111,7 +111,7 @@ const es = {
           q: "¿Tengo que instalar algo? ¿Está en inglés?",
           a: [
             "No tienes que instalar nada: funciona en el navegador de tu celular o de tu computadora.",
-            "Está en español y en inglés. Se muestra en el idioma de tu dispositivo y lo puedes cambiar cuando quieras.",
+            "Está en español y en inglés. Sale en el idioma de tu teléfono o computadora, y dentro de la app lo puedes cambiar en Perfil.",
           ],
           k: "app celular telefono idioma ingles español",
         },
@@ -529,7 +529,7 @@ const en: PreguntasCopy = {
           q: "Do I need to install anything? Is it in Spanish?",
           a: [
             "You don't need to install anything: it works in the browser on your phone or your computer.",
-            "It's in English and Spanish. It shows up in your device's language and you can switch whenever you like.",
+            "It's in English and Spanish. It shows in your phone or computer's language, and inside the app you can change it in Profile.",
           ],
           k: "app phone mobile language spanish english",
         },

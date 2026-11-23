@@ -9,6 +9,7 @@ import { useCopy } from "@/i18n/useI18n";
 import { supportCopy, type SupportCopy } from "@/i18n/copy/support";
 import { useMedia } from "@/hooks/useMedia";
 import { cn } from "@/lib/utils";
+import { fx } from "@/lib/fx";
 import { SupportIcon } from "./SupportIcon";
 
 const TOKEN_KEY = "pbs_support";
@@ -102,8 +103,15 @@ function Typing({ label }: { label: string }) {
   );
 }
 
-export function SupportBubble() {
+/** `enterAt`: on the sign-in screens the bubble comes in last with the rest of the page (data-fx, ms), only the first time. */
+export function SupportBubble({ enterAt }: { enterAt?: number } = {}) {
   const t = useCopy(supportCopy);
+  const [entering, setEntering] = useState(enterAt !== undefined);
+  useEffect(() => {
+    if (enterAt === undefined) return;
+    const id = window.setTimeout(() => setEntering(false), enterAt + 1300);
+    return () => window.clearTimeout(id);
+  }, [enterAt]);
   const [open, setOpen] = useState(() => typeof window !== "undefined" && new URLSearchParams(window.location.search).get("soporte") === "1");
   const [token, setToken] = useState<string | null>(() => (typeof window === "undefined" ? null : readToken()));
   const [draft, setDraft] = useState("");
@@ -355,7 +363,7 @@ export function SupportBubble() {
       {thread}
       {/* The bubble (hidden behind the full-screen chat on phones). */}
       {!(shown && phone) && (
-        <div className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[70] flex items-center gap-3 sm:right-5">
+        <div {...(entering ? { "data-fx": "pop", style: fx(enterAt ?? 0) } : {})} className="fixed bottom-[calc(1.25rem+env(safe-area-inset-bottom,0px))] right-4 z-[70] flex items-center gap-3 sm:right-5">
           {teaser && !shown && (
             <div className="sup-teaser-in relative hidden max-w-[240px] rounded-2xl bg-white py-2.5 pl-3.5 pr-8 shadow-[0_18px_40px_-18px_rgba(15,23,42,0.45)] ring-1 ring-slate-900/5 sm:block">
               <button type="button" onClick={() => { hideTeaser(); reopen(); }} className="text-left">

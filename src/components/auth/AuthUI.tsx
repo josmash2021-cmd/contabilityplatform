@@ -2,6 +2,7 @@ import { useState, type InputHTMLAttributes, type ReactNode } from "react";
 import { Building2, Eye, EyeOff, Loader2, User } from "lucide-react";
 import { useCopy } from "@/i18n/useI18n";
 import { authCopy } from "@/i18n/copy/auth";
+import { fx } from "@/lib/fx";
 
 export type AccountMode = "business" | "personal";
 
@@ -10,10 +11,10 @@ export const inputCls =
 
 export function AuthHeading({ title, subtitle, eyebrow }: { title: string; subtitle?: ReactNode; eyebrow?: string }) {
   return (
-    <div>
-      {eyebrow && <p className="text-sm font-semibold text-blue-600">{eyebrow}</p>}
-      <h1 className="mt-1 text-[1.75rem] font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
-      {subtitle && <p className="mt-2 text-[15px] leading-relaxed text-slate-600">{subtitle}</p>}
+    <div data-fx-group>
+      {eyebrow && <p data-fx="slide" style={fx(160, 0)} className="text-sm font-semibold text-blue-600">{eyebrow}</p>}
+      <h1 data-fx="focus" style={fx(220, 1)} className="mt-1 text-[1.75rem] font-bold leading-tight tracking-tight text-slate-900 sm:text-3xl">{title}</h1>
+      {subtitle && <p data-fx="rise" style={fx(320, 2)} className="mt-2 text-[15px] leading-relaxed text-slate-600">{subtitle}</p>}
     </div>
   );
 }
@@ -26,7 +27,7 @@ export function ModeToggle({ value, onChange }: { value: AccountMode; onChange: 
     { value: "personal", label: ui.personal, icon: User },
   ];
   return (
-    <div role="radiogroup" aria-label={ui.modeLabel} className="relative grid grid-cols-2 rounded-xl bg-slate-100 p-1">
+    <div role="radiogroup" aria-label={ui.modeLabel} data-fx="grow" style={fx(520)} className="relative grid grid-cols-2 rounded-xl bg-slate-100 p-1">
       <span
         aria-hidden
         className="absolute bottom-1 left-0 top-1 w-[calc(50%-4px)] rounded-lg bg-white shadow-sm ring-1 ring-slate-200 transition-transform duration-300 ease-out"

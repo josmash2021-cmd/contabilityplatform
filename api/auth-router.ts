@@ -10,6 +10,7 @@ import { RateLimiter, normalizeEmail } from "./lib/security";
 import { msg } from "./lib/i18n";
 import { sendMail } from "./lib/mailer";
 import { resetCodeMail } from "./lib/accountEmails";
+import { recordConsents } from "./lib/consents";
 
 // ── Rate limits (per email) ──
 // The reset code is only 6 digits: without an attempt limit it can be brute-forced
@@ -40,6 +41,9 @@ export const authRouter = createRouter({
       password: z.string().min(6, "Minimo 6 caracteres"),
       name: z.string().min(1, "Nombre requerido"),
       mode: z.enum(["business", "personal"]).default("business"),
+      // The sign-up boxes: the Terms of Use and Privacy Policy (the page requires it) and tips by email.
+      acceptTerms: z.boolean().optional(),
+      marketing: z.boolean().optional(),
     }))
     .mutation(async ({ input, ctx }) => {
       // Rate limit disabled for testing
@@ -62,6 +66,7 @@ export const authRouter = createRouter({
         modePreference: input.mode,
       });
       const userId = Number(result[0].insertId);
+      if (input.acceptTerms) await recordConsents(db, userId, ["terms", "privacy", ...(input.marketing ? ["marketing" as const] : [])], ctx.req);
       const token = await signLocalToken(String(userId), input.email);
       // Set HttpOnly cookie
       ctx.resHeaders.set("Set-Cookie", `${LOCAL_AUTH_COOKIE}=${token}; HttpOnly; Path=/; Max-Age=2592000; SameSite=Lax`);

@@ -9,6 +9,7 @@ import {
 import { TRIAL_DAYS } from "@/components/marketing/content";
 import { useCopy } from "@/i18n/useI18n";
 import { authCopy } from "@/i18n/copy/auth";
+import { fx } from "@/lib/fx";
 
 export default function Login() {
   const { login: t } = useCopy(authCopy);
@@ -33,9 +34,11 @@ export default function Login() {
         }
         localStorage.setItem("auth_user", JSON.stringify(data.user));
         toast.success(t.welcome);
-        // Redirect based on user mode from backend
+        // Back to the page they were opening (only this site's own pages), else home for their mode.
+        const next = new URLSearchParams(window.location.search).get("next") ?? "";
+        const safeNext = /^\/(?![/\\])/.test(next) && !/[\\\s]/.test(next) && !next.startsWith("/login") ? next : null;
         const isPersonal = data.user.modePreference === "personal";
-        window.location.href = isPersonal ? "/personal" : "/";
+        window.location.href = safeNext ?? (isPersonal ? "/personal" : "/");
       } else {
         toast.error(data.error || t.error);
       }
@@ -58,9 +61,9 @@ export default function Login() {
     <div>
       <AuthHeading title={t.title} subtitle={t.subtitle} />
 
-      <div className="mt-8">
+      <div className="mt-8" data-fx-group>
         <ModeToggle value={mode} onChange={setMode} />
-        <p className="mt-2 text-[13px] text-slate-500">{t.modeHint}</p>
+        <p data-fx="fade" style={fx(620)} className="mt-2 text-[13px] text-slate-500">{t.modeHint}</p>
       </div>
 
       <form onSubmit={handleSubmit} className="mt-6 space-y-5" noValidate>
@@ -79,7 +82,7 @@ export default function Login() {
           label={t.password}
           htmlFor={ids.password}
           action={
-            <Link to="/forgot-password" className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">
+            <Link to="/forgot-password" viewTransition className="text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline">
               {t.forgot}
             </Link>
           }
@@ -97,7 +100,7 @@ export default function Login() {
 
       <div className="mt-8 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-center text-sm text-slate-600">
         {t.noAccount}{" "}
-        <Link to="/register" className="font-semibold text-slate-900 hover:underline">
+        <Link to="/register" viewTransition className="font-semibold text-slate-900 hover:underline">
           {t.tryFree(TRIAL_DAYS)}
         </Link>
       </div>

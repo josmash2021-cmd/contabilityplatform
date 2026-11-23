@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { AgreeBoxes } from "@/components/auth/AgreeBoxes";
 import { useSearchParams } from "react-router";
 import { toast } from "sonner";
 import { Loader2 } from "lucide-react";
@@ -28,6 +29,9 @@ export default function JoinTeam() {
   const [name, setName] = useState<string | null>(null);
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
+  // A new account accepts the Terms of Use and the Privacy Policy (same boxes as /register).
+  const [agree, setAgree] = useState(false);
+  const [marketing, setMarketing] = useState(false);
 
   const register = trpc.auth.register.useMutation();
   const login = trpc.auth.login.useMutation();
@@ -51,7 +55,7 @@ export default function JoinTeam() {
         const email = preview.data.email;
         const data = mode === "existing"
           ? await login.mutateAsync({ email, password, mode: "business" })
-          : await register.mutateAsync({ email, password, name: nameValue.trim(), mode: "business" });
+          : await register.mutateAsync({ email, password, name: nameValue.trim(), mode: "business", acceptTerms: agree, marketing });
         if (!data.success || !("token" in data) || !data.token) throw new Error(("error" in data && data.error) || tt.inviteInvalid);
         localStorage.setItem("auth_token", data.token);
         localStorage.setItem("auth_user", JSON.stringify(data.user));
@@ -70,7 +74,7 @@ export default function JoinTeam() {
   if (!preview.data) return <Loader2 className="mx-auto mt-10 h-5 w-5 animate-spin text-slate-400" aria-label={t.titleGeneric} />;
 
   const { email, role, ownerName, companyName, logo, expiresAt } = preview.data;
-  const canSubmit = isAuthenticated || (password.length >= 8 && (mode === "existing" || nameValue.trim().length > 0));
+  const canSubmit = isAuthenticated || (password.length >= 8 && (mode === "existing" || (nameValue.trim().length > 0 && agree)));
   const expires = new Date(expiresAt).toLocaleDateString(locale, { day: "numeric", month: "long" });
 
   return (
@@ -99,6 +103,7 @@ export default function JoinTeam() {
               <input id="join-pass" type="password" value={password} onChange={(e) => setPassword(e.target.value)}
                 autoComplete={mode === "existing" ? "current-password" : "new-password"} minLength={8} className={INPUT} />
             </FormField>
+            {mode === "new" && <AgreeBoxes agree={agree} onAgree={setAgree} marketing={marketing} onMarketing={setMarketing} />}
           </>
         )}
         <button type="submit" disabled={busy || !canSubmit} className={`${BTN_PRIMARY} min-h-[46px] text-[15px]`}>

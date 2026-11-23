@@ -14,6 +14,7 @@ import ForgotPassword from "@/pages/ForgotPassword";
 import NotFound from "@/pages/NotFound";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
+import TermsOfUse from "@/pages/TermsOfUse";
 import AuthLayout from "@/components/layout/AuthLayout";
 
 /**
@@ -90,12 +91,13 @@ function PageLoader() {
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
 
   if (!isAuthenticated) {
-    // Visitors see the company landing page at "/"; other app URLs ask them to log in.
+    // Visitors see the company landing page at "/"; other app URLs ask them to log in, then come back here
+    // (a link from an email to Impuestos lands on Impuestos after signing in).
     if (pathname === "/") return <Landing />;
-    return <Navigate to="/login" replace />;
+    return <Navigate to={`/login?next=${encodeURIComponent(pathname + search)}`} replace />;
   }
   return <>{children}</>;
 }
@@ -135,6 +137,8 @@ export default function App() {
         {/* Tax service terms - accepted before sending a return */}
         <Route path="/terminos" element={<TermsOfService />} />
         <Route path="/terms" element={<TermsOfService />} />
+        <Route path="/terminos-de-uso" element={<TermsOfUse />} />
+        <Route path="/terms-of-use" element={<TermsOfUse />} />
 
         {/* Public site pages (the marketing menu) */}
         <Route path="/producto" element={<SiteProducto />} />

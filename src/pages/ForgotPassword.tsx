@@ -132,7 +132,7 @@ export default function ForgotPassword() {
 
       <p className="mt-8 text-center text-sm text-slate-600">
         {t.remembered}{" "}
-        <Link to="/login" className="font-semibold text-slate-900 hover:underline">{t.login}</Link>
+        <Link to="/login" viewTransition className="font-semibold text-slate-900 hover:underline">{t.login}</Link>
       </p>
     </div>
   );

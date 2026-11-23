@@ -169,7 +169,7 @@ const es = {
     title: "Pensada para cómo trabajas de verdad",
     text: "No necesitas saber de contabilidad ni sentarte frente a una computadora.",
     items: (days: number) => [
-      { title: "En tu idioma", text: "Todo en español claro, sin palabras de contador. Si prefieres inglés, lo cambias con un toque.", chips: ["Español", "English"] },
+      { title: "En tu idioma", text: "Todo en español claro, sin palabras de contador. Sale en el idioma de tu teléfono o computadora: español o inglés.", chips: ["Español", "English"] },
       { title: "En tu teléfono", text: "Cobra, toma foto a un recibo o revisa tu banco desde el celular, donde estés. También funciona en la computadora.", chips: ["Cobrar", "Foto de recibo", "Banco"] },
       { title: "Sin tarjeta para empezar", text: `Pruébala ${days} días con todo incluido. No te pedimos tarjeta y no hay cobros automáticos.`, chips: [`${days} días gratis`, "$0 para empezar"] },
     ],
@@ -478,7 +478,7 @@ const en: ProductoCopy = {
     title: "Designed for the way you really work",
     text: "You don't need to know accounting or sit in front of a computer.",
     items: (days: number) => [
-      { title: "In your language", text: "Plain English, no accounting jargon. If you prefer Spanish, switch with one tap.", chips: ["English", "Español"] },
+      { title: "In your language", text: "Plain English, no accounting jargon. It shows in your phone or computer's language: English or Spanish.", chips: ["English", "Español"] },
       { title: "On your phone", text: "Take a payment, snap a receipt or check your bank from your phone, wherever you are. It works on your computer too.", chips: ["Charge", "Receipt photo", "Bank"] },
       { title: "No card to start", text: `Try it for ${days} days with everything included. We don't ask for a card and there are no automatic charges.`, chips: [`${days} days free`, "$0 to start"] },
     ],

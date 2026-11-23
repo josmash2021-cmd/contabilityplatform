@@ -121,7 +121,7 @@ const es = {
     taxPlans: (personal: string[], business: string[]) => `${listEs(personal)} para ti; ${listEs(business)} para tu negocio`,
     items: (days: number, taxPlans: string) => [
       { title: "Conexión segura con Plaid", text: "Cuando conectas tu banco, inicias sesión dentro de Plaid: nunca vemos tu usuario ni tu contraseña, y el acceso es de solo lectura." },
-      { title: "En español e inglés", text: "Usa la plataforma en tu idioma y cámbialo cuando quieras." },
+      { title: "En español e inglés", text: "Sale en el idioma de tu teléfono o computadora. Dentro de la app lo cambias en Perfil." },
       { title: "En tu teléfono", text: "Funciona en el navegador de tu teléfono, tu tableta o tu computadora." },
       { title: `${days} días gratis`, text: `Cada cuenta nueva empieza con ${days} días de acceso completo. No te pedimos tarjeta.` },
       { title: "Cancela cuando quieras", text: "No hay cobros automáticos al terminar la prueba, y cancelas tu suscripción desde Ajustes, sin llamadas ni trámites." },
@@ -257,7 +257,7 @@ const en: PreciosCopy = {
     taxPlans: (personal: string[], business: string[]) => `${listEn(personal)} for you; ${listEn(business)} for your business`,
     items: (days: number, taxPlans: string) => [
       { title: "Secure connection with Plaid", text: "When you connect your bank, you log in inside Plaid: we never see your username or password, and access is read-only." },
-      { title: "In English and Spanish", text: "Use the platform in your language and switch it anytime." },
+      { title: "In English and Spanish", text: "It shows in your phone or computer's language. Inside the app you can change it in Profile." },
       { title: "On your phone", text: "Works in the browser on your phone, tablet or computer." },
       { title: `${days} days free`, text: `Every new account starts with ${days} days of full access. We don't ask for a card.` },
       { title: "Cancel anytime", text: "There are no automatic charges when the trial ends, and you cancel your subscription from Settings, no calls or paperwork." },

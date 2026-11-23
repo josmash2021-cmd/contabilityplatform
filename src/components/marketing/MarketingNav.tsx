@@ -4,7 +4,6 @@ import { Menu, X, ArrowRight } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { useCopy } from "@/i18n/useI18n";
 import { marketingCopy } from "@/i18n/copy/marketing";
-import { LanguageSwitcher } from "@/i18n/LanguageSwitcher";
 import { TRIAL_DAYS } from "./content";
 
 /** Sticky top navigation. Transparent over the dark hero, solid once you scroll. */
@@ -67,7 +66,6 @@ export function MarketingNav() {
         </ul>
 
         <div className="hidden items-center gap-2 xl:flex">
-          <LanguageSwitcher tone={solid ? "light" : "dark"} />
           <Link
             to="/login"
             className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
@@ -130,7 +128,6 @@ export function MarketingNav() {
           <Link to="/login" className="inline-flex h-12 items-center justify-center rounded-xl border border-slate-200 text-base font-medium text-slate-800 hover:bg-slate-50">
             {nav.login}
           </Link>
-          <LanguageSwitcher className="mt-1 justify-self-center" />
         </div>
         </div>
         </div>

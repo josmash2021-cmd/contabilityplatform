@@ -109,6 +109,14 @@ module.exports = {
           "0%": { opacity: "0", transform: "translateY(18px)" },
           "100%": { opacity: "1", transform: "translateY(0)" },
         },
+        "bar-grow": {
+          "0%": { transform: "scaleY(0)" },
+          "100%": { transform: "scaleY(1)" },
+        },
+        "bar-fill": {
+          "0%": { transform: "scaleX(0)" },
+          "100%": { transform: "scaleX(1)" },
+        },
       },
       fontFamily: {
         // Marketing site + auth screens (loaded from Google Fonts in index.html)
@@ -124,6 +132,8 @@ module.exports = {
         "slide-right": "slide-right 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards",
         "soft-float": "soft-float 6s ease-in-out infinite",
         "hero-in": "hero-in 0.8s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "bar-grow": "bar-grow 0.9s cubic-bezier(0.16, 1, 0.3, 1) both",
+        "bar-fill": "bar-fill 0.9s cubic-bezier(0.16, 1, 0.3, 1) both",
         aurora: "aurora 22s ease-in-out infinite alternate",
         "icon-cycle": "icon-cycle 6s cubic-bezier(0.4, 0, 0.2, 1) infinite",
       },
