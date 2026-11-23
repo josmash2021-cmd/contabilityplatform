@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Maximize2, Minimize2 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
-import { STAMP, findSignSpot, signMoment, stampHead, type PdfTextItem, type SignSpot } from "@contracts/taxRules";
+import { STAMP, STAMP_HEAD, findSignSpot, signMoment, stampId, type PdfTextItem, type SignSpot } from "@contracts/taxRules";
 import type { Doc } from "./taxView";
 
 type Sheet = { spot: SignSpot; vpW: number; vpH: number; transform: number[] };
@@ -55,12 +55,12 @@ function textWidth(s: string, bold: boolean): number {
 
 /**
  * The 8879 the client is signing, live: zoomed in on its "Your signature" line (or the whole page), with the
- * drawn signature on the line as it's drawn, "Firmado electrónicamente por", the name, and Alabama's date and
- * time beside it, and the date in "Date": the same boxes the server stamps (STAMP). Clearing the pad clears
+ * drawn signature on the line as it's drawn, "Electronically signed by", the name, Alabama's date and time and
+ * the ID's place beside it, and the date in "Date": the same boxes the server stamps (STAMP). Clearing the pad clears
  * it here. Tells the form where the line is (`onSpot`), which goes with tax.sign.
  */
-export function TaxSignLive({ doc, signature, name, lang, labels, onSpot }: {
-  doc: Doc; signature: string | null; name: string; lang: "es" | "en";
+export function TaxSignLive({ doc, signature, name, labels, onSpot }: {
+  doc: Doc; signature: string | null; name: string;
   labels: { title: string; live: string; here: string; whole: string; zoom: string };
   onSpot: (s: SignSpot | null) => void;
 }) {
@@ -130,7 +130,9 @@ export function TaxSignLive({ doc, signature, name, lang, labels, onSpot }: {
   const fit = shown ? Math.min(STAMP.sigMaxW / shown.w, STAMP.sigH / shown.h) : 0;
   const sw = shown ? shown.w * fit : 0, sh = shown ? shown.h * fit : 0;
   const { date, time } = signMoment(now);
-  const head = stampHead(lang);
+  const head = STAMP_HEAD;
+  // The ID is made when signing; here, its place.
+  const idLine = stampId("····-····");
   const who = name.trim();
   const when = `${date} ${time}`;
   const tx = sp ? sp.x + STAMP.sigLeft + sw + STAMP.gap : 0;
@@ -165,6 +167,7 @@ export function TaxSignLive({ doc, signature, name, lang, labels, onSpot }: {
                       <text transform={at(tx, sp.y + 16)} fontSize={size(head, false, STAMP.headSize)}>{head}</text>
                       {who && <text transform={at(tx, sp.y + 8)} fontSize={size(who, true, STAMP.nameSize)} fontWeight={700}>{who}</text>}
                       <text transform={at(tx, sp.y + 1)} fontSize={size(when, false, STAMP.timeSize)}>{when}</text>
+                      <text transform={at(tx, sp.y - 7)} fontSize={STAMP.idSize} opacity={0.55}>{idLine}</text>
                       {sp.dateX !== null && <text transform={at(sp.dateX, sp.y + 1)} fontSize={STAMP.dateSize}>{date}</text>}
                     </g>
                   </>

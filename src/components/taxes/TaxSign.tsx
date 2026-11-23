@@ -3,7 +3,7 @@ import { toast } from "sonner";
 import { CheckCircle2, Loader2, PenLine } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
-import { useCopy, useLang } from "@/i18n/useI18n";
+import { useCopy } from "@/i18n/useI18n";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { normalizeName, sameName, type SignSpot } from "@contracts/taxRules";
 import { SignaturePad } from "./SignaturePad";
@@ -26,7 +26,6 @@ export function TaxSignForm({ ret, docs, preparerName, signName, onOpen, onAsk }
 }) {
   const t = useCopy(taxesCopy);
   const s = t.p.sign;
-  const lang = useLang().lang === "en" ? "en" : "es";
   const utils = trpc.useUtils();
   const nameId = useId();
   const [checked, setChecked] = useState(false);
@@ -83,7 +82,7 @@ export function TaxSignForm({ ret, docs, preparerName, signName, onOpen, onAsk }
 
       <section className="grid gap-2.5" aria-label={s.signTitle}>
         <h3 className="text-[14.5px] font-bold text-slate-900">{s.signTitle}</h3>
-        {f8879 && <TaxSignLive doc={f8879} signature={signature} name={nameOk && signName ? signName : name} lang={lang} onSpot={setSpot}
+        {f8879 && <TaxSignLive doc={f8879} signature={signature} name={nameOk && signName ? signName : name} onSpot={setSpot}
           labels={{ title: s.liveTitle, live: s.live, here: s.liveHere, whole: s.liveWhole, zoom: s.liveZoom }} />}
         <SignaturePad onChange={setSignature} label={s.pad} clearLabel={s.clear} />
         <div className="grid gap-1">

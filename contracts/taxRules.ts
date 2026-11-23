@@ -230,15 +230,17 @@ export function findSignSpot(pages: ReadonlyArray<{ items: readonly PdfTextItem[
 }
 
 /** How the signature sits on the line (points): its box, and the small "signed" note beside it. */
-export const STAMP = { sigLeft: 4, sigBelow: 3, sigH: 26, sigMaxW: 150, gap: 8, headSize: 5.5, nameSize: 7, timeSize: 6.5, dateSize: 9 } as const;
+export const STAMP = { sigLeft: 4, sigBelow: 3, sigH: 26, sigMaxW: 150, gap: 8, headSize: 5.5, nameSize: 7, timeSize: 6.5, idSize: 5.5, dateSize: 9 } as const;
 
 /** The signing moment as the IRS form shows it: Alabama's date (MM/DD/YYYY) and time with its zone. */
 export function signMoment(d: Date): { date: string; time: string } {
   const date = d.toLocaleDateString("en-US", { timeZone: "America/Chicago", month: "2-digit", day: "2-digit", year: "numeric" });
   // Some browsers put a narrow space before "PM", which the PDF's font doesn't have: a plain space everywhere.
-  const time = d.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).replace(/[  ]/g, " ");
+  const time = d.toLocaleTimeString("en-US", { timeZone: "America/Chicago", hour: "numeric", minute: "2-digit", timeZoneName: "short" }).replace(/[\u202f\u00a0]/g, " ");
   return { date, time };
 }
 
-/** The words of the stamp beside the signature. */
-export const stampHead = (lang: "es" | "en") => (lang === "en" ? "Electronically signed by" : "Firmado electrónicamente por");
+/** The words of the stamp beside the signature: in English, like the IRS form it goes on (the app and the signature page speak the client's language). */
+export const STAMP_HEAD = "Electronically signed by";
+/** The signature's ID under the stamp ("ID 7F3A-91C2"), the same one on the signature page. */
+export const stampId = (id: string) => `ID ${id}`;

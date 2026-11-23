@@ -14,7 +14,8 @@ import { accountMode } from "./lib/plans";
 import { contextHas, getPlanContext } from "./lib/planAccess";
 import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
-import { decodeSignature, sha256, signedPdf } from "./lib/taxSign";
+import { decodeSignature, sha256, signatureId, signedPdf } from "./lib/taxSign";
+import { sealKey } from "./lib/taxSeal";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
@@ -437,17 +438,20 @@ export const taxRouter = createRouter({
           input.docId ? eq(taxDocuments.id, input.docId) : undefined))
         .orderBy(desc(taxDocuments.createdAt), desc(taxDocuments.id)).limit(1))[0];
       const original = f8879 ? decryptTaxFile(Buffer.from(f8879.data)) : null;
-      const signedAt = new Date();
+      // Whole seconds: the time on the PDF, in taxSignatures and in the signature ID are the same.
+      const signedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
       const ip = (ctx.req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ctx.req.headers.get("x-real-ip") || "").slice(0, 80) || null;
       const userAgent = (ctx.req.headers.get("user-agent") || "").slice(0, 300) || null;
       const docSha256 = original ? sha256(original) : null;
       const lang = ctx.lang === "en" ? "en" : "es";
       // The signed 8879 is built first; only then is the approval claimed, once (a double tap signs once).
+      // The app's seal key (made the first time); without it the copy still goes, unsealed.
+      const seal = await sealKey(db).catch((e: unknown) => { console.error("[tax.sign] seal key:", e instanceof Error ? e.message : e); return null; });
       // On the document: the name as on the return (the typed one matches it, maybe without accents or capitals).
       const pdfBytes = await signedPdf(original && f8879 ? { bytes: original, mimeType: f8879.mimeType } : null, png, {
         name: legalName || input.name, email: (ctx.user as { email?: string | null }).email ?? null, signedAt, ip, userAgent, docSha256,
-        docName: f8879?.fileName ?? null, taxYear: year, lang,
-      }, input.spot ?? null);
+        docName: f8879?.fileName ?? null, taxYear: year, lang, signId: signatureId(docSha256, signedAt, png),
+      }, input.spot ?? null, seal);
       const signed = Buffer.from(pdfBytes);
       const claim = await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id} AND step = ${SIGN_STEP} AND approvedAt IS NULL`);
       if (Number((claim as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) === 0) return { ok: true, already: true };

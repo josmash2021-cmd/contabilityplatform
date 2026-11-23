@@ -5,7 +5,8 @@
 // "Date"), plus one "Firma electrónica" page with all of that, so the preparer keeps it with the return.
 import { createHash } from "node:crypto";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFImage } from "pdf-lib";
-import { STAMP, signMoment, stampHead, type SignSpot } from "@contracts/taxRules";
+import { STAMP, STAMP_HEAD, signMoment, stampId, type SignSpot } from "@contracts/taxRules";
+import { sealPdf, type SealKey } from "./taxSeal";
 
 export type SignAudit = {
   name: string;
@@ -17,9 +18,20 @@ export type SignAudit = {
   docName: string | null;
   taxYear: number;
   lang: "es" | "en";
+  /** signatureId(): beside the signature and on the signature page. */
+  signId: string;
 };
 
 export const sha256 = (b: Uint8Array): string => createHash("sha256").update(b).digest("hex");
+
+/**
+ * The signature's short ID ("7F3A-91C2"), printed beside the signature and on the signature page. It can be
+ * worked out again from what taxSignatures keeps: SHA-256 of "<8879 SHA-256>|<signedAt, whole seconds, ISO>|<signature PNG SHA-256>".
+ */
+export function signatureId(docSha256: string | null, signedAt: Date, png: Uint8Array): string {
+  const h = sha256(Buffer.from(`${docSha256 ?? ""}|${new Date(Math.floor(signedAt.getTime() / 1000) * 1000).toISOString()}|${sha256(png)}`)).slice(0, 8).toUpperCase();
+  return `${h.slice(0, 4)}-${h.slice(4)}`;
+}
 
 const PNG_HEAD = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 /** A drawn signature as sent by the page: a PNG data URL, not empty, not huge. */
@@ -75,21 +87,25 @@ function stampSignature(pdf: PDFDocument, spot: SignSpot, sig: PDFImage, font: P
   const size = (f: PDFFont, s: string, max: number) => Math.min(max, room / Math.max(1, f.widthOfTextAtSize(s, 1)));
   const navy = rgb(0.09, 0.2, 0.55);
   const { date, time } = signMoment(a.signedAt);
-  const head = safe(font, stampHead(a.lang));
+  const head = safe(font, STAMP_HEAD);
   const name = safe(bold, a.name);
   const when = safe(font, `${date} ${time}`);
+  const id = stampId(a.signId);
   page.drawText(head, { x: tx, y: y + 16, size: size(font, head, STAMP.headSize), font, color: navy });
   page.drawText(name, { x: tx, y: y + 8, size: size(bold, name, STAMP.nameSize), font: bold, color: navy });
   page.drawText(when, { x: tx, y: y + 1, size: size(font, when, STAMP.timeSize), font, color: navy });
+  // Under the line: the ID that ties this signature to the signature page.
+  page.drawText(id, { x: tx, y: y - 7, size: STAMP.idSize, font, color: navy });
   if (spot.dateX !== null) page.drawText(date, { x: clamp(spot.dateX, x, box.x + box.width - 50), y: y + 1, size: STAMP.dateSize, font, color: navy });
   return spot.page;
 }
 
 /**
  * The 8879 (PDF or photo) with the signature page added at the end; a PDF 8879 also gets the signature on its
- * line (`spot`). Without an 8879, just the signature page.
+ * line (`spot`). Without an 8879, just the signature page. With a seal key, the whole file is sealed last
+ * (taxSeal); if sealing fails the file goes unsealed rather than blocking the signature.
  */
-export async function signedPdf(original: { bytes: Uint8Array; mimeType: string } | null, signaturePng: Uint8Array, a: SignAudit, spot: SignSpot | null = null): Promise<Uint8Array> {
+export async function signedPdf(original: { bytes: Uint8Array; mimeType: string } | null, signaturePng: Uint8Array, a: SignAudit, spot: SignSpot | null = null, seal: SealKey | null = null): Promise<Uint8Array> {
   let pdf: PDFDocument;
   if (original?.mimeType === "application/pdf") {
     try { pdf = await PDFDocument.load(original.bytes, { ignoreEncryption: true }); } catch { pdf = await PDFDocument.create(); }
@@ -139,14 +155,19 @@ export async function signedPdf(original: { bytes: Uint8Array; mimeType: string 
     [es ? "Identidad verificada con" : "Identity checked with", es ? "Código de 6 números enviado a su correo para abrir Impuestos" : "6-digit code sent to their email to open Taxes"],
     [es ? "Dirección IP" : "IP address", a.ip ?? "—"],
     [es ? "Dispositivo" : "Device", (a.userAgent ?? "—").slice(0, 300)],
+    [es ? "ID de la firma" : "Signature ID", a.signId],
+    [es ? "Método de firma" : "Signature method", es ? "Firma dibujada en la pantalla (dedo o mouse) y nombre completo escrito, que coincide con el de la declaración" : "Signature drawn on the screen (finger or mouse) and full name typed, matching the name on the return"],
     [es ? "Documento firmado" : "Signed document", a.docName ?? (es ? "Formulario 8879" : "Form 8879")],
     ...(onPage ? [[es ? "Firma en el 8879" : "Signature on the 8879", es ? `Página ${onPage}, línea Your signature` : `Page ${onPage}, Your signature line`] as [string, string]] : []),
-    ["SHA-256", a.docSha256 ?? "—"],
+    [es ? "SHA-256 del 8879 que vio" : "SHA-256 of the 8879 they saw", a.docSha256 ?? "—"],
+    ...(seal ? [[es ? "Sello del documento" : "Document seal", es
+      ? "Este PDF lleva un sello digital de Personal & Business Solutions. Si alguien lo cambia, el lector de PDF (por ejemplo Adobe Acrobat) avisa que fue modificado."
+      : "This PDF carries a digital seal from Personal & Business Solutions. If anyone changes it, a PDF reader (such as Adobe Acrobat) shows it was modified."] as [string, string]] : []),
   ];
   for (const [k, v] of rows) {
     page.drawText(safe(font, k), { x: 56, y, size: 9.5, font, color: muted });
     const lines = wrap(font, safe(font, v), 9.5, 330);
-    lines.forEach((l, i) => page.drawText(l, { x: 226, y: y - i * 13, size: 9.5, font: k === "SHA-256" ? font : bold, color: ink }));
+    lines.forEach((l, i) => page.drawText(l, { x: 226, y: y - i * 13, size: 9.5, font: k.startsWith("SHA-256") ? font : bold, color: ink }));
     y -= 13 * Math.max(1, lines.length) + 6;
   }
   y -= 8;
@@ -155,5 +176,12 @@ export async function signedPdf(original: { bytes: Uint8Array; mimeType: string 
     : "This page is part of the e-file authorization. Personal & Business Solutions keeps the signature encrypted together with this record."), 9, 500)) {
     page.drawText(l, { x: 56, y, size: 9, font, color: muted }); y -= 12;
   }
-  return pdf.save();
+  if (!seal) return pdf.save();
+  const plain = await pdf.save();
+  try {
+    return await sealPdf(pdf, seal, a.signedAt, es ? "Firma electrónica del Formulario 8879" : "Form 8879 electronic signature");
+  } catch (e) {
+    console.error("[taxSign] seal failed, keeping the unsealed copy:", e instanceof Error ? e.message : e);
+    return plain;
+  }
 }

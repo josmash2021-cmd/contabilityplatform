@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { PDFDocument, StandardFonts } from "pdf-lib";
 import { IRS_8879_SPOT, findSignSpot, sameName, signMoment, type PdfTextItem } from "@contracts/taxRules";
-import { signedPdf } from "./taxSign";
+import { signatureId, signedPdf } from "./taxSign";
+import { makeSealKey, sealIntact } from "./taxSeal";
 
 const item = (str: string, x: number, y: number, width: number, size = 9): PdfTextItem => ({ str, transform: [size, 0, 0, size, x, y], width });
 
@@ -92,7 +93,7 @@ describe("the signed 8879", () => {
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
     const out = await signedPdf({ bytes: original, mimeType: "application/pdf" }, png, {
       name: "María José López", email: "eva@example.com", signedAt: new Date("2026-11-23T04:39:00Z"), ip: "1.2.3.4", userAgent: "test",
-      docSha256: "abc", docName: "8879.pdf", taxYear: 2026, lang: "es",
+      docSha256: "abc", docName: "8879.pdf", taxYear: 2026, lang: "es", signId: "7F3A-91C2",
     }, spot);
     const doc = await PDFDocument.load(out);
     expect(doc.getPageCount()).toBe(2);
@@ -101,12 +102,16 @@ describe("the signed 8879", () => {
     const name = find("María José López");
     const when = find("11/22/2026 10:39 PM CST");
     const date = find("11/22/2026");
-    expect(find("Firmado electrónicamente por")).toBeTruthy();
+    expect(find("Electronically signed by")).toBeTruthy();
+    const id = find("ID 7F3A-91C2");
+    expect(id && Math.abs(id.transform[5] - (spot.y - 7)) < 0.5).toBe(true);
     expect(name && Math.abs(name.transform[5] - (spot.y + 8)) < 0.5 && name.transform[4] > spot.x && name.transform[4] < spot.x + spot.w).toBe(true);
     expect(when && Math.abs(when.transform[5] - (spot.y + 1)) < 0.5).toBe(true);
     expect(date && spot.dateX !== null && Math.abs(date.transform[4] - spot.dateX) < 0.5).toBe(true);
     const last = (await textOf(out, 2)).map((t) => t.str).join(" ");
     expect(last).toContain("Página 1, línea Your signature");
+    expect(last).toContain("7F3A-91C2");
+    expect(last).toContain("Firma dibujada en la pantalla");
   });
 
   it("keeps a spot from the page on the page", async () => {
@@ -114,11 +119,42 @@ describe("the signed 8879", () => {
     pdf.addPage([612, 792]);
     const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
     const out = await signedPdf({ bytes: await pdf.save(), mimeType: "application/pdf" }, png, {
-      name: "Eva Tax", email: null, signedAt: new Date(), ip: null, userAgent: null, docSha256: null, docName: null, taxYear: 2026, lang: "en",
+      name: "Eva Tax", email: null, signedAt: new Date(), ip: null, userAgent: null, docSha256: null, docName: null, taxYear: 2026, lang: "en", signId: "0000-0000",
     }, { page: 1, labelX: 0, x: 99_999, y: -500, w: 99_999, dateX: 99_999 });
     for (const t of await textOf(out, 1)) {
       expect(t.transform[4]).toBeLessThan(612);
       expect(t.transform[5]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("the signature ID and the seal", () => {
+  it("gives the same ID for the same signature (whole seconds), another one otherwise", () => {
+    const png = Buffer.from("png-bytes");
+    const at = new Date("2026-11-23T04:39:00.000Z");
+    const id = signatureId("abc", at, png);
+    expect(id).toMatch(/^[0-9A-F]{4}-[0-9A-F]{4}$/);
+    expect(signatureId("abc", new Date("2026-11-23T04:39:00.731Z"), png)).toBe(id);
+    expect(signatureId("abd", at, png)).not.toBe(id);
+  });
+
+  it("seals the signed 8879 so any change shows", async () => {
+    const pdf = await PDFDocument.create();
+    const page = pdf.addPage([612, 792]);
+    page.drawText("Your signature", { x: 36, y: 302.6, size: 9, font: await pdf.embedFont(StandardFonts.Helvetica) });
+    const png = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==", "base64");
+    const out = await signedPdf({ bytes: await pdf.save(), mimeType: "application/pdf" }, png, {
+      name: "María José López", email: null, signedAt: new Date("2026-11-23T04:39:00Z"), ip: null, userAgent: null, docSha256: "abc",
+      docName: null, taxYear: 2026, lang: "es", signId: "7F3A-91C2",
+    }, { page: 1, labelX: 36, x: 106, y: 302.6, w: 278, dateX: 424 }, makeSealKey());
+    expect(sealIntact(out)).toBe(true);
+    expect(Buffer.from(out).toString("latin1")).toContain("/ByteRange");
+    expect((await PDFDocument.load(out)).getPageCount()).toBe(2);
+    expect((await textOf(out, 2)).map((t) => t.str).join(" ")).toContain("Este PDF lleva un sello digital");
+    // One byte changed in the content: the seal no longer matches.
+    const bad = Buffer.from(out);
+    bad[400] ^= 0x01;
+    expect(sealIntact(bad)).toBe(false);
+    expect(sealIntact(await pdf.save())).toBe(false);
   });
 });
