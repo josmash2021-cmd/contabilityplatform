@@ -255,7 +255,8 @@ const pEs = {
       "Firmas aquí mismo, en tu teléfono.",
     ],
     officeWaiting: (name: string) => `Cuando ${name} abra la firma, aparece aquí sola.`,
-    officeOpen: (name: string, time: string) => `${name} revisó tu identificación y abrió la firma hasta las ${time}.`,
+    // The Spanish time already ends in a dot ("a. m."): no second one.
+    officeOpen: (name: string, time: string) => `${name} revisó tu identificación y abrió la firma hasta las ${time}`,
     paperTitle: "Firma en papel desde tu casa",
     paperSteps: [
       "Abre tu 8879, descárgalo e imprímelo.",
@@ -998,7 +999,7 @@ const es = {
     photo: "Comparé la foto con la persona y está aquí conmigo",
     save: "Guardar y abrir la firma (30 min)",
     checked: (date: string, by: string, id: string, tin: string) => `Identificación revisada el ${date} por ${by}: ${id}, ${tin}.`,
-    openUntil: (time: string) => `Firma abierta en la app hasta las ${time}.`,
+    openUntil: (time: string) => `Firma abierta en la app hasta las ${time}`,
     closed: "Firma cerrada.",
     open: "Abrir la firma (30 min)",
     close: "Cerrar la firma",
