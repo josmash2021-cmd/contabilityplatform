@@ -20,7 +20,31 @@ export type SignAudit = {
   lang: "es" | "en";
   /** signatureId(): beside the signature and on the signature page. */
   signId: string;
+  /** The in-person ID check (IRS Pub. 1345): which photo ID the preparer inspected, who, when; null = not recorded. */
+  identity?: { idType: string; taxIdKind: string; taxIdLast4: string; checkedBy: string | null; checkedAt: Date } | null;
 };
+
+const ID_NAMES: Record<string, [string, string]> = {
+  license: ["licencia de manejar", "driver's license"],
+  state_id: ["identificación del estado", "state ID"],
+  passport: ["pasaporte", "passport"],
+  consular: ["matrícula consular o identificación nacional", "consular or national ID"],
+  military: ["identificación militar", "military ID"],
+  other: ["otra identificación oficial con foto", "other government photo ID"],
+};
+
+/** "Identidad verificada con": the in-person ID check in words. */
+function identityText(a: SignAudit): string {
+  const es = a.lang === "es";
+  const i = a.identity;
+  if (!i) return es ? "Sin registro de verificación" : "No verification recorded";
+  const idName = (ID_NAMES[i.idType] ?? ID_NAMES.other)[es ? 0 : 1];
+  const when = i.checkedAt.toLocaleString(es ? "es-US" : "en-US", { timeZone: "America/Chicago", dateStyle: "medium", timeStyle: "short" });
+  const tin = `${i.taxIdKind === "itin" ? "ITIN" : "SSN"} ***-**-${i.taxIdLast4}`;
+  return es
+    ? `En persona: ${i.checkedBy ?? "su preparador"} revisó su ${idName}, comparó la foto y anotó nombre, ${tin}, dirección y fecha de nacimiento (${when}). Firmó con su preparador presente.`
+    : `In person: ${i.checkedBy ?? "their preparer"} inspected their ${idName}, compared the photo and recorded name, ${tin}, address and date of birth (${when}). Signed with the preparer present.`;
+}
 
 export const sha256 = (b: Uint8Array): string => createHash("sha256").update(b).digest("hex");
 
@@ -152,7 +176,8 @@ export async function signedPdf(original: { bytes: Uint8Array; mimeType: string 
     [es ? "Fecha y hora (Alabama)" : "Date and time (Alabama)", when],
     [es ? "Fecha y hora (UTC)" : "Date and time (UTC)", a.signedAt.toISOString()],
     [es ? "Correo de la cuenta" : "Account email", a.email ?? "—"],
-    [es ? "Identidad verificada con" : "Identity checked with", es ? "Código de 6 números enviado a su correo para abrir Impuestos" : "6-digit code sent to their email to open Taxes"],
+    [es ? "Identidad verificada" : "Identity verified", identityText(a)],
+    [es ? "Acceso a la cuenta" : "Account access", es ? "Sesión de su cuenta y código de 6 números enviado a su correo para abrir Impuestos" : "Their account session and a 6-digit code sent to their email to open Taxes"],
     [es ? "Dirección IP" : "IP address", a.ip ?? "—"],
     [es ? "Dispositivo" : "Device", (a.userAgent ?? "—").slice(0, 300)],
     [es ? "ID de la firma" : "Signature ID", a.signId],

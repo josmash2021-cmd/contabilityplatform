@@ -16,10 +16,11 @@ import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
 import { decodeSignature, sha256, signatureId, signedPdf } from "./lib/taxSign";
 import { sealKey } from "./lib/taxSeal";
+import { utcDate } from "./lib/support";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
-  canSend, currentTaxYear, isClientDocKind, missingToSend, sameName,
+  ID_TYPES, PAPER_8879, canSend, currentTaxYear, isClientDocKind, missingToSend, sameName,
   type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
 } from "@contracts/taxRules";
 
@@ -100,6 +101,25 @@ export function ensureTaxTables(db: Db): Promise<void> {
         docSha256 CHAR(64),
         createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
         INDEX taxSignatures_returnId_idx (returnId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
+    // Signing in person (IRS Pub. 1345): the preparer inspected a government photo ID with the client in front
+    // of them and recorded name, SSN/ITIN, address and date of birth (encrypted in `data`). While `openUntil` is
+    // ahead, the client can e-sign the 8879 in the app (the preparer is with them).
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS taxIdChecks (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        returnId BIGINT UNSIGNED NOT NULL,
+        userId BIGINT UNSIGNED NOT NULL,
+        checkedBy BIGINT UNSIGNED NOT NULL,
+        checkedByName VARCHAR(160),
+        idType VARCHAR(30) NOT NULL,
+        taxIdKind VARCHAR(4) NOT NULL,
+        taxIdLast4 CHAR(4) NOT NULL,
+        data LONGBLOB NOT NULL,
+        checkedAt TIMESTAMP DEFAULT NOW() NOT NULL,
+        openUntil TIMESTAMP NULL,
+        INDEX taxIdChecks_returnId_idx (returnId)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
     // Added later (additive, nullable): when the client approved the finished return ("Revisa y firma"), and the
@@ -230,6 +250,28 @@ function stepDatesWith(dates: (string | null)[] | null | undefined, step: number
 
 const resultInput = z.object({ kind: z.enum(["refund", "owe"]), amount: z.number().min(0).max(10_000_000) }).nullable().optional();
 
+type IdCheckRow = { id: number; idType: string; taxIdKind: string; taxIdLast4: string; checkedByName: string | null; checkedAt: Date | string; openUntil: Date | string | null; open: number };
+
+/** The latest in-person ID check of a return, and whether signing is open now (times as ISO, UTC). */
+async function latestIdCheck(db: Db, returnId: number): Promise<{ idType: string; taxIdKind: string; taxIdLast4: string; checkedByName: string | null; checkedAt: string; openUntil: string | null; open: boolean } | null> {
+  const res = (await db.execute(sql`SELECT id, idType, taxIdKind, taxIdLast4, checkedByName, checkedAt, openUntil, (openUntil IS NOT NULL AND openUntil > NOW()) AS open
+    FROM taxIdChecks WHERE returnId = ${returnId} ORDER BY id DESC LIMIT 1`)) as unknown as [IdCheckRow[]] | IdCheckRow[];
+  const row = ((Array.isArray(res[0]) ? res[0] : res) as IdCheckRow[])[0];
+  if (!row) return null;
+  const iso = (v: Date | string | null) => utcDate(v)?.toISOString() ?? null;
+  return { idType: row.idType, taxIdKind: row.taxIdKind, taxIdLast4: row.taxIdLast4, checkedByName: row.checkedByName, checkedAt: iso(row.checkedAt)!, openUntil: iso(row.openUntil), open: Number(row.open) === 1 };
+}
+
+/** A real calendar date (YYYY-MM-DD) for someone between 14 and 120 years old. */
+function realBirthDate(s: string): boolean {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
+  if (!m) return false;
+  const d = new Date(Date.UTC(+m[1], +m[2] - 1, +m[3]));
+  if (d.getUTCMonth() !== +m[2] - 1 || d.getUTCDate() !== +m[3]) return false;
+  const age = (Date.now() - d.getTime()) / (365.25 * 24 * 3600_000);
+  return age >= 14 && age <= 120;
+}
+
 /** Client calls that read or change the return and its documents: only with Impuestos open in this tab (lib/taxGate). */
 const unlockedQuery = authedQuery.use(async ({ ctx, next }) => {
   await requireTaxUnlocked(getDb(), Number(ctx.user.id), ctx.req, ctx.lang);
@@ -244,7 +286,7 @@ export const taxRouter = createRouter({
     const access = await taxAccess(db, ctx.user);
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
-    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null, signName: null as string | null };
+    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null, signName: null as string | null, inPerson: null as { open: boolean; until: string | null } | null };
     const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
     if (!access.allowed) return { ...base, ...empty };
     const userId = Number(ctx.user.id);
@@ -267,7 +309,10 @@ export const taxRouter = createRouter({
     } catch { preparerName = null; }
     // The name to type to sign: the one the preparer confirmed from the ID, else the account's.
     const signName = ret?.legalName?.trim() || ctx.user.name?.trim() || null;
-    return { ...base, preparerName, signName, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
+    // Signing in the office: open while the preparer, with the client and their photo ID, has opened it.
+    const check = ret && ret.step === SIGN_STEP && !ret.approvedAt ? await latestIdCheck(db, ret.id) : null;
+    const inPerson = check ? { open: check.open, until: check.open ? check.openUntil : null } : null;
+    return { ...base, preparerName, signName, inPerson, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
   }),
 
   /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */
@@ -342,12 +387,15 @@ export const taxRouter = createRouter({
       const db = getDb();
       await requireAccess(db, ctx.user, ctx.lang);
       const mode = modeOf(ctx.user);
-      if (!isClientDocKind(mode, input.kind)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxBadFile") });
+      const paper = input.kind === PAPER_8879;
+      if (!paper && !isClientDocKind(mode, input.kind)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxBadFile") });
       const { buf, fileName } = decodeFile(input, ctx.lang);
       await ensureTaxTables(db);
       const userId = Number(ctx.user.id);
       const ret = await getOrCreateReturn(db, userId, mode, currentTaxYear());
       if (ret.step >= FILED_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxLocked") });
+      // The hand-signed 8879 (signing on paper): only while the return waits for the signature.
+      if (paper && (ret.step !== SIGN_STEP || ret.approvedAt)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxPaperNotNow") });
       if (((await filesByKind(db, ret.id))[input.kind] ?? 0) >= TAX_MAX_FILES_PER_KIND) {
         throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxTooMany") });
       }
@@ -426,6 +474,9 @@ export const taxRouter = createRouter({
       const ret = await findReturn(db, userId, modeOf(ctx.user), year);
       if (!ret || ret.step !== SIGN_STEP) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNotReady") });
       if (ret.approvedAt) return { ok: true, already: true };
+      // Signing in the app is the in-person kind (IRS Pub. 1345): the preparer checked the photo ID and is with them.
+      const check = await latestIdCheck(db, ret.id);
+      if (!check?.open) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNeedInPerson") });
       const legalName = ret.legalName?.trim() || ctx.user.name?.trim() || "";
       if (legalName && !sameName(input.name, legalName)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNameMismatch") });
       const png = decodeSignature(input.signature);
@@ -451,10 +502,13 @@ export const taxRouter = createRouter({
       const pdfBytes = await signedPdf(original && f8879 ? { bytes: original, mimeType: f8879.mimeType } : null, png, {
         name: legalName || input.name, email: (ctx.user as { email?: string | null }).email ?? null, signedAt, ip, userAgent, docSha256,
         docName: f8879?.fileName ?? null, taxYear: year, lang, signId: signatureId(docSha256, signedAt, png),
+        identity: { idType: check.idType, taxIdKind: check.taxIdKind, taxIdLast4: check.taxIdLast4, checkedBy: check.checkedByName, checkedAt: new Date(check.checkedAt) },
       }, input.spot ?? null, seal);
       const signed = Buffer.from(pdfBytes);
       const claim = await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${ret.id} AND step = ${SIGN_STEP} AND approvedAt IS NULL`);
       if (Number((claim as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) === 0) return { ok: true, already: true };
+      // Signed: the in-person window closes.
+      await db.execute(sql`UPDATE taxIdChecks SET openUntil = NULL WHERE returnId = ${ret.id}`);
       await db.execute(sql`INSERT INTO taxSignatures (returnId, userId, name, signature, signedAt, ip, userAgent, docId, docSha256)
         VALUES (${ret.id}, ${userId}, ${input.name}, ${encryptTaxFile(png)}, ${signedAt}, ${ip}, ${userAgent}, ${f8879?.id ?? null}, ${docSha256})`);
       await db.insert(taxDocuments).values({
@@ -519,8 +573,52 @@ export const taxRouter = createRouter({
     const messages: TaxMessage[] = await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt);
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
-    return { ret, docs, messages, missing: missingToSend(ret.mode, ret.answers ?? {}, counts) };
+    return { ret, docs, messages, missing: missingToSend(ret.mode, ret.answers ?? {}, counts), idCheck: await latestIdCheck(db, ret.id) };
   }),
+
+  /**
+   * "Revisé su identificación en persona" (IRS Pub. 1345, in-person e-signature): the preparer inspected a
+   * government photo ID, compared the photo, and records name, SSN or ITIN, address and date of birth (kept
+   * encrypted). The name must be the return's. Opens signing in the app for 30 minutes (they're together).
+   */
+  adminIdCheck: adminQuery
+    .input(z.object({
+      returnId: z.number().int().positive(), idType: z.enum(ID_TYPES), name: z.string().trim().min(3).max(160),
+      taxIdKind: z.enum(["ssn", "itin"]), taxId: z.string().trim().max(20), address: z.string().trim().min(5).max(240),
+      dob: z.string().trim().max(10), photoMatched: z.literal(true),
+    }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureTaxTables(db);
+      if (!hasTaxKey()) throw new TRPCError({ code: "PRECONDITION_FAILED", message: msg(ctx.lang, "taxNoKey") });
+      const ret = (await db.select(retMeta).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0] as TaxReturnMeta | undefined;
+      if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      const digits = input.taxId.replace(/\D/g, "");
+      const itinOk = input.taxIdKind === "itin" ? digits.startsWith("9") : !digits.startsWith("9");
+      if (digits.length !== 9 || !itinOk || !realBirthDate(input.dob)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxIdCheckBad") });
+      const legal = ret.legalName?.trim();
+      if (legal && !sameName(input.name, legal)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxIdCheckName") });
+      if (!legal) await db.execute(sql`UPDATE taxReturns SET legalName = ${input.name} WHERE id = ${ret.id}`);
+      const data = encryptTaxFile(Buffer.from(JSON.stringify({ name: input.name, taxIdKind: input.taxIdKind, taxId: digits, address: input.address, dob: input.dob })));
+      const canSign = ret.step === SIGN_STEP && !ret.approvedAt;
+      await db.execute(sql`INSERT INTO taxIdChecks (returnId, userId, checkedBy, checkedByName, idType, taxIdKind, taxIdLast4, data, openUntil)
+        VALUES (${ret.id}, ${ret.userId}, ${Number(ctx.user.id)}, ${ctx.user.name ?? null}, ${input.idType}, ${input.taxIdKind}, ${digits.slice(-4)}, ${data},
+        ${canSign ? sql`NOW() + INTERVAL 30 MINUTE` : null})`);
+      return { ok: true, open: canSign };
+    }),
+
+  /** Opens (30 minutes, with the client in front of them) or closes signing in the app, after an ID check. */
+  adminOpenSigning: adminQuery
+    .input(z.object({ returnId: z.number().int().positive(), open: z.boolean() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureTaxTables(db);
+      const check = await latestIdCheck(db, input.returnId);
+      if (!check) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxIdCheckNone") });
+      await db.execute(sql`UPDATE taxIdChecks SET openUntil = ${input.open ? sql`NOW() + INTERVAL 30 MINUTE` : null}
+        WHERE returnId = ${input.returnId} ORDER BY id DESC LIMIT 1`);
+      return { ok: true };
+    }),
 
   /** The preparer read the client's messages. */
   adminMarkRead: adminQuery.input(z.object({ returnId: z.number().int().positive() })).mutation(async ({ input }) => {
@@ -537,6 +635,17 @@ export const taxRouter = createRouter({
       const db = getDb();
       await ensureTaxTables(db);
       await db.update(taxDocuments).set({ status: input.status, note: input.status === "redo" ? input.note || null : null }).where(eq(taxDocuments.id, input.docId));
+      // The hand-signed 8879 marked "Está bien" is the client's signature: the return is approved. Taken back, it isn't
+      // (unless they also signed in the app).
+      const doc = (await db.select({ kind: taxDocuments.kind, returnId: taxDocuments.returnId }).from(taxDocuments).where(eq(taxDocuments.id, input.docId)).limit(1))[0];
+      if (doc?.kind === PAPER_8879) {
+        if (input.status === "ok") {
+          await db.execute(sql`UPDATE taxReturns SET approvedAt = NOW() WHERE id = ${doc.returnId} AND step = ${SIGN_STEP} AND approvedAt IS NULL`);
+        } else {
+          await db.execute(sql`UPDATE taxReturns SET approvedAt = NULL WHERE id = ${doc.returnId} AND step = ${SIGN_STEP}
+            AND NOT EXISTS (SELECT 1 FROM taxDocuments WHERE returnId = ${doc.returnId} AND kind = 'f8879_signed')`);
+        }
+      }
       return { ok: true };
     }),
 

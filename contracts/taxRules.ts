@@ -49,6 +49,11 @@ export const TAX_DOC_KINDS: Record<TaxMode, readonly TaxDocKind[]> = {
 
 /** Documents the preparer gives back: the finished returns and the e-file authorization. */
 export const PREPARER_DOC_KINDS = ["final_fed", "final_state", "f8879", "prep_other"] as const;
+/** The hand-signed 8879 the client uploads (signing on paper): a photo or PDF the preparer reviews like any document. */
+export const PAPER_8879 = "f8879_paper";
+/** Government photo IDs the preparer can inspect in person (IRS Pub. 1345 lists license, state, military, national ID, passport…). */
+export const ID_TYPES = ["license", "state_id", "passport", "consular", "military", "other"] as const;
+export type IdType = (typeof ID_TYPES)[number];
 export type PreparerDocKind = (typeof PREPARER_DOC_KINDS)[number];
 
 /** The return's progress. -1 = not sent yet (the person is still gathering documents). */

@@ -222,7 +222,7 @@ export function TaxDocsDone({ mode, docs, onOpen, preparerOnly }: { mode: TaxMod
         </>
       )}
       {preparerOnly && <ul className="mt-2.5 grid gap-1.5">{prep.map((f) => item(f, t.preparerDocs[f.kind] ?? f.fileName))}</ul>}
-      {mine.length > 0 && <ul className="mt-3 grid gap-1.5">{mine.map((f) => item(f, t.docs[mode][f.kind]?.title ?? f.kind))}</ul>}
+      {mine.length > 0 && <ul className="mt-3 grid gap-1.5">{mine.map((f) => item(f, t.docs[mode][f.kind]?.title ?? t.preparerDocs[f.kind] ?? f.kind))}</ul>}
     </section>
   );
 }

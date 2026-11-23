@@ -145,7 +145,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const lock = trpc.tax.lock.useMutation({
     onSettled: () => { clearTaxUnlock(); toast(p.gate.locked); void utils.tax.invalidate(); },
   });
-  const titleOf = (k: string) => t.docs[mode][k]?.title ?? k;
+  const titleOf = (k: string) => t.docs[mode][k]?.title ?? t.preparerDocs[k] ?? k;
 
   // ── Upload: the menu picks the source, the matching hidden input opens the camera, gallery or files ──
   const upload = trpc.tax.upload.useMutation();
@@ -307,7 +307,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
       )}
       <div className={cols}>
         {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName}
-          signName={data.signName ?? null} onAsk={() => setAskOpen(true)} />}
+          signName={data.signName ?? null} inPerson={data.inPerson ?? null} onAsk={() => setAskOpen(true)} onPick={pick} busyKind={busyKind} />}
         <div className="grid min-w-0 gap-3.5">
           <TaxAgencies year={year} stack />
           <TaxHistory past={past} onOpen={onPast} />

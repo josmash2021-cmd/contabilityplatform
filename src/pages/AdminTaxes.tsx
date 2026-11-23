@@ -24,7 +24,7 @@ import { taxesCopy, type TaxesCopy } from "@/i18n/copy/taxes";
 import { TAX_ACCEPT, TaxFileError, formatFileSize, prepareTaxUpload } from "@/lib/taxFiles";
 import { cn } from "@/lib/utils";
 import {
-  DRAFT_STEP, PREPARER_DOC_KINDS, TAX_DOC_KINDS, TAX_QUESTIONS, TAX_STEP_COUNT,
+  DRAFT_STEP, ID_TYPES, PREPARER_DOC_KINDS, TAX_DOC_KINDS, TAX_QUESTIONS, TAX_STEP, TAX_STEP_COUNT, type IdType,
   type Missing, type PreparerDocKind, type TaxDocMeta, type TaxMessage, type TaxMode, type TaxResult,
 } from "@contracts/taxRules";
 
@@ -316,7 +316,7 @@ function ReturnDetail({ returnId }: { returnId: number }) {
     );
   }
 
-  const { ret, docs, messages, missing } = data;
+  const { ret, docs, messages, missing, idCheck } = data;
   const mode: TaxMode = ret.mode;
   const name = ret.name || ret.email || t.admin.noName;
   const resultsKey = JSON.stringify([ret.filingStatus, ret.fedResult, ret.stateResult, ret.legalName]);
@@ -358,12 +358,124 @@ function ReturnDetail({ returnId }: { returnId: number }) {
         <ResultsForm key={resultsKey} returnId={ret.id} filingStatus={ret.filingStatus} fed={ret.fedResult} state={ret.stateResult} legalName={ret.legalName ?? ret.name ?? ""} />
       </div>
 
+      <SignCard key={`${ret.step}-${idCheck?.checkedAt ?? ""}`} returnId={ret.id} step={ret.step} approvedAt={ret.approvedAt} idCheck={idCheck} legalName={ret.legalName ?? ret.name ?? ""} />
       <ClientDocs mode={mode} docs={docs} onView={setViewing} />
       <PreparerDocs returnId={ret.id} docs={docs} onView={setViewing} />
       <MessagesThread returnId={ret.id} clientName={name} messages={messages} />
 
       <TaxFileViewer docId={viewing?.id ?? null} title={viewing?.title} onClose={() => setViewing(null)} />
     </div>
+  );
+}
+
+// ── Signing the 8879: in person (photo ID checked, signing opened in the app) or on paper ──
+type IdCheck = { idType: string; taxIdKind: string; taxIdLast4: string; checkedByName: string | null; checkedAt: string; openUntil: string | null; open: boolean } | null;
+
+function SignCard({ returnId, step, approvedAt, idCheck, legalName }: { returnId: number; step: number; approvedAt: Date | string | null; idCheck: IdCheck; legalName: string }) {
+  const t = useCopy(taxesCopy);
+  const c = t.signCard;
+  const { lang } = useLang();
+  const locale = intlLocale(lang);
+  const refresh = useRefresh();
+  const onError = useErrorToast();
+  const ids = { type: useId(), name: useId(), kind: useId(), tin: useId(), address: useId(), dob: useId(), photo: useId() };
+  const [again, setAgain] = useState(false);
+  const [idType, setIdType] = useState<IdType>("license");
+  const [name, setName] = useState(legalName);
+  const [taxIdKind, setTaxIdKind] = useState<"ssn" | "itin">("ssn");
+  const [taxId, setTaxId] = useState("");
+  const [address, setAddress] = useState("");
+  const [dob, setDob] = useState("");
+  const [photo, setPhoto] = useState(false);
+  const done = { onSuccess: async () => { toast.success(t.admin.saved); setAgain(false); setTaxId(""); setPhoto(false); await refresh(); }, onError };
+  const check = trpc.tax.adminIdCheck.useMutation(done);
+  const openSigning = trpc.tax.adminOpenSigning.useMutation(done);
+  const atSign = step === TAX_STEP.sign;
+  const ready = name.trim().length >= 3 && taxId.replace(/\D/g, "").length === 9 && address.trim().length >= 5 && !!dob && photo;
+  const time = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString(locale, { hour: "numeric", minute: "2-digit" }) : "");
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!ready) return;
+    check.mutate({ returnId, idType, name: name.trim(), taxIdKind, taxId, address: address.trim(), dob, photoMatched: true });
+  };
+
+  return (
+    <Card className="gap-4 border-neutral-200/80 shadow-sm" data-sign-card="">
+      <CardHeader>
+        <h2 className="flex items-center gap-2 text-base font-semibold leading-none"><Shield className="h-4 w-4" aria-hidden />{c.title}</h2>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {approvedAt ? (
+          <p className="flex items-center gap-2 text-sm font-medium text-emerald-700"><CheckCircle2 className="h-4 w-4" aria-hidden />{c.signedOn(fmtDate(approvedAt, locale))}</p>
+        ) : !atSign ? (
+          <p className="text-sm text-neutral-500">{c.notYet}</p>
+        ) : (
+          <>
+            {idCheck && !again ? (
+              <div className="space-y-3">
+                <p className="text-sm text-neutral-700">
+                  {c.checked(fmtDateTime(idCheck.checkedAt, locale), idCheck.checkedByName ?? "—", c.idTypes[idCheck.idType] ?? idCheck.idType, `${idCheck.taxIdKind === "itin" ? "ITIN" : "SSN"} ***-**-${idCheck.taxIdLast4}`)}
+                </p>
+                <p className={cn("flex items-center gap-2 text-sm font-medium", idCheck.open ? "text-emerald-700" : "text-neutral-500")} data-sign-state={idCheck.open ? "open" : "closed"}>
+                  <span className={cn("h-2 w-2 rounded-full", idCheck.open ? "animate-pulse bg-emerald-500 motion-reduce:animate-none" : "bg-neutral-300")} aria-hidden />
+                  {idCheck.open ? c.openUntil(time(idCheck.openUntil)) : c.closed}
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" disabled={openSigning.isPending} onClick={() => openSigning.mutate({ returnId, open: !idCheck.open })}
+                    className={idCheck.open ? "border border-neutral-200 bg-white text-neutral-800 hover:bg-neutral-50" : "bg-black text-white hover:bg-neutral-800"}>
+                    {openSigning.isPending && <Loader2 className="animate-spin" aria-hidden />}{idCheck.open ? c.close : c.open}
+                  </Button>
+                  <Button type="button" variant="outline" onClick={() => setAgain(true)}>{c.again}</Button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={submit} className="space-y-4">
+                <p className="text-sm text-neutral-600">{c.intro}</p>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-1.5">
+                    <Label htmlFor={ids.type} className="text-xs text-neutral-500">{c.idType}</Label>
+                    <select id={ids.type} value={idType} onChange={(e) => { const v = ID_TYPES.find((x) => x === e.target.value); if (v) setIdType(v); }} className={selectClass}>
+                      {ID_TYPES.map((k) => <option key={k} value={k}>{c.idTypes[k]}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={ids.name} className="text-xs text-neutral-500">{c.name}</Label>
+                    <Input id={ids.name} value={name} onChange={(e) => setName(e.target.value)} maxLength={160} autoComplete="off" />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={ids.tin} className="text-xs text-neutral-500">{c.taxId}</Label>
+                    <div className="flex gap-2">
+                      <select aria-label={c.taxIdKind} value={taxIdKind} onChange={(e) => setTaxIdKind(e.target.value === "itin" ? "itin" : "ssn")} className={cn(selectClass, "w-24 shrink-0")}>
+                        <option value="ssn">SSN</option><option value="itin">ITIN</option>
+                      </select>
+                      <Input id={ids.tin} value={taxId} onChange={(e) => setTaxId(e.target.value)} inputMode="numeric" maxLength={11} autoComplete="off" placeholder="123-45-6789" />
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label htmlFor={ids.dob} className="text-xs text-neutral-500">{c.dob}</Label>
+                    <Input id={ids.dob} type="date" value={dob} onChange={(e) => setDob(e.target.value)} />
+                  </div>
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <Label htmlFor={ids.address} className="text-xs text-neutral-500">{c.address}</Label>
+                    <Input id={ids.address} value={address} onChange={(e) => setAddress(e.target.value)} maxLength={240} autoComplete="off" />
+                  </div>
+                </div>
+                <label htmlFor={ids.photo} className="flex cursor-pointer items-start gap-2.5 text-sm text-neutral-800">
+                  <input id={ids.photo} type="checkbox" checked={photo} onChange={(e) => setPhoto(e.target.checked)} className="mt-0.5 h-4 w-4 accent-black" />{c.photo}
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="submit" disabled={!ready || check.isPending} className="bg-black text-white hover:bg-neutral-800">
+                    {check.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}{c.save}
+                  </Button>
+                  {idCheck && <Button type="button" variant="outline" onClick={() => setAgain(false)}>{c.cancel}</Button>}
+                </div>
+              </form>
+            )}
+            <p className="border-t border-neutral-100 pt-3 text-xs text-neutral-500">{c.paper}</p>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -677,7 +789,7 @@ function ClientDocs({ mode, docs, onView }: { mode: TaxMode; docs: TaxDocMeta[];
         ) : (
           <div className="space-y-5">
             {kinds.map((kind) => {
-              const title = t.docs[mode][kind]?.title ?? kind;
+              const title = t.docs[mode][kind]?.title ?? t.preparerDocs[kind] ?? kind;
               const list = clientDocs.filter((d) => d.kind === kind);
               return (
                 <section key={kind} aria-label={title}>

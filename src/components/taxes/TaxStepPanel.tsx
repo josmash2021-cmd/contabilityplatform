@@ -7,7 +7,9 @@ import { intlLocale } from "@/i18n/lang";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { TAX_STEP, TAX_STEP_COUNT, shownDocKinds, type TaxMode } from "@contracts/taxRules";
 import { TaxLink } from "./TaxSide";
-import { TaxSignForm } from "./TaxSign";
+import { TaxSignForm, type InPerson } from "./TaxSign";
+import type { PickFn } from "./TaxDocs";
+import { PAPER_8879 } from "@contracts/taxRules";
 import { shortDate, taxMoney, type Doc, type Ret, type TaxResult } from "./taxView";
 
 function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "good" | "warn"; title: ReactNode; meta: ReactNode }) {
@@ -24,9 +26,9 @@ function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "goo
  * files sent, the preparer's review, the results and documents the preparer sent, the client's approval
  * at "Revisa y firma" (tax.sign, our own e-signature), the e-file and acceptance dates, and where to follow the refund.
  */
-export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName, signName, onAsk }: {
+export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName, signName, inPerson, onAsk, onPick, busyKind }: {
   i: number; ret: Ret; mode: TaxMode; docs: readonly Doc[]; onOpen: (d: Doc) => void; onSeeNow: () => void; preparerName: string;
-  signName: string | null; onAsk: () => void;
+  signName: string | null; inPerson: InPerson; onAsk: () => void; onPick: PickFn; busyKind: string | null;
 }) {
   const t = useCopy(taxesCopy);
   const p = t.p.panel;
@@ -37,7 +39,7 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerNam
   const date = (k: number) => shortDate(ret.stepDates?.[k], locale, thisYear);
   const mine = docs.filter((d) => d.source === "client");
   const prep = (kind: string) => docs.filter((d) => d.source === "preparer" && d.kind === kind);
-  const titleOf = (k: string) => t.docs[mode][k]?.title ?? k;
+  const titleOf = (k: string) => t.docs[mode][k]?.title ?? t.preparerDocs[k] ?? k;
   const finalFed = prep("final_fed")[0], finalState = prep("final_state")[0], f8879 = prep("f8879")[0];
 
   const result = (label: string, r: TaxResult, word: string) => (
@@ -84,9 +86,10 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerNam
     );
   } else if (i === TAX_STEP.sign) {
     const approvedOn = ret.approvedAt ? shortDate(ret.approvedAt, locale, thisYear) : "";
-    const signedDoc = prep("f8879_signed")[0];
+    // Signed in the app, or the hand-signed one the preparer marked OK.
+    const signedDoc = prep("f8879_signed")[0] ?? mine.find((d) => d.kind === PAPER_8879 && d.status === "ok");
     // Still to sign: option A's form (total, previews, our own signature of the 8879).
-    body = st === TAX_STEP.sign && !ret.approvedAt ? <TaxSignForm ret={ret} docs={docs} preparerName={preparerName} signName={signName} onOpen={onOpen} onAsk={onAsk} /> : (
+    body = st === TAX_STEP.sign && !ret.approvedAt ? <TaxSignForm ret={ret} docs={docs} preparerName={preparerName} signName={signName} inPerson={inPerson} onOpen={onOpen} onAsk={onAsk} onPick={onPick} busyKind={busyKind} /> : (
       <>
         {results(st > TAX_STEP.sign ? "" : p.estimated)}
         {(finalFed || finalState || f8879) && (
