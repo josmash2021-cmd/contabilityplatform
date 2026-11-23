@@ -1,22 +1,23 @@
 import { ArrowLeft, ScrollText } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import { AnimatedPage } from "@/components/AnimatedPage";
 import { useCopy } from "@/i18n/useI18n";
 import { termsOfUseCopy } from "@/i18n/copy/termsOfUse";
 import { useNoZoom } from "@/hooks/useNoZoom";
+import { useBack } from "@/hooks/useBack";
+import { CONTACT_EMAIL } from "@contracts/constants";
 
-const CONTACT_EMAIL = "josmash2021@gmail.com";
 
 /** "Términos de uso" (/terminos-de-uso, /terms-of-use): the app's terms, accepted when creating an account. */
 export default function TermsOfUse() {
-  const navigate = useNavigate();
+  const back = useBack(); // opened on its own (new tab, a link), it goes to the home page
   const t = useCopy(termsOfUseCopy);
   useNoZoom(); // Part of the public site: no zoom.
 
   return (
     <AnimatedPage className="mx-auto max-w-3xl p-4 lg:p-8">
       <div className="mb-6 flex items-start gap-3">
-        <button type="button" onClick={() => navigate(-1)} aria-label={t.back}
+        <button type="button" onClick={back} aria-label={t.back}
           className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
           <ArrowLeft className="h-4 w-4" />
         </button>

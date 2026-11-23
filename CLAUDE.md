@@ -8,7 +8,7 @@ Live: https://aethelaccountingplatform.com · repo folder `contabilityplatform` 
 - Two modes per account: **business** (sales/POS, invoices, quotes, customers, vendors, expenses, receipts, bank, reports, accountant, team, assistant, taxes) and **personal** (bank, transactions, budgets, goals, subscriptions, assistant, taxes).
 - Plans: business Básico / Pro / Negocio, personal Básico (free) / Pro; 7-day free trial, no card. Rules live in `contracts/planFeatures.ts` (single source); prices in `src/components/marketing/content.ts` must match `api/lib/plans.ts`.
 - Tax prep is **free** for the client, **Alabama only**, documents encrypted in the DB (`TAX_FILES_KEY`).
-- Public site: `/` (landing when signed out), `/producto`, `/como-funciona`, `/seguridad`, `/precios`, `/preguntas`, `/privacy`, `/terminos` (= `/terms`, tax service terms) and `/terminos-de-uso` (= `/terms-of-use`, the app's own terms, `src/i18n/copy/termsOfUse.ts`); both are drafts the owner should have a lawyer review. Sign-in: `/login`, `/register`, `/forgot-password`, `/join`.
+- Public site: `/` (landing when signed out), `/producto`, `/como-funciona`, `/seguridad`, `/precios`, `/preguntas`, `/privacy`, `/terminos` (= `/terms`, tax service terms) and `/terminos-de-uso` (= `/terms-of-use`, the app's own terms, `src/i18n/copy/termsOfUse.ts`); both are drafts the owner should have a lawyer review. Their public contact address (and the Privacy Policy's) is `CONTACT_EMAIL` in `contracts/constants.ts` (team@personalandbusinesssolution.com; an address can't have "&" after the @). The owner's own admin login (`OWNER_EMAIL` in `api/auth-router.ts`) is a different thing: never change it. The legal pages' back arrow uses `useBack()` (`src/hooks/useBack.ts`): opened on their own it goes home. Sign-in: `/login`, `/register`, `/forgot-password`, `/join`.
 - Admin (role `admin`): `/admin`, `/admin/usuarios|suscripciones|bloqueados|ingresos`, `/admin/impuestos`, `/admin/soporte` (site support chat).
 
 ## Owner's standing rules (always)
@@ -62,5 +62,5 @@ React 19 + Vite + Tailwind 3 + shadcn (`src/components/ui`) · tRPC on Hono · d
 - Gotchas: screenshot `clip` is in page coordinates (add `scrollX/scrollY`); the server reads the auth **cookie before** `x-auth-token`, so test `fetch` calls use `credentials: "omit"`; make a test admin with `UPDATE users SET role='admin'` on the local DB only.
 
 ## Open items (ask the owner when relevant)
-- Privacy Policy contact email; correcting production card expenses booked to 1150 (needs permission); the commercial video (needs a Spanish voice: online neural voice vs owner's own recording).
+- Correcting production card expenses booked to 1150 (needs permission); the commercial video (needs a Spanish voice: online neural voice vs owner's own recording).
 - Owner should rotate the Gmail app password, test "Olvidé mi contraseña", and back up `TAX_FILES_KEY`.

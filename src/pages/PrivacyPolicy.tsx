@@ -3,12 +3,12 @@ import { AnimatedPage } from "@/components/AnimatedPage";
 import { Card, CardContent } from "@/components/ui/card";
 import { Shield, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useNavigate } from "react-router";
 import { useCopy } from "@/i18n/useI18n";
 import { billingCopy } from "@/i18n/copy/billing";
 import { useNoZoom } from "@/hooks/useNoZoom";
+import { useBack } from "@/hooks/useBack";
+import { CONTACT_EMAIL } from "@contracts/constants";
 
-const CONTACT_EMAIL = "josmash2021@gmail.com";
 
 /** Renders copy segments: even items as plain text, odd items in bold. */
 function Rich({ parts }: { parts: string[] }) {
@@ -16,14 +16,14 @@ function Rich({ parts }: { parts: string[] }) {
 }
 
 export default function PrivacyPolicy() {
-  const navigate = useNavigate();
+  const back = useBack(); // opened on its own (new tab, a link), it goes to the home page
   const t = useCopy(billingCopy).privacy;
   useNoZoom(); // Part of the public site: no zoom.
 
   return (
     <AnimatedPage className="p-4 lg:p-6 max-w-3xl mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <Button variant="outline" size="sm" onClick={() => navigate(-1)} className="h-9 px-2 border-neutral-200">
+        <Button variant="outline" size="sm" onClick={back} className="h-9 px-2 border-neutral-200">
           <ArrowLeft className="w-4 h-4" />
         </Button>
         <div>
