@@ -100,7 +100,11 @@ export const adminRouter = createRouter({
       const status = userStatus(u, subs, pays as AdminPayRow[], until);
       const banks = await db.select({ bankName: bankAccounts.bankName, isActive: bankAccounts.isActive }).from(bankAccounts).where(eq(bankAccounts.userId, u.id)) as { bankName: string; isActive: boolean | null }[];
       let team = 0;
-      try { team = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE ownerId = ${u.id}`))[0]?.n ?? 0); } catch { /* no team table */ }
+      let memberOf = 0;
+      try {
+        team = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE ownerId = ${u.id}`))[0]?.n ?? 0);
+        memberOf = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE memberUserId = ${u.id}`))[0]?.n ?? 0);
+      } catch { /* no team table */ }
       let tax: { id: number; year: number; step: number; submitted: boolean } | null = null;
       try {
         const r = rowsOf<{ id: number; taxYear: number; step: number; submittedAt: string | null }>(await db.execute(sql`SELECT id, taxYear, step, submittedAt FROM taxReturns WHERE userId = ${u.id} ORDER BY taxYear DESC, id DESC LIMIT 1`))[0];
@@ -115,8 +119,31 @@ export const adminRouter = createRouter({
         paidTotal: Math.round(paidTotal * 100) / 100,
         banks: [...new Set(banks.filter((b) => b.isActive !== false).map((b) => b.bankName))],
         team,
+        memberOf,
         tax,
       };
+    }),
+
+  // ── "Cambiar a Personal / Negocio": the type of account. Nothing is deleted: business data stays and shows
+  //    again if it goes back. Not for admins, nor (to Personal) for someone in a team: the team is business-only. ──
+  setMode: adminQuery
+    .input(z.object({ userId: z.number().int().positive(), mode: z.enum(["business", "personal"]) }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      const u = ((await db.select().from(users).where(eq(users.id, input.userId)).limit(1)) as UserRow[])[0];
+      if (!u) return { success: false as const, error: "notFound" as const };
+      if (u.role === "admin") return { success: false as const, error: "admin" as const };
+      if (input.mode === "personal") {
+        let asMember = 0, asOwner = 0;
+        try {
+          asMember = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE memberUserId = ${u.id}`))[0]?.n ?? 0);
+          asOwner = Number(rowsOf<{ n: number }>(await db.execute(sql`SELECT COUNT(*) AS n FROM teamMembers WHERE ownerId = ${u.id}`))[0]?.n ?? 0);
+        } catch { /* no team table: no team */ }
+        if (asMember) return { success: false as const, error: "teamMember" as const };
+        if (asOwner) return { success: false as const, error: "hasTeam" as const };
+      }
+      await db.update(users).set({ modePreference: input.mode, hasPersonalMode: true }).where(eq(users.id, u.id));
+      return { success: true as const, mode: input.mode };
     }),
 
   // ── "Dar más días gratis": the trial runs N more days (from today, or from when it would end) ──

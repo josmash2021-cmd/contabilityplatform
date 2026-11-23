@@ -1,7 +1,7 @@
 // The admin's own shell, apart from the business app: a menu on computers (Resumen, Usuarios, Pagos, Impuestos,
 // Soporte, Bloqueados, Sistema, and "Volver a mi cuenta"), a bar at the bottom on phones with "Más" for the rest.
 // The counts on the menu and the system card come from admin.overview (the same numbers as the Resumen).
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router";
 import { ArrowLeft, CreditCard, FileText, Headphones, Home, MoreHorizontal, Server, UserX, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
@@ -12,6 +12,7 @@ import { useCopy } from "@/i18n/useI18n";
 import { adminCopy, type AdminCopy } from "@/i18n/copy/admin";
 import { cn } from "@/lib/utils";
 import { MenuCount } from "@/components/admin/adminUi";
+import { preloadWhenIdle } from "@/lib/preloadPages";
 
 type Item = { path: string; label: keyof AdminCopy["menu"]; icon: LucideIcon; also?: string[]; exact?: boolean };
 
@@ -37,6 +38,7 @@ export default function AdminLayout() {
   const { pathname } = useLocation();
   const [more, setMore] = useState(false);
   const { data: o } = trpc.admin.overview.useQuery(undefined, { enabled: isAdmin, refetchInterval: 20_000, refetchOnWindowFocus: true });
+  useEffect(() => { if (isAdmin) preloadWhenIdle("admin"); }, [isAdmin]);
 
   if (!isAdmin) return <Navigate to="/" replace />;
 

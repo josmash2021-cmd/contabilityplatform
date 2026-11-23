@@ -7,6 +7,7 @@ import { Toaster } from "@/components/ui/sonner"
 import App from './App.tsx'
 import { I18nProvider } from "@/i18n/I18nProvider"
 import { oneToastAtATime } from "@/lib/oneToast"
+import { reloadForNewVersion } from "@/lib/newVersion"
 
 // One notification at a time: a new one replaces the one on screen.
 oneToastAtATime()
@@ -25,6 +26,12 @@ if (window.matchMedia?.("(display-mode: standalone)").matches || (navigator as N
 window.addEventListener("unhandledrejection", (e) => {
   const r = e.reason as { name?: string; message?: string } | undefined
   if (r?.name === "AbortError" && /transition was skipped/i.test(r.message ?? "")) e.preventDefault()
+})
+
+// A piece of code (or its styles) from an older version couldn't be downloaded (a tab opened before we published):
+// reload once to get the new version. If it just did, the error screen takes over (src/components/ErrorBoundary.tsx).
+window.addEventListener("vite:preloadError", (e) => {
+  if (reloadForNewVersion()) e.preventDefault()
 })
 
 createRoot(document.getElementById('root')!).render(

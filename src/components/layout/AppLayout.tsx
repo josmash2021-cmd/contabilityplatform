@@ -1,4 +1,5 @@
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense } from "react";
+import { preloadWhenIdle } from "@/lib/preloadPages";
 import { toast } from "sonner";
 import { Outlet, useLocation, useNavigate, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
@@ -270,16 +271,24 @@ export function AppLayout() {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => { el.dataset.fx = "in"; }));
     return () => cancelAnimationFrame(raf);
   }, [location.key, location.pathname]);
+  // The tapped item shows as selected right away (before the page has changed); a change of page from
+  // anywhere else (back button, a link) takes over, because `from` no longer matches.
+  const [pend, setPend] = useState<{ to: string; from: string } | null>(null);
+  const navPath = pend && pend.from === pathname ? pend.to : pathname;
+  // The other pages' code downloads once the app is idle, so a tap doesn't wait for it (src/lib/preloadPages.ts).
+  useEffect(() => { preloadWhenIdle("app"); }, []);
   const go = (path: string) => {
     setMoreOpen(false);
     setNewOpen(false);
     const el = fxRef.current;
     const same = path === pathname;
     const still = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!same) setPend({ to: path.split("?")[0], from: pathname });
     if (same || still || !el) { navigate(path); return; }
     el.dataset.fx = "out";
-    // The old page stays soft while the next one loads, then the layout effect above brings it into focus.
-    window.setTimeout(() => startTransition(() => { navigate(path); }), 240);
+    // No waiting: the page changes now. If its code is still downloading, the old page stays soft meanwhile
+    // (a transition keeps it on screen), then the layout effect above brings the new one into focus.
+    startTransition(() => { navigate(path); });
     // Never stay soft if nothing changed.
     window.setTimeout(() => { if (el.dataset.fx === "out" && fxPath.current === pathname) el.dataset.fx = "in"; }, 3000);
   };
@@ -320,7 +329,7 @@ export function AppLayout() {
             <p className="truncate text-xs text-slate-500">{planLabel || "Personal & Business Solutions"}</p>
           </div>
         </div>
-        <SideNav groups={groups} pathname={pathname} locked={locked} label={label} t={t} onGo={go} counts={counts} />
+        <SideNav groups={groups} pathname={navPath} locked={locked} label={label} t={t} onGo={go} counts={counts} />
         <div className="border-t border-slate-100 px-5 py-3">
           <Link to="/privacy" className="text-[11px] text-slate-400 hover:text-slate-600">{t.shell.privacy}</Link>
         </div>
@@ -355,7 +364,7 @@ export function AppLayout() {
 
         {/* ── Phone tab bar ── */}
         <nav data-tabbar aria-label={t.shell.searchLabel} className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-slate-200 bg-white pb-[max(16px,calc(env(safe-area-inset-bottom,0px)+8px))] pl-[max(4px,env(safe-area-inset-left,0px))] pr-[max(4px,env(safe-area-inset-right,0px))] pt-1.5 lg:hidden">
-          {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(pathname, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} count={counts[tab.path]} /> : <span key="empty-l" />)}
+          {[tabs[0], tabs[1]].map((tab) => tab ? <TabButton key={tab.path} item={tab} on={isOn(navPath, tab.path)} label={t.shell.short[tab.path] ?? label(tab.path)} onGo={go} count={counts[tab.path]} /> : <span key="empty-l" />)}
           <div className="grid place-items-center">
             {newItems.length ? (
               <button type="button" onClick={() => setNewOpen(true)} aria-haspopup="dialog" aria-expanded={newOpen} aria-label={t.shell.newTitle}
@@ -364,11 +373,11 @@ export function AppLayout() {
               </button>
             ) : null}
           </div>
-          {tabs[2] ? <TabButton item={tabs[2]} on={isOn(pathname, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
+          {tabs[2] ? <TabButton item={tabs[2]} on={isOn(navPath, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
           <button
             onClick={() => setMoreOpen(true)}
-            aria-current={rest.some((i) => isOn(pathname, i.path)) ? "page" : undefined}
-            className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", rest.some((i) => isOn(pathname, i.path)) ? "text-blue-600" : "text-slate-500")}
+            aria-current={rest.some((i) => isOn(navPath, i.path)) ? "page" : undefined}
+            className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", rest.some((i) => isOn(navPath, i.path)) ? "text-blue-600" : "text-slate-500")}
           >
             <MoreHorizontal className="h-[22px] w-[22px]" aria-hidden />{t.shell.more}
           </button>
@@ -409,7 +418,7 @@ export function AppLayout() {
                   <ul className={cn("grid gap-1.5", !g.title && "mt-3.5")}>
                     {items.map((i) => {
                       const Icon = i.icon;
-                      const on = isOn(pathname, i.path);
+                      const on = isOn(navPath, i.path);
                       return (
                         <li key={i.path}>
                           <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined}

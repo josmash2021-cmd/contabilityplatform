@@ -327,8 +327,8 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
 
 /* Changing page in the app (AppLayout): soft on the way out, then the new page eases into focus. At rest there is no
    filter at all, so nothing "fixed" inside a page is affected. */
-.page-fx { transition: filter 620ms cubic-bezier(0.22, 1, 0.36, 1), opacity 620ms cubic-bezier(0.22, 1, 0.36, 1); }
-.page-fx[data-fx="out"] { filter: blur(7px); opacity: 0.4; will-change: filter, opacity; transition-duration: 240ms; transition-timing-function: cubic-bezier(0.4, 0, 0.7, 1); }
+.page-fx { transition: filter 420ms cubic-bezier(0.22, 1, 0.36, 1), opacity 420ms cubic-bezier(0.22, 1, 0.36, 1); }
+.page-fx[data-fx="out"] { filter: blur(6px); opacity: 0.45; will-change: filter, opacity; transition-duration: 180ms; transition-timing-function: cubic-bezier(0.4, 0, 0.7, 1); }
 
 /* Asistente: the answer's caret while it writes itself in, and the "writing" dots. */
 .typing-caret { display: inline-block; width: 2px; height: 1.05em; margin-left: 2px; vertical-align: -0.15em; border-radius: 1px; background: #2563eb; animation: caret-blink 1s steps(2, start) infinite; }

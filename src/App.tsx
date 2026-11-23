@@ -16,23 +16,20 @@ import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import TermsOfUse from "@/pages/TermsOfUse";
 import AuthLayout from "@/components/layout/AuthLayout";
+import { registerPreload, type PreloadGroup } from "@/lib/preloadPages";
+import { reloadForNewVersion } from "@/lib/newVersion";
 
 /**
  * Lazy-load a page. After a deploy, the old chunk files no longer exist; if a
- * chunk fails to load, reload once to pick up the new version.
+ * chunk fails to load, reload once to pick up the new version (src/lib/newVersion.ts). If it already did a moment
+ * ago, the error goes to the ErrorBoundary around the routes: a clear screen with "Recargar", never a blank page.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- same constraint as React.lazy
-function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>) {
+function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T }>, group?: PreloadGroup) {
+  if (group) registerPreload(group, load);
   return lazy(() =>
     load().catch((err) => {
-      const key = "chunk-reload-at";
-      let last = 0;
-      try { last = Number(sessionStorage.getItem(key) || 0); } catch { /* ignore */ }
-      if (Date.now() - last > 10_000) {
-        try { sessionStorage.setItem(key, String(Date.now())); } catch { /* ignore */ }
-        window.location.reload();
-        return new Promise<{ default: T }>(() => {}); // wait for the reload
-      }
+      if (reloadForNewVersion()) return new Promise<{ default: T }>(() => {}); // wait for the reload
       throw err;
     }),
   );
@@ -41,48 +38,48 @@ function lazyPage<T extends ComponentType<any>>(load: () => Promise<{ default: T
 // App pages are split out of the landing bundle.
 const AppLayout = lazyPage(() => import("@/components/layout/AppLayout").then((m) => ({ default: m.AppLayout })));
 const AdminLayout = lazyPage(() => import("@/components/layout/AdminLayout"));
-const Dashboard = lazyPage(() => import("@/pages/Dashboard"));
-const POS = lazyPage(() => import("@/pages/POS"));
-const Services = lazyPage(() => import("@/pages/Services"));
-const Customers = lazyPage(() => import("@/pages/Customers"));
-const Transactions = lazyPage(() => import("@/pages/Transactions"));
-const Bank = lazyPage(() => import("@/pages/Bank"));
-const BankCategoryDetail = lazyPage(() => import("@/pages/BankCategoryDetail"));
-const BankTransactions = lazyPage(() => import("@/pages/BankTransactions"));
-const Reports = lazyPage(() => import("@/pages/Reports"));
-const Settings = lazyPage(() => import("@/pages/Settings"));
-const PersonalDashboard = lazyPage(() => import("@/pages/PersonalDashboard"));
-const PersonalTransactions = lazyPage(() => import("@/pages/PersonalTransactions"));
-const PersonalGoals = lazyPage(() => import("@/pages/PersonalGoals"));
-const PersonalSubscriptions = lazyPage(() => import("@/pages/PersonalSubscriptions"));
-const PersonalBank = lazyPage(() => import("@/pages/PersonalBank"));
-const PersonalCategoryDetail = lazyPage(() => import("@/pages/PersonalCategoryDetail"));
+const Dashboard = lazyPage(() => import("@/pages/Dashboard"), "app");
+const POS = lazyPage(() => import("@/pages/POS"), "app");
+const Services = lazyPage(() => import("@/pages/Services"), "app");
+const Customers = lazyPage(() => import("@/pages/Customers"), "app");
+const Transactions = lazyPage(() => import("@/pages/Transactions"), "app");
+const Bank = lazyPage(() => import("@/pages/Bank"), "app");
+const BankCategoryDetail = lazyPage(() => import("@/pages/BankCategoryDetail"), "app");
+const BankTransactions = lazyPage(() => import("@/pages/BankTransactions"), "app");
+const Reports = lazyPage(() => import("@/pages/Reports"), "app");
+const Settings = lazyPage(() => import("@/pages/Settings"), "app");
+const PersonalDashboard = lazyPage(() => import("@/pages/PersonalDashboard"), "app");
+const PersonalTransactions = lazyPage(() => import("@/pages/PersonalTransactions"), "app");
+const PersonalGoals = lazyPage(() => import("@/pages/PersonalGoals"), "app");
+const PersonalSubscriptions = lazyPage(() => import("@/pages/PersonalSubscriptions"), "app");
+const PersonalBank = lazyPage(() => import("@/pages/PersonalBank"), "app");
+const PersonalCategoryDetail = lazyPage(() => import("@/pages/PersonalCategoryDetail"), "app");
 const Onboarding = lazyPage(() => import("@/pages/Onboarding"));
 const Setup = lazyPage(() => import("@/pages/Setup"));
 const Diagnostico = lazyPage(() => import("@/pages/Diagnostico"));
-const AdminHome = lazyPage(() => import("@/pages/AdminHome"));
-const AdminUsers = lazyPage(() => import("@/pages/AdminUsers"));
-const AdminSystem = lazyPage(() => import("@/pages/AdminSystem"));
-const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"));
-const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"));
-const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"));
-const AdminSupport = lazyPage(() => import("@/pages/AdminSupport"));
-const Taxes = lazyPage(() => import("@/pages/Taxes"));
-const Assistant = lazyPage(() => import("@/pages/Assistant"));
-const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"));
-const Team = lazyPage(() => import("@/pages/Team"));
+const AdminHome = lazyPage(() => import("@/pages/AdminHome"), "admin");
+const AdminUsers = lazyPage(() => import("@/pages/AdminUsers"), "admin");
+const AdminSystem = lazyPage(() => import("@/pages/AdminSystem"), "admin");
+const AdminDetail = lazyPage(() => import("@/pages/AdminDetail"), "admin");
+const AdminUserActivity = lazyPage(() => import("@/pages/AdminUserActivity"), "admin");
+const AdminTaxes = lazyPage(() => import("@/pages/AdminTaxes"), "admin");
+const AdminSupport = lazyPage(() => import("@/pages/AdminSupport"), "admin");
+const Taxes = lazyPage(() => import("@/pages/Taxes"), "app");
+const Assistant = lazyPage(() => import("@/pages/Assistant"), "app");
+const PersonalBudgets = lazyPage(() => import("@/pages/PersonalBudgets"), "app");
+const Team = lazyPage(() => import("@/pages/Team"), "app");
 const JoinTeam = lazyPage(() => import("@/pages/JoinTeam"));
 const SiteProducto = lazyPage(() => import("@/pages/site/Producto"));
 const SiteComoFunciona = lazyPage(() => import("@/pages/site/ComoFunciona"));
 const SiteSeguridad = lazyPage(() => import("@/pages/site/Seguridad"));
 const SitePrecios = lazyPage(() => import("@/pages/site/Precios"));
 const SitePreguntas = lazyPage(() => import("@/pages/site/Preguntas"));
-const Receipts = lazyPage(() => import("@/pages/Receipts"));
-const Expenses = lazyPage(() => import("@/pages/Expenses"));
-const Vendors = lazyPage(() => import("@/pages/Vendors"));
-const Quotes = lazyPage(() => import("@/pages/Quotes"));
-const Invoices = lazyPage(() => import("@/pages/Invoices"));
-const Accountant = lazyPage(() => import("@/pages/Accountant"));
+const Receipts = lazyPage(() => import("@/pages/Receipts"), "app");
+const Expenses = lazyPage(() => import("@/pages/Expenses"), "app");
+const Vendors = lazyPage(() => import("@/pages/Vendors"), "app");
+const Quotes = lazyPage(() => import("@/pages/Quotes"), "app");
+const Invoices = lazyPage(() => import("@/pages/Invoices"), "app");
+const Accountant = lazyPage(() => import("@/pages/Accountant"), "app");
 
 function PageLoader() {
   return (
@@ -114,7 +111,11 @@ function PublicGuard({ children }: { children: React.ReactNode }) {
 }
 
 export default function App() {
+  // Anything that fails while a page loads shows a clear screen (Recargar / Ir al inicio), never a blank page;
+  // going to another address gives it another chance.
+  const { pathname } = useLocation();
   return (
+    <ErrorBoundary resetKey={pathname}>
     <Suspense fallback={<PageLoader />}>
       <Routes>
         {/* Public auth routes */}
@@ -203,5 +204,6 @@ export default function App() {
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>
+    </ErrorBoundary>
   );
 }

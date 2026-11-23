@@ -2,7 +2,7 @@
 // and the actions with their names: email them, give more free days, give or remove free access, block, delete.
 import { useState } from "react";
 import { Link } from "react-router";
-import { AlertTriangle, ArrowRight, Clock, Gift, Mail, X } from "lucide-react";
+import { AlertTriangle, ArrowLeftRight, ArrowRight, Clock, Gift, Mail, X } from "lucide-react";
 import { toast } from "sonner";
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from "@/components/ui/sheet";
 import {
@@ -24,7 +24,7 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
   const { lang } = useLang();
   const utils = trpc.useUtils();
   const { data: d } = trpc.admin.userDetail.useQuery({ userId: userId ?? 0 }, { enabled: !!userId });
-  const [ask, setAsk] = useState<null | "extend" | "grant" | "block" | "delete">(null);
+  const [ask, setAsk] = useState<null | "extend" | "grant" | "block" | "delete" | "mode">(null);
 
   const refresh = () => Promise.all([utils.admin.userDetail.invalidate(), utils.admin.listUsers.invalidate(), utils.admin.overview.invalidate(), utils.admin.stats.invalidate()]);
   const fail = () => toast.error(t.sheet.error);
@@ -44,6 +44,14 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
     onSuccess: (r) => { if (r.success) { setAsk(null); void refresh(); } else fail(); },
     onError: fail,
   });
+  const setMode = trpc.admin.setMode.useMutation({
+    onSuccess: (r) => {
+      if (r.success) { toast.success(t.sheet.modeDone(t.kind[r.mode])); setAsk(null); void refresh(); return; }
+      toast.error(r.error === "teamMember" ? t.sheet.modeTeamMember : r.error === "hasTeam" ? t.sheet.modeHasTeam : t.sheet.error);
+      setAsk(null);
+    },
+    onError: fail,
+  });
   const del = trpc.admin.deleteUser.useMutation({
     onSuccess: (r) => { if (r.success) { setAsk(null); onClose(); void refresh(); } else fail(); },
     onError: fail,
@@ -55,6 +63,8 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
   const isAdmin = s?.kind === "admin";
   const canExtend = !!s && ["trial", "ended", "canceled", "free"].includes(s.kind);
   const canGrant = !!s && !isAdmin && s.kind !== "blocked" && s.kind !== "gift" && s.kind !== "paying";
+  const otherMode = u?.mode === "personal" ? "business" : "personal";
+  const paysSomething = !!s && (s.kind === "paying" || s.kind === "failed");
   const lastFailed = d?.payments.find((p) => p.status === "failed");
   const taxText = !d?.tax ? t.sheet.noTax : d.tax.submitted && d.tax.step >= 0 ? t.sheet.taxStep(d.tax.year, steps[d.tax.step] ?? "") : t.sheet.taxDraft(d.tax.year);
 
@@ -171,6 +181,9 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
             )}
             {!isAdmin && (
               <>
+                <button type="button" onClick={() => setAsk("mode")} className={cn(btn, "border border-slate-200 bg-white hover:bg-slate-50")}>
+                  <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />{t.sheet.mode(t.kind[otherMode])}
+                </button>
                 <div className="grid grid-cols-2 gap-2.5">
                   {s.kind === "blocked"
                     ? <button type="button" disabled={block.isPending} onClick={() => block.mutate({ userId: u.id })} className={cn(btn, "border border-slate-200 bg-white hover:bg-slate-50")}>{t.sheet.unblock}</button>
@@ -183,19 +196,35 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
           </div>
         )}
 
-        <AlertDialog open={ask === "block" || ask === "delete"} onOpenChange={(o) => { if (!o) setAsk(null); }}>
+        <AlertDialog open={ask === "block" || ask === "delete" || ask === "mode"} onOpenChange={(o) => { if (!o) setAsk(null); }}>
           <AlertDialogContent>
             <AlertDialogHeader>
-              <AlertDialogTitle>{ask === "delete" ? t.sheet.delete : t.sheet.block}</AlertDialogTitle>
-              <AlertDialogDescription>{ask === "delete" ? t.sheet.deleteConfirm(name) : t.sheet.blockConfirm(name)}</AlertDialogDescription>
+              <AlertDialogTitle>{ask === "delete" ? t.sheet.delete : ask === "mode" ? t.sheet.modeTitle(t.kind[otherMode]) : t.sheet.block}</AlertDialogTitle>
+              {ask === "mode" ? (
+                <AlertDialogDescription asChild>
+                  <div className="grid gap-2 text-sm text-slate-600">
+                    <p>{t.sheet.modeText(name, t.kind[otherMode])}</p>
+                    <p>{t.sheet.modeKeep}</p>
+                    {paysSomething && <p className="font-medium text-amber-800">{t.sheet.modePaying}</p>}
+                    <p>{t.sheet.modeRelogin(t.kind[otherMode])}</p>
+                  </div>
+                </AlertDialogDescription>
+              ) : (
+                <AlertDialogDescription>{ask === "delete" ? t.sheet.deleteConfirm(name) : t.sheet.blockConfirm(name)}</AlertDialogDescription>
+              )}
             </AlertDialogHeader>
             <AlertDialogFooter>
               <AlertDialogCancel>{t.sheet.cancel}</AlertDialogCancel>
               <AlertDialogAction
                 className={ask === "delete" ? "bg-red-600 hover:bg-red-700" : undefined}
-                onClick={(e) => { e.preventDefault(); if (!u) return; if (ask === "delete") del.mutate({ userId: u.id }); else block.mutate({ userId: u.id }); }}
+                onClick={(e) => {
+                  e.preventDefault(); if (!u) return;
+                  if (ask === "delete") del.mutate({ userId: u.id });
+                  else if (ask === "mode") setMode.mutate({ userId: u.id, mode: otherMode });
+                  else block.mutate({ userId: u.id });
+                }}
               >
-                {ask === "delete" ? t.sheet.deleteYes : t.sheet.block}
+                {ask === "delete" ? t.sheet.deleteYes : ask === "mode" ? t.sheet.modeYes(t.kind[otherMode]) : t.sheet.block}
               </AlertDialogAction>
             </AlertDialogFooter>
           </AlertDialogContent>
