@@ -17,10 +17,12 @@ import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
 import { decodeSignature, sha256, signatureId, signedPdf } from "./lib/taxSign";
 import { sealKey } from "./lib/taxSeal";
 import { utcDate } from "./lib/support";
+import { sendMail } from "./lib/mailer";
+import { taxStepMail } from "./lib/taxMail";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
-  ID_TYPES, PAPER_8879, canSend, currentTaxYear, isClientDocKind, missingToSend, sameName,
+  ID_TYPES, PAPER_8879, canSend, currentTaxYear, filingDeadline, isClientDocKind, missingToSend, sameName,
   type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
 } from "@contracts/taxRules";
 
@@ -129,6 +131,8 @@ export function ensureTaxTables(db: Db): Promise<void> {
     });
     await addColumn(sql`ALTER TABLE taxReturns ADD COLUMN approvedAt TIMESTAMP NULL`);
     await addColumn(sql`ALTER TABLE taxReturns ADD COLUMN legalName VARCHAR(160) NULL`);
+    // The client's language, for the step emails (saved when they send the return and sign).
+    await addColumn(sql`ALTER TABLE taxReturns ADD COLUMN lang VARCHAR(2) NULL`);
   })().catch((e) => {
     tablesReady = null;
     throw e;
@@ -262,6 +266,39 @@ async function latestIdCheck(db: Db, returnId: number): Promise<{ idType: string
   return { idType: row.idType, taxIdKind: row.taxIdKind, taxIdLast4: row.taxIdLast4, checkedByName: row.checkedByName, checkedAt: iso(row.checkedAt)!, openUntil: iso(row.openUntil), open: Number(row.open) === 1 };
 }
 
+/** "Tu preparador": the first name of whoever prepares the returns (the app's first admin). */
+async function preparerFirstName(db: Db): Promise<string | null> {
+  try {
+    const res = (await db.execute(sql`SELECT name FROM users WHERE role = 'admin' AND name IS NOT NULL AND name <> '' ORDER BY id LIMIT 1`)) as unknown as [Array<{ name: string }>] | Array<{ name: string }>;
+    const rows = (Array.isArray(res[0]) ? res[0] : res) as Array<{ name: string }>;
+    return rows[0]?.name?.trim().split(/\s+/)[0] || null;
+  } catch { return null; }
+}
+
+/**
+ * The client's email for the step the return just reached ("Tu declaración está lista para firmar"…), in their
+ * language. Never throws and never holds the request (callers don't wait for it).
+ */
+async function notifyStep(db: Db, returnId: number, step: number): Promise<void> {
+  try {
+    const r = (await db.select({
+      mode: taxReturns.mode, taxYear: taxReturns.taxYear, fed: taxReturns.fedResult, st: taxReturns.stateResult,
+      lang: sql<string | null>`lang`, legalName: sql<string | null>`legalName`, email: users.email, name: users.name,
+    }).from(taxReturns).leftJoin(users, eq(users.id, taxReturns.userId)).where(eq(taxReturns.id, returnId)).limit(1))[0];
+    if (!r?.email) return;
+    const lang = r.lang === "en" ? "en" : "es";
+    const kinds = [r.fed, r.st].map((x) => (typeof x === "string" ? (JSON.parse(x) as { kind?: string } | null) : (x as { kind?: string } | null))?.kind);
+    const due = new Date(`${filingDeadline(r.taxYear)}T12:00:00Z`).toLocaleDateString(lang === "en" ? "en-US" : "es-US", { timeZone: "UTC", day: "numeric", month: "long", year: "numeric" });
+    const mail = taxStepMail(step, {
+      to: r.email, lang, firstName: (r.name || r.legalName || "").trim().split(/\s+/)[0] ?? "", preparer: (await preparerFirstName(db)) ?? (lang === "en" ? "Your preparer" : "Tu preparador"),
+      mode: r.mode, refund: kinds.includes("refund"), owe: kinds.includes("owe"), deadline: due,
+    });
+    if (mail) await sendMail(mail);
+  } catch (e) {
+    console.error("[tax] step email:", e instanceof Error ? e.message : e);
+  }
+}
+
 /** A real calendar date (YYYY-MM-DD) for someone between 14 and 120 years old. */
 function realBirthDate(s: string): boolean {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
@@ -301,12 +338,7 @@ export const taxRouter = createRouter({
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
     // "Tu preparador": the first name of whoever prepares the returns (the app's admin), not a second "Tu preparador".
-    let preparerName: string | null = null;
-    try {
-      const res = (await db.execute(sql`SELECT name FROM users WHERE role = 'admin' AND name IS NOT NULL AND name <> '' ORDER BY id LIMIT 1`)) as unknown as [Array<{ name: string }>] | Array<{ name: string }>;
-      const rows = (Array.isArray(res[0]) ? res[0] : res) as Array<{ name: string }>;
-      preparerName = rows[0]?.name?.trim().split(/\s+/)[0] || null;
-    } catch { preparerName = null; }
+    const preparerName = await preparerFirstName(db);
     // The name to type to sign: the one the preparer confirmed from the ID, else the account's.
     const signName = ret?.legalName?.trim() || ctx.user.name?.trim() || null;
     // Signing in the office: open while the preparer, with the client and their photo ID, has opened it.
@@ -446,6 +478,8 @@ export const taxRouter = createRouter({
       }
       const now = new Date();
       await db.update(taxReturns).set({ step: 0, stepDates: stepDatesWith([], 0), consentAt: now, submittedAt: now }).where(eq(taxReturns.id, ret.id));
+      await db.execute(sql`UPDATE taxReturns SET lang = ${ctx.lang === "en" ? "en" : "es"} WHERE id = ${ret.id}`);
+      void notifyStep(db, ret.id, 0);
       return { ok: true };
     }),
 
@@ -509,6 +543,7 @@ export const taxRouter = createRouter({
       if (Number((claim as unknown as [{ affectedRows?: number }])[0]?.affectedRows ?? 0) === 0) return { ok: true, already: true };
       // Signed: the in-person window closes.
       await db.execute(sql`UPDATE taxIdChecks SET openUntil = NULL WHERE returnId = ${ret.id}`);
+      await db.execute(sql`UPDATE taxReturns SET lang = ${lang} WHERE id = ${ret.id}`);
       await db.execute(sql`INSERT INTO taxSignatures (returnId, userId, name, signature, signedAt, ip, userAgent, docId, docSha256)
         VALUES (${ret.id}, ${userId}, ${input.name}, ${encryptTaxFile(png)}, ${signedAt}, ${ip}, ${userAgent}, ${f8879?.id ?? null}, ${docSha256})`);
       await db.insert(taxDocuments).values({
@@ -654,11 +689,13 @@ export const taxRouter = createRouter({
     .mutation(async ({ input }) => {
       const db = getDb();
       await ensureTaxTables(db);
-      const ret = (await db.select({ stepDates: taxReturns.stepDates }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
+      const ret = (await db.select({ step: taxReturns.step, stepDates: taxReturns.stepDates }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
       if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
       await db.update(taxReturns).set({ step: input.step, stepDates: stepDatesWith(ret.stepDates, input.step) }).where(eq(taxReturns.id, input.returnId));
       // Back before "Revisa y firma": the client approves again when it comes back.
       if (input.step < SIGN_STEP) await db.execute(sql`UPDATE taxReturns SET approvedAt = NULL WHERE id = ${input.returnId}`);
+      // Forward: the client gets the email of the step it reached (going back sends nothing).
+      if (input.step > ret.step && input.step >= 0) void notifyStep(db, input.returnId, input.step);
       return { ok: true };
     }),
 
@@ -692,7 +729,18 @@ export const taxRouter = createRouter({
         returnId: input.returnId, userId: ret.userId, kind: input.kind, source: "preparer", fileName, mimeType: input.mimeType, size: buf.length,
         data: encryptTaxFile(buf), status: "ok",
       });
-      return { ok: true };
+      // With the 1040 and the 8879 up, the return goes to "Revisa y firma" by itself (and the client is told).
+      const now = (await db.select({ step: taxReturns.step, stepDates: taxReturns.stepDates }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
+      if (now && now.step >= 0 && now.step < SIGN_STEP && (input.kind === "f8879" || input.kind === "final_fed")) {
+        const have = await db.select({ kind: taxDocuments.kind }).from(taxDocuments)
+          .where(and(eq(taxDocuments.returnId, input.returnId), eq(taxDocuments.source, "preparer"), inArray(taxDocuments.kind, ["f8879", "final_fed"])));
+        if (have.some((d: { kind: string }) => d.kind === "f8879") && have.some((d: { kind: string }) => d.kind === "final_fed")) {
+          await db.update(taxReturns).set({ step: SIGN_STEP, stepDates: stepDatesWith(now.stepDates, SIGN_STEP) }).where(eq(taxReturns.id, input.returnId));
+          void notifyStep(db, input.returnId, SIGN_STEP);
+          return { ok: true, movedToSign: true };
+        }
+      }
+      return { ok: true, movedToSign: false };
     }),
 
   adminDeleteDoc: adminQuery.input(z.object({ docId: z.number().int().positive() })).mutation(async ({ input }) => {

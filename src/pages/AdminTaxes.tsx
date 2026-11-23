@@ -926,8 +926,8 @@ function PreparerDocs({ returnId, docs, onView }: { returnId: number; docs: TaxD
     setBusy(true);
     try {
       const payload = await prepareTaxUpload(file);
-      await upload.mutateAsync({ returnId, kind, ...payload });
-      toast.success(t.uploaded);
+      const r = await upload.mutateAsync({ returnId, kind, ...payload });
+      toast.success(r.movedToSign ? t.signCard.movedToSign : t.uploaded);
       await refresh();
     } catch (err) {
       toast.error(errorText(t, err));
