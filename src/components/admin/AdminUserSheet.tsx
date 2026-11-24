@@ -9,6 +9,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { trpc } from "@/providers/trpc";
+import { useAuth } from "@/hooks/useAuth";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { adminCopy } from "@/i18n/copy/admin";
 import { taxesCopy } from "@/i18n/copy/taxes";
@@ -22,6 +23,7 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
   const t = useCopy(adminCopy);
   const steps = useCopy(taxesCopy).stepsShort;
   const { lang } = useLang();
+  const { user: me } = useAuth();
   const utils = trpc.useUtils();
   const { data: d } = trpc.admin.userDetail.useQuery({ userId: userId ?? 0 }, { enabled: !!userId });
   const [ask, setAsk] = useState<null | "extend" | "grant" | "block" | "delete" | "mode">(null);
@@ -45,7 +47,13 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
     onError: fail,
   });
   const setMode = trpc.admin.setMode.useMutation({
-    onSuccess: (r) => {
+    onSuccess: (r, input) => {
+      // Their own account: no need to sign out, the saved session takes the new mode and the app opens on that side.
+      if (r.success && me && Number(input.userId) === Number(me.id)) {
+        try { localStorage.setItem("auth_user", JSON.stringify({ ...me, modePreference: r.mode })); } catch { /* the next sign-in has it */ }
+        window.location.assign(r.mode === "personal" ? "/personal" : "/");
+        return;
+      }
       if (r.success) { toast.success(t.sheet.modeDone(t.kind[r.mode])); setAsk(null); void refresh(); return; }
       toast.error(r.error === "teamMember" ? t.sheet.modeTeamMember : r.error === "hasTeam" ? t.sheet.modeHasTeam : t.sheet.error);
       setAsk(null);
@@ -61,6 +69,8 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
   const s = d?.status;
   const name = u?.name || u?.email || "";
   const isAdmin = s?.kind === "admin";
+  // The admin's own card: they can switch their own account between Negocio and Personal (not block or delete it).
+  const isMe = !!u && !!me && Number(u.id) === Number(me.id);
   const canExtend = !!s && ["trial", "ended", "canceled", "free"].includes(s.kind);
   const canGrant = !!s && !isAdmin && s.kind !== "blocked" && s.kind !== "gift" && s.kind !== "paying";
   const otherMode = u?.mode === "personal" ? "business" : "personal";
@@ -179,6 +189,11 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
             {canExtend && canGrant && (
               <button type="button" onClick={() => setAsk("grant")} className={cn(btn, "border border-slate-200 bg-white hover:bg-slate-50")}><Gift className="h-4 w-4" aria-hidden="true" />{t.sheet.grant}</button>
             )}
+            {isAdmin && isMe && (
+              <button type="button" onClick={() => setAsk("mode")} className={cn(btn, "border border-slate-200 bg-white hover:bg-slate-50")} data-self-mode="">
+                <ArrowLeftRight className="h-4 w-4" aria-hidden="true" />{t.sheet.mode(t.kind[otherMode])}
+              </button>
+            )}
             {!isAdmin && (
               <>
                 <button type="button" onClick={() => setAsk("mode")} className={cn(btn, "border border-slate-200 bg-white hover:bg-slate-50")}>
@@ -203,10 +218,10 @@ export function AdminUserSheet({ userId, onClose }: { userId: number | null; onC
               {ask === "mode" ? (
                 <AlertDialogDescription asChild>
                   <div className="grid gap-2 text-sm text-slate-600">
-                    <p>{t.sheet.modeText(name, t.kind[otherMode])}</p>
-                    <p>{t.sheet.modeKeep}</p>
+                    <p>{isMe ? t.sheet.modeSelfText(t.kind[otherMode]) : t.sheet.modeText(name, t.kind[otherMode])}</p>
+                    <p>{isMe ? t.sheet.modeSelfKeep(t.kind[otherMode === "personal" ? "business" : "personal"]) : t.sheet.modeKeep}</p>
                     {paysSomething && <p className="font-medium text-amber-800">{t.sheet.modePaying}</p>}
-                    <p>{t.sheet.modeRelogin(t.kind[otherMode])}</p>
+                    <p>{isMe ? t.sheet.modeSelf(t.kind[otherMode]) : t.sheet.modeRelogin(t.kind[otherMode])}</p>
                   </div>
                 </AlertDialogDescription>
               ) : (

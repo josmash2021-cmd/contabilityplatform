@@ -124,11 +124,13 @@ export const adminRouter = createRouter({
   //    again if it goes back. Not for admins, nor (to Personal) for someone in a team: the team is business-only. ──
   setMode: adminQuery
     .input(z.object({ userId: z.number().int().positive(), mode: z.enum(["business", "personal"]) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const db = getDb();
       const u = ((await db.select().from(users).where(eq(users.id, input.userId)).limit(1)) as UserRow[])[0];
       if (!u) return { success: false as const, error: "notFound" as const };
-      if (u.role === "admin") return { success: false as const, error: "admin" as const };
+      // Another admin's account is left alone; an admin may switch their own (owner, 2026-11-24: "colócame en personal").
+      // Nothing is deleted: the other mode's data waits there, and the admin panel works the same in both.
+      if (u.role === "admin" && Number(u.id) !== Number(ctx.user.id)) return { success: false as const, error: "admin" as const };
       if (input.mode === "personal") {
         let asMember = 0, asOwner = 0;
         try {
