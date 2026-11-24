@@ -63,8 +63,9 @@
   transition: transform .5s var(--ab-soft), opacity .35s var(--ab-ease), border-radius .5s var(--ab-ease), filter .4s var(--ab-ease), visibility 0s .5s; }
 .ab-scrim { position: fixed; inset: 0; z-index: 81; background: rgba(15,23,42,.14); opacity: 0; pointer-events: none; transition: opacity .4s var(--ab-ease); }
 @media (max-width: 1023px) {
-  .ab-panel { left: 0; right: 0; bottom: 0; width: auto; max-width: none; height: min(78dvh, 640px); border-radius: 22px 22px 0 0; border-width: 1px 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px); transform-origin: 50% 100%; transition: transform .55s var(--ab-ease), opacity .3s var(--ab-ease); }
+  /* With the keyboard open it sits just above it and shrinks with it (--ab-kb / --ab-vh from visualViewport), smoothly. */
+  .ab-panel { left: 0; right: 0; bottom: var(--ab-kb, 0px); width: auto; max-width: none; height: min(78dvh, 640px, calc(var(--ab-vh, 100dvh) - 16px)); border-radius: 22px 22px 0 0; border-width: 1px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px); transform-origin: 50% 100%; transition: transform .55s var(--ab-ease), opacity .3s var(--ab-ease), bottom .35s var(--ab-ease), height .35s var(--ab-ease); }
   .ab-panel.ab-closed { transform: translateY(104%); opacity: 1; border-radius: 22px 22px 0 0; filter: none;
     transition: transform .45s var(--ab-soft), visibility 0s .45s; }
   .ab-scrim.ab-on { opacity: 1; pointer-events: auto; }
@@ -74,7 +75,7 @@
 .ab-mini .ab-film { position: absolute; inset: 0; border-radius: 52% 48% 50% 50% / 50% 52% 48% 50%; background: radial-gradient(circle at 50% 55%, rgba(255,255,255,0) 0 55%, rgba(255,255,255,.5) 90%);
   box-shadow: inset 0 0 0 1px rgba(203,213,225,.9), inset 0 -5px 10px rgba(147,197,253,.3), inset 4px 5px 10px rgba(244,114,182,.2); animation: ab-wobble 8s ease-in-out infinite; }
 .ab-mini svg { position: absolute; inset: 0; margin: auto; width: 17px; height: 17px; }
-.ab-msgs { overflow-y: auto; padding: 14px 18px 16px; display: grid; align-content: start; gap: 10px; scrollbar-width: none;
+.ab-msgs { overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px 16px; display: grid; align-content: start; gap: 10px; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%); }
 .ab-msgs::-webkit-scrollbar { display: none; }
 .ab-m { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; animation: ab-rise .55s var(--ab-ease) both; }

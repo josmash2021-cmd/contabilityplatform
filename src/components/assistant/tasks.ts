@@ -24,6 +24,15 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
   const t = c.t;
   const plan = (steps: Step[], done: string | null, quiet: string | null = null, missing: string | null = null): TaskPlan => ({ steps, done, quiet, missing });
   switch (task.task) {
+    case "tour": {
+      // Each main page: it taps (or, on a phone, goes to) the page, then says what it's for beside its title.
+      const steps: Step[] = [{ ...t.tour.intro }];
+      for (const [path, name, what] of t.tour[c.mode]) {
+        steps.push({ ...t.tour.page(name), nav: path });
+        steps.push({ auto: what, teach: what, el: "main h1", act: "show", optional: true });
+      }
+      return plan(steps, t.tour.done);
+    }
     case "budget": {
       const cat = c.catLabel(task.category, "expense"), amt = c.money(task.amount);
       const edit = g(`budget-edit-${task.category}`);

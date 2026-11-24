@@ -280,7 +280,7 @@ export const assistantRouter = createRouter({
       // Every tool call made for this answer: they become its sources.
       const calls: ToolCall[] = [];
       const today = todayCentral();
-      const bubbleOut: BubbleOut = { task: null, report: null };
+      const bubbleOut: BubbleOut = { task: null, report: null, start: false };
       const system = systemPrompt(plan.mode, today, !!input.bubble) + (input.bubble ? bubblePrompt(plan.mode, input.bubble.page || "/", plan) : "");
       const tools = [
         ...assistantTools(db, userId, plan.mode, today, (c) => calls.push(c)),
@@ -331,7 +331,7 @@ export const assistantRouter = createRouter({
       const attached = files.length ? JSON.stringify(files.map((f) => ({ name: f.name, mime: f.mime }))) : null;
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId, attachments) VALUES (${userId}, 'user', ${input.question}, ${chatCol}, ${attached})`);
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources, chatId) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null}, ${chatCol})`);
-      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId, task: bubbleOut.task, report: bubbleOut.report };
+      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId, task: bubbleOut.task, report: bubbleOut.report, start: bubbleOut.task ? bubbleOut.start : false };
     }),
 
   /**

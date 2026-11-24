@@ -22,6 +22,8 @@ export type Step = {
   when?: () => boolean;
   /** Extra time it stays (lit, with its words) after reading, for a last step that only shows where to go on. */
   hold?: number;
+  /** Not on every page (a page's title in the tour): if it isn't there, it just says its words and goes on. */
+  optional?: boolean;
 };
 export type GuideEnd = "done" | "stopped" | "missing";
 type P = { x: number; y: number };
@@ -52,6 +54,61 @@ export function visible(el: Element | null): el is HTMLElement {
   return r.width > 0 && r.height > 0 && !el.closest("[hidden],[aria-hidden='true'],[inert]");
 }
 const firstVisible = (sel: string) => [...document.querySelectorAll(sel)].find(visible) ?? null;
+
+/** The box that scrolls this element: the nearest ancestor that really scrolls, else the page. */
+function scrollBoxOf(el: HTMLElement): HTMLElement {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const oy = getComputedStyle(p).overflowY;
+    if ((oy === "auto" || oy === "scroll" || oy === "overlay") && p.scrollHeight > p.clientHeight + 1) return p;
+  }
+  return (document.scrollingElement as HTMLElement) ?? document.documentElement;
+}
+
+/**
+ * Scrolls a box to `to` with the same calm curve as the bubble's flight (sine in-out), frame by frame, instead of the
+ * browser's own smooth scroll, which on phones can jump in one go. A touch of the person's stops it.
+ */
+export function glide(box: HTMLElement, to: number, msIn?: number): Promise<void> {
+  return new Promise((done) => {
+    const from = box.scrollTop;
+    const max = Math.max(0, box.scrollHeight - box.clientHeight);
+    const target = Math.max(0, Math.min(max, Math.round(to)));
+    const dist = target - from;
+    const still = typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (Math.abs(dist) < 2 || still) { box.scrollTop = target; done(); return; }
+    const ms = msIn ?? Math.max(450, Math.min(1100, Math.abs(dist) * 0.9));
+    const start = performance.now();
+    let over = false;
+    // Marked while it scrolls (the browser checks measure only this, not the page's own reflows).
+    document.documentElement.dataset.abGlide = "1";
+    const end = () => { delete document.documentElement.dataset.abGlide; done(); };
+    const quit = () => { over = true; };
+    box.addEventListener("touchstart", quit, { once: true, passive: true });
+    box.addEventListener("wheel", quit, { once: true, passive: true });
+    const step = (now: number) => {
+      if (over) { end(); return; }
+      const t = Math.min(1, (now - start) / ms);
+      box.scrollTop = from + dist * ease(t);
+      if (t < 1) requestAnimationFrame(step);
+      else { box.removeEventListener("touchstart", quit); box.removeEventListener("wheel", quit); end(); }
+    };
+    requestAnimationFrame(step);
+  });
+}
+
+/** Brings an element into the middle of what's visible (above the phone's tab bar), gently; nothing if it's already well in view. */
+async function glideInto(el: HTMLElement) {
+  const box = scrollBoxOf(el);
+  const page = box === document.scrollingElement || box === document.documentElement || box === document.body;
+  const r = el.getBoundingClientRect();
+  const tab = document.querySelector("nav[data-tabbar]");
+  const tabTop = tab && visible(tab) ? tab.getBoundingClientRect().top : window.innerHeight;
+  const area = page ? { top: 0, bottom: tabTop } : (() => { const b = box.getBoundingClientRect(); return { top: Math.max(0, b.top), bottom: Math.min(b.bottom, tabTop) }; })();
+  const margin = 24;
+  if (r.top >= area.top + margin && r.bottom <= area.bottom - margin) return;
+  const mid = (area.top + area.bottom) / 2;
+  await glide(box, box.scrollTop + (r.top + r.height / 2 - mid));
+}
 
 /** Sets a React-controlled input's value as if typed (React listens to the native setter + input event). */
 function setNative(el: HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement, value: string) {
@@ -379,8 +436,15 @@ export class Guide {
         await this.waitRead(Math.max(MIN_READ_MS, words * WORD_MS + PAUSE_MS));
         continue;
       }
-      const el = await this.waitEl(s.el);
+      const el = await this.waitEl(s.el, s.optional ? 2500 : 8000);
       if (!this.alive()) return "stopped";
+      if (!el && s.optional) {
+        this.talk(`<div class="ab-step"><i></i>${esc(label)}</div><div class="ab-spoken">${esc(text)}</div>`);
+        const words = this.speak();
+        await this.waitRead(Math.max(MIN_READ_MS, words * WORD_MS + PAUSE_MS));
+        this.hush();
+        continue;
+      }
       if (!el) { this.finishRun(); return "missing"; }
       this.lastShow = i === steps.length - 1 && s.act === "show";
       await this.doEl(el, s, mode, text, label);
@@ -397,8 +461,8 @@ export class Guide {
     const b = this.env.bubble;
     this.currentAct = s.act;
     if (this.run) this.run.el = el;
-    el.scrollIntoView({ block: "center", inline: "nearest", behavior: this.reduce ? "auto" : "smooth" });
-    await sleep(this.reduce ? 50 : 420);
+    await glideInto(el);
+    await sleep(this.reduce ? 50 : 150);
     if (!this.alive()) return;
     this.light(el);
     this.hush();

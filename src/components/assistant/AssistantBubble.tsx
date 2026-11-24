@@ -19,9 +19,12 @@ import { bubbleCopy } from "@/i18n/copy/bubble";
 import { settingsCopy } from "@/i18n/copy/settings";
 import { useCatLabel } from "@/components/personal/txKit";
 import { moneyAuto } from "@/components/personal/personalUtils";
-import { Guide, visible, type GuideMode } from "./guide";
+import { Guide, glide, visible, type GuideMode } from "./guide";
 import { offerLine, planFor, type TaskCtx } from "./tasks";
 import "./bubble.css";
+
+/** "Hazlo por mí" in their own words: the task starts at once, without the buttons. */
+const DO_IT = /\bh[aá]z(lo|melo|me)\b|\bpor m[ií]\b|\bdo it\b|\bfor me\b/i;
 
 type Msg = { id: number; role: "me" | "bot"; text: string; task?: BubbleTask | null; report?: BubbleReport | null; used?: boolean; reported?: "sending" | "sent" };
 
@@ -106,7 +109,7 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     },
   }), [t, s, mode, catLabel, lang]);
 
-  const add = (m: Omit<Msg, "id">) => setMsgs((list) => [...list, { ...m, id: nextId++ }]);
+  const add = (m: Omit<Msg, "id">) => { const id = nextId++; setMsgs((list) => [...list, { ...m, id }]); return id; };
   const firstName = (user?.name || "").trim().split(/\s+/)[0] ?? "";
 
   const toggle = () => {
@@ -122,10 +125,23 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, phone]);
+  // Phones: with the keyboard open the sheet rides just above it (no jump of the page under it).
+  useEffect(() => {
+    const vv = window.visualViewport, panel = panelRef.current;
+    if (!open || !phone || !vv || !panel) return;
+    const fit = () => {
+      panel.style.setProperty("--ab-kb", `${Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop))}px`);
+      panel.style.setProperty("--ab-vh", `${Math.round(vv.height)}px`);
+    };
+    fit();
+    vv.addEventListener("resize", fit);
+    vv.addEventListener("scroll", fit);
+    return () => { vv.removeEventListener("resize", fit); vv.removeEventListener("scroll", fit); panel.style.removeProperty("--ab-kb"); panel.style.removeProperty("--ab-vh"); };
+  }, [open, phone]);
   // The newest line (and its buttons) always in view.
   useEffect(() => {
     const box = msgsRef.current;
-    if (box) window.requestAnimationFrame(() => box.scrollTo({ top: box.scrollHeight, behavior: "smooth" }));
+    if (box) window.requestAnimationFrame(() => void glide(box, box.scrollHeight));
   }, [msgs, ask.isPending, open]);
 
   const st = status.data;
@@ -139,8 +155,11 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     try {
       const r = await ask.mutateAsync({ question, chatId, bubble: { page: `${pathname}${search}` } });
       setChatId(r.chatId);
-      add({ role: "bot", text: r.answer, task: r.task ?? null, report: r.report ?? null });
+      // They said "hazlo por mí" (or the assistant saw a direct order): "Okey, empiezo a hacerlo" and it starts.
+      const now = !!r.task && (r.start || DO_IT.test(question));
+      const id = add({ role: "bot", text: r.answer, task: r.task ?? null, report: r.report ?? null, used: now });
       void utils.assistant.status.invalidate();
+      if (now && r.task) { const task = r.task; window.setTimeout(() => void runTask(id, task, "auto"), 1300); }
     } catch (e) {
       add({ role: "bot", text: e instanceof Error ? e.message : t.notReady });
     }

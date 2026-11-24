@@ -14,6 +14,9 @@ describe("checkOffer — the closed list", () => {
     expect(typeof await checkOffer(none, 1, "personal", { task: "invoice" })).toBe("string");
     expect(await checkOffer(none, 1, "business", { task: "invoice" })).toEqual({ task: "invoice" });
     expect(await checkOffer(none, 1, "personal", { task: "connect_bank" })).toEqual({ task: "connect_bank" });
+    // The tour, on both sides.
+    expect(await checkOffer(none, 1, "personal", { task: "tour" })).toEqual({ task: "tour" });
+    expect(await checkOffer(none, 1, "business", { task: "tour" })).toEqual({ task: "tour" });
   });
 
   it("a budget needs a spending category and a positive amount", async () => {
@@ -74,7 +77,11 @@ describe("what the bubble knows", () => {
     expect(p).toMatch(/refunds/);
     expect(p).toMatch(/passwords/);
     expect(p).toMatch(/new options, new pages/);
-    expect(p).toContain("budget, goal, connect_bank, change_category, review, sync_bank, user_color");
-    expect(bubblePrompt("business", "/", { tier: null, trial: true })).toContain("customer, invoice, receipt, connect_bank, user_color");
+    expect(p).toContain("tour, budget, goal, connect_bank, change_category, review, sync_bank, user_color");
+    expect(bubblePrompt("business", "/", { tier: null, trial: true })).toContain("tour, customer, invoice, receipt, connect_bank, user_color");
+    // "Hazlo por mí" in their own words: it starts at once, no "¿lo hago?".
+    expect(p).toMatch(/start: true/);
+    expect(p).toMatch(/Okey, empiezo a hacerlo/);
+    expect(p).toMatch(/hazme un tour/);
   });
 });

@@ -24,13 +24,14 @@ export const isUserColor = (v: unknown): v is UserColor => typeof v === "string"
 
 /** The tasks, per side of the app. */
 export const BUBBLE_TASKS = {
-  personal: ["budget", "goal", "connect_bank", "change_category", "review", "sync_bank", "user_color"],
-  business: ["customer", "invoice", "receipt", "connect_bank", "user_color"],
+  personal: ["tour", "budget", "goal", "connect_bank", "change_category", "review", "sync_bank", "user_color"],
+  business: ["tour", "customer", "invoice", "receipt", "connect_bank", "user_color"],
 } as const;
 export type BubbleTaskName = (typeof BUBBLE_TASKS)["personal" | "business"][number];
 
 /** A task the bubble offers, with what it will do (the server fills in what it looked up, like a movement's month). */
 export type BubbleTask =
+  | { task: "tour" }
   | { task: "budget"; category: string; amount: number }
   | { task: "goal"; name: string; amount: number; monthly: number | null }
   | { task: "connect_bank" }

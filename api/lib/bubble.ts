@@ -25,7 +25,7 @@ type Db = ReturnType<typeof getDb>;
 type Mode = "business" | "personal";
 
 /** What the bubble's tools leave for the answer: the task it offered and the report it suggested (last one wins). */
-export type BubbleOut = { task: BubbleTask | null; report: BubbleReport | null };
+export type BubbleOut = { task: BubbleTask | null; report: BubbleReport | null; start: boolean };
 
 /** The page names, so the bubble says where things are the way the menu says it. */
 const PAGES: Record<Mode, Array<[string, string, string]>> = {
@@ -90,6 +90,10 @@ What you can do on screen: offer ONE task with offer_task, only from this closed
 • connect_bank only opens the bank's own window: their bank username, password and codes they type themselves; you never see or ask for them.
 • invoice opens a new invoice; they choose what to charge, check it and send it themselves.
 • receipt opens the receipt photo; they take the photo.
+• tour walks them through the main pages, one by one, saying what each is for. Offer it when they ask to see the app, how it works, or for a tour ("enséñame la app", "hazme un tour", "¿cómo funciona?").
+
+When they ask you to do it themselves — "hazlo por mí", "hazlo tú", "házmelo", or a direct order with every value ("ponme $300 al mes en comida", "cámbiame el color a morado", "hazme un tour") — don't explain or ask "¿lo hago?": call offer_task with start: true and answer only with one short line like "Okey, empiezo a hacerlo: te pongo $300 al mes en Comida." The app starts at once. Without that, offer it (start false) and let them choose "Hazlo por mí" or "Enséñame".
+If what they want is allowed but isn't on the list, never just say you can't: tell them in words, step by step, where to tap.
 
 Repairs: if something doesn't add up (a number, a total, a bank that stopped updating, a movement in the wrong category, something counted twice), call check_problems and look with the money tools. Fix their own data only with a task from the list (change_category, review, sync_bank...). If the fault is the app's own (a wrong calculation, a page that fails, a button that does nothing), explain it simply and call offer_report so they can tell support with one tap. You never change the app.
 
@@ -117,6 +121,7 @@ const offerInput = z.object({
   email: z.string().max(120).optional().describe("customer: email (optional)"),
   transactionId: z.number().int().optional().describe("change_category: the movement's id (from list_bank_transactions)"),
   color: z.string().max(20).optional().describe(`user_color: one of ${USER_COLORS.join(", ")}`),
+  start: z.boolean().optional().describe("true when they asked you to do it (\"hazlo por mí\", \"hazlo tú\", \"házmelo\", \"ponlo\", \"cámbialo\", \"hazme un tour\"): the app starts it right away"),
 });
 type OfferInput = z.infer<typeof offerInput>;
 
@@ -166,7 +171,7 @@ export async function checkOffer(db: Db, userId: number, mode: Mode, a: OfferInp
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return "That email doesn't look right; ask again or leave it out.";
       return { task: "customer", name: name.slice(0, 80), lastName: (a.lastName ?? "").trim().slice(0, 80), phone: (a.phone ?? "").trim().slice(0, 30), email };
     }
-    case "connect_bank": case "review": case "sync_bank": case "invoice": case "receipt":
+    case "tour": case "connect_bank": case "review": case "sync_bank": case "invoice": case "receipt":
       return { task: a.task };
     default:
       return "Not on the list.";
@@ -233,7 +238,8 @@ export function bubbleTools(db: Db, userId: number, mode: Mode, today: string, o
         const res = await checkOffer(db, userId, mode, a);
         if (typeof res === "string") return no(res);
         out.task = res;
-        return JSON.stringify({ offered: true, task: res });
+        out.start = a.start === true;
+        return JSON.stringify({ offered: true, task: res, startsNow: out.start });
       },
     }),
     betaZodTool({
