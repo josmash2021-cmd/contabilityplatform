@@ -16,6 +16,8 @@ import { getTrialInfo } from "./lib/trial";
 import { accountMode } from "./lib/plans";
 import { rowsOf, utcDate } from "./lib/support";
 import { readMaintenance, writeMaintenance } from "./lib/maintenance";
+import { TRPCError } from "@trpc/server";
+import { msg } from "./lib/i18n";
 
 // Maintenance mode lives in api/lib/maintenance.ts (settings, cache and what customers can't do while it's on).
 
@@ -597,9 +599,14 @@ export const adminRouter = createRouter({
       message: z.string().max(300).nullable().optional(),
       minutes: z.number().int().min(0).max(24 * 60).nullable().optional(),
     }))
-    .mutation(async ({ input }) => {
-      const state = await writeMaintenance(getDb(), input);
-      return { success: true, ...state };
+    .mutation(async ({ ctx, input }) => {
+      try {
+        const state = await writeMaintenance(getDb(), input);
+        return { success: true, ...state };
+      } catch (e) {
+        console.error("[maintenance] save:", e instanceof Error ? e.message : e);
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: msg(ctx.lang, "maintenanceNotSaved") });
+      }
     }),
 
   // ── Create a payout (withdrawal) ──

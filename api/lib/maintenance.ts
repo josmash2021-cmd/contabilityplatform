@@ -2,9 +2,9 @@
 // and the server doesn't let them change anything (api/middleware.ts); the admin can do everything. Kept in
 // systemSettings: on/off, an optional message from the admin and an optional time it's expected back. A short cache
 // keeps every request from reading the database.
-import { eq } from "drizzle-orm";
-import { systemSettings } from "@db/schema";
+import { sql } from "drizzle-orm";
 import { getDb } from "../queries/connection";
+import { rowsOf } from "./support";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -17,17 +17,32 @@ const CACHE_MS = 5000;
 
 export type MaintenanceState = { enabled: boolean; message: string | null; until: string | null };
 
+// The settings table is created on first use (production's database didn't have it: saving failed in silence and
+// maintenance never turned on). Additive: it never touches a table that's already there.
+let ready: Promise<void> | null = null;
+function ensureSettings(db: Db): Promise<void> {
+  if (ready) return ready;
+  ready = db.execute(sql`CREATE TABLE IF NOT EXISTS systemSettings (
+      id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+      \`key\` VARCHAR(100) NOT NULL UNIQUE,
+      value TEXT,
+      updatedAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`).then(() => undefined).catch((e: unknown) => { ready = null; throw e; });
+  return ready as Promise<void>;
+}
+
+/** One setting ("" when there's none, or when it can't be read: reading never locks anyone out). */
 async function get(db: Db, key: string): Promise<string> {
   try {
-    const rows: { value: string | null }[] = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
-    return rows[0]?.value ?? "";
+    await ensureSettings(db);
+    return rowsOf<{ value: string | null }>(await db.execute(sql`SELECT value FROM systemSettings WHERE \`key\` = ${key} LIMIT 1`))[0]?.value ?? "";
   } catch { return ""; }
 }
 
+/** Saves one setting. Throws when it can't (the admin is told, instead of "turned on" with nothing saved). */
 async function put(db: Db, key: string, value: string) {
-  try {
-    await db.insert(systemSettings).values({ key, value }).onDuplicateKeyUpdate({ set: { value, updatedAt: new Date() } });
-  } catch { /* table may not exist yet */ }
+  await ensureSettings(db);
+  await db.execute(sql`INSERT INTO systemSettings (\`key\`, value) VALUES (${key}, ${value}) ON DUPLICATE KEY UPDATE value = VALUES(value)`);
 }
 
 /** The admin's own words, or null (then each customer reads the default in their language). */
@@ -56,7 +71,10 @@ export async function writeMaintenance(db: Db, input: { enabled: boolean; messag
   if (!input.enabled) await put(db, MAINTENANCE_UNTIL_KEY, "");
   else if (input.minutes !== undefined) await put(db, MAINTENANCE_UNTIL_KEY, input.minutes ? new Date(now.getTime() + input.minutes * 60_000).toISOString() : "");
   cache = null;
-  return readMaintenance(db);
+  const state = await readMaintenance(db);
+  // Read back what was saved: it has to say what was asked for.
+  if (state.enabled !== input.enabled) throw new Error("maintenance not saved");
+  return state;
 }
 
 /** While it's on, customers can look but not change anything; signing in and out still works, and the admin can do it all. */
