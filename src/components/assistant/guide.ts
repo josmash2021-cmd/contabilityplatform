@@ -33,12 +33,34 @@ export type Step = {
   label?: string;
 };
 export type GuideEnd = "done" | "stopped" | "missing";
+/** An answer the bubble offers in its cloud ("→ $6,000 sugerido"). */
+export type Choice = { label: string; value: string; hint?: string; kind?: "all" | "yes" };
+/** What a scripted task (one that asks as it goes, like a goal) can do with the bubble's hands. */
+export type ScriptKit = {
+  mode: GuideMode;
+  alive: () => boolean;
+  /** Goes to a page from the menu (on a phone through "Más"). */
+  nav: (path: string, words: { auto: string; teach: string }, label: string) => Promise<void>;
+  /** The first element on screen for a selector, waiting for it. */
+  find: (sel: string, ms?: number) => Promise<HTMLElement | null>;
+  /** Flies to it and says something (no answer needed). */
+  show: (el: HTMLElement, label: string, text: string) => Promise<void>;
+  /** Flies to it, asks in its cloud and waits: the value chosen, "dom" when `until` became true, null when stopped. */
+  ask: (el: HTMLElement, label: string, text: string, choices: Choice[], opts?: { allow?: HTMLElement; until?: () => boolean }) => Promise<string | null>;
+  /** Presses it (saying `text` first when given). */
+  tap: (el: HTMLElement, label?: string, text?: string) => Promise<void>;
+  /** Types into it, letter by letter. */
+  type: (el: HTMLElement, value: string) => Promise<void>;
+  /** Picks a value in a select. */
+  pick: (el: HTMLElement, value: string) => Promise<void>;
+};
 type P = { x: number; y: number };
 
 export type GuideEnv = {
   bubble: HTMLElement;
   cloud: HTMLElement;
-  spot: HTMLElement;
+  /** The drop that joins the bubble and its cloud (an svg with a <g> of three paths: fill, left side, right side). */
+  neck: SVGSVGElement;
   /** Where the bubble rests (viewport coordinates of its top-left corner). */
   home: () => P;
   size: () => number;
@@ -161,9 +183,11 @@ export class Guide {
   private landed: (() => void) | null = null;
   private run: { mode: GuideMode; token: number; el: HTMLElement | null } | null = null;
   private token = 0;
-  private lightTok = 0;
-  private track = 0;
-  private tracking = false;
+  /** What it's working on now (marked data-ab-here; no frame is drawn, owner 2026-11-24). */
+  private here: HTMLElement | null = null;
+  /** While it asks: the person's taps here are their answer, not a stop. */
+  private allow: HTMLElement | null = null;
+  private answer: ((v: string | null) => void) | null = null;
   private readDone: (() => void) | null = null;
   private stepDone: (() => void) | null = null;
   private stopped = false;
@@ -186,7 +210,6 @@ export class Guide {
     document.removeEventListener("pointerdown", this.onDown, true);
     document.removeEventListener("click", this.onClick, true);
     cancelAnimationFrame(this.flight);
-    cancelAnimationFrame(this.track);
   }
 
   get busy() { return this.run !== null; }
@@ -260,9 +283,8 @@ export class Guide {
       return this.clampPos({ x: right - size * 0.9, y: top + tr.height + 6 });
     }
     if (act === "show" && r.height > size * 2) return this.clampPos({ x: r.right - size * 0.75, y: r.top + 14 });
-    const touchX = r.left + Math.max(Math.min(r.width - 20, r.width * 0.78), Math.min(r.width / 2, 24));
-    const touchY = r.top + r.height / 2;
-    return this.clampPos({ x: touchX - size * 0.22, y: touchY - size * 0.28 });
+    // Like a finger pointing from below: on the lower right corner, mostly outside it (never over the words).
+    return this.clampPos({ x: r.right - size * 0.3, y: r.bottom - size * 0.28 });
   }
 
   // ── Its cloud ──
@@ -270,10 +292,26 @@ export class Guide {
    * Next to the bubble, on the side that doesn't cover what it's showing. For a heading it prefers going above it:
    * what the heading talks about comes right under it.
    */
-  talk(html: string, at: P = this.pos, avoid?: DOMRect, aboveFirst = false) {
+  talk(html: string, at: P = this.pos, avoid?: DOMRect, aboveFirst = false, choices?: Choice[]) {
     const say = this.env.cloud, size = this.env.size();
     say.classList.remove("ab-on");
     say.innerHTML = html;
+    say.classList.toggle("ab-asking", !!choices?.length);
+    if (choices?.length) {
+      const box = document.createElement("div");
+      box.className = "ab-opts";
+      for (const c of choices) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.dataset.value = c.value;
+        if (c.kind) b.dataset.kind = c.kind;
+        b.textContent = c.label;
+        if (c.hint) { const h = document.createElement("small"); h.textContent = c.hint; b.append(" ", h); }
+        b.addEventListener("click", () => { const a = this.answer; this.answer = null; a?.(c.value); });
+        box.appendChild(b);
+      }
+      say.appendChild(box);
+    }
     const vw = window.innerWidth, limit = bottomLimit();
     const w = Math.min(270, vw - 24);
     say.style.width = `${w}px`;
@@ -281,18 +319,53 @@ export class Guide {
     // Above a heading it may go up to the screen's top edge (over the app's top bar), not over what it explains.
     const fits = (x: number, y: number) => x >= 12 && x + w <= vw - 12 && y >= (aboveFirst ? 2 : 12) && y + h <= limit - 8;
     const hits = (x: number, y: number) => !!avoid && x < avoid.right + 6 && x + w > avoid.left - 6 && y < avoid.bottom + 6 && y + h > avoid.top - 6;
-    const below = at.y + size + 10, above = at.y - h - 10;
-    const side = { x: at.x + size + 10, y: at.y + 4 }, left = { x: at.x - w - 10, y: at.y + 4 };
+    // Room between the bubble and its cloud for the drop that joins them.
+    const below = at.y + size + 24, above = at.y - h - 24;
+    const side = { x: at.x + size + 22, y: at.y + 4 }, left = { x: at.x - w - 22, y: at.y + 4 };
     const under = { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: below };
-    const over = { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: Math.min(at.y, avoid?.top ?? at.y) - h - 6 };
+    const over = { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: Math.min(at.y, avoid?.top ?? at.y) - h - 22 };
     const options: P[] = aboveFirst ? [over, side, left, under] : [side, under, over, left];
     const pick = options.find((o) => fits(o.x, o.y) && !hits(o.x, o.y)) ?? options.find((o) => fits(o.x, o.y))
       ?? { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: Math.min(Math.max(12, above), limit - h - 8) };
     say.style.left = `${Math.round(pick.x)}px`;
     say.style.top = `${Math.round(pick.y)}px`;
-    requestAnimationFrame(() => say.classList.add("ab-on"));
+    // The drop grows out of the bubble first, then the cloud.
+    requestAnimationFrame(() => { this.tie(at, pick, w, h); setTimeout(() => say.classList.add("ab-on"), this.reduce ? 0 : 130); });
   }
-  hush() { this.env.cloud.classList.remove("ab-on"); }
+  hush() { this.env.cloud.classList.remove("ab-on"); this.env.neck.classList.remove("ab-on"); }
+  /**
+   * The drop (owner chose it, 2026-11-24): from just inside the bubble's rim to the cloud's nearest edge, narrow at the
+   * bubble and wide at the cloud, with a soft waist; white like the cloud, with its border on the sides.
+   */
+  private tie(at: P, cloud: P, w: number, h: number) {
+    const neck = this.env.neck, size = this.env.size();
+    const g = neck.querySelector("g"), [fill, l, r] = [...neck.querySelectorAll("path")];
+    if (!g || !fill || !l || !r) return;
+    const cx = at.x + size / 2, cy = at.y + size / 2;
+    let sx = cx, sy = cy, ex: number, ey: number, horizontal = false;
+    if (cloud.y > at.y + size - 4) { sy = cy + size * 0.34; ex = Math.min(Math.max(cx, cloud.x + 30), cloud.x + w - 30); ey = cloud.y + 1.5; }
+    else if (cloud.y + h < at.y + 4) { sy = cy - size * 0.34; ex = Math.min(Math.max(cx, cloud.x + 30), cloud.x + w - 30); ey = cloud.y + h - 1.5; }
+    else { horizontal = true; sx = cloud.x > cx ? cx + size * 0.34 : cx - size * 0.34; ex = cloud.x > cx ? cloud.x + 1.5 : cloud.x + w - 1.5; ey = Math.min(Math.max(cy, cloud.y + 24), cloud.y + h - 24); }
+    const wT = 13, wB = 46;
+    let d: (k: number) => string, base: string;
+    if (!horizontal) {
+      const span = ey - sy;
+      d = (k) => `M${sx + k * wT / 2} ${sy} C${sx + k * wT / 2} ${sy + span * 0.55} ${ex + k * wB / 2} ${ey - span * 0.5} ${ex + k * wB / 2} ${ey}`;
+      base = `L${ex + wB / 2} ${ey} C${ex + wB / 2} ${ey - span * 0.5} ${sx + wT / 2} ${sy + span * 0.55} ${sx + wT / 2} ${sy} Z`;
+    } else {
+      const span = ex - sx;
+      d = (k) => `M${sx} ${cy + k * wT / 2} C${sx + span * 0.55} ${cy + k * wT / 2} ${ex - span * 0.5} ${ey + k * wB / 2} ${ex} ${ey + k * wB / 2}`;
+      base = `L${ex} ${ey + wB / 2} C${ex - span * 0.5} ${ey + wB / 2} ${sx + span * 0.55} ${cy + wT / 2} ${sx} ${cy + wT / 2} Z`;
+    }
+    fill.setAttribute("d", `${d(-1)} ${base}`);
+    l.setAttribute("d", d(-1));
+    r.setAttribute("d", d(1));
+    g.style.transformOrigin = `${sx}px ${sy}px`;
+    g.style.transition = "none";
+    g.style.transform = horizontal ? "scaleX(0.05)" : "scaleY(0.05)";
+    neck.classList.add("ab-on");
+    requestAnimationFrame(() => requestAnimationFrame(() => { g.style.transition = ""; g.style.transform = "none"; }));
+  }
   /** Says a line by itself (no steps), word by word, then goes quiet. */
   async note(text: string, at: P = this.pos, holdMs = 4200) {
     this.talk(`<div class="ab-spoken">${esc(text)}</div>`, at);
@@ -323,72 +396,42 @@ export class Guide {
     }
     return n;
   }
-  private say(label: string, text: string, at?: P, avoid?: DOMRect, aboveFirst = false) {
-    this.talk(`${label ? `<div class="ab-step"><i></i>${esc(label)}</div>` : ""}<div class="ab-spoken">${esc(text)}</div>`, at, avoid, aboveFirst);
+  private say(label: string, text: string, at?: P, avoid?: DOMRect, aboveFirst = false, choices?: Choice[]) {
+    this.talk(`${label ? `<div class="ab-step"><i></i>${esc(label)}</div>` : ""}<div class="ab-spoken">${esc(text)}</div>`, at, avoid, aboveFirst, choices);
     return this.speak();
   }
   private readMs(words: number) { return Math.max(MIN_READ_MS, words * WORD_MS + PAUSE_MS); }
 
-  // ── The glow: appears in place; if lit elsewhere, that one fades out first; it follows its element ──
-  private light(el: HTMLElement, again: () => HTMLElement | null) {
-    const tok = ++this.lightTok;
-    const spot = this.env.spot;
-    const put = () => {
-      if (tok !== this.lightTok) return;
-      this.follow(el, again);
-      void spot.offsetWidth;
-      spot.classList.add("ab-on");
-    };
-    if (spot.classList.contains("ab-on")) { spot.classList.remove("ab-on"); setTimeout(put, this.reduce ? 0 : 240); } else put();
-  }
-  /** Keeps the glow on its element while the page scrolls; if the page redraws it, finds it again (never a stale spot). */
-  private follow(first: HTMLElement, again: () => HTMLElement | null) {
-    cancelAnimationFrame(this.track);
-    this.tracking = true;
-    let el: HTMLElement | null = first;
-    const spot = this.env.spot, pad = 8;
-    const tick = () => {
-      if (!el || !el.isConnected || !visible(el)) {
-        el = again();
-        if (this.run && el) this.run.el = el;
-      }
-      if (!el) spot.style.opacity = "0";
-      else {
-        spot.style.opacity = "";
-        const r = el.getBoundingClientRect();
-        spot.style.transform = `translate(${Math.round(r.left - pad)}px, ${Math.round(r.top - pad)}px)`;
-        spot.style.width = `${Math.round(r.width + pad * 2)}px`;
-        spot.style.height = `${Math.round(r.height + pad * 2)}px`;
-      }
-      if (this.tracking) this.track = requestAnimationFrame(tick);
-    };
-    tick();
+  // ── What it works on: no frame around it (owner: "quítale los bordes"); the bubble and its cloud say it ──
+  private light(el: HTMLElement) {
+    this.unlight();
+    this.here = el;
+    el.setAttribute("data-ab-here", "");
   }
   private unlight() {
-    this.lightTok++;
-    this.env.spot.classList.remove("ab-on");
-    const t = this.lightTok;
-    setTimeout(() => { if (t === this.lightTok) { this.tracking = false; cancelAnimationFrame(this.track); this.env.spot.style.opacity = ""; } }, 300);
+    this.here?.removeAttribute("data-ab-here");
+    this.here = null;
   }
-  /** It leans toward what it shows, once, and the glow gives one soft pulse. */
+  /** It leans toward what it shows, once. */
   private pointAt(r: DOMRect) {
     const size = this.env.size(), b = this.env.bubble;
     const bx = this.pos.x + size / 2, by = this.pos.y + size / 2, tx = r.left + r.width / 2, ty = r.top + r.height / 2;
     const d = Math.hypot(tx - bx, ty - by) || 1;
     b.style.setProperty("--nx", `${((tx - bx) / d * 9).toFixed(1)}px`);
     b.style.setProperty("--ny", `${((ty - by) / d * 9).toFixed(1)}px`);
-    b.classList.remove("ab-point"); this.env.spot.classList.remove("ab-ping"); void b.offsetWidth;
-    b.classList.add("ab-point"); this.env.spot.classList.add("ab-ping");
-    setTimeout(() => { b.classList.remove("ab-point"); this.env.spot.classList.remove("ab-ping"); }, 2300);
+    b.classList.remove("ab-point"); void b.offsetWidth;
+    b.classList.add("ab-point");
+    setTimeout(() => b.classList.remove("ab-point"), 2300);
   }
   /** One press, where it stands: it dips toward the button (the button sinks too), one ripple, the real click. */
   private async tapOn(el: HTMLElement) {
     const size = this.env.size(), b = this.env.bubble;
     const r = el.getBoundingClientRect();
-    const tx = r.left + Math.max(Math.min(r.width - 20, r.width * 0.78), Math.min(r.width / 2, 24)), ty = r.top + r.height / 2;
+    // The point it touches: the lower right corner, where it stands.
+    const tx = r.right - Math.min(10, r.width * 0.1), ty = r.bottom - Math.min(10, r.height * 0.25);
     // Too far (the page moved): a short, calm approach first.
-    const here = { x: this.pos.x + size * 0.22, y: this.pos.y + size * 0.28 };
-    if (Math.hypot(here.x - tx, here.y - ty) > 26) await this.flyTo(this.clampPos({ x: tx - size * 0.22, y: ty - size * 0.28 }), 650);
+    const want = this.clampPos({ x: r.right - size * 0.3, y: r.bottom - size * 0.28 });
+    if (Math.hypot(want.x - this.pos.x, want.y - this.pos.y) > 26) await this.flyTo(want, 650);
     if (!this.alive()) return;
     const cx = this.pos.x + size / 2, cy = this.pos.y + size / 2, d = Math.hypot(tx - cx, ty - cy) || 1;
     b.style.setProperty("--px", `${((tx - cx) / d * 10).toFixed(1)}px`);
@@ -451,10 +494,12 @@ export class Guide {
     }
   }
   /** After a page change: the new page is on, starts at its top (while it fades in) and has stopped loading. */
-  private async arrived(path: string) {
+  private async arrived(path: string, oldPage: Element | null = null) {
     const want = path.split("?")[0];
     const until = performance.now() + 5000;
     while (performance.now() < until && this.alive() && location.pathname !== want) await sleep(60);
+    // The address changes before the new page is drawn (its code may still be loading): wait for the page itself.
+    while (oldPage && performance.now() < until && this.alive() && document.querySelector("main .page-fx > div") === oldPage) await sleep(60);
     const main = document.querySelector("main");
     if (main && main.scrollTop > 0) main.scrollTop = 0;
     let lastH = main?.scrollHeight ?? 0, calm = 0;
@@ -486,6 +531,7 @@ export class Guide {
     const target = e.target as Node;
     // A tap on the bubble while it works stops it, like a tap anywhere else; its cloud and panel never do.
     if (this.env.own(target) && !this.env.bubble.contains(target)) return;
+    if (this.allow && this.allow.contains(target)) return;
     if (this.lastShow && !this.env.bubble.contains(target)) { this.readDone?.(); return; }
     // Teach: inside what's lit is them doing the step; anywhere else ends it. Auto: any tap of theirs stops it.
     if (this.run.mode === "teach" && this.run.el && this.run.el.contains(target)) return;
@@ -507,6 +553,8 @@ export class Guide {
     this.stopped = true;
     this.readDone?.();
     this.stepDone?.();
+    const a = this.answer; this.answer = null; a?.(null);
+    this.allow = null;
     this.hush();
     this.unlight();
     this.env.bubble.classList.remove("ab-talking");
@@ -532,29 +580,8 @@ export class Guide {
 
       // A page change: the menu item (on a phone through "Más"), or straight there.
       if (s.go || s.nav) {
-        const path = s.go ?? s.nav ?? "/";
-        let navEl = s.nav ? firstVisible(`[data-nav="${s.nav}"]`) : null;
-        if (!navEl && s.nav) {
-          const more = firstVisible("[data-guide='nav-more']");
-          if (more) {
-            await this.doEl(more, { ...s, act: "tap" }, mode, mode === "auto" ? this.env.moreWords.auto : this.env.moreWords.teach, label, () => firstVisible("[data-guide='nav-more']"));
-            if (!this.alive()) return "stopped";
-            navEl = await this.waitEl(() => firstVisible(`[data-nav="${s.nav}"]`), 3000);
-          }
-        }
-        if (navEl) {
-          const sel = `[data-nav="${s.nav}"]`;
-          await this.doEl(navEl, { ...s, act: "tap" }, mode, text, label, () => firstVisible(sel));
-        } else {
-          this.unlight();
-          const words = this.say(label, text);
-          await this.waitRead(Math.min(2600, Math.max(1300, words * WORD_MS + PAUSE_MS)));
-          if (!this.alive()) return "stopped";
-          this.hush();
-          if (location.pathname + location.search !== path) this.env.navigate(path);
-        }
+        await this.runNav(s, mode, text, label);
         if (!this.alive()) return "stopped";
-        await this.arrived(path);
         continue;
       }
       if (s.end) { await this.toTheEnd(label, text); continue; }
@@ -576,7 +603,7 @@ export class Guide {
       }
       if (!el) { this.finishRun(); return "missing"; }
       this.lastShow = i === steps.length - 1 && s.act === "show";
-      await this.doEl(el, s, mode, text, label, locate);
+      await this.doEl(el, s, mode, text, label);
       this.lastShow = false;
       if (!this.alive()) return "stopped";
     }
@@ -584,6 +611,125 @@ export class Guide {
     this.finishRun();
     await this.flyTo(this.env.home());
     return "done";
+  }
+
+  /** A page change: the menu item (on a phone through "Más"), or straight there; then the new page settles. */
+  private async runNav(s: Step, mode: GuideMode, text: string, label: string) {
+    const path = s.go ?? s.nav ?? "/";
+    const before = document.querySelector("main .page-fx > div");
+    const samePage = location.pathname === path.split("?")[0];
+    {
+      {
+        let navEl = s.nav ? firstVisible(`[data-nav="${s.nav}"]`) : null;
+        if (!navEl && s.nav) {
+          const more = firstVisible("[data-guide='nav-more']");
+          if (more) {
+            await this.doEl(more, { ...s, act: "tap" }, mode, mode === "auto" ? this.env.moreWords.auto : this.env.moreWords.teach, label);
+            if (!this.alive()) return;
+            navEl = await this.waitEl(() => firstVisible(`[data-nav="${s.nav}"]`), 3000);
+          }
+        }
+        if (navEl) {
+          await this.doEl(navEl, { ...s, act: "tap" }, mode, text, label);
+        } else {
+          this.unlight();
+          const words = this.say(label, text);
+          await this.waitRead(Math.min(2600, Math.max(1300, words * WORD_MS + PAUSE_MS)));
+          if (!this.alive()) return;
+          this.hush();
+          if (location.pathname + location.search !== path) this.env.navigate(path);
+        }
+        if (!this.alive()) return;
+        await this.arrived(path, samePage ? null : before);
+      }
+    }
+  }
+
+  /** Brings the bubble beside an element together with the page (it "pulls" the page), and marks it. */
+  private async reach(el: HTMLElement, act: Step["act"]) {
+    this.unlight();
+    this.hush();
+    await this.settled(el, 600);
+    if (!this.alive()) return;
+    const { box, delta } = scrollNeeded(el);
+    const r0 = el.getBoundingClientRect();
+    const at = this.spotFor(new DOMRect(r0.left, r0.top - delta, r0.width, r0.height), el, act);
+    const ms = Math.max(this.flightMs(Math.hypot(at.x - this.pos.x, at.y - this.pos.y)), delta ? Math.min(1800, 500 + Math.abs(delta) * 1.0) : 0);
+    await Promise.all([delta ? glide(box, box.scrollTop + delta, ms) : Promise.resolve(), this.flyTo(at, ms)]);
+    if (this.alive()) this.light(el);
+  }
+
+  /** A task that asks as it goes (a goal): the script uses the bubble's hands; this keeps it stoppable. */
+  async runScript(script: (k: ScriptKit) => Promise<"done" | "missing">, mode: GuideMode): Promise<GuideEnd> {
+    this.stop();
+    this.stopped = false;
+    const token = ++this.token;
+    this.run = { mode, token, el: null };
+    const kit: ScriptKit = {
+      mode,
+      alive: () => this.alive(),
+      nav: async (path, words, label) => {
+        if (!this.alive()) return;
+        const one: Step = { ...words, nav: path, label };
+        await this.runNav(one, mode, mode === "auto" ? words.auto : words.teach, label);
+      },
+      find: (sel, ms = 8000) => this.waitEl(() => firstVisible(sel), ms),
+      show: async (el, label, text) => {
+        if (!this.alive()) return;
+        await this.reach(el, "show");
+        if (!this.alive()) return;
+        const words = this.say(label, text, this.pos, el.getBoundingClientRect());
+        await this.waitRead(this.readMs(words));
+        this.hush();
+      },
+      ask: async (el, label, text, choices, opts) => {
+        if (!this.alive()) return null;
+        await this.reach(el, "show");
+        if (!this.alive()) return null;
+        this.allow = opts?.allow ?? null;
+        if (this.run) this.run.el = opts?.allow ?? el;
+        const b = this.env.bubble;
+        b.classList.add("ab-talking");
+        const words = this.say(label, text, this.pos, el.getBoundingClientRect(), false, choices);
+        setTimeout(() => b.classList.remove("ab-talking"), words * WORD_MS + 500);
+        const value = await new Promise<string | null>((done) => {
+          let poll = 0;
+          this.answer = (v) => { clearInterval(poll); done(v); };
+          if (opts?.until) poll = window.setInterval(() => { if (opts.until?.()) { const a = this.answer; this.answer = null; clearInterval(poll); a?.("dom"); } }, 150);
+        });
+        this.allow = null;
+        this.hush();
+        return this.alive() ? value : null;
+      },
+      tap: async (el, label, text) => {
+        if (!this.alive()) return;
+        await this.reach(el, "tap");
+        if (!this.alive()) return;
+        if (text) {
+          const words = this.say(label ?? "", text, this.pos, el.getBoundingClientRect());
+          await this.waitRead(this.readMs(words));
+          this.hush();
+        }
+        if (this.alive()) await this.tapOn(el);
+      },
+      type: async (el, value) => {
+        if (!this.alive()) return;
+        await this.reach(el, "type");
+        if (this.alive() && el instanceof HTMLInputElement) { await this.typeIn(el, value); await sleep(350); }
+      },
+      pick: async (el, value) => {
+        if (!this.alive()) return;
+        await this.reach(el, "pick");
+        if (this.alive() && el instanceof HTMLSelectElement) { setNative(el, value); await sleep(600); }
+      },
+    };
+    await sleep(450);
+    let end: "done" | "missing" = "done";
+    try { end = await script(kit); } catch { end = "missing"; }
+    if (!this.alive()) return "stopped";
+    this.finishRun();
+    await this.flyTo(this.env.home());
+    return end;
   }
 
   /** The tour: down to the end of the page together with the page, then its words ("Esa es toda la página…"). */
@@ -609,27 +755,17 @@ export class Guide {
     this.hush();
   }
 
-  private async doEl(el: HTMLElement, s: Step, mode: GuideMode, text: string, label: string, locate: () => HTMLElement | null) {
+  private async doEl(el: HTMLElement, s: Step, mode: GuideMode, text: string, label: string) {
     const b = this.env.bubble;
     this.currentAct = s.act;
     if (this.run) this.run.el = el;
-    this.unlight();
-    this.hush();
-    await this.settled(el, 600);
-    if (!this.alive()) return;
     // Teach: from the moment it's chosen, their tap or typing counts (they may be quicker than the bubble).
     let early = false;
     const person = mode === "teach" && s.act && s.act !== "show" ? this.waitPerson(s, el).then(() => { early = true; }) : null;
     // The page and the bubble move together: the page brings the element into view while the bubble flies to it.
-    const { box, delta } = scrollNeeded(el);
-    const r0 = el.getBoundingClientRect();
-    const rAfter = new DOMRect(r0.left, r0.top - delta, r0.width, r0.height);
-    const at = this.spotFor(rAfter, el, s.act);
-    const ms = Math.max(this.flightMs(Math.hypot(at.x - this.pos.x, at.y - this.pos.y)), delta ? Math.min(1800, 500 + Math.abs(delta) * 1.0) : 0);
-    await Promise.all([delta ? glide(box, box.scrollTop + delta, ms) : Promise.resolve(), this.flyTo(at, ms)]);
+    await this.reach(el, s.act);
     if (!this.alive()) return;
     if (person && early) return;
-    this.light(el, locate);
     const r = el.getBoundingClientRect();
     if (s.act !== "tap" || mode === "teach") this.pointAt(r);
     await sleep(120);

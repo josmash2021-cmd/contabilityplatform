@@ -28,11 +28,17 @@ describe("checkOffer — the closed list", () => {
     expect(typeof await checkOffer(none, 1, "personal", { task: "budget", category: "food" })).toBe("string");
   });
 
-  it("a goal needs a name and an amount; the monthly part fits inside it", async () => {
-    expect(await checkOffer(none, 1, "personal", { task: "goal", name: " Carro ", amount: 5000, monthly: 200 })).toEqual({ task: "goal", name: "Carro", amount: 5000, monthly: 200 });
-    expect(await checkOffer(none, 1, "personal", { task: "goal", name: "Viaje", amount: 1500 })).toEqual({ task: "goal", name: "Viaje", amount: 1500, monthly: null });
-    expect(typeof await checkOffer(none, 1, "personal", { task: "goal", name: "", amount: 100 })).toBe("string");
-    expect(typeof await checkOffer(none, 1, "personal", { task: "goal", name: "X", amount: 100, monthly: 500 })).toBe("string");
+  it("a goal carries only what they said (the bubble asks the rest on screen); what's there must make sense", async () => {
+    expect(await checkOffer(none, 1, "personal", { task: "goal", name: " Carro ", amount: 5000, monthly: 200 }))
+      .toEqual({ task: "goal", kind: null, name: "Carro", amount: 5000, monthly: 200, date: null, track: null });
+    expect(await checkOffer(none, 1, "personal", { task: "goal" }))
+      .toEqual({ task: "goal", kind: null, name: null, amount: null, monthly: null, date: null, track: null });
+    expect(await checkOffer(none, 1, "personal", { task: "goal", kind: "car", date: "2027-11", track: "manual" }))
+      .toEqual({ task: "goal", kind: "car", name: null, amount: null, monthly: null, date: "2027-11", track: "manual" });
+    expect(typeof await checkOffer(none, 1, "personal", { task: "goal", amount: 0 })).toBe("string");
+    expect(typeof await checkOffer(none, 1, "personal", { task: "goal", amount: 100, monthly: 500 })).toBe("string");
+    // Someone else's account to follow it: dropped (the bubble asks).
+    expect(await checkOffer(none, 1, "personal", { task: "goal", track: 99 })).toMatchObject({ track: null });
   });
 
   it("a category change only for the person's own movement, with a category of its kind", async () => {

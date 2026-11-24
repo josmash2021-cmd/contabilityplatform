@@ -60,17 +60,18 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
       ], t.budget.done(amt, cat));
     }
     case "goal": {
-      const amt = c.money(task.amount);
+      // "Enséñame" (the person does it); "Hazlo por mí" asks as it goes (goalScript.ts).
+      const A = t.goalAsk;
       const steps: Step[] = [
         { ...t.navTo(t.goal.page), nav: "/personal/goals" },
         { ...t.goal.new, el: g("goal-new"), act: "tap" },
-        { ...t.goal.other, el: g("goal-tpl-other"), act: "tap" },
-        { ...t.goal.name(task.name), el: g("goal-name"), act: "type", value: task.name },
-        { ...t.goal.amount(amt), el: g("goal-amount"), act: "type", value: String(task.amount) },
+        { ...(task.kind && task.kind !== "other" ? { auto: A.kinds[task.kind], teach: A.kinds[task.kind] } : t.goal.other), el: g(`goal-tpl-${task.kind ?? "other"}`), act: "tap" },
+        { ...(task.name ? t.goal.name(task.name) : { auto: A.nameEmpty, teach: A.nameEmpty }), el: g("goal-name"), act: "type", value: task.name ?? "" },
+        { ...(task.amount ? t.goal.amount(c.money(task.amount)) : { auto: A.amount("", "", null), teach: A.amount("", "", null).replace(/ Te sugiero \.| I suggest \./, "") }), el: g("goal-amount"), act: "type", value: task.amount ? String(task.amount) : "" },
       ];
       if (task.monthly) steps.push({ ...t.goal.monthly(c.money(task.monthly)), el: g("goal-monthly"), act: "type", value: String(task.monthly) });
       steps.push({ ...t.goal.create, el: g("goal-save"), act: "tap" });
-      return plan(steps, t.goal.done(task.name, amt));
+      return plan(steps, task.name && task.amount ? t.goal.done(task.name, c.money(task.amount)) : null);
     }
     case "connect_bank": {
       const personal = c.mode === "personal";
@@ -136,7 +137,7 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
 export function offerLine(task: BubbleTask, c: TaskCtx): string | null {
   switch (task.task) {
     case "budget": return `${c.catLabel(task.category, "expense")} · ${c.money(task.amount)}`;
-    case "goal": return `${task.name} · ${c.money(task.amount)}${task.monthly ? ` · ${c.money(task.monthly)}` : ""}`;
+    case "goal": return [task.name, task.amount ? c.money(task.amount) : null, task.monthly ? c.money(task.monthly) : null, c.t.goalAsk.onScreen].filter(Boolean).join(" · ");
     case "change_category": return `${task.name} → ${c.catLabel(task.category, task.type)}`;
     case "user_color": return c.colorName(task.color);
     case "customer": return [task.name, task.lastName].filter(Boolean).join(" ");

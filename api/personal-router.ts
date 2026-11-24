@@ -624,10 +624,17 @@ export const personalRouter = createRouter({
       WHERE userId = ${userId} AND type = 'expense' AND category NOT IN ('transfer', 'card_payment') AND transactionDate BETWEEN ${from} AND ${to}
       GROUP BY DATE_FORMAT(transactionDate, '%Y-%m')`);
     const monthly = spent.length ? spent.reduce((s, r) => s + (Number(r.total) || 0), 0) / spent.length : null;
+    // Money in over the same months (not money moved between their own accounts, not a card's payment).
+    const got = await rawRows<{ ym: string; total: string }>(db, sql`
+      SELECT DATE_FORMAT(transactionDate, '%Y-%m') AS ym, SUM(amount) AS total FROM bankTransactions
+      WHERE userId = ${userId} AND type = 'income' AND category NOT IN ('transfer', 'transfer_income', 'card_payment') AND transactionDate BETWEEN ${from} AND ${to}
+      GROUP BY DATE_FORMAT(transactionDate, '%Y-%m')`);
+    const monthlyIncome = got.length ? got.reduce((s, r) => s + (Number(r.total) || 0), 0) / got.length : null;
     return {
       savings: accounts.filter(isSavings).map((a) => ({ id: a.id, name: acctLabel(a), balance: Number(a.currentBalance) || 0, usedBy: usedBy(a.id, "acct") })),
       cards: accounts.filter(isCard).map((a) => ({ id: a.id, name: acctLabel(a), owed: Math.max(0, Number(a.currentBalance) || 0), usedBy: usedBy(a.id, "debt") })),
       monthlySpending: monthly === null ? null : Math.round(monthly * 100) / 100,
+      monthlyIncome: monthlyIncome === null ? null : Math.round(monthlyIncome * 100) / 100,
       monthsUsed: spent.length,
     };
   }),

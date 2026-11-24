@@ -158,7 +158,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
             opts.isLoading ? (
               <div className="space-y-2" role="status" aria-label={f.loading}>{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-14 rounded-xl" />)}</div>
             ) : (
-              <ul className="grid gap-1.5">
+              <ul className="grid gap-1.5" data-guide="goal-tpls">
                 {menu.map((m) => (
                   <li key={`${m.k}-${m.card?.id ?? ""}`}>
                     <button type="button" onClick={() => start(m.k, m.card)} data-guide={`goal-tpl-${m.k}`}
@@ -202,7 +202,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
                   </div>
                   <div className="mt-3">
                     <label htmlFor={`${uid}-date`} className={plabel}>{f.date}</label>
-                    <select id={`${uid}-date`} value={date} onChange={(e) => setDate(e.target.value)} className={pinput}>
+                    <select id={`${uid}-date`} data-guide="goal-date" value={date} onChange={(e) => setDate(e.target.value)} className={pinput}>
                       <option value="">{f.noDate}</option>
                       {dateOpts.map((d) => <option key={d} value={d}>{monthName(d, locale)}</option>)}
                     </select>
@@ -238,7 +238,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
 
 function TrackOpt({ name, value, checked, onPick, title, sub, disabled }: { name: string; value: string; checked: boolean; onPick: (v: string) => void; title: string; sub: string; disabled?: boolean }) {
   return (
-    <label className={cn("flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 transition-colors", checked ? "border-blue-600 bg-blue-50" : "border-slate-200", disabled && "cursor-not-allowed opacity-55")}>
+    <label data-guide={`goal-track-${value}`} className={cn("flex cursor-pointer items-start gap-2.5 rounded-[10px] border px-3 py-2.5 transition-colors", checked ? "border-blue-600 bg-blue-50" : "border-slate-200", disabled && "cursor-not-allowed opacity-55")}>
       <input type="radio" name={name} value={value} checked={checked} disabled={disabled} onChange={() => onPick(value)} className="mt-1 h-4 w-4 accent-blue-600" />
       <span><b className="block text-sm text-slate-900">{title}</b><small className="block text-xs text-slate-500">{sub}</small></span>
     </label>

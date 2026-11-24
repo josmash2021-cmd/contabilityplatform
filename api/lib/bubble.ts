@@ -14,7 +14,7 @@ import { sql } from "drizzle-orm";
 import { betaZodTool } from "@anthropic-ai/sdk/helpers/beta/zod";
 import type { getDb } from "../queries/connection";
 import {
-  BUBBLE_TASKS, NOT_BUDGETABLE, PERSONAL_EXPENSE_KEYS, PERSONAL_INCOME_KEYS, REPORT_MAX, USER_COLORS, isUserColor,
+  BUBBLE_TASKS, GOAL_KINDS, NOT_BUDGETABLE, PERSONAL_EXPENSE_KEYS, PERSONAL_INCOME_KEYS, REPORT_MAX, USER_COLORS, isUserColor, type GoalKind,
   type BubbleReport, type BubbleTask,
 } from "@contracts/bubble";
 import { rowsOf } from "./support";
@@ -88,6 +88,7 @@ How the app thinks (use it to explain):
 
 What you can do on screen: offer ONE task with offer_task, only from this closed list for their side: ${tasks}. The app then shows "Hazlo por mí" (you do it with the app's own buttons while they watch) and "Enséñame" (you show them where to tap). Before offering, have every value you need (category and amount, goal name and amount, which movement, which color: ${USER_COLORS.join(", ")}); if one is missing, ask for it first. Say plainly in your answer what it will do (for example "Te pongo $300 al mes en Comida"). Never offer a task for anything else, and never pretend you did something: the app does it only when they tap.
 • connect_bank only opens the bank's own window: their bank username, password and codes they type themselves; you never see or ask for them.
+• goal: pass only what they already told you (kind, name, amount, monthly, date YYYY-MM, track); don't ask the rest in the chat. The bubble opens Nueva meta and asks each missing part on screen (what it's for, how much, how much a month, by when, how to follow it, its name), each with a suggestion from their bank, offers "Sugiéreme todo", and asks "¿La creo así?" before creating it.
 • invoice opens a new invoice; they choose what to charge, check it and send it themselves.
 • receipt opens the receipt photo; they take the photo.
 • tour walks them through the main pages, one by one, saying what each is for. Offer it when they ask to see the app, how it works, or for a tour ("enséñame la app", "hazme un tour", "¿cómo funciona?").
@@ -113,9 +114,12 @@ const no = (why: string) => JSON.stringify({ offered: false, why });
 const offerInput = z.object({
   task: z.enum([...new Set([...BUBBLE_TASKS.personal, ...BUBBLE_TASKS.business])] as [string, ...string[]]).describe("The task, from the closed list for their side"),
   category: z.string().max(40).optional().describe("budget / change_category: the category key"),
-  amount: z.number().optional().describe("budget: monthly limit in dollars; goal: the total to save"),
-  monthly: z.number().optional().describe("goal: how much a month (optional)"),
-  name: z.string().max(100).optional().describe("goal: its name; customer: first name"),
+  amount: z.number().optional().describe("budget: monthly limit in dollars; goal: the total to save (only if they said it)"),
+  monthly: z.number().optional().describe("goal: how much a month (only if they said it)"),
+  name: z.string().max(100).optional().describe("goal: its name (only if they said it); customer: first name"),
+  kind: z.enum(GOAL_KINDS).optional().describe("goal: what it's for (only if they said it): emergency, trip, car, other"),
+  date: z.string().regex(/^\d{4}-\d{2}$/).optional().describe("goal: by when, YYYY-MM (only if they said it)"),
+  track: z.union([z.literal("manual"), z.number().int()]).optional().describe("goal: 'manual' or a savings account id (only if they said it)"),
   lastName: z.string().max(80).optional().describe("customer: last name (optional)"),
   phone: z.string().max(30).optional().describe("customer: phone (optional)"),
   email: z.string().max(120).optional().describe("customer: email (optional)"),
@@ -139,13 +143,18 @@ export async function checkOffer(db: Db, userId: number, mode: Mode, a: OfferInp
       return { task: "budget", category: cat, amount };
     }
     case "goal": {
-      const name = (a.name ?? "").trim();
-      const amount = money2(a.amount);
-      if (!name) return "Ask what the goal is for (its name).";
-      if (!(amount >= 1 && amount <= 10_000_000)) return "Ask how much they want to save in total.";
-      const monthly = a.monthly === undefined || a.monthly === null ? null : money2(a.monthly);
-      if (monthly !== null && !(monthly >= 0 && monthly <= amount)) return "The monthly amount must be between 0 and the total.";
-      return { task: "goal", name: name.slice(0, 100), amount, monthly };
+      // Only what they said; the bubble asks the rest on screen, with suggestions from their bank, and confirms.
+      const name = (a.name ?? "").trim().slice(0, 100) || null;
+      const amount = a.amount === undefined ? null : money2(a.amount);
+      if (amount !== null && !(amount >= 1 && amount <= 10_000_000)) return "The total must be a positive amount.";
+      const monthly = a.monthly === undefined ? null : money2(a.monthly);
+      if (monthly !== null && !(monthly > 0 && (amount === null || monthly <= amount))) return "The monthly amount must be positive and not more than the total.";
+      let track: "manual" | number | null = a.track === undefined ? null : a.track;
+      if (typeof track === "number") {
+        const mine = rowsOf<{ id: number }>(await db.execute(sql`SELECT id FROM bankAccounts WHERE id = ${track} AND userId = ${userId} LIMIT 1`))[0];
+        if (!mine) track = null;
+      }
+      return { task: "goal", kind: (a.kind as GoalKind | undefined) ?? null, name, amount, monthly, date: a.date ?? null, track };
     }
     case "change_category": {
       const id = Number(a.transactionId);

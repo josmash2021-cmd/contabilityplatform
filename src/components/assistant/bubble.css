@@ -5,13 +5,15 @@
 
 .ab-root { --ab-ease: cubic-bezier(.33, 0, .15, 1); --ab-soft: cubic-bezier(.45, 0, .2, 1); --ab-spring: cubic-bezier(.34, 1.45, .64, 1); }
 
-.ab-bubble { position: fixed; left: 0; top: 0; width: var(--ab-size, 66px); height: var(--ab-size, 66px); border: 0; padding: 0; cursor: pointer; z-index: 80;
+.ab-bubble { position: fixed; left: 0; top: 0; width: var(--ab-size, 66px); height: var(--ab-size, 66px); border: 0; padding: 0; cursor: pointer; z-index: 81;
   background: transparent; translate: var(--x, 0px) var(--y, 0px); will-change: translate; pointer-events: auto; -webkit-tap-highlight-color: transparent;
   transition: opacity .45s var(--ab-ease); }
+/* Seen on any background (even on a blue button, owner 2026-11-24): a bright white rim, a faint violet halo,
+   frosted glass and a deeper shadow. */
 .ab-bubble .ab-film { position: absolute; inset: 0; border-radius: 52% 48% 50% 50% / 50% 52% 48% 50%;
-  background: radial-gradient(circle at 50% 52%, rgba(255,255,255,0) 0 64%, rgba(255,255,255,.18) 78%, rgba(255,255,255,.6) 95%, rgba(255,255,255,.85) 100%);
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.7), inset 0 -8px 14px rgba(56,189,248,.22), inset 7px 8px 14px rgba(236,72,153,.16), 0 16px 28px -16px rgba(15,23,42,.38);
-  -webkit-backdrop-filter: blur(.6px) saturate(1.5); backdrop-filter: blur(.6px) saturate(1.5);
+  background: radial-gradient(circle at 50% 52%, rgba(255,255,255,.18) 0 56%, rgba(255,255,255,.36) 74%, rgba(255,255,255,.7) 92%, rgba(255,255,255,.95) 100%);
+  box-shadow: 0 0 0 1.5px rgba(255,255,255,.95), 0 0 0 4px rgba(129,140,248,.22), inset 0 -8px 14px rgba(56,189,248,.26), inset 7px 8px 14px rgba(236,72,153,.18), 0 16px 28px -10px rgba(15,23,42,.5);
+  -webkit-backdrop-filter: blur(2px) saturate(1.6); backdrop-filter: blur(2px) saturate(1.6);
   animation: ab-wobble 8s ease-in-out infinite, ab-float 5.5s ease-in-out infinite; }
 .ab-bubble .ab-film::before { content: ""; position: absolute; inset: 0; border-radius: inherit;
   background: conic-gradient(from var(--ab-hue), rgba(255,0,170,.6), rgba(0,200,255,.6), rgba(80,255,160,.45), rgba(255,215,0,.5), rgba(140,70,255,.6), rgba(255,0,170,.6));
@@ -36,10 +38,25 @@
 .ab-bubble.ab-talking svg { animation: ab-glow 1.4s ease-in-out infinite; }
 
 /* Its little cloud: the words come in one by one */
-.ab-say { position: fixed; z-index: 81; max-width: 270px; background: rgba(255,255,255,.97); border: 1px solid #e2e8f0; border-radius: 18px; padding: 11px 14px;
+.ab-say { position: fixed; z-index: 79; max-width: 270px; background: #fff; border: 1px solid #dfe3f6; border-radius: 18px; padding: 11px 14px;
   font-size: 14px; line-height: 1.45; color: #0f172a; box-shadow: 0 18px 40px -18px rgba(15,23,42,.45); pointer-events: none;
   opacity: 0; transform: translateY(6px) scale(.98); transition: opacity .5s var(--ab-ease), transform .6s var(--ab-ease); }
 .ab-say.ab-on { opacity: 1; transform: none; }
+/* When it asks, its choices are tappable: words with an arrow, no boxes */
+.ab-say.ab-asking.ab-on { pointer-events: auto; }
+.ab-opts { display: grid; margin-top: 4px; }
+.ab-opts button { display: flex; align-items: baseline; gap: 7px; border: 0; background: none; padding: 6px 0; min-height: 34px; font: inherit; font-size: 13.5px; font-weight: 500; color: #2563eb; text-align: left; cursor: pointer; }
+.ab-opts button::before { content: "→"; color: #94a3b8; }
+.ab-opts button small { color: #5b6678; font-weight: 500; font-size: 12px; }
+.ab-opts button[data-kind="all"] { color: #7c3aed; font-weight: 600; }
+.ab-opts button[data-kind="yes"] { color: #0f172a; font-weight: 700; }
+.ab-opts button:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; border-radius: 4px; }
+/* The drop that joins the bubble and its cloud (owner's choice): white like the cloud, its border on the sides; it grows from the bubble */
+.ab-neck { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 80; pointer-events: none; overflow: visible; opacity: 0; transition: opacity .2s var(--ab-ease); }
+.ab-neck.ab-on { opacity: 1; }
+.ab-neck-fill { fill: #fff; }
+.ab-neck-side { fill: none; stroke: #dfe3f6; stroke-width: 1; }
+.ab-neck g { transform-box: view-box; transition: transform .42s var(--ab-ease); }
 .ab-say .ab-step { font-size: 12px; color: #5b6678; display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .ab-say .ab-step i { width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #7c3aed); }
 /* Each word fades in (no blur: a half-blurred word looked unfinished) */
@@ -57,13 +74,13 @@
 .ab-caret { caret-color: #2563eb; }
 
 /* The panel: grows out of the bubble on computers; a sheet from below on phones */
-.ab-panel { position: fixed; right: 24px; bottom: 24px; width: 384px; max-width: calc(100vw - 32px); height: min(580px, calc(100dvh - 48px)); z-index: 82;
+.ab-panel { position: fixed; right: 24px; bottom: 24px; width: 384px; max-width: calc(100vw - 32px); height: min(580px, calc(100dvh - 48px)); z-index: 83;
   background: #fff; border-radius: 26px; border: 1px solid #e2e8f0; box-shadow: 0 30px 70px -30px rgba(15,23,42,.5);
   display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; color: #0f172a;
   transform-origin: calc(100% - 33px) calc(100% - 33px); transition: transform .7s var(--ab-spring), opacity .4s var(--ab-ease), border-radius .7s var(--ab-ease), filter .5s var(--ab-ease); }
 .ab-panel.ab-closed { transform: scale(.1); opacity: 0; border-radius: 50%; filter: blur(6px); pointer-events: none; visibility: hidden;
   transition: transform .5s var(--ab-soft), opacity .35s var(--ab-ease), border-radius .5s var(--ab-ease), filter .4s var(--ab-ease), visibility 0s .5s; }
-.ab-scrim { position: fixed; inset: 0; z-index: 81; background: rgba(15,23,42,.14); opacity: 0; pointer-events: none; transition: opacity .4s var(--ab-ease); }
+.ab-scrim { position: fixed; inset: 0; z-index: 82; background: rgba(15,23,42,.14); opacity: 0; pointer-events: none; transition: opacity .4s var(--ab-ease); }
 @media (max-width: 1023px) {
   /* With the keyboard open it sits just above it and shrinks with it (--ab-kb / --ab-vh from visualViewport), smoothly. */
   .ab-panel { left: 0; right: 0; bottom: var(--ab-kb, 0px); width: auto; max-width: none; height: min(78dvh, 640px, calc(var(--ab-vh, 100dvh) - 16px)); border-radius: 22px 22px 0 0; border-width: 1px 0 0;
@@ -77,11 +94,11 @@
 .ab-mini .ab-film { position: absolute; inset: 0; border-radius: 52% 48% 50% 50% / 50% 52% 48% 50%; background: radial-gradient(circle at 50% 55%, rgba(255,255,255,0) 0 55%, rgba(255,255,255,.5) 90%);
   box-shadow: inset 0 0 0 1px rgba(203,213,225,.9), inset 0 -5px 10px rgba(147,197,253,.3), inset 4px 5px 10px rgba(244,114,182,.2); animation: ab-wobble 8s ease-in-out infinite; }
 .ab-mini svg { position: absolute; inset: 0; margin: auto; width: 17px; height: 17px; }
-.ab-msgs { overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px 16px; display: grid; align-content: start; gap: 10px; scrollbar-width: none;
+.ab-msgs { overflow-y: auto; overscroll-behavior: contain; padding: 14px 18px 16px; display: grid; grid-template-columns: minmax(0, 1fr); align-content: start; gap: 10px; scrollbar-width: none;
   -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%); }
 .ab-msgs::-webkit-scrollbar { display: none; }
 .ab-m { max-width: 88%; padding: 10px 13px; border-radius: 16px; font-size: 14px; line-height: 1.45; white-space: pre-line; overflow-wrap: anywhere; animation: ab-rise .55s var(--ab-ease) both; }
-.ab-m.ab-bot { background: #f1f5f9; border-bottom-left-radius: 5px; }
+.ab-m.ab-bot { justify-self: start; background: #f1f5f9; border-bottom-left-radius: 5px; }
 .ab-m.ab-me { justify-self: end; background: #2563eb; color: #fff; border-bottom-right-radius: 5px; }
 .ab-go { display: inline-flex; margin-top: 8px; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-radius: 999px; border: 0; background: #0f172a; color: #fff;
   font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: transform .2s var(--ab-ease), background .2s; }

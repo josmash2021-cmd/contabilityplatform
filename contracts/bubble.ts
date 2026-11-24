@@ -33,7 +33,8 @@ export type BubbleTaskName = (typeof BUBBLE_TASKS)["personal" | "business"][numb
 export type BubbleTask =
   | { task: "tour" }
   | { task: "budget"; category: string; amount: number }
-  | { task: "goal"; name: string; amount: number; monthly: number | null }
+  /** A goal: what they already said (the rest the bubble asks on screen, with suggestions, and confirms). */
+  | { task: "goal"; kind: GoalKind | null; name: string | null; amount: number | null; monthly: number | null; date: string | null; track: "manual" | number | null }
   | { task: "connect_bank" }
   | { task: "change_category"; transactionId: number; category: string; type: "income" | "expense"; name: string; amount: number; date: string }
   | { task: "review" }
@@ -42,6 +43,9 @@ export type BubbleTask =
   | { task: "customer"; name: string; lastName: string; phone: string; email: string }
   | { task: "invoice" }
   | { task: "receipt" };
+
+export const GOAL_KINDS = ["emergency", "trip", "car", "other"] as const;
+export type GoalKind = (typeof GOAL_KINDS)[number];
 
 /** A problem the bubble may send to support (only the app's own faults; the person's data it repairs itself). */
 export type BubbleReport = { summary: string };

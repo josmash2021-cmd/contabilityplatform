@@ -23,6 +23,7 @@ import { useCatLabel } from "@/components/personal/txKit";
 import { moneyAuto } from "@/components/personal/personalUtils";
 import { Guide, glide, visible, type GuideMode } from "./guide";
 import { offerLine, planFor, type TaskCtx } from "./tasks";
+import { goalScript, type GoalResult } from "./goalScript";
 import "./bubble.css";
 
 /** "Hazlo por mí" in their own words: the task starts at once, without the buttons. */
@@ -56,7 +57,7 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
 
   const bubbleRef = useRef<HTMLButtonElement>(null);
   const cloudRef = useRef<HTMLDivElement>(null);
-  const spotRef = useRef<HTMLDivElement>(null);
+  const neckRef = useRef<SVGSVGElement>(null);
   const panelRef = useRef<HTMLElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const msgsRef = useRef<HTMLDivElement>(null);
@@ -81,10 +82,10 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const sizeRef = useRef(size);
   useEffect(() => { sizeRef.current = size; guideRef.current?.rest(); }, [size]);
   useEffect(() => {
-    if (!bubbleRef.current || !cloudRef.current || !spotRef.current) return;
+    if (!bubbleRef.current || !cloudRef.current || !neckRef.current) return;
     const own = (n: Node) => [bubbleRef.current, cloudRef.current, panelRef.current, scrimRef.current].some((el) => !!el && el.contains(n));
     const g = new Guide({
-      bubble: bubbleRef.current, cloud: cloudRef.current, spot: spotRef.current,
+      bubble: bubbleRef.current, cloud: cloudRef.current, neck: neckRef.current,
       home: () => homeOf(sizeRef.current), size: () => sizeRef.current,
       navigate: (p) => goRef.current(p), own, stepLabel: (i, n) => bubbleCopy[talkLang.current].step(i, n),
       get moreWords() { return bubbleCopy[talkLang.current].more; },
@@ -186,8 +187,18 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     setRunning(true);
     talkLang.current = l;
     const w = bubbleCopy[l];
-    const plan = planFor(task, ctxIn(l));
-    const end = await g.runSteps(plan.steps, how);
+    const tctx = ctxIn(l);
+    const plan = planFor(task, tctx);
+    let end;
+    if (task.task === "goal" && how === "auto") {
+      // It asks as it goes, with suggestions from their own numbers (Metas' goalOptions).
+      const o = await utils.personal.goalOptions.fetch().catch(() => null);
+      const result: GoalResult = { name: task.name ?? "", amount: task.amount ?? 0, created: false };
+      end = await g.runScript(goalScript(task, tctx, { monthIn: o?.monthlyIncome ?? null, monthOut: o?.monthlySpending ?? null, savings: o?.savings ?? [] }, result), how);
+      plan.done = end === "done" && result.created ? w.tasks.goal.done(result.name, moneyAuto(result.amount)) : null;
+      if (end === "done" && !result.created) end = "stopped";
+      if (end === "missing") plan.missing = w.tasks.goalAsk.notCreated;
+    } else end = await g.runSteps(plan.steps, how);
     setRunning(false);
     if (end === "done") {
       if (plan.quiet) void g.note(plan.quiet);
@@ -225,7 +236,8 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
 
   return (
     <div className="ab-root" data-assistant-bubble="">
-      <div ref={spotRef} className="ab-spot" aria-hidden="true" />
+      {/* The drop that joins the bubble and its cloud (no frame around what it shows: owner, 2026-11-24) */}
+      <svg ref={neckRef} className="ab-neck" aria-hidden="true"><g><path className="ab-neck-fill" /><path className="ab-neck-side" /><path className="ab-neck-side" /></g></svg>
       <div ref={cloudRef} className="ab-say" aria-live="polite" />
       <button
         ref={bubbleRef} type="button" onClick={toggle} aria-label={t.open} aria-expanded={open} data-running={running ? "1" : undefined}
