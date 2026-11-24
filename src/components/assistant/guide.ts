@@ -100,17 +100,29 @@ function scrollBoxOf(el: HTMLElement): HTMLElement {
   return (document.scrollingElement as HTMLElement) ?? document.documentElement;
 }
 const isPage = (box: HTMLElement) => box === document.scrollingElement || box === document.documentElement || box === document.body;
-/** The top of the phone's tab bar (or the bottom of the screen). */
+/**
+ * The part of the screen that's really seen, in the page's own coordinates (where fixed things are placed). On a phone
+ * the keyboard or a pinch zoom shrink and pan it; placing by the whole window lost the bubble off screen (owner).
+ */
+export function viewArea(): { left: number; top: number; right: number; bottom: number } {
+  const vv = typeof window !== "undefined" ? window.visualViewport : null;
+  const left = vv ? vv.offsetLeft : 0, top = vv ? vv.offsetTop : 0;
+  const right = left + (vv ? vv.width : window.innerWidth), bottom = top + (vv ? vv.height : window.innerHeight);
+  return { left, top, right: Math.min(right, window.innerWidth), bottom: Math.min(bottom, window.innerHeight) };
+}
+/** The top of the phone's tab bar, or the bottom of what's seen. */
 function bottomLimit(): number {
   const tab = document.querySelector("nav[data-tabbar]");
-  return tab && visible(tab) ? tab.getBoundingClientRect().top : window.innerHeight;
+  const seen = viewArea().bottom;
+  return tab && visible(tab) ? Math.min(seen, tab.getBoundingClientRect().top) : seen;
 }
 /** The visible part of a scrolling box, above the tab bar. */
 function areaOf(box: HTMLElement) {
   const limit = bottomLimit();
-  if (isPage(box)) return { top: 0, bottom: limit };
+  const seenTop = viewArea().top;
+  if (isPage(box)) return { top: seenTop, bottom: limit };
   const b = box.getBoundingClientRect();
-  return { top: Math.max(0, b.top), bottom: Math.min(b.bottom, limit) };
+  return { top: Math.max(seenTop, b.top), bottom: Math.min(b.bottom, limit) };
 }
 /** How far a box should scroll so the element sits comfortably in view (0: it already does). */
 function scrollNeeded(el: HTMLElement): { box: HTMLElement; delta: number } {
@@ -203,13 +215,31 @@ export class Guide {
     this.setPos(env.home());
     document.addEventListener("pointerdown", this.onDown, true);
     document.addEventListener("click", this.onClick, true);
+    window.visualViewport?.addEventListener("resize", this.onView);
+    window.visualViewport?.addEventListener("scroll", this.onView);
   }
+  private viewFrame = 0;
+  /** What's seen changed (keyboard, zoom, rotation): if it's working, it stays by what it works on, inside the view. */
+  private onView = () => {
+    cancelAnimationFrame(this.viewFrame);
+    this.viewFrame = requestAnimationFrame(() => {
+      if (!this.run) { this.rest(); return; }
+      if (this.landed) return; // in flight: it lands where it's going
+      const el = this.here;
+      if (el && el.isConnected) this.setPos(this.spotFor(el.getBoundingClientRect(), el, this.currentAct === "tap" || this.currentAct === "type" || this.currentAct === "pick" ? this.currentAct : "show"));
+      else this.setPos(this.clampPos(this.pos));
+      if (this.env.cloud.classList.contains("ab-on") && this.cloudAt) this.placeCloud(this.pos, el?.getBoundingClientRect() ?? this.cloudAt.avoid ?? undefined, this.cloudAt.aboveFirst, false);
+    });
+  };
 
   destroy() {
     this.stop();
     document.removeEventListener("pointerdown", this.onDown, true);
     document.removeEventListener("click", this.onClick, true);
+    window.visualViewport?.removeEventListener("resize", this.onView);
+    window.visualViewport?.removeEventListener("scroll", this.onView);
     cancelAnimationFrame(this.flight);
+    cancelAnimationFrame(this.viewFrame);
   }
 
   get busy() { return this.run !== null; }
@@ -247,7 +277,7 @@ export class Guide {
       const ms = msIn ?? this.flightMs(dist);
       // The side of the arc: the one that bows upward (a vertical move bows outward, away from the screen's edge).
       let nx = -dy / dist, ny = dx / dist;
-      if (ny > 0 || (Math.abs(ny) < 0.2 && (from.x + to.x) / 2 + nx * 40 > window.innerWidth - 30)) { nx = -nx; ny = -ny; }
+      if (ny > 0 || (Math.abs(ny) < 0.2 && (from.x + to.x) / 2 + nx * 40 > viewArea().right - 30)) { nx = -nx; ny = -ny; }
       const bend = Math.min(80, dist * 0.2);
       const c1 = { x: from.x + dx * 0.3 + nx * bend, y: from.y + dy * 0.3 + ny * bend };
       const c2 = { x: from.x + dx * 0.78 + nx * bend * 0.4, y: from.y + dy * 0.78 + ny * bend * 0.4 };
@@ -266,8 +296,8 @@ export class Guide {
     });
   }
   private clampPos(p: P): P {
-    const size = this.env.size();
-    return { x: Math.min(Math.max(8, p.x), window.innerWidth - size - 8), y: Math.min(Math.max(8, p.y), bottomLimit() - size - 8) };
+    const size = this.env.size(), a = viewArea();
+    return { x: Math.min(Math.max(a.left + 8, p.x), a.right - size - 8), y: Math.min(Math.max(a.top + 8, p.y), bottomLimit() - size - 8) };
   }
   /**
    * Where it stands for an element: for a button or a field, on its right end like a finger about to touch it (it
@@ -279,7 +309,7 @@ export class Guide {
       const tr = textBox(el);
       const dy = r.top - el.getBoundingClientRect().top;
       const top = tr.top + dy, right = tr.right;
-      if (right + size + 12 < window.innerWidth) return this.clampPos({ x: right + 10, y: top + tr.height / 2 - size / 2 });
+      if (right + size + 12 < viewArea().right) return this.clampPos({ x: right + 10, y: top + tr.height / 2 - size / 2 });
       return this.clampPos({ x: right - size * 0.9, y: top + tr.height + 6 });
     }
     if (act === "show" && r.height > size * 2) return this.clampPos({ x: r.right - size * 0.75, y: r.top + 14 });
@@ -293,7 +323,7 @@ export class Guide {
    * what the heading talks about comes right under it.
    */
   talk(html: string, at: P = this.pos, avoid?: DOMRect, aboveFirst = false, choices?: Choice[]) {
-    const say = this.env.cloud, size = this.env.size();
+    const say = this.env.cloud;
     say.classList.remove("ab-on");
     say.innerHTML = html;
     say.classList.toggle("ab-asking", !!choices?.length);
@@ -312,23 +342,32 @@ export class Guide {
       }
       say.appendChild(box);
     }
-    const vw = window.innerWidth, limit = bottomLimit();
-    const w = Math.min(270, vw - 24);
+    this.cloudAt = { avoid: avoid ?? null, aboveFirst };
+    this.placeCloud(at, avoid, aboveFirst, true);
+  }
+  /** Where the cloud goes next to the bubble (inside what's seen), and the drop that joins them. */
+  private cloudAt: { avoid: DOMRect | null; aboveFirst: boolean } | null = null;
+  private placeCloud(at: P, avoid: DOMRect | undefined, aboveFirst: boolean, appear: boolean) {
+    const say = this.env.cloud, size = this.env.size();
+    const area = viewArea(), limit = bottomLimit();
+    const vl = area.left, vr = area.right, vt = area.top;
+    const w = Math.min(270, vr - vl - 24);
     say.style.width = `${w}px`;
     const h = say.offsetHeight;
     // Above a heading it may go up to the screen's top edge (over the app's top bar), not over what it explains.
-    const fits = (x: number, y: number) => x >= 12 && x + w <= vw - 12 && y >= (aboveFirst ? 2 : 12) && y + h <= limit - 8;
+    const fits = (x: number, y: number) => x >= vl + 12 && x + w <= vr - 12 && y >= vt + (aboveFirst ? 2 : 12) && y + h <= limit - 8;
     const hits = (x: number, y: number) => !!avoid && x < avoid.right + 6 && x + w > avoid.left - 6 && y < avoid.bottom + 6 && y + h > avoid.top - 6;
     // Room between the bubble and its cloud for the drop that joins them.
     const below = at.y + size + 24, above = at.y - h - 24;
     const side = { x: at.x + size + 22, y: at.y + 4 }, left = { x: at.x - w - 22, y: at.y + 4 };
-    const under = { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: below };
-    const over = { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: Math.min(at.y, avoid?.top ?? at.y) - h - 22 };
+    const under = { x: Math.min(Math.max(vl + 12, at.x + size - w), vr - w - 12), y: below };
+    const over = { x: Math.min(Math.max(vl + 12, at.x + size - w), vr - w - 12), y: Math.min(at.y, avoid?.top ?? at.y) - h - 22 };
     const options: P[] = aboveFirst ? [over, side, left, under] : [side, under, over, left];
     const pick = options.find((o) => fits(o.x, o.y) && !hits(o.x, o.y)) ?? options.find((o) => fits(o.x, o.y))
-      ?? { x: Math.min(Math.max(12, at.x + size - w), vw - w - 12), y: Math.min(Math.max(12, above), limit - h - 8) };
+      ?? { x: Math.min(Math.max(vl + 12, at.x + size - w), vr - w - 12), y: Math.min(Math.max(vt + 12, above), limit - h - 8) };
     say.style.left = `${Math.round(pick.x)}px`;
     say.style.top = `${Math.round(pick.y)}px`;
+    if (!appear) { this.tie(at, pick, w, h, false); return; }
     // The drop grows out of the bubble first, then the cloud.
     requestAnimationFrame(() => { this.tie(at, pick, w, h); setTimeout(() => say.classList.add("ab-on"), this.reduce ? 0 : 130); });
   }
@@ -337,7 +376,7 @@ export class Guide {
    * The drop (owner chose it, 2026-11-24): from just inside the bubble's rim to the cloud's nearest edge, narrow at the
    * bubble and wide at the cloud, with a soft waist; white like the cloud, with its border on the sides.
    */
-  private tie(at: P, cloud: P, w: number, h: number) {
+  private tie(at: P, cloud: P, w: number, h: number, grow = true) {
     const neck = this.env.neck, size = this.env.size();
     const g = neck.querySelector("g"), [fill, l, r] = [...neck.querySelectorAll("path")];
     if (!g || !fill || !l || !r) return;
@@ -361,9 +400,10 @@ export class Guide {
     l.setAttribute("d", d(-1));
     r.setAttribute("d", d(1));
     g.style.transformOrigin = `${sx}px ${sy}px`;
+    neck.classList.add("ab-on");
+    if (!grow) { g.style.transition = "none"; g.style.transform = "none"; return; }
     g.style.transition = "none";
     g.style.transform = horizontal ? "scaleX(0.05)" : "scaleY(0.05)";
-    neck.classList.add("ab-on");
     requestAnimationFrame(() => requestAnimationFrame(() => { g.style.transition = ""; g.style.transform = "none"; }));
   }
   /** Says a line by itself (no steps), word by word, then goes quiet. */
@@ -426,32 +466,41 @@ export class Guide {
   /** One press, where it stands: it dips toward the button (the button sinks too), one ripple, the real click. */
   private async tapOn(el: HTMLElement) {
     const size = this.env.size(), b = this.env.bubble;
-    const r = el.getBoundingClientRect();
-    // The point it touches: the lower right corner, where it stands.
-    const tx = r.right - Math.min(10, r.width * 0.1), ty = r.bottom - Math.min(10, r.height * 0.25);
-    // Too far (the page moved): a short, calm approach first.
-    const want = this.clampPos({ x: r.right - size * 0.3, y: r.bottom - size * 0.28 });
-    if (Math.hypot(want.x - this.pos.x, want.y - this.pos.y) > 26) await this.flyTo(want, 650);
+    let r = el.getBoundingClientRect();
+    // Its corner (where it waits, not over the words): back there first if the page moved.
+    const corner = this.clampPos({ x: r.right - size * 0.3, y: r.bottom - size * 0.28 });
+    if (Math.hypot(corner.x - this.pos.x, corner.y - this.pos.y) > 26) await this.flyTo(corner, 650);
     if (!this.alive()) return;
-    const cx = this.pos.x + size / 2, cy = this.pos.y + size / 2, d = Math.hypot(tx - cx, ty - cy) || 1;
-    b.style.setProperty("--px", `${((tx - cx) / d * 10).toFixed(1)}px`);
-    b.style.setProperty("--py", `${((ty - cy) / d * 10).toFixed(1)}px`);
-    await sleep(160);
+    r = el.getBoundingClientRect();
+    // The point it really touches: inside the button, on its right part (owner: "presiona exactamente donde es").
+    const a = viewArea();
+    const tx = Math.min(Math.max(r.left + Math.min(r.width / 2, 22), r.right - Math.min(r.width * 0.28, 34)), a.right - 6);
+    // (inside what's seen; a tab of the phone's bottom bar is pressed right on it)
+    const ty = Math.min(Math.max(r.top + r.height / 2, a.top + 6), a.bottom - 6);
+    // A short dip onto it (its center on that point), the press, the ripple right there, the real click.
+    const back = { ...this.pos };
+    await this.flyTo({ x: tx - size / 2, y: ty - size / 2 }, 280);
+    if (!this.alive()) return;
+    b.style.setProperty("--px", "0px");
+    b.style.setProperty("--py", "0px");
     b.classList.add("ab-press"); el.classList.remove("ab-untap"); el.classList.add("ab-tapped");
-    await sleep(360);
     const rip = document.createElement("span");
     rip.className = "ab-ripple"; rip.style.left = `${tx}px`; rip.style.top = `${ty}px`;
     document.body.appendChild(rip); setTimeout(() => rip.remove(), 1100);
+    await sleep(300);
     b.classList.remove("ab-press"); el.classList.remove("ab-tapped"); el.classList.add("ab-untap");
     setTimeout(() => el.classList.remove("ab-untap"), 600);
     this.unlight();
-    await sleep(300);
     if (!this.alive()) return;
     el.click();
-    await sleep(500);
+    // Steps back to its corner (if the button is still there), so it doesn't cover what comes next.
+    await sleep(120);
+    if (el.isConnected && visible(el)) await this.flyTo(back, 300); else await sleep(380);
   }
+  private touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
   private async typeIn(el: HTMLInputElement, text: string) {
-    el.focus({ preventScroll: true });
+    // On a phone, focusing would open the keyboard: the bubble writes without it.
+    if (!this.touch) el.focus({ preventScroll: true });
     setNative(el, "");
     el.classList.add("ab-caret");
     let v = "";
@@ -738,7 +787,7 @@ export class Guide {
     this.hush();
     const main = document.querySelector("main");
     const size = this.env.size();
-    const at = this.clampPos({ x: window.innerWidth - size - 16, y: bottomLimit() - size - 70 });
+    const at = this.clampPos({ x: viewArea().right - size - 16, y: bottomLimit() - size - 70 });
     if (main) {
       const max = Math.max(0, main.scrollHeight - main.clientHeight);
       const dist = max - main.scrollTop;

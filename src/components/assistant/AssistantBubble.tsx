@@ -21,7 +21,7 @@ import { personalCopy } from "@/i18n/copy/personal";
 import type { Lang } from "@/i18n/lang";
 import { useCatLabel } from "@/components/personal/txKit";
 import { moneyAuto } from "@/components/personal/personalUtils";
-import { Guide, glide, visible, type GuideMode } from "./guide";
+import { Guide, glide, viewArea, visible, type GuideMode } from "./guide";
 import { offerLine, planFor, type TaskCtx } from "./tasks";
 import { goalScript, type GoalResult } from "./goalScript";
 import "./bubble.css";
@@ -37,7 +37,9 @@ const STAR_SOFT = "M12 4.5 C13.6 8.8 15.2 10.4 19.5 12 C15.2 13.6 13.6 15.2 12 1
 
 /** Where it rests: the lower right corner, above the phone's tab bar and above the tax preparer's bubble. */
 function homeOf(size: number): { x: number; y: number } {
-  const vw = window.innerWidth, vh = window.innerHeight;
+  // What's really seen (a phone's keyboard or a zoom shrink it), so its corner is always on screen.
+  const seen = viewArea();
+  const vw = seen.right, vh = seen.bottom;
   const tab = document.querySelector("nav[data-tabbar]");
   const tabH = tab && visible(tab) ? tab.getBoundingClientRect().height : 0;
   const dock = document.querySelector("[data-tax-dock]");
