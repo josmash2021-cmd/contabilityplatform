@@ -6,6 +6,8 @@
 // Transfers, cash, card payments, gas stations and groceries never count, unless the name is a known
 // subscription (Walmart+, Costco membership…). Used by api/subscriptions-router.ts and its tests.
 
+import { isCarWash } from "./bankRules";
+
 export type SubFreq = "week" | "month" | "year";
 
 /** One bank movement, money out as a positive amount. Dates are calendar days "YYYY-MM-DD". */
@@ -118,10 +120,29 @@ const KNOWN: Known[] = [
   [/\bprogressive\b/, "progressive", "Progressive", false],
   [/\bstate\s*farm\b/, "state-farm", "State Farm", false],
   [/\ballstate\b/, "allstate", "Allstate", false],
+  // Car wash memberships (owner, 2026-11-24).
+  [/\bmarc\s*-?\s*1\b|\bmarc1\b|\bmark\s*-?\s*1\s*car/, "marc-1", "Marc-1 Car Wash", false],
+  [/\bmister\s*car\s*wash\b|\bmcw\b/, "mister-car-wash", "Mister Car Wash", false],
+  [/\bquick\s*quack\b|\bdontdrivedirty\b/, "quick-quack", "Quick Quack", false],
+  [/\bzips\s*(car|express)\b|\bzips\s*#?\s*\d/, "zips", "ZIPS Car Wash", false],
+  [/\btake\s*5\s*car\s*wash\b/, "take-5-car-wash", "Take 5 Car Wash", false],
+  [/\btommy'?s\s*express\b/, "tommys-express", "Tommy's Express", false],
+  [/\bwhistle\s*express\b/, "whistle-express", "Whistle Express", false],
+  [/\bclub\s*car\s*wash\b/, "club-car-wash", "Club Car Wash", false],
+  [/\bmod\s*wash\b/, "modwash", "ModWash", false],
+  [/\bautobell\b/, "autobell", "Autobell", false],
+  [/\brocket\s*express\b/, "rocket-express", "Rocket Express", false],
+  [/\bjet\s*brite\b/, "jet-brite", "Jet Brite", false],
+  [/\bcrew\s*car\s*wash\b/, "crew-carwash", "Crew Carwash", false],
+  [/\bmr\.?\s*clean\s*car\s*wash\b/, "mr-clean-car-wash", "Mr. Clean Car Wash", false],
+  [/\bhurricane\s*express\b/, "hurricane-express-wash", "Hurricane Express", false],
+  [/\btidal\s*wave\b/, "tidal-wave", "Tidal Wave Auto Spa", false],
+  [/\bgoo\s*-?\s*goo\b/, "goo-goo", "Goo-Goo Express", false],
+  [/\bmoo\s*moo\b/, "moo-moo", "Moo Moo Car Wash", false],
 ];
 
 // Never a subscription (checked after the known services, so "Walmart+" still counts).
-const EXCLUDED_CATEGORIES = new Set(["transfer", "transfer_income", "zelle_sent", "zelle_income", "cash_withdrawal", "cash_deposit", "deposit", "paycheck", "income", "refund", "gasolina"]);
+const EXCLUDED_CATEGORIES = new Set(["card_payment", "transfer", "transfer_income", "zelle_sent", "zelle_income", "cash_withdrawal", "cash_deposit", "deposit", "paycheck", "income", "refund", "gasolina"]);
 const EXCLUDED_WORDS = [
   // money moving, not a service
   /\bzelle\b/, /\bvenmo\b/, /\bcash\s*app\b/, /\bpaypal\s*transfer\b/, /\btransfer\b/, /\bwithdrawal\b/, /\batm\b/, /\bdeposit\b/,
@@ -169,6 +190,8 @@ const HABIT_CATEGORIES = new Set(["food", "home_expense"]);
 export function isExcluded(tx: Pick<DetectTx, "description" | "merchantName" | "category">): boolean {
   if (tx.category && (EXCLUDED_CATEGORIES.has(tx.category) || HABIT_CATEGORIES.has(tx.category))) return true;
   const text = `${cleanMerchantText(tx.merchantName ?? "")} ${cleanMerchantText(tx.description)}`;
+  // A car wash membership counts, even at a gas station ("SHELL CAR WASH").
+  if (isCarWash(text)) return false;
   return EXCLUDED_WORDS.some((re) => re.test(text));
 }
 

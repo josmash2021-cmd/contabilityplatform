@@ -29,14 +29,18 @@ export const REVIEW_CATEGORIES: ReadonlyArray<{ key: string; dir: Direction }> =
   { key: "gasolina", dir: "out" },
   { key: "food", dir: "out" },
   { key: "subscription", dir: "out" },
+  { key: "rent", dir: "out" },
   { key: "utilities", dir: "out" },
   { key: "insurance", dir: "out" },
+  { key: "health_insurance", dir: "out" },
   { key: "medical", dir: "out" },
+  { key: "government", dir: "out" },
   { key: "zelle_sent", dir: "out" },
   { key: "transfer", dir: "out" },
   { key: "cash_withdrawal", dir: "out" },
   { key: "home_expense", dir: "out" },
   // Either way
+  { key: "card_payment", dir: "both" },
   { key: "loan", dir: "both" },
   { key: "other", dir: "both" },
 ];

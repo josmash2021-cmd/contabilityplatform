@@ -4,7 +4,7 @@
 // Plaid's merchant fields (never a raw bank description), so it is shared by all users.
 import { inArray, sql } from "drizzle-orm";
 import type { getDb } from "../queries/connection";
-import { bundledLogoFor, candidateKeys, merchantBrandOf, safeLogoUrl, type PlaidTxBrand } from "./brand";
+import { bundledLogoFor, candidateKeys, merchantBrandOf, safeLogoUrl, trustedMerchantName, type PlaidTxBrand } from "./brand";
 import { merchantLogosTable } from "./brandSchema";
 import { ensureBrandTables } from "./brandTables";
 
@@ -80,7 +80,10 @@ async function logosFor(db: Db, keys: string[]): Promise<Map<string, string>> {
  * Never throws: on any database problem the rows come back with `logoUrl: null`.
  */
 export async function withMerchantLogos<T extends LogoLookupRow>(db: Db, rows: T[]): Promise<Array<T & { logoUrl: string | null }>> {
-  const keysPerRow = rows.map((r) => (safeLogoUrl(r.logoUrl) ? [] : candidateKeys(r)));
+  // Plaid's merchant name (and the logo that came with it) only when it doesn't contradict the bank's text: a row
+  // saved as "AT&T" for "ATS ALABASTER AL" shows the bank's text and no AT&T logo.
+  const wrong = rows.map((r) => !!r.merchantName && !!r.description && !trustedMerchantName(r.merchantName, r.description));
+  const keysPerRow = rows.map((r, i) => (safeLogoUrl(r.logoUrl) && !wrong[i] ? [] : candidateKeys(r)));
   let found = new Map<string, string>();
   try {
     found = await logosFor(db, [...new Set(keysPerRow.flat())]);
@@ -88,9 +91,9 @@ export async function withMerchantLogos<T extends LogoLookupRow>(db: Db, rows: T
     console.error("[merchantLogos] lookup failed:", e instanceof Error ? e.message : e);
   }
   return rows.map((r, i) => {
-    const own = safeLogoUrl(r.logoUrl);
+    const own = wrong[i] ? null : safeLogoUrl(r.logoUrl);
     // The brand's current logo saved with the app first (Plaid's can be an older version), then Plaid's.
     const match = bundledLogoFor(r) ?? own ?? keysPerRow[i].map((k) => found.get(k)).find(Boolean) ?? null;
-    return { ...r, logoUrl: match };
+    return wrong[i] ? { ...r, merchantName: null, logoUrl: match } : { ...r, logoUrl: match };
   });
 }

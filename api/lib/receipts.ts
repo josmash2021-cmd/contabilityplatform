@@ -21,6 +21,7 @@ export const RECEIPT_CATEGORIES = [
   "professional",
   "travel",
   "fees",
+  "licenses",
   "other",
 ] as const;
 export type ReceiptCategory = (typeof RECEIPT_CATEGORIES)[number];

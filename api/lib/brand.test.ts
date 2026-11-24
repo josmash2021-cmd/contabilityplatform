@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
-  bundledBankLogo, bundledMerchantLogo, candidateKeys, isBankOwnMovement, cleanAccountName, cleanWebsite, contrast, directLogoOf, institutionLogoDataUrl,
+  bundledBankLogo, bundledLogoFor, bundledMerchantLogo, candidateKeys, isBankOwnMovement, cleanAccountName, cleanWebsite, contrast, directLogoOf, institutionLogoDataUrl,
   looksMangled, merchantBrandOf, merchantKey, monogram, monogramColors, normalizeColor, plaidErrorCode,
-  repairedName, safeLogoUrl, statusForError,
+  repairedName, safeLogoUrl, statusForError, trustedMerchantName,
 } from "./brand";
 
 const PNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
@@ -214,6 +214,53 @@ describe("each brand's current logo saved with the app", () => {
   it("never guesses on other names", () => {
     for (const text of ["SHELLY'S SALON", "TARGETED ADS LLC", "MAXWELL HARDWARE", "UBERTOS PIZZA", "CITIZENS BANK"]) {
       expect(bundledMerchantLogo(text), text).toBeNull();
+    }
+  });
+});
+
+describe("Plaid's merchant name, only when the bank's text agrees (owner, 2026-11-24: ATS Alabaster showed as AT&T)", () => {
+  it("drops a famous name that is one letter off the text, and its logo", () => {
+    expect(trustedMerchantName("AT&T", "ATS ALABASTER AL")).toBeNull();
+    expect(candidateKeys({ merchantName: "AT&T", description: "ATS ALABASTER AL" })).not.toContain("att");
+    expect(bundledLogoFor({ merchantName: "AT&T", description: "ATS ALABASTER AL" })).toBeNull();
+    expect(directLogoOf({ name: "ATS ALABASTER AL", merchant_name: "AT&T", logo_url: "https://plaid-merchant-logos.plaid.com/att.png" })).toBeNull();
+    // Another brand we know by name in the text.
+    expect(trustedMerchantName("Shell", "CHEVRON 0091234 HOOVER AL")).toBeNull();
+  });
+  it("keeps it when the text contains, abbreviates or simply doesn't spell it", () => {
+    const ok: Array<[string, string]> = [
+      ["AT&T", "AT&T*BILL PAYMENT"], ["AT&T", "ATT*BILL PAYMENT 800-331-0500"], ["Amazon", "AMZN Mktp US*2K3AB1"], ["Walmart", "WM SUPERCENTER #1234"],
+      ["Walmart", "WAL-MART #1234"], ["McDonald's", "MCDONALD'S F1234"], ["Joe's Pizza", "SQ *JOES PIZZA"], ["DoorDash", "DD *DOORDASH DASHPASS"],
+      ["T-Mobile", "T-MOBILE AUTO PAY"], ["Verizon", "VZWRLSS*APOCC VISB"], ["Netflix", "NFLX DIGITAL NTWKS"], ["Apple", "APL*ITUNES.COM/BILL"],
+      ["Starbucks", "SBUX 1234"], ["Uber", "UBER *TRIP HELP.UBER.COM"], ["McDonald's", "MCDONALS 3321"],
+    ];
+    for (const [m, text] of ok) expect(trustedMerchantName(m, text), `${m} / ${text}`).toBe(m);
+    expect(directLogoOf({ name: "AT&T*BILL PAYMENT", merchant_name: "AT&T", logo_url: "https://plaid-merchant-logos.plaid.com/att.png" })).toBe("https://plaid-merchant-logos.plaid.com/att.png");
+  });
+});
+
+describe("the new logos (owner, 2026-11-24)", () => {
+  it("lenders, rent, power, health insurance, phone and stores", () => {
+    const cases: Array<[string, string]> = [
+      ["UPSTART NETWORK PAYMENT", "upstart"], ["AFFIRM * PAY 8XYZ", "affirm"], ["KLARNA* NEWEGG", "klarna"], ["AFTERPAY US", "afterpay"],
+      ["ONEMAIN FINANCIAL", "onemain"], ["EARNIN ACTIVEHOURS", "earnin"], ["FLEX FINANCE", "flex"], ["GETFLEX.COM RENT", "flex"],
+      ["ALABAMA POWER CO BILL PAY", "alabama-power"], ["BLUE CROSS BLUE SHIELD AL", "bcbs-alabama"], ["BCBS OF AL PREMIUM", "bcbs-alabama"],
+      ["T-MOBILE AUTO PAY", "t-mobile"], ["CRICKET WIRELESS", "cricket"], ["SPECTRUM", "spectrum"], ["ZAXBY'S #123", "zaxbys"],
+      ["WAFFLE HOUSE 1234", "waffle-house"], ["RAISING CANE'S 0123", "raising-canes"], ["WINN-DIXIE #1234", "winn-dixie"], ["ALDI 72034", "aldi"],
+      ["SYNCB/AMAZON PYMT", "synchrony"], ["MISSION LANE PAYMENT", "mission-lane"],
+    ];
+    for (const [text, icon] of cases) expect(bundledMerchantLogo(text), text).toBe(`/brands/merchants/${icon}.png`);
+  });
+  it("card issuers use their bank's logo", () => {
+    expect(bundledMerchantLogo("CAPITAL ONE MOBILE PYMT")).toBe("/brands/banks/capital-one.png");
+    expect(bundledMerchantLogo("DISCOVER E-PAYMENT 1234")).toBe("/brands/banks/discover.png");
+    expect(bundledMerchantLogo("AMEX EPAYMENT ACH PMT")).toBe("/brands/banks/american-express.png");
+    expect(safeLogoUrl("/brands/banks/capital-one.png")).toBe("/brands/banks/capital-one.png");
+  });
+  it("still doesn't guess on look-alikes", () => {
+    for (const text of ["DAVE'S HOT CHICKEN", "ZELLE TO DAVE SMITH", "ALFA ROMEO OF HOOVER", "DISCOVERY KIDS", "FLEXSHOPPER"]) {
+      const logo = bundledMerchantLogo(text);
+      expect(logo === null || logo.endsWith("zelle.png"), text).toBe(true);
     }
   });
 });

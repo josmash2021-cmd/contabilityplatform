@@ -189,8 +189,10 @@ export default function PersonalTransactions() {
   // ─── Summary bar (category with its budget, or the month in and out) ───
   const budgetRow = curCat !== "all" ? budgets?.items.find((b) => b.category === curCat && b.limit !== null) : undefined;
   const catOut = sumOut(rows.filter((r) => r.category === curCat));
-  const inSum = sumIn(shown);
-  const outSum = sumOut(shown);
+  // Paying a credit card is neither money in nor spending (owner, 2026-11-24), unless that's what's being looked at.
+  const counted = curCat === "card_payment" ? shown : shown.filter((r) => r.category !== "card_payment");
+  const inSum = sumIn(counted);
+  const outSum = sumOut(counted);
   const summary = curCat !== "all" ? (
     <div className="mt-3 rounded-xl bg-slate-100 px-3.5 py-3 text-sm">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">

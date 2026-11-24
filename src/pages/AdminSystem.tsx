@@ -53,7 +53,42 @@ export default function AdminSystem() {
       </section>
 
       {m && <MaintenanceCard key={`${m.enabled}|${m.message ?? ""}|${m.until ?? ""}`} state={m} />}
+
+      <MissingLogos />
     </div>
+  );
+}
+
+/** The businesses people pay most that still show a letter instead of their logo (admin.merchantsWithoutLogo). */
+function MissingLogos() {
+  const t = useCopy(adminCopy).system.page;
+  const { lang } = useLang();
+  const { data, isLoading } = trpc.admin.merchantsWithoutLogo.useQuery(undefined, { staleTime: 60_000 });
+  const day = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString(intlLocale(lang), { day: "numeric", month: "short", timeZone: "UTC" });
+  return (
+    <section aria-label={t.logos} className={cn(card, "grid gap-1 p-5")} data-missing-logos="">
+      <h2 className="text-base font-bold">{t.logos}</h2>
+      <p className="mb-2 max-w-[62ch] text-[13px] text-slate-500">{t.logosText}</p>
+      {isLoading ? <span className="py-3 text-sm text-slate-400">…</span>
+        : !data?.length ? <p className="inline-flex items-center gap-2 py-3 text-sm font-medium text-emerald-700"><i className="h-1.5 w-1.5 rounded-full bg-emerald-500" aria-hidden="true" />{t.logosNone}</p>
+        : (
+          <ol className="grid">
+            {data.map((r, i) => (
+              <li key={`${r.name}-${i}`} className="flex items-baseline gap-3 border-b border-slate-100 py-2.5 last:border-0" title={r.sample}>
+                <span className="w-6 shrink-0 text-right text-xs tabular-nums text-slate-400">{i + 1}</span>
+                <span className="grid min-w-0 flex-1">
+                  <b className="truncate text-sm font-semibold">{r.name}</b>
+                  <span className="truncate text-[12px] text-slate-400">{r.sample}</span>
+                </span>
+                <span className="shrink-0 text-right text-[12px] text-slate-500">
+                  {t.logosCount(r.count, r.people)}
+                  {r.last && <span className="hidden sm:inline"> · {t.logosLast(day(r.last))}</span>}
+                </span>
+              </li>
+            ))}
+          </ol>
+        )}
+    </section>
   );
 }
 

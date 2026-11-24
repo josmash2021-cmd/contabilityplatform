@@ -50,7 +50,8 @@ export type SpendingTx = {
 export function spendingByCategory(txs: readonly SpendingTx[]): Map<string, number> {
   const cents = new Map<string, number>();
   for (const t of txs) {
-    if (t.type !== "expense") continue;
+    // Paying a credit card isn't spending: what was bought with it already counted (owner, 2026-11-24).
+    if (t.type !== "expense" || t.category === "card_payment") continue;
     const amount = typeof t.amount === "number" ? t.amount : parseFloat(t.amount ?? "0");
     const c = toCents(amount);
     if (c <= 0) continue;
@@ -147,7 +148,7 @@ export function budgetTotals(rows: readonly BudgetRow[]): BudgetTotals {
 // ── 2.0 Presupuestos: pace, fixed categories, month history, rollover and suggestions ──
 
 /** Categories that charge by themselves (subscriptions, rent, bills): shown as "Fijos", no daily pace. */
-export const FIXED_CATEGORIES: ReadonlySet<string> = new Set(["subscription", "rent", "renta", "insurance", "seguro", "utilities", "phone", "internet"]);
+export const FIXED_CATEGORIES: ReadonlySet<string> = new Set(["subscription", "rent", "renta", "insurance", "seguro", "health_insurance", "utilities", "phone", "internet"]);
 export const isFixedCategory = (category: string) => FIXED_CATEGORIES.has(category);
 
 /** The prototype's states: no budget, over, fixed, careful (20% ahead of today's pace) or fine. */

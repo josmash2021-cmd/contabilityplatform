@@ -180,8 +180,11 @@ export default function PersonalDashboard() {
   const spendable = spendFrom.reduce((s, a) => s + a.balance, 0);
   const owed = debtAccounts.reduce((s, a) => s + Math.max(0, a.balance), 0);
   const rows: TxRow[] = ((monthQ.data?.transactions ?? []) as Parameters<typeof bankRow>[0][]).map(bankRow);
-  const income = num(monthQ.data?.income);
-  const expense = num(monthQ.data?.expense);
+  // Paying a credit card moves money between your own accounts: neither money in nor spending (owner, 2026-11-24).
+  const cardIn = rows.reduce((t, r) => t + (r.category === "card_payment" && r.isIn ? r.amount : 0), 0);
+  const cardOut = rows.reduce((t, r) => t + (r.category === "card_payment" && !r.isIn ? r.amount : 0), 0);
+  const income = Math.max(0, num(monthQ.data?.income) - cardIn);
+  const expense = Math.max(0, num(monthQ.data?.expense) - cardOut);
   const kept = income - expense;
 
   // Charges that repeat: the same detector as Suscripciones (real weekly/monthly/yearly intervals, no gas stations),
@@ -238,7 +241,7 @@ export default function PersonalDashboard() {
     ? (budgets?.items ?? []).map((b) => ({ cat: b.category, spent: b.spent, limit: b.limit })).slice(0, 7)
     : (() => {
       const by = new Map<string, number>();
-      for (const r of rows) if (!r.isIn) by.set(r.category, (by.get(r.category) ?? 0) + r.amount);
+      for (const r of rows) if (!r.isIn && r.category !== "card_payment") by.set(r.category, (by.get(r.category) ?? 0) + r.amount);
       return [...by.entries()].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([cat, spent]) => ({ cat, spent, limit: null }));
     })();
   const maxSpend = Math.max(1, ...spend.map((s) => s.spent));

@@ -21,6 +21,7 @@
 //      movement (Por revisar → Personal or a split's personal parts), duplicates and excluded movements.
 import { RECEIPT_CATEGORIES, type ReceiptCategory } from "./receipts";
 import { merchantKeyOf, nameInText } from "./reviewEngine";
+import { isCarWash } from "./bankRules";
 
 // ── Categories ──
 /** Receipt categories, plus the bills paid to vendors (Proveedores files them as "vendors"). */
@@ -47,6 +48,9 @@ const BANK_TO_SPEND: Record<string, SpendCategory> = {
   subscription: "software",
   utilities: "utilities",
   insurance: "insurance",
+  health_insurance: "insurance",
+  rent: "rent",
+  government: "licenses",
   rideshare: "travel",
   medical: "other",
   zelle_sent: "other",
@@ -56,10 +60,14 @@ const BANK_TO_SPEND: Record<string, SpendCategory> = {
 /** Money out that is not spending: moving money between your accounts, taking out cash, paying a loan, personal. */
 export const NOT_SPENDING_BANK_CATEGORIES: ReadonlySet<string> = new Set([
   "transfer", "transfer_income", "cash_withdrawal", "loan", "home_expense",
+  // Paying a credit card: the purchases were already counted when they were made (on the card).
+  "card_payment",
 ]);
 
 /** The Gastos category of a bank movement's category. */
-export function bankSpendCategory(bankCategory: string | null | undefined): SpendCategory {
+export function bankSpendCategory(bankCategory: string | null | undefined, text?: string | null): SpendCategory {
+  // A car wash membership is a vehicle cost, not software.
+  if (bankCategory === "subscription" && isCarWash(text)) return "vehicle";
   return BANK_TO_SPEND[(bankCategory ?? "").trim()] ?? "other";
 }
 
@@ -144,7 +152,7 @@ const DIGITAL_TEXT = new RegExp([
   String.raw`\b(?:doordash|uber|lyft|grubhub|instacart|postmates|t-?mobile|verizon|at&t|spectrum|comcast|xfinity|netflix|spotify|hulu)\b`,
   String.raw`\.(?:com|net|org|io|app)\b`,
 ].join("|"), "i");
-const DIGITAL_CATEGORIES = new Set(["subscription", "utilities", "insurance", "loan", "zelle_sent", "transfer", "software", "phone", "internet"]);
+const DIGITAL_CATEGORIES = new Set(["subscription", "utilities", "insurance", "health_insurance", "rent", "government", "card_payment", "loan", "zelle_sent", "transfer", "software", "phone", "internet"]);
 const DIGITAL_PLAID = /"primary"\s*:\s*"(?:RENT_AND_UTILITIES|LOAN_PAYMENTS|BANK_FEES|TRANSFER_OUT)"|"detailed"\s*:\s*"(?:GENERAL_SERVICES_INSURANCE|GENERAL_MERCHANDISE_ONLINE_MARKETPLACES|TRANSPORTATION_TAXIS_AND_RIDE_SHARES)"/;
 
 /** A payment whose bank record is enough (no receipt photo to ask for): see the rule above. */
@@ -366,7 +374,7 @@ export function buildSpendItems(input: {
       vendorId: null,
       who: b.name,
       detail: null,
-      category: bankSpendCategory(b.category),
+      category: bankSpendCategory(b.category, b.text),
       amountCents: b.amountCents,
       date: b.date,
       method: null,

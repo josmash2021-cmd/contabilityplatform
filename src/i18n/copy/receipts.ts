@@ -137,6 +137,7 @@ const es = {
     professional: "Servicios profesionales",
     travel: "Viajes",
     fees: "Comisiones del banco y tarjetas",
+    licenses: "Licencias, permisos y trámites",
     other: "Otros gastos",
   } satisfies Record<ReceiptCategory, string>,
 };
@@ -276,6 +277,7 @@ const en: ReceiptsCopy = {
     professional: "Professional services",
     travel: "Travel",
     fees: "Bank and card fees",
+    licenses: "Licenses, permits & government fees",
     other: "Other expenses",
   },
 };

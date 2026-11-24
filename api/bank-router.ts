@@ -11,7 +11,8 @@ import { storedReviewsFor, unreviewed } from "./review-router";
 import { assertNotReconciled, closedPeriodIds } from "./reconcile-router";
 import { forgetInstitutions, itemKeyOf, refreshInstitution, trackPlaid, type PlaidLike } from "./lib/bankInstitutions";
 import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
-import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName } from "./lib/brand";
+import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName, trustedMerchantName } from "./lib/brand";
+import { billFromPlaid, isCarWash, knownBill, type KnownBill } from "./lib/bankRules";
 import { isDuplicateKey } from "./lib/dbErrors";
 import { bankInstitutionsTable } from "./lib/brandSchema";
 import type { AccountsGetRequest, AccountsGetResponse, Transaction, TransactionsGetRequest, TransactionsGetResponse } from "plaid";
@@ -155,9 +156,32 @@ function detectReversedTransactions(transactions: any[]): Set<string> {
   return reversed;
 }
 
+/**
+ * Where a known bill goes (api/lib/bankRules.ts). Money out: that category. Money in: a card payment received on the
+ * card's own account is still a card payment; money back from the power company, a landlord, an insurer or the
+ * government is a refund; money in from a lender (loan funds, a cash advance) is left to the rules below.
+ */
+function placeBill(bill: KnownBill | null, plaidAmount: number): { type: "income" | "expense"; category: string } | null {
+  if (!bill) return null;
+  if (plaidAmount > 0) return { type: "expense", category: bill };
+  if (bill === "card_payment") return { type: "income", category: "card_payment" };
+  if (bill === "loan") return null;
+  return { type: "income", category: "refund" };
+}
+
 export function determineTypeAndCategory(plaidAmount: number, plaidCategories: string[], description: string): { type: "income" | "expense"; category: string } {
   const desc = description.toLowerCase();
   const absAmt = Math.abs(plaidAmount);
+
+  // ===== KNOWN BILLS BY NAME (owner, 2026-11-24): paying a credit card, loans and buy now pay later, Flex and
+  // rent, power/water/phone, health insurance, government fees. Before everything else, so "CAPITAL ONE MOBILE PMT"
+  // isn't a purchase and "FLEX FINANCE" isn't shopping.
+  const byName = placeBill(knownBill(description, plaidCategories?.[1], plaidAmount), plaidAmount);
+  if (byName) return byName;
+
+  // Car washes are memberships (unlimited washes every month): Suscripciones y membresías. Before the gas
+  // stations, so "SHELL CAR WASH" is the wash and not gas.
+  if (isCarWash(description)) return plaidAmount < 0 ? { type: "income", category: "refund" } : { type: "expense", category: "subscription" };
 
   // ===== INCOME: MONEY COMING TO USER (before generic merchant rules) =====
   const isIncomingTransfer = (desc.includes("money transfer") || desc.includes("transfer")) && desc.includes("from");
@@ -265,8 +289,13 @@ export function determineTypeAndCategory(plaidAmount: number, plaidCategories: s
     }
   }
 
-  // Rent ( PURCHASE TURBO BOOST etc. detected as rent by Plaid ) → Compras
-  if (detailed.includes("RENT") || desc.includes("rent")) return { type: "expense", category: "shopping" };
+  // "PURCHASE TURBO BOOST" comes from Plaid as rent: it's a purchase.
+  if (desc.includes("turbo")) return { type: "expense", category: "shopping" };
+
+  // Plaid's own bill categories: rent apart from utilities (both used to land in Compras), card payments, loans,
+  // health insurance, government fees.
+  const byPlaid = placeBill(billFromPlaid(detailed, description, plaidAmount), plaidAmount);
+  if (byPlaid) return byPlaid;
 
   // Loan
   if (detailed.includes("LOAN") || desc.includes("loan") || desc.includes("mortgage")) return { type: "expense", category: "loan" };
@@ -665,8 +694,25 @@ function ownRowUpdate(userId: number, account: Pick<BankAccount, "id" | "bankNam
   };
 }
 
-/** Plaid's categories for a movement, as determineTypeAndCategory takes them. */
-function plaidCategoriesOf(tx: Pick<Transaction, "personal_finance_category" | "category">): string[] {
+/** The saved plaidCategory column ('{"primary":"RENT_AND_UTILITIES","detailed":"RENT_AND_UTILITIES_RENT"}') as determineTypeAndCategory takes it. */
+export function storedPlaidCategories(saved: string | null | undefined): string[] {
+  if (!saved) return [];
+  try {
+    const v: unknown = JSON.parse(saved);
+    if (Array.isArray(v)) return v.filter((x): x is string => typeof x === "string");
+    const o = v as { primary?: unknown; detailed?: unknown } | null;
+    return o && typeof o.primary === "string" && typeof o.detailed === "string" ? [o.primary, o.detailed] : [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Plaid's categories for a movement, as determineTypeAndCategory takes them. None when Plaid's merchant contradicts
+ * the bank's text: its category came from that wrong guess ("ATS ALABASTER AL" as AT&T → "telephone").
+ */
+function plaidCategoriesOf(tx: Pick<Transaction, "personal_finance_category" | "category"> & { name?: string | null; merchant_name?: string | null }): string[] {
+  if (tx.merchant_name && tx.name && !trustedMerchantName(tx.merchant_name, tx.name)) return [];
   const pfc = tx.personal_finance_category;
   return pfc?.detailed ? [pfc.primary, pfc.detailed] : tx.category || [];
 }
@@ -695,12 +741,16 @@ export function plaidTransactionRow(userId: number, account: Pick<BankAccount, "
   };
 }
 
-/** The merchant's name as Plaid gives it: its merchant_name, else the merchant counterparty's name. */
-export function plaidMerchantNameOf(tx: { merchant_name?: string | null; counterparties?: Array<{ type?: string | null; name?: string | null }> | null }): string {
+/**
+ * The merchant's name as Plaid gives it: its merchant_name, else the merchant counterparty's name. Empty when it
+ * contradicts the bank's own text (Plaid's guess was wrong, trustedMerchantName): then the bank's text is kept.
+ */
+export function plaidMerchantNameOf(tx: { name?: string | null; merchant_name?: string | null; counterparties?: Array<{ type?: string | null; name?: string | null }> | null }): string {
   const own = (tx.merchant_name ?? "").trim();
-  if (own) return own;
   const cp = (tx.counterparties ?? []).find((c) => c?.type === "merchant" && c.name);
-  return (cp?.name ?? "").trim();
+  const named = own || (cp?.name ?? "").trim();
+  if (!named) return "";
+  return tx.name ? trustedMerchantName(named, tx.name) ?? "" : named;
 }
 
 /**
@@ -1573,7 +1623,7 @@ export const bankRouter = createRouter({
               plaidTransactionId: pt.transaction_id,
               plaidAmount: String(plaidAmount.toFixed(2)),
               plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
-              merchantName: pt.merchant_name || pt.name,
+              merchantName: (plaidMerchantNameOf(pt) || pt.name || "").slice(0, 255),
               reference: pt.transaction_id,
               lastSyncedAt: new Date(),
               isReconciled: false,
@@ -1833,7 +1883,7 @@ export const bankRouter = createRouter({
               plaidAmount: String(plaidAmount.toFixed(2)),
               plaidTransactionId: pt.transaction_id,
               plaidCategory: pt.personal_finance_category ? JSON.stringify(pt.personal_finance_category) : null,
-              merchantName: pt.merchant_name || pt.name,
+              merchantName: (plaidMerchantNameOf(pt) || pt.name || "").slice(0, 255),
               isDuplicate: false,
               lastSyncedAt: new Date(),
               isReconciled: false,
@@ -2524,7 +2574,9 @@ export const bankRouter = createRouter({
           const plaidAmt = tx.plaidAmount != null ? parseFloat(tx.plaidAmount) : null;
           const { type, category } = determineTypeAndCategory(
             plaidAmt ?? parseFloat(tx.amount) * (tx.type === "income" ? -1 : 1),
-            tx.plaidCategory ? [tx.plaidCategory] : [],
+            // The saved Plaid category is JSON ({primary, detailed}); it used to go in as one string, so Plaid's
+            // own category was ignored here and rent or a paycheck could flip to something else.
+            tx.merchantName && tx.description && !trustedMerchantName(tx.merchantName, tx.description) ? [] : storedPlaidCategories(tx.plaidCategory),
             tx.description || ""
           );
           // Only update if category actually changed

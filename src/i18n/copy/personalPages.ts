@@ -229,8 +229,8 @@ const goalsPEn: typeof goalsPEs = {
 
 // ── Suscripciones 2.0, as the prototype's pSubs (src/pages/PersonalSubscriptions.tsx and its sheets) ──
 const subsPEs = {
-  title: "Suscripciones",
-  subtitle: "Cobros que se repiten cada semana, cada mes o cada año, encontrados en tus movimientos.",
+  title: "Suscripciones y membresías",
+  subtitle: "Cobros que se repiten cada semana, cada mes o cada año, como el streaming, el gimnasio o el lavado de carro, encontrados en tus movimientos.",
   loading: "Buscando tus suscripciones…",
   loadError: "No pudimos cargar tus suscripciones.",
   retry: "Intentar de nuevo",
@@ -265,10 +265,10 @@ const subsPEs = {
     bothN: "Sí, todas",
     notUse: (name: string) => `Ya no uso ${name}`,
   },
-  list: "Tus suscripciones",
+  list: "Tus suscripciones y membresías",
   addManual: "Agregar a mano",
   order: "En orden del próximo cobro.",
-  noneActive: "No tienes suscripciones activas.",
+  noneActive: "No tienes suscripciones ni membresías activas.",
   noBank: "Conecta tu banco y las buscamos en tus movimientos. También puedes agregarlas a mano.",
   gone: "Canceladas",
   gonePending: "Canceladas y por confirmar",
@@ -383,8 +383,8 @@ const subsPEs = {
 };
 
 const subsPEn: typeof subsPEs = {
-  title: "Subscriptions",
-  subtitle: "Charges that repeat every week, month or year, found in your transactions.",
+  title: "Subscriptions & memberships",
+  subtitle: "Charges that repeat every week, month or year, like streaming, the gym or the car wash, found in your transactions.",
   loading: "Looking for your subscriptions…",
   loadError: "We couldn't load your subscriptions.",
   retry: "Try again",
@@ -419,10 +419,10 @@ const subsPEn: typeof subsPEs = {
     bothN: "Yes, all of them",
     notUse: (name: string) => `I don't use ${name} anymore`,
   },
-  list: "Your subscriptions",
+  list: "Your subscriptions & memberships",
   addManual: "Add by hand",
   order: "In order of the next charge.",
-  noneActive: "You don't have active subscriptions.",
+  noneActive: "You don't have active subscriptions or memberships.",
   noBank: "Connect your bank and we'll look for them in your transactions. You can also add them by hand.",
   gone: "Cancelled",
   gonePending: "Cancelled and waiting to confirm",
@@ -748,7 +748,7 @@ const es = {
 
   subs: {
     p: subsPEs,
-    title: "Suscripciones",
+    title: "Suscripciones y membresías",
     subtitle: "Cobros que se repiten cada mes",
     checking: "Revisando tu banco…",
     refresh: "Actualizar",
@@ -1055,7 +1055,7 @@ const en: PersonalPagesCopy = {
 
   subs: {
     p: subsPEn,
-    title: "Subscriptions",
+    title: "Subscriptions & memberships",
     subtitle: "Charges that repeat every month",
     checking: "Checking your bank…",
     refresh: "Refresh",

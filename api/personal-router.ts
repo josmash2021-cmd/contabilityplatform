@@ -621,7 +621,7 @@ export const personalRouter = createRouter({
     const to = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 0)).toISOString().slice(0, 10);
     const spent = await rawRows<{ ym: string; total: string }>(db, sql`
       SELECT DATE_FORMAT(transactionDate, '%Y-%m') AS ym, SUM(amount) AS total FROM bankTransactions
-      WHERE userId = ${userId} AND type = 'expense' AND category <> 'transfer' AND transactionDate BETWEEN ${from} AND ${to}
+      WHERE userId = ${userId} AND type = 'expense' AND category NOT IN ('transfer', 'card_payment') AND transactionDate BETWEEN ${from} AND ${to}
       GROUP BY DATE_FORMAT(transactionDate, '%Y-%m')`);
     const monthly = spent.length ? spent.reduce((s, r) => s + (Number(r.total) || 0), 0) / spent.length : null;
     return {

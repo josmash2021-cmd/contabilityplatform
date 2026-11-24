@@ -158,13 +158,44 @@ const MERCHANT_ICONS: Readonly<Record<string, string>> = {
   netflix: "netflix", spotify: "spotify", disneyplus: "disney-plus", hulu: "hulu", youtube: "youtube", youtubepremium: "youtube",
   hbomax: "max", maxcom: "max", google: "google", intuit: "intuit-quickbooks", quickbooks: "intuit-quickbooks",
   progressive: "progressive", statefarm: "state-farm", geico: "geico", allstate: "allstate",
+  // Loans, buy now pay later, cash advances (owner, 2026-11-24).
+  upstart: "upstart", upstartnetwork: "upstart", affirm: "affirm", klarna: "klarna", afterpay: "afterpay", sezzle: "sezzle",
+  onemain: "onemain", onemainfinancial: "onemain", onemainfin: "onemain",
+  earnin: "earnin", activehours: "earnin", earninactivehours: "earnin", brigit: "brigit", moneylion: "moneylion", daveinc: "dave", davecom: "dave",
+  // Rent, power, health insurance.
+  flex: "flex", getflex: "flex", getflexcom: "flex", flexfinance: "flex", flexrent: "flex", flexiblefinance: "flex",
+  alabamapower: "alabama-power", alabamapowerco: "alabama-power", alabamapowercompany: "alabama-power", alpower: "alabama-power",
+  bcbs: "bcbs-alabama", bcbsal: "bcbs-alabama", bcbsofal: "bcbs-alabama", bcbsalabama: "bcbs-alabama", bluecross: "bcbs-alabama",
+  bluecrossblueshield: "bcbs-alabama", bluecrossbl: "bcbs-alabama", bluecrossblue: "bcbs-alabama", bluecrossal: "bcbs-alabama", alabamablue: "bcbs-alabama",
+  alfainsurance: "alfa-insurance", alfains: "alfa-insurance", alfamutual: "alfa-insurance",
+  // Phone and internet.
+  tmobile: "t-mobile", cricket: "cricket", cricketwireless: "cricket", boostmobile: "boost-mobile",
+  metropcs: "metro-by-t-mobile", metrobytmobile: "metro-by-t-mobile", metrobyt: "metro-by-t-mobile", spectrum: "spectrum", charterspectrum: "spectrum",
+  // Stores, food and gas around Alabama.
+  familydollar: "family-dollar", aldi: "aldi", winndixie: "winn-dixie", zaxbys: "zaxbys", zaxby: "zaxbys", wafflehouse: "waffle-house",
+  sonic: "sonic", sonicdrivein: "sonic", popeyes: "popeyes", raisingcanes: "raising-canes", raisingcane: "raising-canes", bojangles: "bojangles",
+  quiktrip: "quiktrip", racetrac: "racetrac",
+  // Car washes (memberships).
+  mistercarwash: "mister-car-wash", mistercar: "mister-car-wash", mcw: "mister-car-wash", quickquack: "quick-quack", quickquackcarwash: "quick-quack",
+  dontdrivedirty: "quick-quack", myqq: "quick-quack", zips: "zips", zipscarwash: "zips", zipscar: "zips", take5carwash: "take-5-car-wash", take5car: "take-5-car-wash",
+  tommysexpress: "tommys-express", tommysexpresscarwash: "tommys-express", whistleexpress: "whistle-express", whistleexpresscarwash: "whistle-express",
+  clubcarwash: "club-car-wash", clubcar: "club-car-wash", modwash: "modwash", autobell: "autobell", autobellcarwash: "autobell",
+  rocketexpress: "rocket-express", rocketexpresswash: "rocket-express", jetbrite: "jet-brite", jetbritecarwash: "jet-brite", crewcarwash: "crew-carwash",
+  mrcleancarwash: "mr-clean-car-wash", mrcleancar: "mr-clean-car-wash", hurricaneexpress: "hurricane-express-wash", hurricaneexpresswash: "hurricane-express-wash",
+  // Credit cards: the card's own logo (a payment to the card, or a charge on it).
+  creditone: "credit-one", creditonebank: "credit-one", synchrony: "synchrony", synchronybank: "synchrony", syncb: "synchrony", missionlane: "mission-lane",
+  capitalone: "banks/capital-one", discover: "banks/discover", discovercard: "banks/discover", amex: "banks/american-express",
+  americanexpress: "banks/american-express", citi: "banks/citi", citicard: "banks/citi", citicards: "banks/citi",
 };
+
+/** Where a saved icon lives: merchants/<slug>.png, or a card issuer's bank logo (banks/<slug>.png). */
+const iconPath = (icon: string) => (icon.startsWith("banks/") ? `/brands/${icon}.png` : `/brands/merchants/${icon}.png`);
 
 /** The saved current logo for a bank row (its merchant keys), or null. Zelle is recognized anywhere in the text. */
 export function bundledLogoFor(row: { merchantName?: string | null; description?: string | null }): string | null {
   for (const k of candidateKeys(row)) {
     const icon = MERCHANT_ICONS[k];
-    if (icon) return `/brands/merchants/${icon}.png`;
+    if (icon) return iconPath(icon);
   }
   return /\bzelle\b/i.test(`${row.merchantName ?? ""} ${row.description ?? ""}`) ? "/brands/merchants/zelle.png" : null;
 }
@@ -179,7 +210,7 @@ export function safeLogoUrl(url: string | null | undefined): string | null {
   if (typeof url !== "string") return null;
   const u = url.trim();
   if (u.length > 1000) return null;
-  if (/^\/brands\/merchants\/[a-z0-9-]+\.png$/.test(u)) return u;
+  if (/^\/brands\/(?:merchants|banks)\/[a-z0-9-]+\.png$/.test(u)) return u;
   if (/^data:image\/(png|jpeg|gif|webp);base64,[A-Za-z0-9+/]+=*$/.test(u)) return u;
   try {
     const parsed = new URL(u);
@@ -203,6 +234,8 @@ export function merchantKey(name: string | null | undefined): string {
 
 /** The parts of a Plaid transaction that carry the merchant's identity. */
 export type PlaidTxBrand = {
+  /** The bank's own text: Plaid's merchant is only trusted when it doesn't contradict it (trustedMerchantName). */
+  name?: string | null;
   merchant_name?: string | null;
   logo_url?: string | null;
   website?: string | null;
@@ -227,9 +260,15 @@ export function merchantBrandOf(tx: PlaidTxBrand): { key: string; name: string; 
   return { key, name, logoUrl, website };
 }
 
-/** The logo Plaid sent with this very transaction (its own logo_url, else its counterparty's). */
+/**
+ * The logo Plaid sent with this very transaction (its own logo_url, else its counterparty's). None when
+ * Plaid's merchant contradicts the bank's text ("ATS ALABASTER AL" sent as AT&T): that logo isn't this business's.
+ */
 export function directLogoOf(tx: PlaidTxBrand): string | null {
-  return merchantBrandOf(tx)?.logoUrl ?? null;
+  const b = merchantBrandOf(tx);
+  if (!b) return null;
+  if (tx.name && !trustedMerchantName(b.name, tx.name)) return null;
+  return b.logoUrl;
 }
 
 /** Bank boilerplate at the start of a description ("PURCHASE AUTHORIZED ON 11/18 ..."), not part of the merchant. */
@@ -247,12 +286,11 @@ const LEADING_NOISE = new Set([
 export function candidateKeys(row: { merchantName?: string | null; description?: string | null }): string[] {
   const out: string[] = [];
   const add = (k: string) => { if (k.length >= 2 && !out.includes(k)) out.push(k); };
-  add(merchantKey(row.merchantName));
-  for (const text of [row.merchantName, row.description]) {
-    const words = (text ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
-    let i = 0;
-    while (i < words.length && (LEADING_NOISE.has(words[i]) || /^\d+$/.test(words[i]))) i++;
-    const rest = words.slice(i, i + 4);
+  // A merchant name that contradicts the bank's text is Plaid's wrong guess: only the text counts then.
+  const merchant = row.description ? trustedMerchantName(row.merchantName, row.description) : row.merchantName;
+  add(merchantKey(merchant));
+  for (const text of [merchant, row.description]) {
+    const rest = merchantWords(text).slice(0, 4);
     for (let n = rest.length; n >= 1; n--) {
       const k = rest.slice(0, n).join("");
       // A lone short word ("at", "bp") only counts when it's the whole name, to avoid false matches.
@@ -261,6 +299,63 @@ export function candidateKeys(row: { merchantName?: string | null; description?:
     }
   }
   return out;
+}
+
+/** The words of a name or bank text, without the bank's leading boilerplate ("PURCHASE AUTHORIZED ON 11/18", "SQ *"). */
+function merchantWords(text: string | null | undefined): string[] {
+  const words = (text ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
+  let i = 0;
+  while (i < words.length && (LEADING_NOISE.has(words[i]) || /^\d+$/.test(words[i]))) i++;
+  return words.slice(i);
+}
+
+/** True when every letter of `short` appears in `long` in order, starting with the same letter ("amzn" in "amazon", "wm" in "walmart"). */
+function abbreviates(short: string, long: string): boolean {
+  if (!short || !long || short[0] !== long[0]) return false;
+  let j = 0;
+  for (const ch of long) if (ch === short[j]) j++;
+  return j === short.length;
+}
+
+/** Whether two words are at most `max` edits apart. */
+function within(a: string, b: string, max: number): boolean {
+  if (Math.abs(a.length - b.length) > max) return false;
+  let prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= a.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    if (Math.min(...cur) > max) return false;
+    prev = cur;
+  }
+  return prev[b.length] <= max;
+}
+
+/**
+ * Plaid's merchant name for a bank movement, or null when it contradicts the bank's own text. Plaid guesses the
+ * merchant from the text and sometimes picks a famous name that is one letter off: "ATS ALABASTER AL" came back as
+ * AT&T, with AT&T's logo. Trusted when the text contains it or abbreviates it ("AMZN MKTP" → Amazon, "WM SUPERCENTER"
+ * → Walmart, "SQ *JOES PIZZA" → Joe's Pizza) or simply says something else ("VZWRLSS*APOCC" → Verizon). Not trusted
+ * when the text's first word is a near miss of it (ats / att), or the text names another brand we know.
+ */
+export function trustedMerchantName(merchant: string | null | undefined, text: string | null | undefined): string | null {
+  const m = (merchant ?? "").trim();
+  if (!m) return null;
+  const words = merchantWords(text);
+  if (words.length === 0) return m;
+  const mKey = merchantKey(m);
+  const mFirst = merchantKey(m.split(/\s+/)[0]);
+  const tKey = words.join("");
+  if (mKey.length >= 2 && tKey.includes(mKey)) return m;
+  if (mFirst.length >= 3 && tKey.includes(mFirst)) return m;
+  const t0 = words[0];
+  if (words.some((w) => w.length >= 2 && (abbreviates(w, mKey) || abbreviates(w, mFirst) || mKey.startsWith(w)))) return m;
+  // The text names a different brand we know ("EXXON 1234" sent as Shell).
+  const own = MERCHANT_ICONS[t0] ?? MERCHANT_ICONS[words.slice(0, 2).join("")];
+  const theirs = MERCHANT_ICONS[mKey] ?? MERCHANT_ICONS[mFirst];
+  if (own && own !== theirs) return null;
+  // One letter off: a fuzzy match, not the same business.
+  if (t0.length >= 3 && mFirst.length >= 3 && t0[0] === mFirst[0] && t0 !== mFirst && within(t0, mFirst, 1)) return null;
+  return m;
 }
 
 // ── Account names ("Way2Save® Savings") ──

@@ -55,6 +55,11 @@ const es = {
       updated: "Aviso actualizado",
       preview: "Ver cómo lo ven tus clientes",
       reminder: "Mantenimiento encendido: tus clientes ven el aviso",
+      logos: "Comercios sin logo",
+      logosText: "Los negocios que tus clientes pagan más seguido y que todavía salen con una letra, de los últimos 90 días. Sin transferencias, Zelle, efectivo ni oficinas de gobierno.",
+      logosNone: "Todos los comercios de los últimos 90 días tienen su logo.",
+      logosCount: (n: number, people: number) => `${n === 1 ? "1 movimiento" : `${n} movimientos`} · ${people === 1 ? "1 persona" : `${people} personas`}`,
+      logosLast: (day: string) => `último ${day}`,
     },
   },
   home: {
@@ -321,6 +326,11 @@ const en: AdminCopy = {
       updated: "Notice updated",
       preview: "See how your customers see it",
       reminder: "Maintenance is on: your customers see the notice",
+      logos: "Merchants without a logo",
+      logosText: "The businesses your customers pay most often that still show a letter, from the last 90 days. No transfers, Zelle, cash or government offices.",
+      logosNone: "Every merchant from the last 90 days has its logo.",
+      logosCount: (n: number, people: number) => `${n === 1 ? "1 transaction" : `${n} transactions`} · ${people === 1 ? "1 person" : `${people} people`}`,
+      logosLast: (day: string) => `last ${day}`,
     },
   },
   home: {

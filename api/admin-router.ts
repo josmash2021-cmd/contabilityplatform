@@ -16,6 +16,7 @@ import { getTrialInfo } from "./lib/trial";
 import { accountMode } from "./lib/plans";
 import { rowsOf, utcDate } from "./lib/support";
 import { readMaintenance, writeMaintenance } from "./lib/maintenance";
+import { merchantsWithoutLogo } from "./lib/missingLogos";
 import { TRPCError } from "@trpc/server";
 import { msg } from "./lib/i18n";
 
@@ -666,4 +667,7 @@ export const adminRouter = createRouter({
 
   // ── Maintenance status (public: the customer's screen asks for it) ──
   maintenanceStatus: publicQuery.query(async () => readMaintenance(getDb())),
+
+  /** Admin · Sistema: the businesses people pay most that still have no logo (api/lib/missingLogos.ts). */
+  merchantsWithoutLogo: adminQuery.query(async () => merchantsWithoutLogo(getDb())),
 });

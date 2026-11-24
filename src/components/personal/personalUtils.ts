@@ -2,10 +2,11 @@
 // The category icon and tone idea and the date handling are copied from the personal home
 // (src/pages/PersonalDashboard.tsx), not imported from it.
 import {
-  ArrowDownRight, ArrowUpRight, Banknote, Building2, Car, CircleDollarSign, Cloud, CreditCard, Dumbbell, Film, Fuel, HeartPulse,
-  Music, Newspaper, ParkingCircle, Receipt, RotateCcw, Send, Shield, ShoppingBag, Smartphone, TrendingUp, Tv, Utensils, Wifi,
-  type LucideIcon,
+  ArrowDownRight, ArrowUpRight, Banknote, Building2, Car, CircleDollarSign, Cloud, CreditCard, Dumbbell, FileBadge, Film, Fuel, HandCoins,
+  HeartPulse, House, Music, Newspaper, ParkingCircle, Receipt, RotateCcw, Send, Shield, ShieldPlus, ShoppingBag, Smartphone, TrendingUp, Tv,
+  Utensils, Wifi, Zap, type LucideIcon,
 } from "lucide-react";
+import { isCarWash } from "../../../api/lib/bankRules";
 
 export type CatStyle = { icon: LucideIcon; tone: string };
 
@@ -28,6 +29,13 @@ const CAT_STYLE: Record<string, CatStyle> = {
   gasolina: { icon: Fuel, tone: "bg-orange-50 text-orange-600" },
   medical: { icon: HeartPulse, tone: "bg-red-50 text-red-600" },
   food: { icon: Utensils, tone: "bg-orange-50 text-orange-600" },
+  card_payment: { icon: CreditCard, tone: "bg-sky-50 text-sky-600" },
+  loan: { icon: HandCoins, tone: "bg-amber-50 text-amber-600" },
+  rent: { icon: House, tone: "bg-indigo-50 text-indigo-600" },
+  utilities: { icon: Zap, tone: "bg-yellow-50 text-yellow-600" },
+  insurance: { icon: Shield, tone: "bg-violet-50 text-violet-600" },
+  health_insurance: { icon: ShieldPlus, tone: "bg-rose-50 text-rose-600" },
+  government: { icon: FileBadge, tone: "bg-slate-100 text-slate-600" },
 };
 
 /** Icon and tone for a category key; a plain arrow or receipt when the key is unknown. */
@@ -48,7 +56,7 @@ export function subStyleOf(name: string): CatStyle {
   if (has("verizon", "at&t", "t-mobile", "tmobile", "sprint", "cricket", "metro", "boost", "mint", "visible")) return { icon: Smartphone, tone: "bg-indigo-50 text-indigo-600" };
   if (has("comcast", "xfinity", "spectrum", "cox", "fios", "frontier", "centurylink")) return { icon: Wifi, tone: "bg-sky-50 text-sky-600" };
   if (has("geico", "state farm", "progressive", "allstate", "farmers", "nationwide", "usaa", "blue cross", "anthem", "aetna", "cigna", "humana", "kaiser")) return { icon: Shield, tone: "bg-violet-50 text-violet-600" };
-  if (has("car wash", "autowash", "tunnel wash", "self serve wash", "quick quack", "zips car", "mister car", "brown bear", "super wash")) return { icon: Car, tone: "bg-cyan-50 text-cyan-600" };
+  if (isCarWash(n) || has("self serve wash", "zips car", "mister car", "brown bear", "super wash")) return { icon: Car, tone: "bg-cyan-50 text-cyan-600" };
   if (has("ezpass", "sunpass", "toll")) return { icon: ParkingCircle, tone: "bg-orange-50 text-orange-600" };
   if (has("planet fit", "la fitness", "equinox", "crunch", "ymca", "orange theory", "soulcycle", "peloton", "gym", "fitness", "24 hour", "gold gym")) return { icon: Dumbbell, tone: "bg-emerald-50 text-emerald-600" };
   if (has("adobe", "microsoft", "office 365", "google one", "icloud", "dropbox", "slack", "zoom", "canva", "chatgpt", "openai", "kimi", "claude", "anthropic", "midjourney")) return { icon: Cloud, tone: "bg-purple-50 text-purple-600" };

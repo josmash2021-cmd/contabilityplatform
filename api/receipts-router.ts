@@ -660,7 +660,7 @@ export const receiptsRouter = createRouter({
         const taken: Array<{ id: number }> = await tx.select({ id: expenseBankLinks.id }).from(expenseBankLinks)
           .where(and(eq(expenseBankLinks.userId, userId), eq(expenseBankLinks.bankTransactionId, bt.id), eq(expenseBankLinks.status, "linked"))).limit(1);
         if (taken.length) throw new TRPCError({ code: "CONFLICT", message: m.bankTaken });
-        const spend = bankSpendCategory(bt.category);
+        const spend = bankSpendCategory(bt.category, `${bt.description ?? ""} ${bt.merchantName ?? ""}`);
         const f: ExpenseFields = {
           merchant: displayNameOf(bt.description, bt.merchantName).slice(0, MAX_MERCHANT_LENGTH) || "Banco",
           category: spend === "vendors" ? "other" : spend,

@@ -17,6 +17,7 @@
 //        - everything else, where only the bank's keywords picked the category (tag "Revisa"), or the
 //          owner's history is mixed or has a single movement.
 import { bankDirection, directionOf, type MoneyType } from "./bankReview";
+import { trustedMerchantName } from "./brand";
 
 // ── Thresholds ──
 /** Reviewed this many times (or more) with one category → "Seguro". */
@@ -105,6 +106,17 @@ const KNOWN_NAMES: Array<[RegExp, string]> = [
   [/^at&?t\b/, "AT&T"], [/^verizon\b/, "Verizon"], [/^google\b/, "Google"], [/^microsoft\b/, "Microsoft"], [/^taco bell\b/, "Taco Bell"],
   [/^chick-?fil-?a\b/, "Chick-fil-A"], [/^dollar general\b/, "Dollar General"], [/^dollar tree\b/, "Dollar Tree"], [/^publix\b/, "Publix"],
   [/^kroger\b/, "Kroger"], [/^instacart\b/, "Instacart"], [/^grubhub\b/, "Grubhub"], [/^lyft\b/, "Lyft"],
+  // Cards, loans and bills (owner, 2026-11-24): the brand, without "MOBILE PMT", "FINANCE RENT", "CO BILL PAY".
+  [/^capital ?one\b/, "Capital One"], [/^discover\b/, "Discover"], [/^(amex|american express)\b/, "American Express"],
+  [/^chase (credit|card|crd)\b/, "Chase"], [/^(synchrony|syncb)\b/, "Synchrony"], [/^credit ?one\b/, "Credit One"], [/^mission ?lane\b/, "Mission Lane"],
+  [/^upstart\b/, "Upstart"], [/^affirm\b/, "Affirm"], [/^klarna\b/, "Klarna"], [/^afterpay\b/, "Afterpay"], [/^advance america\b/, "Advance America"],
+  [/^one ?main\b/, "OneMain"], [/^earnin\b/, "EarnIn"], [/^(flex|getflex)\b/, "Flex"], [/^(alabama power|al power)\b/, "Alabama Power"],
+  [/^(blue ?cross|bcbs)\b/, "Blue Cross Blue Shield"], [/^spectrum\b/, "Spectrum"], [/^cricket\b/, "Cricket"], [/^zaxby'?s\b/, "Zaxby's"],
+  [/^waffle house\b/, "Waffle House"], [/^raising cane'?s\b/, "Raising Cane's"],
+  // Car washes whose bank text starts with a number or a code.
+  [/^marc ?-? ?1\b|^marc1\b/, "Marc-1 Car Wash"], [/^mcw\b/, "Mister Car Wash"], [/^zips (car|express)\b|^zips ?#? ?\d/, "ZIPS Car Wash"],
+  // The card's own line for a payment it received.
+  [/^(?:(?:autopay|automatic|internet|online|mobile|electronic) )?(?:payment|pymt|pmt)?\s*-?\s*thank(?: you)?(?:[- ]mobile)?$/, "Payment - Thank You"],
 ];
 
 /** US state codes banks add after the merchant ("TEMU.COM MA"): where it was processed, not part of the name. */
@@ -123,12 +135,14 @@ const titleCase = (s: string) => s.split(" ").map((w, i) => (i > 0 && LOWER_WORD
 /** The name shown in bold: Plaid's merchant name, else a readable version of the description's merchant. */
 export function displayNameOf(description: string | null | undefined, merchantName?: string | null): string {
   const desc = (description ?? "").trim();
-  const name = (merchantName ?? "").trim();
+  // Plaid's merchant name only when it doesn't contradict the bank's text ("ATS ALABASTER AL" saved as AT&T).
+  const name = (desc ? trustedMerchantName(merchantName, desc) ?? "" : (merchantName ?? "")).trim();
   const readable = (text: string) => {
     const key = tidyKey(merchantKeyOf(text));
     const zelle = /^zelle (?:payment )?(?:from|to) (.+)$/.exec(key);
     if (zelle) return `Zelle · ${titleCase(zelle[1])}`;
-    for (const [re, label] of KNOWN_NAMES) if (re.test(key)) return label;
+    const whole = fold(text);
+    for (const [re, label] of KNOWN_NAMES) if (re.test(key) || re.test(whole)) return label;
     return key ? titleCase(key) : text;
   };
   // Plaid's merchant name ("Amazon") is shown as is. An all-lowercase one is what the old sync cut from the

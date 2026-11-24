@@ -11,6 +11,7 @@ import { movimientosCopy } from "@/i18n/copy/movimientos";
 import { budgetCategoryLabel } from "@/i18n/copy/budgets";
 import { displayAccountName } from "../../../api/lib/banks";
 import { REVIEW_WINDOW_DAYS } from "../../../api/lib/bankReview";
+import { trustedMerchantName } from "../../../api/lib/brand";
 import { dayKey, localTodayKey, num, txDay, type ManualTx } from "./personalUtils";
 
 /** One line in a movements list: a bank movement or one the person added by hand. */
@@ -55,7 +56,8 @@ type RawBankTx = {
 
 export function bankRow(x: RawBankTx, i: number): TxRow {
   const raw = (x.description ?? "").trim();
-  const merchant = (x.merchantName ?? "").trim();
+  // Plaid's merchant name, unless it contradicts the bank's text (a wrong guess: "ATS ALABASTER" sent as AT&T).
+  const merchant = trustedMerchantName(x.merchantName, raw) ?? "";
   const id = x.id === null || x.id === undefined || x.id === "" ? null : Number(x.id);
   return {
     key: `b-${x.plaidTransactionId ?? x.id ?? i}`,

@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  AlertCircle, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Banknote, Building2, CircleDollarSign, Fuel, HeartPulse,
-  Loader2, Receipt, RotateCcw, Send, ShoppingBag, Trash2, TrendingUp, Tv, Utensils, type LucideIcon,
+  AlertCircle, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Banknote, Building2, CircleDollarSign, CreditCard, FileBadge, Fuel,
+  HandCoins, HeartPulse, House, Loader2, Receipt, RotateCcw, Send, Shield, ShieldPlus, ShoppingBag, Trash2, TrendingUp, Tv, Utensils, Zap,
+  type LucideIcon,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatedPage } from "@/components/AnimatedPage";
@@ -26,6 +27,7 @@ const DIRECTION: Record<string, Dir> = {
   cash_withdrawal: "expense", zelle_sent: "expense", subscription: "expense", transfer: "expense", medical: "expense",
   food: "expense", shopping: "expense", gasolina: "expense", loan: "expense", insurance: "expense", utilities: "expense",
   home_expense: "expense", business_expense: "expense", other: "expense",
+  rent: "expense", health_insurance: "expense", government: "expense", card_payment: "expense",
 };
 
 const STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
@@ -44,6 +46,13 @@ const STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
   gasolina: { icon: Fuel, tone: "bg-orange-50 text-orange-600" },
   medical: { icon: HeartPulse, tone: "bg-red-50 text-red-600" },
   transfer: { icon: ArrowDownRight, tone: "bg-slate-100 text-slate-600" },
+  card_payment: { icon: CreditCard, tone: "bg-sky-50 text-sky-600" },
+  loan: { icon: HandCoins, tone: "bg-amber-50 text-amber-600" },
+  rent: { icon: House, tone: "bg-indigo-50 text-indigo-600" },
+  utilities: { icon: Zap, tone: "bg-yellow-50 text-yellow-600" },
+  insurance: { icon: Shield, tone: "bg-violet-50 text-violet-600" },
+  health_insurance: { icon: ShieldPlus, tone: "bg-rose-50 text-rose-600" },
+  government: { icon: FileBadge, tone: "bg-slate-100 text-slate-600" },
 };
 
 /** What a row from bank.listByCategory carries. */
