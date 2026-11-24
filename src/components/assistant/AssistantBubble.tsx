@@ -5,7 +5,7 @@
 // with the app's own buttons while they watch; any tap of theirs stops it) and "Enséñame" (it lights each step and
 // waits for them). Only the closed list of tasks (contracts/bubble.ts, ./tasks.ts). When the fault is the app's, the
 // answer comes with "Avisar a soporte". It never opens by itself; with it closed nothing shows over the page.
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useLocation } from "react-router";
 import { ArrowRight, X } from "lucide-react";
 import type { BubbleReport, BubbleTask } from "@contracts/bubble";
@@ -17,6 +17,8 @@ import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { bubbleCopy } from "@/i18n/copy/bubble";
 import { settingsCopy } from "@/i18n/copy/settings";
+import { personalCopy } from "@/i18n/copy/personal";
+import type { Lang } from "@/i18n/lang";
 import { useCatLabel } from "@/components/personal/txKit";
 import { moneyAuto } from "@/components/personal/personalUtils";
 import { Guide, glide, visible, type GuideMode } from "./guide";
@@ -26,7 +28,7 @@ import "./bubble.css";
 /** "Hazlo por mí" in their own words: the task starts at once, without the buttons. */
 const DO_IT = /\bh[aá]z(lo|melo|me)\b|\bpor m[ií]\b|\bdo it\b|\bfor me\b/i;
 
-type Msg = { id: number; role: "me" | "bot"; text: string; task?: BubbleTask | null; report?: BubbleReport | null; used?: boolean; reported?: "sending" | "sent" };
+type Msg = { id: number; role: "me" | "bot"; text: string; task?: BubbleTask | null; report?: BubbleReport | null; used?: boolean; reported?: "sending" | "sent"; lang?: Lang };
 
 let nextId = 1;
 const STAR = "M12 2 C12.6 7.4 16.6 11.4 22 12 C16.6 12.6 12.6 16.6 12 22 C11.4 16.6 7.4 12.6 2 12 C7.4 11.4 11.4 7.4 12 2 Z";
@@ -45,7 +47,6 @@ function homeOf(size: number): { x: number; y: number } {
 
 export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "personal"; onGo: (path: string) => void; hidden: boolean }) {
   const t = useCopy(bubbleCopy);
-  const s = useCopy(settingsCopy);
   const { lang } = useLang();
   const { user } = useAuth();
   const { pathname, search } = useLocation();
@@ -62,6 +63,8 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const inputRef = useRef<HTMLInputElement>(null);
   const guideRef = useRef<Guide | null>(null);
   const goRef = useRef(onGo);
+  // The language the bubble speaks in while it works: the one of the answer (they wrote in it), not always the app's.
+  const talkLang = useRef<Lang>(lang);
   useEffect(() => { goRef.current = onGo; }, [onGo]);
 
   const [open, setOpen] = useState(false);
@@ -83,13 +86,14 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     const g = new Guide({
       bubble: bubbleRef.current, cloud: cloudRef.current, spot: spotRef.current,
       home: () => homeOf(sizeRef.current), size: () => sizeRef.current,
-      navigate: (p) => goRef.current(p), own, stepLabel: (i, n) => t.step(i, n),
+      navigate: (p) => goRef.current(p), own, stepLabel: (i, n) => bubbleCopy[talkLang.current].step(i, n),
+      get moreWords() { return bubbleCopy[talkLang.current].more; },
     });
     guideRef.current = g;
     const onResize = () => g.rest();
     window.addEventListener("resize", onResize);
     return () => { window.removeEventListener("resize", onResize); g.destroy(); guideRef.current = null; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- made once; the words for the step label follow the language below
+    // Made once: the step words follow talkLang (a ref), the size and navigation follow their refs.
   }, []);
   // A new page: back to its corner (the tax preparer's bubble may be there now).
   useEffect(() => {
@@ -98,16 +102,21 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   }, [pathname]);
   useEffect(() => { if (hidden) guideRef.current?.stop(); }, [hidden]);
 
-  const ctx: TaskCtx = useMemo(() => ({
-    t: t.tasks, mode,
+  /** The task's words in one language (the answer's). */
+  const ctxIn = (l: Lang): TaskCtx => ({
+    t: bubbleCopy[l].tasks, mode,
     money: (n) => moneyAuto(n),
-    catLabel: (c, type) => catLabel(c, type),
-    colorName: (c) => (s.account.colors[c] ?? c).toLowerCase(),
+    catLabel: (c, type) => {
+      const cats = personalCopy[l].categories;
+      return (type === "income" ? cats.income : cats.expense)[c] ?? cats.short[c] ?? catLabel(c, type);
+    },
+    colorName: (c) => (settingsCopy[l].account.colors[c] ?? c).toLowerCase(),
     monthName: (iso) => {
       const [y, m] = iso.split("-").map(Number);
-      return new Date(y, m - 1, 1).toLocaleDateString(intlLocale(lang), { month: "long" });
+      return new Date(y, m - 1, 1).toLocaleDateString(intlLocale(l), { month: "long" });
     },
-  }), [t, s, mode, catLabel, lang]);
+  });
+  const ctx = ctxIn(lang);
 
   const add = (m: Omit<Msg, "id">) => { const id = nextId++; setMsgs((list) => [...list, { ...m, id }]); return id; };
   const firstName = (user?.name || "").trim().split(/\s+/)[0] ?? "";
@@ -115,6 +124,8 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const toggle = () => {
     const g = guideRef.current;
     if (g?.busy) { g.stop(); return; }
+    // The tap that just stopped it (on the bubble) isn't a tap to open the panel.
+    if (g && performance.now() - g.stoppedAt < 600) return;
     if (!open && msgs.length === 0) add({ role: "bot", text: t.hello(firstName) });
     setOpen(!open);
   };
@@ -157,22 +168,25 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
       setChatId(r.chatId);
       // They said "hazlo por mí" (or the assistant saw a direct order): "Okey, empiezo a hacerlo" and it starts.
       const now = !!r.task && (r.start || DO_IT.test(question));
-      const id = add({ role: "bot", text: r.answer, task: r.task ?? null, report: r.report ?? null, used: now });
+      const said: Lang = r.lang === "es" || r.lang === "en" ? r.lang : lang;
+      const id = add({ role: "bot", text: r.answer, task: r.task ?? null, report: r.report ?? null, used: now, lang: said });
       void utils.assistant.status.invalidate();
-      if (now && r.task) { const task = r.task; window.setTimeout(() => void runTask(id, task, "auto"), 1300); }
+      if (now && r.task) { const task = r.task; window.setTimeout(() => void runTask(id, task, "auto", said), 1300); }
     } catch (e) {
       add({ role: "bot", text: e instanceof Error ? e.message : t.notReady });
     }
   };
   const submit = (e: FormEvent) => { e.preventDefault(); void send(text); };
 
-  const runTask = async (id: number, task: BubbleTask, how: GuideMode) => {
+  const runTask = async (id: number, task: BubbleTask, how: GuideMode, l: Lang = lang) => {
     const g = guideRef.current;
     if (!g) return;
     setMsgs((list) => list.map((m) => (m.id === id ? { ...m, used: true } : m)));
     setOpen(false);
     setRunning(true);
-    const plan = planFor(task, ctx);
+    talkLang.current = l;
+    const w = bubbleCopy[l];
+    const plan = planFor(task, ctxIn(l));
     const end = await g.runSteps(plan.steps, how);
     setRunning(false);
     if (end === "done") {
@@ -184,10 +198,10 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
         window.setTimeout(() => setOpen(true), 300);
       }
     } else if (end === "missing") {
-      add({ role: "bot", text: plan.missing ?? t.missing });
+      add({ role: "bot", text: plan.missing ?? w.missing });
       window.setTimeout(() => setOpen(true), 300);
     } else {
-      add({ role: "bot", text: t.stopped });
+      add({ role: "bot", text: w.stopped });
     }
   };
 
@@ -246,9 +260,9 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
               {m.text}
               {m.task && !m.used && (
                 <div>
-                  {offerLine(m.task, ctx) && <span className="mt-1.5 block text-[12.5px] font-medium text-slate-500">{offerLine(m.task, ctx)}</span>}
-                  <button type="button" className="ab-go" data-bubble-do="auto" onClick={() => void runTask(m.id, m.task as BubbleTask, "auto")}>{t.doIt}</button>
-                  <button type="button" className="ab-go ab-alt" data-bubble-do="teach" onClick={() => void runTask(m.id, m.task as BubbleTask, "teach")}>{t.teach}</button>
+                  {offerLine(m.task, m.lang ? ctxIn(m.lang) : ctx) && <span className="mt-1.5 block text-[12.5px] font-medium text-slate-500">{offerLine(m.task, m.lang ? ctxIn(m.lang) : ctx)}</span>}
+                  <button type="button" className="ab-go" data-bubble-do="auto" onClick={() => void runTask(m.id, m.task as BubbleTask, "auto", m.lang)}>{bubbleCopy[m.lang ?? lang].doIt}</button>
+                  <button type="button" className="ab-go ab-alt" data-bubble-do="teach" onClick={() => void runTask(m.id, m.task as BubbleTask, "teach", m.lang)}>{bubbleCopy[m.lang ?? lang].teach}</button>
                 </div>
               )}
               {m.report && m.reported !== "sent" && (

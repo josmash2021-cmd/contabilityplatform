@@ -24,6 +24,7 @@ import { budgetStatus, spendingByCategory } from "./lib/budgets";
 import { msg } from "./lib/i18n";
 import { bubblePrompt, bubbleTools, type BubbleOut } from "./lib/bubble";
 import { REPORT_MAX } from "@contracts/bubble";
+import { replyLanguage } from "@contracts/lang";
 import { addMessage, ensureSupportTables, notifyAdmins, chatById } from "./lib/support";
 import { randomBytes, createHash } from "node:crypto";
 import { users } from "@db/schema";
@@ -182,14 +183,15 @@ async function questionsThisMonth(db: Db, userId: number): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-export function systemPrompt(mode: "business" | "personal", today: string, bubble = false): string {
+export function systemPrompt(mode: "business" | "personal", today: string, bubble = false, lang: "es" | "en" = "en"): string {
+  const language = lang === "es" ? "Spanish" : "English";
   const who = mode === "business"
     ? "a small-business owner (often a one-person or family business: sales at a point of sale, clients, services, expenses, a connected bank)"
     : "a person managing their household money (a connected bank, spending by category, subscriptions, savings goals)";
   return `You are the assistant inside Personal & Business Solutions, an accounting and personal-finance app. You are talking with ${who}.
 
 How to answer:
-- Reply in the language the person writes in (usually Spanish, sometimes English). Be warm, plain and short: a few sentences or a short list. No jargon; explain any accounting word you must use.
+- Answer ONLY in ${language}, every word: never mix Spanish and English (no Spanglish). They may use a word from the other language ("los biles", "la aseguranza"): understand it, but answer in ${language}. Be warm, plain and short: a few sentences or a short list. No jargon; explain any accounting word you must use.
 - For any number about their money, call the tools and use what they return. Never guess or invent amounts, dates or merchants. If a tool returns nothing, say so and suggest why (for example, the bank isn't connected or synced yet).
 - Pick sensible date ranges yourself ("este mes" = from the 1st of this month to today; "el mes pasado" = the whole previous month) and say which range you used.
 - Amounts are US dollars; write them like $1,234.56.
@@ -281,7 +283,9 @@ export const assistantRouter = createRouter({
       const calls: ToolCall[] = [];
       const today = todayCentral();
       const bubbleOut: BubbleOut = { task: null, report: null, start: false };
-      const system = systemPrompt(plan.mode, today, !!input.bubble) + (input.bubble ? bubblePrompt(plan.mode, input.bubble.page || "/", plan) : "");
+      // The language they wrote in (this message, else their earlier ones), English by default; never mixed.
+      const lang = replyLanguage(input.question, history.filter((m) => m.role === "user").map((m) => m.content));
+      const system = systemPrompt(plan.mode, today, !!input.bubble, lang) + (input.bubble ? bubblePrompt(plan.mode, input.bubble.page || "/", plan, lang) : "");
       const tools = [
         ...assistantTools(db, userId, plan.mode, today, (c) => calls.push(c)),
         ...(input.bubble ? bubbleTools(db, userId, plan.mode, today, bubbleOut) : []),
@@ -331,7 +335,7 @@ export const assistantRouter = createRouter({
       const attached = files.length ? JSON.stringify(files.map((f) => ({ name: f.name, mime: f.mime }))) : null;
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId, attachments) VALUES (${userId}, 'user', ${input.question}, ${chatCol}, ${attached})`);
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources, chatId) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null}, ${chatCol})`);
-      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId, task: bubbleOut.task, report: bubbleOut.report, start: bubbleOut.task ? bubbleOut.start : false };
+      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId, task: bubbleOut.task, report: bubbleOut.report, start: bubbleOut.task ? bubbleOut.start : false, lang };
     }),
 
   /**

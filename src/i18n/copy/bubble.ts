@@ -1,5 +1,7 @@
 // Words of the assistant's bubble (src/components/assistant/AssistantBubble.tsx) and of its tasks (tasks.ts).
 type Sugg = Record<string, string[]>;
+/** One page of the tour: its title's words and the sections it explains (found by their heading's words). */
+type TourPage = { path: string; name: string; title: string; sections: Array<[RegExp, string]>; rows?: string };
 
 const es = {
   title: "Tu asistente inteligente",
@@ -22,6 +24,7 @@ const es = {
   stopped: "Lo dejé ahí. Cuando quieras, lo seguimos.",
   missing: "No encontré dónde hacerlo en esta pantalla. Puede que tu plan no lo tenga o que algo haya cambiado.",
   step: (i: number, n: number | null) => (n ? `Paso ${i} de ${n}` : `Paso ${i}`),
+  more: { auto: "Abro Más para llegar a las otras páginas.", teach: "Toca Más." },
   sugg: {
     "/personal": ["¿Por qué tengo esto para gastar?", "¿En qué se me fue el dinero este mes?", "Algo no cuadra en mis números"],
     "/personal/transactions": ["¿Por qué este movimiento salió así?", "Algo no cuadra en mis números", "¿Cómo confirmo los nuevos?"],
@@ -43,28 +46,79 @@ const es = {
   } as Sugg,
   tasks: {
     tour: {
-      intro: { auto: "Te enseño la app, página por página. Si quieres parar, toca afuera.", teach: "Te enseño la app. Toca cada página cuando te la marque." },
-      page: (name: string) => ({ auto: `${name}.`, teach: `Toca ${name}.` }),
+      intro: { auto: "Te enseño la app, página por página: qué hay en cada una y para qué sirve. Si quieres parar, toca afuera.", teach: "Te enseño la app. Toca cada página cuando te la marque." },
+      page: (name: string) => ({ auto: `Vamos a ${name}.`, teach: `Toca ${name}.` }),
+      pageOf: (i: number, n: number) => `Página ${i} de ${n}`,
+      whole: (next: string) => ({ auto: `Esa es toda la página. Ahora vamos a ${next}.`, teach: `Esa es toda la página. Ahora vamos a ${next}.` }),
+      wholeLast: { auto: "Esa es toda la página.", teach: "Esa es toda la página." },
       personal: [
-        ["/personal", "Inicio", "Inicio: cuánto te queda para gastar este mes y lo que viene."],
-        ["/personal/transactions", "Movimientos", "Movimientos: todo lo que entra y sale de tus bancos. Toca uno para verlo o cambiar su categoría."],
-        ["/personal/budgets", "Presupuestos", "Presupuestos: un límite al mes por categoría. Te aviso cuando estés cerca."],
-        ["/personal/goals", "Metas", "Metas: lo que estás ahorrando y cuándo llegas."],
-        ["/personal/subscriptions", "Suscripciones", "Suscripciones y membresías: los cobros que se repiten cada mes."],
-        ["/personal/bank", "Banco", "Banco: tus bancos y tarjetas conectados."],
-        ["/personal/taxes", "Mi declaración", "Mi declaración: tus impuestos, gratis, con tu preparador."],
-      ] as Array<[string, string, string]>,
+        { path: "/personal", name: "Inicio", title: "Este es tu Inicio. Arriba ves cuánto te queda para gastar este mes, día por día.", sections: [
+          [/Para hoy|For today|Today/i, "Para hoy: lo que conviene hacer hoy, como confirmar tus movimientos nuevos."],
+          [/Últimos movimientos|Latest|Recent/i, "Tus últimos movimientos del banco. Con Ver todo los ves completos."],
+          [/Lo que viene|Coming|Upcoming/i, "Lo que viene: los cobros que se repiten en las próximas dos semanas."],
+          [/En qué se fue|Where did/i, "En qué se fue tu dinero este mes, por categoría. Toca una para ver el detalle."],
+          [/Tus metas|Your goals/i, "Tus metas de ahorro y cuánto llevas en cada una."],
+          [/consejo|tip/i, "Un consejo según tus números de este mes."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/transactions", name: "Movimientos", title: "Movimientos: todo lo que entra y sale de tus bancos y tarjetas, mes por mes.", sections: [] as Array<[RegExp, string]>,
+          rows: "Cada movimiento con su categoría. Tócalo para verlo o cambiarle la categoría." },
+        { path: "/personal/budgets", name: "Presupuestos", title: "Presupuestos: le pones un límite al mes a cada categoría y te aviso cuando estés cerca.", sections: [
+          [/Todavía no tienes presupuestos|no budgets yet/i, "Si todavía no tienes, aquí te sugiero límites según lo que gastas."],
+          [/Para gastar|Flexible|To spend/i, "Para gastar: lo que vas gastando poco a poco, como comida o gasolina, y cuánto te queda."],
+          [/Fijos|Fixed/i, "Fijos: lo que pagas igual cada mes, como la renta, la luz o los seguros."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/goals", name: "Metas", title: "Metas: lo que estás ahorrando y cuándo vas a llegar.", sections: [
+          [/Todavía no tienes metas|no goals yet/i, "Aquí creas tu primera meta: un viaje, un carro o un fondo para emergencias."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/subscriptions", name: "Suscripciones", title: "Suscripciones y membresías: los cobros que se repiten, como Netflix, el gimnasio o el car wash.", sections: [
+          [/Tus suscripciones|Your subscriptions/i, "La lista de lo que te cobran cada mes, con la fecha del próximo cobro."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/bank", name: "Banco", title: "Banco: tus bancos y tarjetas conectados, con su saldo.", sections: [
+          [/Efectivo y ahorro|Cash and savings/i, "Tus cuentas de cheques y de ahorro, con lo que tienes en cada una."],
+          [/Tarjetas|Cards|Credit/i, "Tus tarjetas y lo que debes en cada una."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/taxes", name: "Mi declaración", title: "Mi declaración: tus impuestos, gratis, con tu preparador.", sections: [
+          [/confirma que eres tú|confirm it's you/i, "Para proteger tus documentos, primero te mandamos un código a tu correo."],
+        ] as Array<[RegExp, string]> },
+      ] as TourPage[],
       business: [
-        ["/", "Inicio", "Inicio: tu día de un vistazo: lo que vendiste, lo que te deben y lo que pagas."],
-        ["/transactions", "Por revisar", "Por revisar: confirma lo que llegó de tu banco."],
-        ["/pos", "Cobrar", "Cobrar: cóbrale a un cliente en el momento."],
-        ["/invoices", "Facturas", "Facturas: lo que te deben y lo que ya cobraste."],
-        ["/customers", "Clientes", "Clientes: tus clientes y lo que te debe cada uno."],
-        ["/expenses", "Gastos", "Gastos: lo que ya pagaste. Tómale foto al recibo y listo."],
-        ["/bank", "Bancos", "Bancos: tus cuentas conectadas."],
-        ["/reports", "Reportes", "Reportes: tu ganancia, simple o para tu contador."],
-        ["/taxes", "Impuestos", "Impuestos: tu declaración y tus documentos."],
-      ] as Array<[string, string, string]>,
+        { path: "/", name: "Inicio", title: "Este es tu Inicio: tu negocio de un vistazo.", sections: [
+          [/Para hoy|For today|Today/i, "Para hoy: lo que conviene atender hoy."],
+          [/En 30 días|In 30 days/i, "Cuánto dinero vas a tener en 30 días, con lo que te deben y lo que tienes que pagar."],
+          [/Ventas de la semana|This week's sales|Sales this week/i, "Tus ventas de la semana, día por día."],
+          [/Esto notamos|We noticed/i, "Cosas que notamos en tus números."],
+        ] as Array<[RegExp, string]> },
+        { path: "/transactions", name: "Por revisar", title: "Por revisar: lo que llegó de tu banco, para que confirmes de qué es cada cosa.", sections: [
+          [/Necesitan tu respuesta|Need your answer/i, "Estos movimientos esperan tu respuesta. Con un toque los confirmas."],
+        ] as Array<[RegExp, string]> },
+        { path: "/pos", name: "Cobrar", title: "Cobrar: le cobras a un cliente en el momento.", sections: [
+          [/Venta actual|Current sale/i, "Aquí armas la venta y escoges cómo te paga: efectivo, tarjeta o Zelle."],
+        ] as Array<[RegExp, string]> },
+        { path: "/invoices", name: "Facturas", title: "Facturas: lo que te deben y lo que ya cobraste.", sections: [
+          [/Todavía no tienes facturas|no invoices yet/i, "Aquí verás tus facturas. Con Nueva factura haces la primera."],
+        ] as Array<[RegExp, string]> },
+        { path: "/customers", name: "Clientes", title: "Clientes: tus clientes y lo que te debe cada uno.", sections: [
+          [/primer cliente|first client/i, "Aquí agregas tu primer cliente o subes tu lista de Excel."],
+        ] as Array<[RegExp, string]> },
+        { path: "/expenses", name: "Gastos", title: "Gastos: lo que ya pagaste. Le tomas foto al recibo y listo.", sections: [
+          [/Por categoría|By category/i, "Tus gastos por categoría."],
+          [/Listo para impuestos|Ready for taxes/i, "Lo que ya está listo para tus impuestos."],
+          [/Límites del mes|Monthly limits/i, "Los límites que pusiste para cada categoría."],
+        ] as Array<[RegExp, string]> },
+        { path: "/bank", name: "Bancos", title: "Bancos: tus cuentas conectadas.", sections: [
+          [/Tus cuentas|Your accounts/i, "Cada cuenta con su saldo y cuándo se actualizó."],
+          [/Cuadrar|Reconcile/i, "Aquí comparas con el estado de cuenta de tu banco."],
+        ] as Array<[RegExp, string]> },
+        { path: "/reports", name: "Reportes", title: "Reportes: cuánto ganaste, simple o para tu contador.", sections: [
+          [/Mes por mes|Month by month/i, "Cuánto entró y cuánto salió cada mes."],
+          [/En qué se fue|Where did/i, "En qué gastaste."],
+          [/De dónde vino|Where did it come/i, "De dónde vino tu dinero."],
+          [/Cierre de mes|Month-end|Close/i, "El cierre del mes, listo para tu contador."],
+        ] as Array<[RegExp, string]> },
+        { path: "/taxes", name: "Impuestos", title: "Impuestos: tu declaración y tus documentos.", sections: [
+          [/confirma que eres tú|confirm it's you/i, "Para proteger tus documentos, primero te mandamos un código a tu correo."],
+        ] as Array<[RegExp, string]> },
+      ] as TourPage[],
       done: "Ese fue el recorrido. Pregúntame lo que quieras de cualquier página, o dime hazlo por mí y lo hago.",
     },
     navTo: (page: string) => ({ auto: `Primero vamos a ${page}.`, teach: `Toca ${page} en el menú.` }),
@@ -158,6 +212,7 @@ const en: BubbleCopy = {
   stopped: "I left it there. We can pick it up whenever you want.",
   missing: "I couldn't find where to do it on this screen. Your plan may not have it, or something changed.",
   step: (i: number, n: number | null) => (n ? `Step ${i} of ${n}` : `Step ${i}`),
+  more: { auto: "I open More to reach the other pages.", teach: "Tap More." },
   sugg: {
     "/personal": ["Why do I have this to spend?", "Where did my money go this month?", "Something doesn't add up"],
     "/personal/transactions": ["Why did this movement come out like this?", "Something doesn't add up", "How do I confirm the new ones?"],
@@ -179,28 +234,79 @@ const en: BubbleCopy = {
   },
   tasks: {
     tour: {
-      intro: { auto: "I'll show you the app, page by page. To stop, tap outside.", teach: "I'll show you the app. Tap each page when I light it." },
-      page: (name: string) => ({ auto: `${name}.`, teach: `Tap ${name}.` }),
+      intro: { auto: "I'll show you the app, page by page: what's on each one and what it's for. To stop, tap outside.", teach: "I'll show you the app. Tap each page when I light it." },
+      page: (name: string) => ({ auto: `Let's go to ${name}.`, teach: `Tap ${name}.` }),
+      pageOf: (i: number, n: number) => `Page ${i} of ${n}`,
+      whole: (next: string) => ({ auto: `That's the whole page. Now let's go to ${next}.`, teach: `That's the whole page. Now let's go to ${next}.` }),
+      wholeLast: { auto: "That's the whole page.", teach: "That's the whole page." },
       personal: [
-        ["/personal", "Home", "Home: how much you have left to spend this month and what's coming."],
-        ["/personal/transactions", "Transactions", "Transactions: everything in and out of your banks. Tap one to see it or change its category."],
-        ["/personal/budgets", "Budgets", "Budgets: a monthly limit per category. I'll tell you when you're close."],
-        ["/personal/goals", "Goals", "Goals: what you're saving and when you'll get there."],
-        ["/personal/subscriptions", "Subscriptions", "Subscriptions and memberships: the charges that repeat every month."],
-        ["/personal/bank", "Bank", "Bank: your connected banks and cards."],
-        ["/personal/taxes", "My tax return", "My tax return: your taxes, free, with your preparer."],
-      ] as Array<[string, string, string]>,
+        { path: "/personal", name: "Home", title: "This is your Home. At the top: what you have left to spend this month, day by day.", sections: [
+          [/Para hoy|For today|Today/i, "For today: what's worth doing today, like confirming new movements."],
+          [/Últimos movimientos|Latest|Recent/i, "Your latest bank movements. See all of them with See all."],
+          [/Lo que viene|Coming|Upcoming/i, "Coming up: the charges that repeat in the next two weeks."],
+          [/En qué se fue|Where did/i, "Where your money went this month, by category. Tap one for the details."],
+          [/Tus metas|Your goals/i, "Your savings goals and how far along each one is."],
+          [/consejo|tip/i, "A tip based on your numbers this month."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/transactions", name: "Transactions", title: "Transactions: everything in and out of your banks and cards, month by month.", sections: [] as Array<[RegExp, string]>,
+          rows: "Each movement with its category. Tap it to see it or change its category." },
+        { path: "/personal/budgets", name: "Budgets", title: "Budgets: a monthly limit for each category; I'll tell you when you're close.", sections: [
+          [/Todavía no tienes presupuestos|no budgets yet/i, "If you don't have any yet, I suggest limits here based on what you spend."],
+          [/Para gastar|Flexible|To spend/i, "To spend: what you spend little by little, like food or gas, and how much is left."],
+          [/Fijos|Fixed/i, "Fixed: what you pay the same every month, like rent, power or insurance."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/goals", name: "Goals", title: "Goals: what you're saving and when you'll get there.", sections: [
+          [/Todavía no tienes metas|no goals yet/i, "Create your first goal here: a trip, a car or an emergency fund."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/subscriptions", name: "Subscriptions", title: "Subscriptions and memberships: the charges that repeat, like Netflix, the gym or the car wash.", sections: [
+          [/Tus suscripciones|Your subscriptions/i, "What you're charged every month, with the date of the next charge."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/bank", name: "Bank", title: "Bank: your connected banks and cards, with their balances.", sections: [
+          [/Efectivo y ahorro|Cash and savings/i, "Your checking and savings accounts, with what's in each one."],
+          [/Tarjetas|Cards|Credit/i, "Your cards and what you owe on each one."],
+        ] as Array<[RegExp, string]> },
+        { path: "/personal/taxes", name: "My tax return", title: "My tax return: your taxes, free, with your preparer.", sections: [
+          [/confirma que eres tú|confirm it's you/i, "To protect your documents, we first send a code to your email."],
+        ] as Array<[RegExp, string]> },
+      ] as TourPage[],
       business: [
-        ["/", "Home", "Home: your day at a glance: what you sold, what you're owed and what you pay."],
-        ["/transactions", "To review", "To review: confirm what came from your bank."],
-        ["/pos", "Checkout", "Checkout: charge a client right now."],
-        ["/invoices", "Invoices", "Invoices: what you're owed and what you've collected."],
-        ["/customers", "Clients", "Clients: your clients and what each one owes."],
-        ["/expenses", "Expenses", "Expenses: what you've paid. Snap the receipt and that's it."],
-        ["/bank", "Banks", "Banks: your connected accounts."],
-        ["/reports", "Reports", "Reports: your profit, simple or for your accountant."],
-        ["/taxes", "Taxes", "Taxes: your tax return and your documents."],
-      ] as Array<[string, string, string]>,
+        { path: "/", name: "Home", title: "This is your Home: your business at a glance.", sections: [
+          [/Para hoy|For today|Today/i, "For today: what's worth handling today."],
+          [/En 30 días|In 30 days/i, "How much money you'll have in 30 days, with what you're owed and what you have to pay."],
+          [/Ventas de la semana|This week's sales|Sales this week/i, "Your sales this week, day by day."],
+          [/Esto notamos|We noticed/i, "Things we noticed in your numbers."],
+        ] as Array<[RegExp, string]> },
+        { path: "/transactions", name: "To review", title: "To review: what came from your bank, so you confirm what each thing is.", sections: [
+          [/Necesitan tu respuesta|Need your answer/i, "These movements are waiting for your answer. One tap confirms them."],
+        ] as Array<[RegExp, string]> },
+        { path: "/pos", name: "Checkout", title: "Checkout: charge a client right now.", sections: [
+          [/Venta actual|Current sale/i, "Build the sale here and choose how they pay: cash, card or Zelle."],
+        ] as Array<[RegExp, string]> },
+        { path: "/invoices", name: "Invoices", title: "Invoices: what you're owed and what you've collected.", sections: [
+          [/Todavía no tienes facturas|no invoices yet/i, "Your invoices show up here. New invoice makes the first one."],
+        ] as Array<[RegExp, string]> },
+        { path: "/customers", name: "Clients", title: "Clients: your clients and what each one owes.", sections: [
+          [/primer cliente|first client/i, "Add your first client here or upload your Excel list."],
+        ] as Array<[RegExp, string]> },
+        { path: "/expenses", name: "Expenses", title: "Expenses: what you've paid. Snap the receipt and that's it.", sections: [
+          [/Por categoría|By category/i, "Your expenses by category."],
+          [/Listo para impuestos|Ready for taxes/i, "What's ready for your taxes."],
+          [/Límites del mes|Monthly limits/i, "The limits you set for each category."],
+        ] as Array<[RegExp, string]> },
+        { path: "/bank", name: "Banks", title: "Banks: your connected accounts.", sections: [
+          [/Tus cuentas|Your accounts/i, "Each account with its balance and when it was updated."],
+          [/Cuadrar|Reconcile/i, "Compare with your bank statement here."],
+        ] as Array<[RegExp, string]> },
+        { path: "/reports", name: "Reports", title: "Reports: how much you made, simple or for your accountant.", sections: [
+          [/Mes por mes|Month by month/i, "How much came in and went out each month."],
+          [/En qué se fue|Where did/i, "What you spent on."],
+          [/De dónde vino|Where did it come/i, "Where your money came from."],
+          [/Cierre de mes|Month-end|Close/i, "The month's close, ready for your accountant."],
+        ] as Array<[RegExp, string]> },
+        { path: "/taxes", name: "Taxes", title: "Taxes: your tax return and your documents.", sections: [
+          [/confirma que eres tú|confirm it's you/i, "To protect your documents, we first send a code to your email."],
+        ] as Array<[RegExp, string]> },
+      ] as TourPage[],
       done: "That was the tour. Ask me anything about any page, or say do it for me and I'll do it.",
     },
     navTo: (page: string) => ({ auto: `First, let's go to ${page}.`, teach: `Tap ${page} in the menu.` }),

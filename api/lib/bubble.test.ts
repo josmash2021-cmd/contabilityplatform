@@ -81,7 +81,8 @@ describe("what the bubble knows", () => {
     expect(bubblePrompt("business", "/", { tier: null, trial: true })).toContain("tour, customer, invoice, receipt, connect_bank, user_color");
     // "Hazlo por mí" in their own words: it starts at once, no "¿lo hago?".
     expect(p).toMatch(/start: true/);
-    expect(p).toMatch(/Okey, empiezo a hacerlo/);
+    expect(bubblePrompt("personal", "/personal", { tier: "pro", trial: false }, "es")).toMatch(/Okey, empiezo a hacerlo/);
+    expect(bubblePrompt("personal", "/personal", { tier: "pro", trial: false }, "en")).toMatch(/Okay, I'm on it/);
     expect(p).toMatch(/hazme un tour/);
   });
 });

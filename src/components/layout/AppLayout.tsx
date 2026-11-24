@@ -377,6 +377,7 @@ export function AppLayout() {
           {tabs[2] ? <TabButton item={tabs[2]} on={isOn(navPath, tabs[2].path)} label={t.shell.short[tabs[2].path] ?? label(tabs[2].path)} onGo={go} count={counts[tabs[2].path]} /> : <span />}
           <button
             onClick={() => setMoreOpen(true)}
+            data-guide="nav-more"
             aria-current={rest.some((i) => isOn(navPath, i.path)) ? "page" : undefined}
             className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", rest.some((i) => isOn(navPath, i.path)) ? "text-blue-600" : "text-slate-500")}
           >
@@ -422,7 +423,7 @@ export function AppLayout() {
                       const on = isOn(navPath, i.path);
                       return (
                         <li key={i.path}>
-                          <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined}
+                          <button onClick={() => go(i.path)} aria-current={on ? "page" : undefined} data-nav={i.path}
                             className={cn("flex w-full items-center gap-3 rounded-xl border p-3 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500",
                               on ? "border-blue-200 bg-blue-50" : "border-slate-200 bg-white hover:bg-slate-50 active:bg-slate-100")}>
                             <Icon className={cn("h-5 w-5 shrink-0", on ? "text-blue-600" : "text-slate-800")} aria-hidden />

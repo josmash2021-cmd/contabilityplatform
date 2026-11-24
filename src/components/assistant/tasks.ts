@@ -18,6 +18,10 @@ export type TaskCtx = {
 export type TaskPlan = { steps: Step[]; done: string | null; quiet: string | null; missing: string | null };
 
 const g = (name: string) => `[data-guide="${name}"]`;
+/** The page's own title (its visible h1, not a hidden one). */
+const pageTitle = () => [...document.querySelectorAll<HTMLElement>("main h1")].find(visible) ?? null;
+/** A section of the page by the words of its heading. */
+const heading = (re: RegExp) => [...document.querySelectorAll<HTMLElement>("main h2, main h3")].find((h) => visible(h) && re.test(h.textContent ?? "")) ?? null;
 const onScreen = (sel: string) => [...document.querySelectorAll(sel)].some(visible);
 
 export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
@@ -25,12 +29,19 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
   const plan = (steps: Step[], done: string | null, quiet: string | null = null, missing: string | null = null): TaskPlan => ({ steps, done, quiet, missing });
   switch (task.task) {
     case "tour": {
-      // Each main page: it taps (or, on a phone, goes to) the page, then says what it's for beside its title.
-      const steps: Step[] = [{ ...t.tour.intro }];
-      for (const [path, name, what] of t.tour[c.mode]) {
-        steps.push({ ...t.tour.page(name), nav: path });
-        steps.push({ auto: what, teach: what, el: "main h1", act: "show", optional: true });
-      }
+      // Page by page: it goes there (on a phone through "Más"), lights the page's title and says what it's for, goes
+      // down through its sections with the page explaining each one, and at the end: "Esa es toda la página".
+      const pages = t.tour[c.mode];
+      const steps: Step[] = [{ ...t.tour.intro, label: "" }];
+      pages.forEach((p, i) => {
+        const label = t.tour.pageOf(i + 1, pages.length);
+        steps.push({ ...t.tour.page(p.name), nav: p.path, label });
+        steps.push({ auto: p.title, teach: p.title, find: pageTitle, act: "show", optional: "say", label });
+        for (const [re, say] of p.sections) steps.push({ auto: say, teach: say, find: () => heading(re), act: "show", optional: "skip", label });
+        if (p.rows) steps.push({ auto: p.rows, teach: p.rows, el: "main [data-tx-id]", act: "show", optional: "skip", label });
+        const next = pages[i + 1];
+        steps.push({ ...(next ? t.tour.whole(next.name) : t.tour.wholeLast), end: true, label });
+      });
       return plan(steps, t.tour.done);
     }
     case "budget": {

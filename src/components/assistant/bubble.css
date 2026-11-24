@@ -27,8 +27,9 @@
 .ab-bubble.ab-flying .ab-film { -webkit-backdrop-filter: none; backdrop-filter: none; }
 .ab-bubble:focus-visible { outline: none; }
 .ab-bubble:focus-visible .ab-film { box-shadow: inset 0 0 0 1px rgba(255,255,255,.6), 0 0 0 3px #fff, 0 0 0 6px #2563eb; }
-.ab-bubble .ab-squash { position: absolute; inset: 0; transition: scale .6s var(--ab-spring); }
-.ab-bubble.ab-press .ab-squash { scale: .8; }
+.ab-bubble .ab-squash { position: absolute; inset: 0; transition: scale .5s var(--ab-spring), translate .4s var(--ab-ease); }
+/* The press: a dip toward the button, right where it stands */
+.ab-bubble.ab-press .ab-squash { scale: .86; translate: var(--px, 0px) var(--py, 0px); transition: scale .22s var(--ab-ease), translate .22s var(--ab-ease); }
 .ab-bubble.ab-land .ab-squash { animation: ab-land 1.1s var(--ab-ease); }
 .ab-bubble.ab-point .ab-squash { animation: ab-nudge 1.1s var(--ab-ease); }
 .ab-bubble.ab-gone { opacity: 0; pointer-events: none; }
@@ -37,11 +38,12 @@
 /* Its little cloud: the words come in one by one */
 .ab-say { position: fixed; z-index: 81; max-width: 270px; background: rgba(255,255,255,.97); border: 1px solid #e2e8f0; border-radius: 18px; padding: 11px 14px;
   font-size: 14px; line-height: 1.45; color: #0f172a; box-shadow: 0 18px 40px -18px rgba(15,23,42,.45); pointer-events: none;
-  opacity: 0; transform: translateY(6px) scale(.97); filter: blur(3px); transition: opacity .65s var(--ab-ease), transform .7s var(--ab-ease), filter .65s var(--ab-ease); }
-.ab-say.ab-on { opacity: 1; transform: none; filter: none; }
+  opacity: 0; transform: translateY(6px) scale(.98); transition: opacity .5s var(--ab-ease), transform .6s var(--ab-ease); }
+.ab-say.ab-on { opacity: 1; transform: none; }
 .ab-say .ab-step { font-size: 12px; color: #5b6678; display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
 .ab-say .ab-step i { width: 7px; height: 7px; border-radius: 50%; background: linear-gradient(135deg, #2563eb, #7c3aed); }
-.ab-say .ab-w { opacity: 0; filter: blur(4px); animation: ab-wordIn .7s var(--ab-ease) forwards; }
+/* Each word fades in (no blur: a half-blurred word looked unfinished) */
+.ab-say .ab-w { opacity: 0; display: inline-block; animation: ab-wordIn .42s var(--ab-ease) forwards; }
 
 /* The glow around what it shows: still, soft, no darkening. It fades out where it was and in on the next one. */
 .ab-spot { position: fixed; z-index: 79; border-radius: 14px; pointer-events: none; opacity: 0; left: 0; top: 0;
@@ -115,7 +117,7 @@
 @keyframes ab-land { 0% { scale: 1.06 .95; } 50% { scale: .97 1.03; } 100% { scale: 1; } }
 @keyframes ab-nudge { 0%, 100% { translate: 0 0; } 45% { translate: var(--nx, 0px) var(--ny, 0px); } }
 @keyframes ab-glow { 0%, 100% { filter: drop-shadow(0 2px 6px rgba(79,70,229,.35)); } 50% { filter: drop-shadow(0 0 10px rgba(129,140,248,.95)); } }
-@keyframes ab-wordIn { to { opacity: 1; filter: none; } }
+@keyframes ab-wordIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @keyframes ab-pingKf { from { box-shadow: 0 0 0 0 rgba(129,140,248,.6); } to { box-shadow: 0 0 0 16px rgba(129,140,248,0); } }
 @keyframes ab-rip { from { transform: scale(.25); opacity: 1; } to { transform: scale(2.3); opacity: 0; } }
 @keyframes ab-rise { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
@@ -124,5 +126,5 @@
 @media (prefers-reduced-motion: reduce) {
   .ab-bubble .ab-film, .ab-bubble .ab-film::before, .ab-mini .ab-film, .ab-bubble .ab-star, .ab-bubble .ab-spark { animation: none; }
   .ab-panel, .ab-spot, .ab-say, .ab-panel.ab-closed { transition: opacity .2s linear, visibility 0s; }
-  .ab-say .ab-w { animation: none; opacity: 1; filter: none; }
+  .ab-say .ab-w { animation: none; opacity: 1; }
 }
