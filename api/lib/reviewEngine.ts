@@ -219,8 +219,55 @@ export function rulePatternFor(description: string, merchantName?: string | null
 }
 
 // ── History ("Lo clasificaste así 12 veces") ──
-export type HistoryRow = { description: string; merchantName?: string | null; category: string; type: MoneyType };
+export type HistoryRow = { description: string; merchantName?: string | null; category: string; type: MoneyType; amountCents?: number; date?: string };
 export type History = Map<string, Map<string, number>>;
+/** What each merchant's reviewed movements looked like, per category: their amounts (cents) and days of the month. */
+export type HistoryLooks = Map<string, Map<string, { amounts: number[]; days: number[] }>>;
+
+/** Money to or from a person through a payment app ("ZELLE TO JUAN PEREZ", Venmo, Cash App, PayPal): the same person can be paid for different things. */
+const PERSON_PAYMENT = /\b(?:zelle|venmo|cash ?app|sq ?cash|paypal)\b/i;
+export const isPersonPayment = (row: { description: string; merchantName?: string | null }) => PERSON_PAYMENT.test(`${row.description} ${row.merchantName ?? ""}`);
+
+/** Amounts and days per merchant and category, for payments to people (the only ones that need them). */
+export function buildHistoryLooks(rows: readonly HistoryRow[]): HistoryLooks {
+  const h: HistoryLooks = new Map();
+  for (const r of rows) {
+    if (!isPersonPayment(r) || !r.amountCents) continue;
+    const key = merchantKeyOf(r.description, r.merchantName);
+    if (!key) continue;
+    const byCat = h.get(key) ?? new Map<string, { amounts: number[]; days: number[] }>();
+    const look = byCat.get(r.category) ?? { amounts: [], days: [] };
+    look.amounts.push(Math.abs(r.amountCents));
+    const d = Number((r.date ?? "").slice(8, 10));
+    if (d >= 1 && d <= 31) look.days.push(d);
+    byCat.set(r.category, look);
+    h.set(key, byCat);
+  }
+  return h;
+}
+
+const median = (xs: readonly number[]) => { const s = [...xs].sort((a, b) => a - b); const m = Math.floor(s.length / 2); return s.length % 2 ? s[m] : Math.round((s[m - 1] + s[m]) / 2); };
+/** Days of the month apart, going around the month's end (the 30th and the 2nd are 3 days apart). */
+const dayGap = (a: number, b: number) => { const g = Math.abs(a - b); return Math.min(g, 31 - g); };
+
+/**
+ * Whether this payment to a person looks like the ones before in that category: an amount close to the usual one
+ * (within 20% or $25) and, when they came on about the same day each month (rent), close to that day too.
+ * Returns the usual amount (dollars) when it doesn't.
+ */
+export function looksUsual(row: { amountCents: number; date: string }, look: { amounts: number[]; days: number[] } | undefined): { usual: boolean; usualAmount: number | null } {
+  if (!look || look.amounts.length === 0) return { usual: false, usualAmount: null };
+  const usualCents = median(look.amounts);
+  const amountOk = Math.abs(Math.abs(row.amountCents) - usualCents) <= Math.max(usualCents * 0.2, 2500);
+  let dayOk = true;
+  if (look.days.length >= 2) {
+    const mid = median(look.days);
+    const monthly = look.days.every((d) => dayGap(d, mid) <= 4);
+    const d = Number(row.date.slice(8, 10));
+    if (monthly && d >= 1) dayOk = dayGap(d, mid) <= 6;
+  }
+  return { usual: amountOk && dayOk, usualAmount: usualCents / 100 };
+}
 
 /** Reviewed movements counted per merchant and category (split and excluded ones are left out by the caller). */
 export function buildHistory(rows: readonly HistoryRow[]): History {
@@ -444,6 +491,8 @@ export type Why =
   | { code: "rule"; pattern: string; category: string }
   | { code: "history"; n: number }
   | { code: "historyMixed"; n: number; total: number }
+  /** Paid to this person n times as `category`, usually `usual` dollars; this one is different (amount or day). */
+  | { code: "historyDifferent"; n: number; usual: number | null }
   | { code: "keyword" }
   | { code: "transfer"; direction: "to" | "from"; otherAccountId: number; date: string }
   | { code: "duplicate"; date: string }
@@ -476,6 +525,8 @@ export type Signals = {
   transfers: ReadonlyMap<number, TransferLeg>;
   duplicates: ReadonlyMap<number, { otherId: number; otherDate: string }>;
   matches: ReadonlyMap<number, Match>;
+  /** Amounts and days of past payments to people (buildHistoryLooks); without it, payments to people never count as sure. */
+  looks?: HistoryLooks;
 };
 
 /** Decides the group, the tag, the suggested category and the "why" of one pending movement. */
@@ -500,6 +551,11 @@ export function classify(row: EngineRow, s: Signals): Verdict {
   const key = merchantKeyOf(row.description, row.merchantName);
   const past = key ? historyFor(s.history, key, row.type) : null;
   if (past && past.n >= HISTORY_SURE && past.n / past.total >= HISTORY_SHARE) {
+    // A payment to a person (Zelle to Juan): sure only when it looks like the ones before (amount, and day for rent).
+    if (isPersonPayment(row)) {
+      const look = looksUsual(row, s.looks?.get(key)?.get(past.category));
+      if (!look.usual) return { kind: "ask", ask: null, conf: "mid", category: past.category, why: { code: "historyDifferent", n: past.n, usual: look.usualAmount }, ruleId: null };
+    }
     return { kind: "ready", ask: null, conf: "high", category: past.category, why: { code: "history", n: past.n }, ruleId: null };
   }
   if (past) return { kind: "ask", ask: null, conf: "mid", category: past.category, why: { code: "historyMixed", n: past.n, total: past.total }, ruleId: null };

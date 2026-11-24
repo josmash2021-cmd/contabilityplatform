@@ -41,7 +41,7 @@ import {
   type MoneyType, type StoredReview,
 } from "./lib/bankReview";
 import {
-  CASH_SUBSET_MAX, SPLIT_MAX_PARTS, PERSONAL_CATEGORY, addDay, buildHistory, classify, detectDuplicates, detectTransfers, displayNameOf,
+  CASH_SUBSET_MAX, SPLIT_MAX_PARTS, PERSONAL_CATEGORY, addDay, buildHistory, buildHistoryLooks, classify, detectDuplicates, detectTransfers, displayNameOf,
   findRule, mainCategoryOf, matchBill, matchCashSales, matchReceivable, rulePatternFor, signedCents, splitProblem,
   toCents, topCategories, transferCategory, type EngineRow, type Match, type SplitPart, type Verdict,
 } from "./lib/reviewEngine";
@@ -275,7 +275,9 @@ async function pendingVerdicts(db: Db, ctx: Ctx, limit: number, tz: number) {
     neighbors = [...pending, ...near.map(engineRow).filter((r) => !seen.has(r.id))];
   }
 
-  const history = buildHistory(await loadHistory(db, userId));
+  const historyRows = await loadHistory(db, userId);
+  const history = buildHistory(historyRows);
+  const looks = buildHistoryLooks(historyRows);
   const plan = await getPlanContext(db, ctx.user);
   const receivables = pending.length && contextHas(plan, "quotes") ? await loadReceivables(db, userId, tz) : [];
   const cashSales = pending.length ? await loadCashSales(db, userId, addDay(minDay, -3), maxDay, tz) : [];
@@ -300,7 +302,7 @@ async function pendingVerdicts(db: Db, ctx: Ctx, limit: number, tz: number) {
   const transfers = detectTransfers(neighbors);
   const duplicates = detectDuplicates(neighbors, new Set(transfers.keys()));
 
-  const verdicts = pending.map((r) => ({ r, v: classify(r, { rules, history, transfers, duplicates, matches }) }));
+  const verdicts = pending.map((r) => ({ r, v: classify(r, { rules, history, transfers, duplicates, matches, looks }) }));
   return { rules, rows, pending, history, matches, transfers, duplicates, verdicts };
 }
 /**

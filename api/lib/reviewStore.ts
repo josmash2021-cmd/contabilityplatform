@@ -125,7 +125,8 @@ export async function applyRulesToPending(db: Db, userId: number, rules: readonl
 /** Movements the owner reviewed in the last year, except splits and exclusions (they say nothing about one category). */
 export async function loadHistory(db: Db, userId: number): Promise<HistoryRow[]> {
   const res = await db.execute(sql`
-    SELECT t.description AS description, t.merchantName AS merchantName, t.category AS category, t.type AS type
+    SELECT t.description AS description, t.merchantName AS merchantName, t.category AS category, t.type AS type,
+      t.amount AS amount, DATE_FORMAT(t.transactionDate, '%Y-%m-%d') AS date
     FROM bankTransactions t
     LEFT JOIN bankReviewLog l ON l.bankTransactionId = t.id AND l.userId = t.userId
     WHERE t.userId = ${userId} AND COALESCE(t.isReconciled, 0) = 1
@@ -133,7 +134,10 @@ export async function loadHistory(db: Db, userId: number): Promise<HistoryRow[]>
       AND (l.action IS NULL OR l.action NOT IN ('excluded', 'split'))
     ORDER BY t.transactionDate DESC
     LIMIT 5000`);
-  return ((res as unknown as [HistoryRow[]])[0] ?? []).map((r) => ({ ...r, type: r.type === "income" ? "income" : "expense" }));
+  type Raw = HistoryRow & { amount?: string | number | null };
+  return ((res as unknown as [Raw[]])[0] ?? []).map(({ amount, ...r }) => ({
+    ...r, type: r.type === "income" ? "income" : "expense", amountCents: toCents(Number(amount ?? 0)), date: r.date ?? undefined,
+  }));
 }
 
 /**

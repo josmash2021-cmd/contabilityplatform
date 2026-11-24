@@ -640,7 +640,7 @@ const es = {
     banner: (n: number) =>
       n === 1 ? "1 movimiento nuevo ya tiene categoría sugerida. Revísalo o confírmalo." : `${n} movimientos nuevos ya tienen categoría sugerida. Revísalos o confírmalos todos.`,
     confirmAll: (n: number) => (n === 1 ? "Confirmarlo" : `Confirmar los ${n}`),
-    autoConfirmed: (n: number) => (n === 1 ? "La app confirmó 1 movimiento por ti esta semana, uno que ya conocía." : `La app confirmó ${n} por ti esta semana, los que ya conocía.`),
+    autoConfirmed: (n: number) => (n === 1 ? "Tu asistente inteligente confirmó 1 movimiento por ti esta semana, uno que ya conocía." : `Tu asistente inteligente confirmó ${n} por ti esta semana, los que ya conocía.`),
     autoSee: "Ver cuáles",
     autoAll: "Ver todos",
     confirmedAll: (n: number) => (n === 1 ? "1 movimiento confirmado con su categoría." : `${n} movimientos confirmados con su categoría.`),
@@ -950,7 +950,7 @@ const en: PersonalPagesCopy = {
     banner: (n: number) =>
       n === 1 ? "1 new transaction already has a suggested category. Review it or confirm it." : `${n} new transactions already have a suggested category. Review them or confirm them all.`,
     confirmAll: (n: number) => (n === 1 ? "Confirm it" : `Confirm all ${n}`),
-    autoConfirmed: (n: number) => (n === 1 ? "The app confirmed 1 transaction for you this week, one it already knew." : `The app confirmed ${n} for you this week, the ones it already knew.`),
+    autoConfirmed: (n: number) => (n === 1 ? "Your smart assistant confirmed 1 transaction for you this week, one it already knew." : `Your smart assistant confirmed ${n} for you this week, the ones it already knew.`),
     autoSee: "See which",
     autoAll: "See all",
     confirmedAll: (n: number) => (n === 1 ? "1 transaction confirmed with its category." : `${n} transactions confirmed with their category.`),

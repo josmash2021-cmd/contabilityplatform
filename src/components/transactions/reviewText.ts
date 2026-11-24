@@ -68,6 +68,7 @@ export function whyText(item: ReviewItemView, t: MovimientosCopy, locale: string
     case "rule": return w.rule(why.pattern, categoryLabel(why.category, t));
     case "history": return w.history(why.n);
     case "historyMixed": return why.total === 1 ? w.historyOnce : w.historyMixed(why.n, why.total);
+    case "historyDifferent": return why.usual !== null ? w.historyDifferent(categoryLabel(item.category, t), money(why.usual)) : w.historyOnce;
     case "keyword": return item.type === "income" ? w.keywordIn : w.keyword;
     case "transfer": {
       const acct = otherAcct(why.otherAccountId, names, t);
