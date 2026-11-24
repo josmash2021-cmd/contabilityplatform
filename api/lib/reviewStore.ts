@@ -6,6 +6,7 @@ import { bills, vendors } from "@db/vendorsSchema";
 import type { getDb } from "../queries/connection";
 import { isMissingTable } from "./dbErrors";
 import { resolveType, type MoneyType } from "./bankReview";
+import { autoPrevOf, forgetAuto } from "./autoConfirm";
 import { bankReviewLog, bankReviewMatches, bankTransactionSplits } from "./reviewSchema";
 import { cleanPattern, findRule, toCents, type CashSale, type HistoryRow, type OpenBill, type Receivable, type Rule } from "./reviewEngine";
 
@@ -242,7 +243,14 @@ export type LogEntry = {
  * all the way back) and gets the new action and time.
  */
 export async function writeLog(db: Db, userId: number, entries: LogEntry[]): Promise<void> {
-  for (const e of entries) {
+  // What the person does replaces what the app confirmed for them (api/lib/autoConfirm.ts). "Deshacer" then goes back
+  // to the category the movement had before the app confirmed it.
+  const txIds = entries.map((e) => Number(e.bankTransactionId));
+  const appPrev = await autoPrevOf(db, userId, txIds);
+  await forgetAuto(db, userId, txIds);
+  for (const e0 of entries) {
+    const before = appPrev.get(Number(e0.bankTransactionId));
+    const e = before ? { ...e0, prevCategory: before.prevCategory, prevType: before.prevType } : e0;
     await db.insert(bankReviewLog).values({
       userId, bankTransactionId: e.bankTransactionId, action: e.action, reason: e.reason ?? null, relatedId: e.relatedId ?? null,
       prevCategory: e.prevCategory, prevType: e.prevType,

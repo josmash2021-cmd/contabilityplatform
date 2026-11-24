@@ -142,7 +142,7 @@ const KNOWN: Known[] = [
 ];
 
 // Never a subscription (checked after the known services, so "Walmart+" still counts).
-const EXCLUDED_CATEGORIES = new Set(["card_payment", "transfer", "transfer_income", "zelle_sent", "zelle_income", "cash_withdrawal", "cash_deposit", "deposit", "paycheck", "income", "refund", "gasolina"]);
+const EXCLUDED_CATEGORIES = new Set(["card_payment", "donations", "remittance", "tax_refund", "transfer", "transfer_income", "zelle_sent", "zelle_income", "cash_withdrawal", "cash_deposit", "deposit", "paycheck", "income", "refund", "gasolina"]);
 const EXCLUDED_WORDS = [
   // money moving, not a service
   /\bzelle\b/, /\bvenmo\b/, /\bcash\s*app\b/, /\bpaypal\s*transfer\b/, /\btransfer\b/, /\bwithdrawal\b/, /\batm\b/, /\bdeposit\b/,

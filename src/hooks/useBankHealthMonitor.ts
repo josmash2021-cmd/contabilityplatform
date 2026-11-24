@@ -36,6 +36,7 @@ export function useBankHealthMonitor(accountId: number | undefined, selectedYear
         utils.bank.getMonthData.invalidate();
         toast.info(`${data.fixed} categorias corregidas`, { id: "auto-fix" });
       }
+      if ((data.autoConfirmed ?? 0) > 0) { void utils.review.count.invalidate(); void utils.review.list.invalidate(); }
     },
   });
 

@@ -93,7 +93,13 @@ export default function PersonalDashboard() {
     onSuccess: () => { void utils.bank.listAccounts.invalidate(); void utils.banks.overview.invalidate(); },
     onError: () => {},
   });
-  const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({ onSuccess: (d) => { if (d.fixed && d.fixed > 0) refreshMonth(); }, onError: () => {} });
+  const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
+    onSuccess: (d) => {
+      if ((d.fixed ?? 0) > 0 || (d.autoConfirmed ?? 0) > 0) refreshMonth();
+      if ((d.autoConfirmed ?? 0) > 0) { void utils.review.list.invalidate(); void utils.review.autoRecent.invalidate(); }
+    },
+    onError: () => {},
+  });
   useEffect(() => {
     if (!hasBank) return;
     syncRecent();

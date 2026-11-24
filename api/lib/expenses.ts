@@ -49,6 +49,8 @@ const BANK_TO_SPEND: Record<string, SpendCategory> = {
   utilities: "utilities",
   insurance: "insurance",
   health_insurance: "insurance",
+  car_insurance: "insurance",
+  donations: "other",
   rent: "rent",
   government: "licenses",
   rideshare: "travel",
@@ -62,6 +64,8 @@ export const NOT_SPENDING_BANK_CATEGORIES: ReadonlySet<string> = new Set([
   "transfer", "transfer_income", "cash_withdrawal", "loan", "home_expense",
   // Paying a credit card: the purchases were already counted when they were made (on the card).
   "card_payment",
+  // Money sent abroad from the business account is the owner's, not a business expense.
+  "remittance",
 ]);
 
 /** The Gastos category of a bank movement's category. */

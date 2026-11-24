@@ -35,7 +35,7 @@ describe("knownBill: what a bank movement is, by its name", () => {
     for (const d of ["BLUE CROSS BLUE SHIELD AL", "BCBS OF ALABAMA PREMIUM", "BLUECROSS AL", "HUMANA INC", "AMBETTER HEALTH", "DELTA DENTAL"]) {
       expect(k(d), d).toBe("health_insurance");
     }
-    expect(k("GEICO AUTO")).toBeNull();
+    expect(k("GEICO AUTO")).toBe("car_insurance");
   });
   it("government: Secretary of State, revenue, tags, IRS, courts (money out only)", () => {
     for (const d of ["ALABAMA SECRETARY OF STATE", "AL SOS ONLINE FILING", "ALABAMA DEPT OF REVENUE", "IRS USATAXPYMT", "SHELBY COUNTY TAG OFFICE", "CITY OF HOOVER MUNICIPAL COURT"]) {
@@ -61,10 +61,11 @@ describe("billFromPlaid: Plaid's category when the name says nothing", () => {
     expect(billFromPlaid("LOAN_PAYMENTS_CREDIT_CARD_PAYMENT", "ONLINE PMT", 200)).toBe("card_payment");
     expect(billFromPlaid("LOAN_PAYMENTS_PERSONAL_LOAN_PAYMENT", "ACH", 150)).toBe("loan");
   });
-  it("health insurance among insurance; government fees but not donations", () => {
+  it("health and car insurance among insurance; government fees and donations apart", () => {
     expect(billFromPlaid("GENERAL_SERVICES_INSURANCE", "BLUE CROSS AL", 300)).toBe("health_insurance");
-    expect(billFromPlaid("GENERAL_SERVICES_INSURANCE", "PROGRESSIVE", 120)).toBeNull();
+    expect(billFromPlaid("GENERAL_SERVICES_INSURANCE", "PROGRESSIVE", 120)).toBe("car_insurance");
+    expect(billFromPlaid("GENERAL_SERVICES_INSURANCE", "LEMONADE RENTERS", 20)).toBeNull();
     expect(billFromPlaid("GOVERNMENT_AND_NON_PROFIT_GOVERNMENT_DEPARTMENTS_AND_AGENCIES", "SOS", 50)).toBe("government");
-    expect(billFromPlaid("GOVERNMENT_AND_NON_PROFIT_DONATIONS", "CHURCH", 50)).toBeNull();
+    expect(billFromPlaid("GOVERNMENT_AND_NON_PROFIT_DONATIONS", "CHURCH", 50)).toBe("donations");
   });
 });

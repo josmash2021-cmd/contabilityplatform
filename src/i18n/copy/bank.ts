@@ -35,6 +35,10 @@ const es = {
     health_insurance: "Seguro médico",
     government: "Gobierno y trámites",
     card_payment: "Pagos de tarjeta",
+    car_insurance: "Seguro de carro",
+    donations: "Iglesia y donaciones",
+    remittance: "Envíos de dinero",
+    tax_refund: "Reembolsos de impuestos",
   } as Record<string, string>,
   bank: {
     title: "Mi Banco",
@@ -262,6 +266,10 @@ const en: BankCopy = {
     health_insurance: "Health insurance",
     government: "Government & fees",
     card_payment: "Card payments",
+    car_insurance: "Car insurance",
+    donations: "Church & donations",
+    remittance: "Money transfers",
+    tax_refund: "Tax refunds",
   },
   bank: {
     title: "My Bank",

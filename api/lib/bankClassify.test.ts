@@ -113,3 +113,76 @@ describe("car wash names", () => {
     expect(displayNameOf("ZIPS DRY CLEANERS", null)).toBe("Zips Dry Cleaners");
   });
 });
+
+import { knownChain } from "./bankRules";
+describe("known chains (owner, 2026-11-24)", () => {
+  it("a restaurant, a supermarket or a pharmacy by name, even when Plaid says nothing", () => {
+    expect(cat("ZAXBY'S #123 HOOVER AL", 12.4)).toEqual({ type: "expense", category: "fast_food" });
+    expect(cat("WAFFLE HOUSE 1234 PELHAM AL", 9.8).category).toBe("fast_food");
+    expect(cat("JACK'S FAMILY REST 1234 HOOVER AL", 18.5).category).toBe("fast_food");
+    expect(cat("PIGGLY WIGGLY #12 PELHAM AL", 41).category).toBe("food");
+    expect(cat("PUBLIX SUPER M 1234", 88).category).toBe("food");
+    expect(cat("SUPERMERCADO LA ESPERANZA", 35).category).toBe("food");
+    expect(cat("TAQUERIA EL GUERO", 22).category).toBe("fast_food");
+    expect(cat("CRACKER BARREL #412", 40).category).toBe("food");
+    expect(cat("CVS/PHARMACY #01234", 15).category).toBe("medical");
+  });
+  it("money in from one isn't a refund by force (it can be a paycheck)", () => {
+    expect(cat("LOS ARCOS RESTAURANT PAYROLL", -800).category).toBe("paycheck");
+  });
+  it("leaves alone what it doesn't know, and the look-alikes", () => {
+    expect(knownChain("ATS ALABASTER AL")).toBeNull();
+    expect(knownChain("TARGETED ADS LLC")).toBeNull();
+    expect(knownChain("SONIC AUTOMOTIVE")).toBeNull();
+    expect(knownChain("SHELL OIL 57444211")).toBe("gas");
+    expect(knownChain("WAL-MART #1234")).toBe("store");
+    expect(knownChain("UBER *TRIP")).toBe("delivery");
+  });
+});
+
+describe("paychecks, car insurance, church and donations, money transfers, tax refunds (owner, 2026-11-24)", () => {
+  it("money in: the paycheck and the tax refund by name", () => {
+    for (const d of ["ADP PAYROLL", "GUSTO PAY 123456", "PAYCHEX INC PAYROLL", "ACME LLC DIRECT DEP", "DIR DEP LOS ARCOS"]) expect(cat(d, -900), d).toEqual({ type: "income", category: "paycheck" });
+    expect(cat("IRS TREAS 310 TAX REF", -1240)).toEqual({ type: "income", category: "tax_refund" });
+    expect(cat("AL DEPT OF REVENUE TAX REFUND", -310)).toEqual({ type: "income", category: "tax_refund" });
+    // Social Security comes as "TREAS 310" too: it's not a tax refund.
+    expect(cat("SSA TREAS 310 XXSOC SEC", -1100).category).not.toBe("tax_refund");
+    // Money out to the IRS is still a government payment.
+    expect(cat("IRS USATAXPYMT", 500).category).toBe("government");
+  });
+  it("car insurance apart from health insurance", () => {
+    for (const d of ["GEICO *AUTO", "PROGRESSIVE *INSURANCE", "STATE FARM RO 27 SFPP", "ALFA INS PREMIUM", "THE GENERAL AUTO INS", "ALLSTATE INS CO"]) expect(cat(d, 120).category, d).toBe("car_insurance");
+    expect(cat("BLUE CROSS BLUE SHIELD AL", 320).category).toBe("health_insurance");
+  });
+  it("church and donations, not Church's Chicken", () => {
+    for (const d of ["FIRST BAPTIST CHURCH", "IGLESIA BAUTISTA HISPANA", "TITHE.LY*DONATION", "PUSHPAY*GRACE CHURCH", "GIVELIFY*IGLESIA", "ST JUDE CHILDRENS ALSAC"]) expect(cat(d, 50).category, d).toBe("donations");
+    expect(cat("CHURCH'S CHICKEN #123", 12).category).toBe("fast_food");
+  });
+  it("money transfers abroad, not bill pay through the same companies", () => {
+    for (const d of ["REMITLY* SEND MONEY", "WESTERN UNION 1234", "XOOM.COM", "MONEYGRAM 5555", "INTERMEX WIRE", "VIAMERICAS CORP"]) expect(cat(d, 200).category, d).toBe("remittance");
+    expect(cat("WU SPEEDPAY ALABAMA POWER", 140).category).not.toBe("remittance");
+  });
+});
+
+describe("logos for money transfers, church giving and payroll", () => {
+  it("show their official logo", () => {
+    const cases: Array<[string, string]> = [
+      ["REMITLY* SEND MONEY", "remitly"], ["WESTERN UNION 1234", "western-union"], ["XOOM.COM", "xoom"], ["MONEYGRAM 5555", "moneygram"],
+      ["INTERMEX WIRE", "intermex"], ["RIA MONEY TRANSFER", "ria"], ["SENDWAVE", "sendwave"], ["TITHE.LY*DONATION", "tithely"],
+      ["PUSHPAY*GRACE CHURCH", "pushpay"], ["GIVELIFY*IGLESIA", "givelify"], ["ADP PAYROLL", "adp"], ["GUSTO PAY 123456", "gusto"], ["PAYCHEX INC PAYROLL", "paychex"],
+    ];
+    for (const [text, icon] of cases) expect(bundledMerchantLogo(text), text).toBe(`/brands/merchants/${icon}.png`);
+    expect(bundledMerchantLogo("GUSTO ITALIAN GRILL")).toBeNull();
+    expect(bundledMerchantLogo("RIA FINANCIAL ADVISORS LLC")).toBeNull();
+    expect(bundledMerchantLogo("RIA FINANCIAL SERVICES")).toBe("/brands/merchants/ria.png");
+  });
+});
+
+describe("clean names for payroll, tax refunds and money transfers", () => {
+  it("read as the brand", () => {
+    expect(displayNameOf("ADP PAYROLL", null)).toBe("ADP");
+    expect(displayNameOf("IRS TREAS 310 TAX REF", null)).toBe("IRS");
+    expect(displayNameOf("REMITLY* SEND MONEY", null)).toBe("Remitly");
+    expect(displayNameOf("GEICO *AUTO", null)).toBe("GEICO");
+  });
+});

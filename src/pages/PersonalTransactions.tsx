@@ -88,6 +88,10 @@ export default function PersonalTransactions() {
   const { data: reviewCount } = trpc.review.count.useQuery(undefined, { enabled: hasAccounts, staleTime: 30_000 });
   const toReview = reviewCount?.count ?? 0;
   const { data: reviewList } = trpc.review.list.useQuery({ limit: MAX_REVIEW_BATCH }, { enabled: hasAccounts && toReview > 0, staleTime: 30_000 });
+  // What the app confirmed by itself this week (api/lib/autoConfirm.ts), and "Ver cuáles" to see only those.
+  const { data: autoRecent } = trpc.review.autoRecent.useQuery(undefined, { enabled: hasAccounts, staleTime: 30_000 });
+  const [onlyAuto, setOnlyAuto] = useState(false);
+  const autoIds = useMemo(() => new Set(autoRecent?.ids ?? []), [autoRecent]);
 
   const afterReview = () => Promise.all([utils.review.count.invalidate(), utils.review.list.invalidate(), utils.bank.getMonthData.invalidate()]);
   const reopen = trpc.review.reopen.useMutation({ onSuccess: () => void afterReview(), onError: (e) => toast.error(e.message) });
@@ -119,6 +123,7 @@ export default function PersonalTransactions() {
   const shown = rows
     .filter((r) => tab === "all" || (tab === "in" ? r.isIn : !r.isIn))
     .filter((r) => curCat === "all" || r.category === curCat)
+    .filter((r) => !onlyAuto || (r.id !== null && autoIds.has(r.id)))
     .filter((r) => !q || `${r.name} ${r.raw} ${catLabel(r.category, r.type)}`.toLowerCase().includes(q))
     .map((r, i) => ({ r, i }))
     .sort((a, b) => (a.r.day === b.r.day ? a.i - b.i : a.r.day < b.r.day ? 1 : -1))
@@ -253,6 +258,18 @@ export default function PersonalTransactions() {
               {confirmAll.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{t.confirmAll(reviewIds.length || toReview)}
             </button>
           </div>
+        )}
+
+        {/* What the app confirmed by itself: a plain line, a dot and a text link */}
+        {hasAccounts && (autoRecent?.count ?? 0) > 0 && (
+          <p className="mb-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-600" data-auto-confirmed="">
+            <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+            <span>{t.autoConfirmed(autoRecent?.count ?? 0)}</span>
+            <button type="button" aria-pressed={onlyAuto} onClick={() => setOnlyAuto((v) => !v)}
+              className="rounded-sm font-semibold text-blue-600 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+              {onlyAuto ? t.autoAll : t.autoSee}
+            </button>
+          </p>
         )}
 
         {/* Search, category, account, refresh */}

@@ -40,7 +40,11 @@ export function useQuietBankSync({ enabled, year, month, accountId }: { enabled:
     onError: () => {},
   });
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
-    onSuccess: (d) => { if (d.fixed && d.fixed > 0) { void utils.bank.getMonthData.invalidate(); void utils.banks.accountMonth.invalidate(); } },
+    onSuccess: (d) => {
+      if ((d.fixed ?? 0) > 0 || (d.autoConfirmed ?? 0) > 0) { void utils.bank.getMonthData.invalidate(); void utils.banks.accountMonth.invalidate(); }
+      // The app confirmed what it was sure about: the Por revisar badge and lists change.
+      if ((d.autoConfirmed ?? 0) > 0) { void utils.review.count.invalidate(); void utils.review.list.invalidate(); void utils.review.autoRecent.invalidate(); }
+    },
     onError: () => {},
   });
 

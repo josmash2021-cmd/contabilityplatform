@@ -148,7 +148,7 @@ export function budgetTotals(rows: readonly BudgetRow[]): BudgetTotals {
 // ── 2.0 Presupuestos: pace, fixed categories, month history, rollover and suggestions ──
 
 /** Categories that charge by themselves (subscriptions, rent, bills): shown as "Fijos", no daily pace. */
-export const FIXED_CATEGORIES: ReadonlySet<string> = new Set(["subscription", "rent", "renta", "insurance", "seguro", "health_insurance", "utilities", "phone", "internet"]);
+export const FIXED_CATEGORIES: ReadonlySet<string> = new Set(["subscription", "rent", "renta", "insurance", "seguro", "health_insurance", "car_insurance", "utilities", "phone", "internet"]);
 export const isFixedCategory = (category: string) => FIXED_CATEGORIES.has(category);
 
 /** The prototype's states: no budget, over, fixed, careful (20% ahead of today's pace) or fine. */

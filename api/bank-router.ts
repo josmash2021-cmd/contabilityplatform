@@ -7,12 +7,13 @@ import { eq, and, or, desc, sql, count, inArray } from "drizzle-orm";
 import { accountMode, bankLimit } from "./lib/plans";
 import { lastPaidTier } from "./lib/planAccess";
 import { applyStoredReviews } from "./lib/bankReview";
-import { storedReviewsFor, unreviewed } from "./review-router";
+import { autoConfirmPending, storedReviewsFor, unreviewed } from "./review-router";
+import { ensureAutoTable, forgetAuto } from "./lib/autoConfirm";
 import { assertNotReconciled, closedPeriodIds } from "./reconcile-router";
 import { forgetInstitutions, itemKeyOf, refreshInstitution, trackPlaid, type PlaidLike } from "./lib/bankInstitutions";
 import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
 import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName, trustedMerchantName } from "./lib/brand";
-import { billFromPlaid, isCarWash, knownBill, type KnownBill } from "./lib/bankRules";
+import { CHAIN_CATEGORY, billFromPlaid, isCarWash, isGasStation, knownBill, knownChain, knownIncome, type KnownBill } from "./lib/bankRules";
 import { isDuplicateKey } from "./lib/dbErrors";
 import { bankInstitutionsTable } from "./lib/brandSchema";
 import type { AccountsGetRequest, AccountsGetResponse, Transaction, TransactionsGetRequest, TransactionsGetResponse } from "plaid";
@@ -47,36 +48,6 @@ export async function initPlaid() {
   } catch { return null; }
 }
 
-// ─── Gas Station Detection — ALL brands ───
-const GAS_BRANDS_ALL = [
-  "shell","exxon","chevron","bp","mobil","texaco","marathon","speedway",
-  "valero","citgo","phillips 66","circle k","sinclair","gulf","esso","arco",
-  "76","union 76","kum & go","kum and go","quik trip","quiktrip","race trac",
-  "racetrac","sheetz","wawa","pilot","flying j","love's","maverik","thorntons",
-  "stripes","murphy usa","casey's","holiday","cumberland farms","royal farms",
-  "getgo","parkers","quick chek","stewart's","oncue","p66","sam's club gas",
-  "costco gas","walmart gas","kennedy",
-];
-function isGasStation(desc: string): boolean {
-  const d = desc.toLowerCase();
-  // Check all known brands with word-boundary to avoid substring matches
-  // (e.g., "alarcon" should NOT match "arco", "mobile" should NOT match "mobil")
-  for (const brand of GAS_BRANDS_ALL) {
-    // Escape special regex chars in brand name
-    const escaped = brand.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // Use word boundary for short brands (< 5 chars) to avoid false positives
-    if (brand.length < 5) {
-      const regex = new RegExp(`\\b${escaped}\\b`, "i");
-      if (regex.test(d)) return true;
-    } else {
-      // For longer brands, includes() is safe enough
-      if (d.includes(brand)) return true;
-    }
-  }
-  // Generic gas keywords
-  if (d.includes("gas station") || d.includes("gasoline") || d.includes("gas sta")) return true;
-  return false;
-}
 
 // ─── Smart Category Rules (in-memory for now, DB later) ───
 const defaultCategoryRules: Record<string, { category: string; type: string }> = {
@@ -178,6 +149,9 @@ export function determineTypeAndCategory(plaidAmount: number, plaidCategories: s
   // isn't a purchase and "FLEX FINANCE" isn't shopping.
   const byName = placeBill(knownBill(description, plaidCategories?.[1], plaidAmount), plaidAmount);
   if (byName) return byName;
+  // Money in known by name: a paycheck (ADP, Gusto, "PAYROLL"...) or a tax refund (IRS, Alabama).
+  const income = knownIncome(description, plaidCategories?.[1], plaidAmount);
+  if (income) return { type: "income", category: income };
 
   // Car washes are memberships (unlimited washes every month): Suscripciones y membresías. Before the gas
   // stations, so "SHELL CAR WASH" is the wash and not gas.
@@ -241,6 +215,13 @@ export function determineTypeAndCategory(plaidAmount: number, plaidCategories: s
     if (plaidAmount < 0) return { type: "income", category: "gasolina" };
     return { type: "expense", category: "gasolina" };
   }
+
+  // ─── KNOWN CHAINS (owner, 2026-11-24): a restaurant, a supermarket or a pharmacy by its name, so "ZAXBY'S #123"
+  // or "PUBLIX SUPER M" isn't "Compras" when the bank or Plaid says nothing better. Money out only: money in from
+  // one can be a paycheck ("LOS ARCOS RESTAURANT PAYROLL"), the rules below decide that.
+  const chain = plaidAmount > 0 ? knownChain(description) : null;
+  const chainCategory = chain ? CHAIN_CATEGORY[chain] : undefined;
+  if (chainCategory) return { type: "expense", category: chainCategory };
 
   // Plaid categories
   const pfc = plaidCategories?.[0]?.toUpperCase() || "";
@@ -2550,18 +2531,19 @@ export const bankRouter = createRouter({
   // ─── AUTOMATIC AI CATEGORIZATION AGENT ───
   // Silently fixes miscategorized transactions — runs automatically on every page load
   autoFixCategories: authedQuery.mutation(async ({ ctx }) => {
-    if (!ctx.user) return { fixed: 0 };
-    if (!await hasActiveBank(ctx.user.id)) return { fixed: 0 };
+    if (!ctx.user) return { fixed: 0, autoConfirmed: 0 };
+    if (!await hasActiveBank(ctx.user.id)) return { fixed: 0, autoConfirmed: 0 };
     const db = getDb();
     try {
-      // Find transactions that were miscategorized by old algorithm
+      await ensureAutoTable(db);
+      // What the app confirmed by itself because it knew the bill by name (api/lib/autoConfirm.ts): a better rule
+      // may still correct it. (What it confirmed by the person's own rule or history stays, like theirs.)
+      const appConfirmed = () => sql`EXISTS (SELECT 1 FROM bankAutoConfirms a WHERE a.bankTransactionId = ${bankTransactions.id} AND a.reason IN ('card', 'bill', 'service', 'chain', 'income'))`;
       const txs = await db.select().from(bankTransactions)
         .where(and(
           eq(bankTransactions.userId, ctx.user.id),
           // Never a movement the owner reviewed: their category stays (api/review-router.ts).
-          unreviewed(),
-          // Only fix known bad categories (PayPal, Cash App, Venmo marked as cash_deposit)
-          // Or any transfer that was marked as cash_deposit/cash_withdrawal without ATM
+          or(unreviewed(), appConfirmed()),
         ));
 
       // Movements inside a closed (reconciled) period keep their category (api/reconcile-router.ts).
@@ -2581,16 +2563,22 @@ export const bankRouter = createRouter({
           );
           // Only update if category actually changed
           if (tx.category !== category) {
-            // Re-checked here too, in case the owner reviewed it while this loop ran.
-            await db.update(bankTransactions)
-              .set({ type, category })
-              .where(and(eq(bankTransactions.id, tx.id), unreviewed()));
+            // Re-checked here too, in case the owner reviewed it while this loop ran. One the app had confirmed goes
+            // back to Por revisar: the app changed its mind, so the person decides.
+            const wasApp = !!tx.isReconciled;
+            const res = await db.update(bankTransactions)
+              .set(wasApp ? { type, category, isReconciled: false } : { type, category })
+              .where(and(eq(bankTransactions.id, tx.id), wasApp ? appConfirmed() : unreviewed()));
+            if (wasApp && Number((res as unknown as Array<{ affectedRows?: number }>)[0]?.affectedRows ?? 0) > 0) await forgetAuto(db, Number(ctx.user.id), [Number(tx.id)]);
             fixed++;
           }
         } catch { /* skip on error */ }
       }
-      return { fixed };
-    } catch { return { fixed: 0 }; }
+      // Then the app confirms what it's sure about, so Por revisar keeps only what needs the person.
+      let autoConfirmed = 0;
+      try { autoConfirmed = await autoConfirmPending(db, ctx); } catch (e: unknown) { console.error("[autoConfirm] failed:", e instanceof Error ? e.message : e); }
+      return { fixed, autoConfirmed };
+    } catch { return { fixed: 0, autoConfirmed: 0 }; }
   }),
 
   // ─── DEBUG: Raw Plaid data (every connected bank) ───

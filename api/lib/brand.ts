@@ -175,6 +175,13 @@ const MERCHANT_ICONS: Readonly<Record<string, string>> = {
   familydollar: "family-dollar", aldi: "aldi", winndixie: "winn-dixie", zaxbys: "zaxbys", zaxby: "zaxbys", wafflehouse: "waffle-house",
   sonic: "sonic", sonicdrivein: "sonic", popeyes: "popeyes", raisingcanes: "raising-canes", raisingcane: "raising-canes", bojangles: "bojangles",
   quiktrip: "quiktrip", racetrac: "racetrac",
+  // Sending money abroad, church giving apps, payroll (official App Store icons).
+  remitly: "remitly", westernunion: "western-union", xoom: "xoom", xoomcom: "xoom", moneygram: "moneygram", intermex: "intermex",
+  riamoney: "ria", riamoneytransfer: "ria", riaenvia: "ria", riafinancialservices: "ria", bossmoney: "boss-money", bossrevolution: "boss-money",
+  sendwave: "sendwave", worldremit: "worldremit",
+  tithely: "tithely", pushpay: "pushpay", givelify: "givelify",
+  adp: "adp", adppayroll: "adp", gustopay: "gusto", gustonet: "gusto", gustonetpay: "gusto", gustopayroll: "gusto", gustocom: "gusto",
+  paychex: "paychex", paylocity: "paylocity", paycom: "paycom",
   // Car washes (memberships).
   mistercarwash: "mister-car-wash", mistercar: "mister-car-wash", mcw: "mister-car-wash", quickquack: "quick-quack", quickquackcarwash: "quick-quack",
   dontdrivedirty: "quick-quack", myqq: "quick-quack", zips: "zips", zipscarwash: "zips", zipscar: "zips", take5carwash: "take-5-car-wash", take5car: "take-5-car-wash",

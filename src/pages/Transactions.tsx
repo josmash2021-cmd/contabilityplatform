@@ -102,9 +102,12 @@ export default function Transactions() {
   // Silently fix categories the old rules got wrong (skips reviewed movements and those a rule set).
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
     onSuccess: (res) => {
-      if (res.fixed && res.fixed > 0) {
+      // Categories fixed, or movements the app confirmed by itself (it was sure): Por revisar changes.
+      if ((res.fixed ?? 0) > 0 || (res.autoConfirmed ?? 0) > 0) {
         void utils.bank.getMonthData.invalidate();
         void utils.review.list.invalidate();
+        void utils.review.count.invalidate();
+        void utils.review.done.invalidate();
       }
     },
   });
@@ -152,7 +155,7 @@ export default function Transactions() {
   const pendingTotal = data?.total ?? 0;
   const tabCount: Record<Tab, number | null> = {
     pending: data ? data.total : null,
-    done: data ? data.doneToday : null,
+    done: data ? data.doneToday + (data.autoToday ?? 0) : null,
     excluded: data ? data.excludedCount : null,
     all: null,
   };
@@ -243,6 +246,15 @@ export default function Transactions() {
             {autoText && (
               <p className="mt-3 flex items-start gap-2.5 rounded-[10px] bg-slate-100 px-3 py-2.5 text-[13px] text-slate-900">
                 <Sparkles className="mt-px h-[18px] w-[18px] shrink-0 text-blue-600" aria-hidden /><span>{autoText}</span>
+              </p>
+            )}
+
+            {/* What the app confirmed by itself today (api/lib/autoConfirm.ts): it was sure; the person can look and change. */}
+            {(data?.autoToday ?? 0) > 0 && (
+              <p className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-[13px] text-slate-600" data-auto-confirmed="">
+                <i className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" aria-hidden="true" />
+                <span>{r.autoConfirmed(data?.autoToday ?? 0)}</span>
+                <button type="button" onClick={() => setTab("done")} className="font-semibold text-blue-600 underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm">{r.autoSee}</button>
               </p>
             )}
 

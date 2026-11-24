@@ -35,6 +35,7 @@ const es = {
       income: "Ingresos",
       general: "Ingresos",
       paycheck: "Nómina",
+      tax_refund: "Reembolso de impuestos",
       transfer: "Transferencias",
     } as Record<string, string>,
     expense: {
@@ -56,6 +57,9 @@ const es = {
       health_insurance: "Seguro médico",
       government: "Gobierno y trámites",
       card_payment: "Pago de tarjeta",
+      car_insurance: "Seguro de carro",
+      donations: "Iglesia y donaciones",
+      remittance: "Envíos de dinero",
     } as Record<string, string>,
     // Short labels used as chips in the transactions list.
     short: {
@@ -311,6 +315,7 @@ const en: PersonalCopy = {
       income: "Income",
       general: "Income",
       paycheck: "Payroll",
+      tax_refund: "Tax refund",
       transfer: "Transfers",
     },
     expense: {
@@ -332,6 +337,9 @@ const en: PersonalCopy = {
       health_insurance: "Health insurance",
       government: "Government & fees",
       card_payment: "Card payment",
+      car_insurance: "Car insurance",
+      donations: "Church & donations",
+      remittance: "Money transfers",
     },
     short: {
       zelle_income: "Zelle Received",

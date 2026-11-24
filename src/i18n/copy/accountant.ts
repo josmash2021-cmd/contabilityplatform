@@ -118,6 +118,10 @@ const es = {
     health_insurance: "Seguro médico",
     government: "Licencias, permisos y trámites",
     card_payment: "Pago de tarjeta",
+    car_insurance: "Seguro de carro",
+    donations: "Iglesia y donaciones",
+    remittance: "Envíos de dinero",
+    tax_refund: "Reembolso de impuestos",
   } as Record<string, string>,
   print: {
     title: "Reporte para el contador",
@@ -283,6 +287,10 @@ const en: AccountantCopy = {
     health_insurance: "Health insurance",
     government: "Licenses, permits & fees",
     card_payment: "Card payment",
+    car_insurance: "Car insurance",
+    donations: "Church & donations",
+    remittance: "Money transfers",
+    tax_refund: "Tax refund",
   },
   print: {
     title: "Report for the accountant",

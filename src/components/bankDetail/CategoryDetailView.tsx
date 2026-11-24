@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import {
-  AlertCircle, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Banknote, Building2, CircleDollarSign, CreditCard, FileBadge, Fuel,
+  AlertCircle, ArrowDownRight, ArrowLeft, ArrowRight, ArrowUpRight, Banknote, Building2, Car, CircleDollarSign, CreditCard, FileBadge, Fuel, Globe, HandHeart, ReceiptText,
   HandCoins, HeartPulse, House, Loader2, Receipt, RotateCcw, Send, Shield, ShieldPlus, ShoppingBag, Trash2, TrendingUp, Tv, Utensils, Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -28,6 +28,7 @@ const DIRECTION: Record<string, Dir> = {
   food: "expense", shopping: "expense", gasolina: "expense", loan: "expense", insurance: "expense", utilities: "expense",
   home_expense: "expense", business_expense: "expense", other: "expense",
   rent: "expense", health_insurance: "expense", government: "expense", card_payment: "expense",
+  car_insurance: "expense", donations: "expense", remittance: "expense", tax_refund: "income",
 };
 
 const STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
@@ -53,6 +54,10 @@ const STYLE: Record<string, { icon: LucideIcon; tone: string }> = {
   insurance: { icon: Shield, tone: "bg-violet-50 text-violet-600" },
   health_insurance: { icon: ShieldPlus, tone: "bg-rose-50 text-rose-600" },
   government: { icon: FileBadge, tone: "bg-slate-100 text-slate-600" },
+  car_insurance: { icon: Car, tone: "bg-sky-50 text-sky-600" },
+  donations: { icon: HandHeart, tone: "bg-rose-50 text-rose-600" },
+  remittance: { icon: Globe, tone: "bg-teal-50 text-teal-600" },
+  tax_refund: { icon: ReceiptText, tone: "bg-emerald-50 text-emerald-600" },
 };
 
 /** What a row from bank.listByCategory carries. */

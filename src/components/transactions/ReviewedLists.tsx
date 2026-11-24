@@ -24,7 +24,7 @@ function Failed({ onRetry }: { onRetry: () => void }) {
 }
 const Empty = ({ text }: { text: string }) => <div className="rounded-[14px] border border-dashed border-slate-200 px-4 py-9 text-center text-slate-500">{text}</div>;
 
-/** "Revisados hoy": what the owner approved, changed, linked, split or answered today. */
+/** "Revisados hoy": what the owner approved, changed, linked, split or answered today, and what the app confirmed for them. */
 export function DoneList({ since }: { since: string }) {
   const t = useCopy(movimientosCopy);
   const r = t.rv;
@@ -47,7 +47,7 @@ export function DoneList({ since }: { since: string }) {
               <MerchantLogo name={name} logoUrl={isTransfer ? null : x.logoUrl} size={22} fallback={<span className="grid w-[22px] place-items-center text-emerald-600"><CheckCircle2 className="h-5 w-5" aria-hidden /></span>} />
               <div className="min-w-0">
                 <b className="block truncate text-sm font-[650] text-slate-900">{name}</b>
-                <span className="block truncate text-xs text-slate-500">{[r.how[x.action] ?? r.how.approved, cat].filter(Boolean).join(" · ")}</span>
+                <span className="block truncate text-xs text-slate-500">{[x.action === "auto" ? `${r.how.auto} ${(x.autoReason && r.autoWhy[x.autoReason]) || ""}`.trim() : r.how[x.action] ?? r.how.approved, cat].filter(Boolean).join(" · ")}</span>
               </div>
               <span className="text-sm font-bold tabular-nums text-slate-900">{x.type === "income" ? "+" : "−"}{money(x.amount)}</span>
             </li>

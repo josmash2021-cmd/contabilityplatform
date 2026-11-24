@@ -22,6 +22,8 @@ export const REVIEW_CATEGORIES: ReadonlyArray<{ key: string; dir: Direction }> =
   { key: "zelle_income", dir: "in" },
   { key: "transfer_income", dir: "in" },
   { key: "refund", dir: "in" },
+  { key: "tax_refund", dir: "in" },
+  { key: "paycheck", dir: "in" },
   { key: "interest", dir: "in" },
   // Money out
   { key: "business_expense", dir: "out" },
@@ -33,8 +35,11 @@ export const REVIEW_CATEGORIES: ReadonlyArray<{ key: string; dir: Direction }> =
   { key: "utilities", dir: "out" },
   { key: "insurance", dir: "out" },
   { key: "health_insurance", dir: "out" },
+  { key: "car_insurance", dir: "out" },
   { key: "medical", dir: "out" },
   { key: "government", dir: "out" },
+  { key: "donations", dir: "out" },
+  { key: "remittance", dir: "out" },
   { key: "zelle_sent", dir: "out" },
   { key: "transfer", dir: "out" },
   { key: "cash_withdrawal", dir: "out" },
@@ -50,7 +55,7 @@ export const REVIEW_CATEGORIES: ReadonlyArray<{ key: string; dir: Direction }> =
  * aren't offered in the picker. Accepted so a movement can keep the category it already has.
  */
 export const OTHER_KNOWN_CATEGORIES: readonly string[] = [
-  "income", "sale", "business_income", "cash_income", "paycheck", "investment", "p2p",
+  "income", "sale", "business_income", "cash_income", "investment", "p2p",
   "retail", "wholesale", "electronics", "rideshare", "food_delivery", "fast_food", "coffee",
 ];
 

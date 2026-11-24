@@ -113,6 +113,12 @@ const KNOWN_NAMES: Array<[RegExp, string]> = [
   [/^one ?main\b/, "OneMain"], [/^earnin\b/, "EarnIn"], [/^(flex|getflex)\b/, "Flex"], [/^(alabama power|al power)\b/, "Alabama Power"],
   [/^(blue ?cross|bcbs)\b/, "Blue Cross Blue Shield"], [/^spectrum\b/, "Spectrum"], [/^cricket\b/, "Cricket"], [/^zaxby'?s\b/, "Zaxby's"],
   [/^waffle house\b/, "Waffle House"], [/^raising cane'?s\b/, "Raising Cane's"],
+  // Payroll, tax refunds, money transfers, car insurance, church giving.
+  [/^adp\b/, "ADP"], [/^gusto\b/, "Gusto"], [/^paychex\b/, "Paychex"], [/^paylocity\b/, "Paylocity"], [/^paycom\b/, "Paycom"],
+  [/^irs\b/, "IRS"], [/^(al|alabama) dept/, "Alabama Department of Revenue"], [/^remitly\b/, "Remitly"], [/^western union\b/, "Western Union"],
+  [/^xoom\b/, "Xoom"], [/^moneygram\b/, "MoneyGram"], [/^intermex\b/, "Intermex"], [/^ria money\b/, "Ria"], [/^sendwave\b/, "Sendwave"],
+  [/^worldremit\b/, "WorldRemit"], [/^geico\b/, "GEICO"], [/^progressive\b/, "Progressive"], [/^state farm\b/, "State Farm"],
+  [/^alfa\b/, "Alfa"], [/^tithe\.?ly\b/, "Tithe.ly"], [/^pushpay\b/, "Pushpay"], [/^givelify\b/, "Givelify"],
   // Car washes whose bank text starts with a number or a code.
   [/^marc ?-? ?1\b|^marc1\b/, "Marc-1 Car Wash"], [/^mcw\b/, "Mister Car Wash"], [/^zips (car|express)\b|^zips ?#? ?\d/, "ZIPS Car Wash"],
   // The card's own line for a payment it received.

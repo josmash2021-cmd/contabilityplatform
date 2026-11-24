@@ -32,7 +32,7 @@ import { bankAccounts, bankTransactions, type User } from "@db/schema";
 import type { Lang } from "./lib/i18n";
 import { contextHas, getPlanContext } from "./lib/planAccess";
 import { withMerchantLogos } from "./lib/merchantLogos";
-import { assertPeriodsOpen } from "./reconcile-router";
+import { assertPeriodsOpen, closedPeriodIds } from "./reconcile-router";
 import { invoicesRouter } from "./invoices-router";
 import { vendorsRouter } from "./vendors-router";
 import { rulesRouter } from "./rules-router";
@@ -51,6 +51,9 @@ import {
   type LogAction, type LogEntry,
 } from "./lib/reviewStore";
 import { accountShortLabel } from "./lib/banks";
+import { accountMode } from "./lib/plans";
+import { autoPrevOf, autoReasonFor, autoSince, ensureAutoTable, forgetAuto, recordAuto, type AutoReason } from "./lib/autoConfirm";
+import { utcDate } from "./lib/support";
 
 type Db = ReturnType<typeof getDb>;
 type Exec = [{ insertId: number | string; affectedRows: number }];
@@ -241,6 +244,96 @@ export type ReviewItem = {
   transferPair: number | null; duplicateOf: number | null; match: Match | null;
 } & Omit<Verdict, "category" | "ruleId">;
 
+/**
+ * Por revisar's verdict for each pending movement (newest first, up to `limit`): the rows, and what the inbox and
+ * the app's own confirmations (api/lib/autoConfirm.ts) need. Reading it applies the owner's rules to new movements
+ * (only for the owner: a team member's read changes nothing).
+ */
+async function pendingVerdicts(db: Db, ctx: Ctx, limit: number, tz: number) {
+  const userId = Number(ctx.user.id);
+  const rules = await loadRules(db, userId);
+  if (!ctx.member && rules.length) await applyRulesToPending(db, userId, rules);
+
+  const rows: TxRow[] = await db.select(txCols).from(bankTransactions)
+    .where(and(eq(bankTransactions.userId, userId), notReviewed(), recent()))
+    .orderBy(desc(bankTransactions.transactionDate), desc(bankTransactions.id))
+    .limit(limit);
+  const pending = rows.map(engineRow);
+
+  // Neighbors (any status, except excluded ones) for transfers and duplicates.
+  let neighbors: EngineRow[] = pending;
+  let minDay = "", maxDay = "";
+  if (pending.length) {
+    minDay = pending.reduce((m, r) => (r.date < m ? r.date : m), pending[0].date);
+    maxDay = pending.reduce((m, r) => (r.date > m ? r.date : m), pending[0].date);
+    const near: TxRow[] = await db.select(txCols).from(bankTransactions).where(and(
+      eq(bankTransactions.userId, userId),
+      sql`${bankTransactions.transactionDate} BETWEEN ${addDay(minDay, -3)} AND ${addDay(maxDay, 3)}`,
+      sql`NOT EXISTS (SELECT 1 FROM bankReviewLog l WHERE l.bankTransactionId = ${bankTransactions.id} AND l.action = 'excluded')`,
+    )).limit(3000);
+    const seen = new Set(pending.map((r) => r.id));
+    neighbors = [...pending, ...near.map(engineRow).filter((r) => !seen.has(r.id))];
+  }
+
+  const history = buildHistory(await loadHistory(db, userId));
+  const plan = await getPlanContext(db, ctx.user);
+  const receivables = pending.length && contextHas(plan, "quotes") ? await loadReceivables(db, userId, tz) : [];
+  const cashSales = pending.length ? await loadCashSales(db, userId, addDay(minDay, -3), maxDay, tz) : [];
+  const openBills = pending.length && contextHas(plan, "vendors") ? await loadOpenBills(db, userId) : [];
+  const dismissed = await loadDismissed(db, userId, pending.map((r) => r.id));
+  const linked = await loadLinkedTargets(db, userId);
+
+  // Oldest first, so the oldest deposit gets the oldest sale or bill.
+  const matches = new Map<number, Match>();
+  const usedSales = new Set(linked.sale);
+  const usedBills = new Set(linked.bill);
+  const usedCash = new Set<number>();
+  for (const r of [...pending].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
+    const d = dismissed.get(r.id) ?? new Set<string>();
+    const m = matchReceivable(r, receivables, usedSales, d) ?? matchCashSales(r, cashSales, usedCash, d) ?? matchBill(r, openBills, usedBills, d);
+    if (!m) continue;
+    matches.set(r.id, m);
+    if (m.type === "sale") usedSales.add(m.saleId);
+    else if (m.type === "bill") usedBills.add(m.billId);
+    else m.saleIds.forEach((s) => usedCash.add(s));
+  }
+  const transfers = detectTransfers(neighbors);
+  const duplicates = detectDuplicates(neighbors, new Set(transfers.keys()));
+
+  const verdicts = pending.map((r) => ({ r, v: classify(r, { rules, history, transfers, duplicates, matches }) }));
+  return { rules, rows, pending, history, matches, transfers, duplicates, verdicts };
+}
+/**
+ * The app confirms the pending movements it's sure about (api/lib/autoConfirm.ts), so Por revisar keeps only what
+ * needs the person. Only for the owner (a team member's visit confirms nothing), never inside a closed period.
+ * Returns how many it confirmed.
+ */
+export async function autoConfirmPending(db: Db, ctx: Ctx): Promise<number> {
+  if (ctx.member) return 0;
+  await ensureReviewTables(db);
+  await ensureAutoTable(db);
+  const userId = Number(ctx.user.id);
+  const mode = accountMode(ctx.user.modePreference);
+  const { rows, verdicts } = await pendingVerdicts(db, ctx, REVIEW_LIST_MAX, 0);
+  const locked = new Set(await closedPeriodIds(db, userId, rows.map((r) => Number(r.id))));
+  const picks: Array<{ id: number; category: string; reason: AutoReason; type: MoneyType; prevCategory: string; prevType: MoneyType }> = [];
+  for (const { r, v } of verdicts) {
+    if (locked.has(r.id) || !isKnownCategory(v.category)) continue;
+    const reason = autoReasonFor({ description: r.description, merchantName: r.merchantName, type: r.type, category: r.category }, v, mode);
+    if (reason) picks.push({ id: r.id, category: v.category, reason, type: resolveType(v.category, r.type), prevCategory: r.category, prevType: r.type });
+  }
+  let done = 0;
+  const confirmed: typeof picks = [];
+  for (const p of picks) {
+    // Still pending at this moment (the person may have reviewed it meanwhile).
+    const res: Exec = await db.update(bankTransactions).set({ category: p.category, type: p.type, isReconciled: true })
+      .where(and(eq(bankTransactions.id, p.id), eq(bankTransactions.userId, userId), notReviewed()));
+    if (Number(res[0]?.affectedRows ?? 0) > 0) { done++; confirmed.push(p); }
+  }
+  await recordAuto(db, userId, confirmed);
+  return done;
+}
+
 export const reviewRouter = createRouter({
   /**
    * The movements still to review, grouped (kind), with the suggested category, the reason in facts (why)
@@ -261,57 +354,8 @@ export const reviewRouter = createRouter({
       const tz = input?.tzOffsetMinutes ?? 0;
       const since = sinceOf(input?.since);
 
-      const rules = await loadRules(db, userId);
-      if (!ctx.member && rules.length) await applyRulesToPending(db, userId, rules);
-
-      const rows: TxRow[] = await db.select(txCols).from(bankTransactions)
-        .where(and(eq(bankTransactions.userId, userId), notReviewed(), recent()))
-        .orderBy(desc(bankTransactions.transactionDate), desc(bankTransactions.id))
-        .limit(input?.limit ?? REVIEW_PAGE);
+      const { rules, rows, history, matches, transfers, duplicates, verdicts } = await pendingVerdicts(db, ctx, input?.limit ?? REVIEW_PAGE, tz);
       const total = await pendingCount(db, userId);
-      const pending = rows.map(engineRow);
-
-      // Neighbors (any status, except excluded ones) for transfers and duplicates.
-      let neighbors: EngineRow[] = pending;
-      let minDay = "", maxDay = "";
-      if (pending.length) {
-        minDay = pending.reduce((m, r) => (r.date < m ? r.date : m), pending[0].date);
-        maxDay = pending.reduce((m, r) => (r.date > m ? r.date : m), pending[0].date);
-        const near: TxRow[] = await db.select(txCols).from(bankTransactions).where(and(
-          eq(bankTransactions.userId, userId),
-          sql`${bankTransactions.transactionDate} BETWEEN ${addDay(minDay, -3)} AND ${addDay(maxDay, 3)}`,
-          sql`NOT EXISTS (SELECT 1 FROM bankReviewLog l WHERE l.bankTransactionId = ${bankTransactions.id} AND l.action = 'excluded')`,
-        )).limit(3000);
-        const seen = new Set(pending.map((r) => r.id));
-        neighbors = [...pending, ...near.map(engineRow).filter((r) => !seen.has(r.id))];
-      }
-
-      const history = buildHistory(await loadHistory(db, userId));
-      const plan = await getPlanContext(db, ctx.user);
-      const receivables = pending.length && contextHas(plan, "quotes") ? await loadReceivables(db, userId, tz) : [];
-      const cashSales = pending.length ? await loadCashSales(db, userId, addDay(minDay, -3), maxDay, tz) : [];
-      const openBills = pending.length && contextHas(plan, "vendors") ? await loadOpenBills(db, userId) : [];
-      const dismissed = await loadDismissed(db, userId, pending.map((r) => r.id));
-      const linked = await loadLinkedTargets(db, userId);
-
-      // Oldest first, so the oldest deposit gets the oldest sale or bill.
-      const matches = new Map<number, Match>();
-      const usedSales = new Set(linked.sale);
-      const usedBills = new Set(linked.bill);
-      const usedCash = new Set<number>();
-      for (const r of [...pending].sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id)) {
-        const d = dismissed.get(r.id) ?? new Set<string>();
-        const m = matchReceivable(r, receivables, usedSales, d) ?? matchCashSales(r, cashSales, usedCash, d) ?? matchBill(r, openBills, usedBills, d);
-        if (!m) continue;
-        matches.set(r.id, m);
-        if (m.type === "sale") usedSales.add(m.saleId);
-        else if (m.type === "bill") usedBills.add(m.billId);
-        else m.saleIds.forEach((s) => usedCash.add(s));
-      }
-      const transfers = detectTransfers(neighbors);
-      const duplicates = detectDuplicates(neighbors, new Set(transfers.keys()));
-
-      const verdicts = pending.map((r) => ({ r, v: classify(r, { rules, history, transfers, duplicates, matches }) }));
       const withLogos = await withMerchantLogos(db, rows.map((r) => ({ id: Number(r.id), merchantName: r.merchantName, description: r.description })));
       const logoOf = new Map(withLogos.map((x) => [x.id, x.logoUrl]));
 
@@ -363,10 +407,19 @@ export const reviewRouter = createRouter({
         },
         topCategories: { income: topCategories(history, "income"), expense: topCategories(history, "expense") },
         rulesCount: rules.length,
+        autoToday: (await autoSince(db, userId, since)).length,
         doneToday,
         reviewedToday: doneToday + excludedToday,
         excludedCount: Number(exc[0]?.n ?? 0),
       };
+    }),
+
+  /** What the app confirmed by itself in the last days (personal Movimientos: "La app confirmó N por ti"). */
+  autoRecent: authedQuery
+    .input(z.object({ days: z.number().int().min(1).max(60).default(7) }).nullish())
+    .query(async ({ input, ctx }) => {
+      const list = await autoSince(getDb(), Number(ctx.user.id), new Date(Date.now() - (input?.days ?? 7) * 86_400_000));
+      return { count: list.length, ids: list.map((a) => a.bankTransactionId) };
     }),
 
   /** How many are waiting (for the "Por revisar (N)" badge). */
@@ -395,12 +448,20 @@ export const reviewRouter = createRouter({
           .from(bankTransactionSplits).where(and(eq(bankTransactionSplits.userId, userId), inArray(bankTransactionSplits.bankTransactionId, splitIds)))
           .orderBy(bankTransactionSplits.bankTransactionId, bankTransactionSplits.position)
         : [];
-      const logos = await withMerchantLogos(db, rows.map((r) => ({ id: Number(r.id), merchantName: r.merchantName, description: r.description })));
-      return rows.map((r, i) => ({
+      // What the app confirmed by itself since then (once the person touches one, it's in their own log above).
+      const autos = await autoSince(db, userId, sinceOf(input?.since));
+      const autoRows: TxRow[] = autos.length ? await ownRows(db, userId, autos.map((a) => a.bankTransactionId)) : [];
+      const autoOf = new Map(autos.map((a) => [a.bankTransactionId, a]));
+      const all = [
+        ...rows.map((r) => ({ r, action: (r.action === "excluded" && r.reason === "transfer" ? "transfer" : r.action) as LogAction | "transfer" | "auto", at: r.at as Date | string, autoReason: null as AutoReason | null })),
+        ...autoRows.map((r) => ({ r, action: "auto" as const, at: utcDate(autoOf.get(Number(r.id))?.at ?? null) ?? new Date(), autoReason: autoOf.get(Number(r.id))?.reason ?? null })),
+      ].sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+      const logos = await withMerchantLogos(db, all.map(({ r }) => ({ id: Number(r.id), merchantName: r.merchantName, description: r.description })));
+      return all.map(({ r, action, at, autoReason }, i) => ({
         id: Number(r.id), who: displayNameOf(r.description, r.merchantName), description: r.description, amount: Math.abs(Number(r.amount)),
-        type: r.type, category: r.category, at: r.at, logoUrl: logos[i].logoUrl,
-        // An approved transfer between the owner's accounts ("Entre tus cuentas").
-        action: (r.action === "excluded" && r.reason === "transfer" ? "transfer" : r.action) as LogAction | "transfer",
+        type: r.type, category: r.category, at, logoUrl: logos[i].logoUrl,
+        // "transfer" = an approved transfer between the owner's accounts ("Entre tus cuentas"); "auto" = the app confirmed it.
+        action, autoReason,
         parts: parts.filter((p) => Number(p.tx) === Number(r.id)).map((p) => ({ category: p.category, amount: Number(p.amount) })),
       }));
     }),
@@ -480,6 +541,9 @@ export const reviewRouter = createRouter({
       for (const l of logs0) if (l.action === "excluded" && l.reason === "transfer" && l.relatedId) all.add(Number(l.relatedId));
       const idList = [...all];
       await assertPeriodsOpen(db, userId, idList, ctx.lang);
+      // Back to pending: not the app's confirmation anymore either (one the app confirmed goes back to what it had).
+      const appPrev = await autoPrevOf(db, userId, idList);
+      await forgetAuto(db, userId, idList);
       const rows = await ownRows(db, userId, idList);
       const logs: Array<{ tx: number; action: LogAction; reason: string | null; prevCategory: string | null; prevType: MoneyType | null }> = await db
         .select({ tx: bankReviewLog.bankTransactionId, action: bankReviewLog.action, reason: bankReviewLog.reason, prevCategory: bankReviewLog.prevCategory, prevType: bankReviewLog.prevType })
@@ -499,8 +563,10 @@ export const reviewRouter = createRouter({
         if (links.length) await db.delete(bankReviewMatches).where(and(eq(bankReviewMatches.userId, userId), inArray(bankReviewMatches.id, links.map((l) => Number(l.id)))));
         if (log?.action === "split") await clearSplits(db, userId, [id]);
         const restore: { isReconciled: boolean; category?: string; type?: MoneyType; isDuplicate?: boolean } = { isReconciled: false };
-        if (log?.prevCategory) restore.category = log.prevCategory;
-        if (log?.prevType) restore.type = log.prevType;
+        // What it had before: from the person's review, else from the app's confirmation.
+        const prev = log?.prevCategory ? { category: log.prevCategory, type: log.prevType } : appPrev.has(id) ? { category: appPrev.get(id)?.prevCategory, type: appPrev.get(id)?.prevType } : null;
+        if (prev?.category) restore.category = prev.category;
+        if (prev?.type) restore.type = prev.type;
         if (log?.action === "excluded" && log.reason === "duplicate") restore.isDuplicate = false;
         const res: Exec = await db.update(bankTransactions).set(restore).where(and(eq(bankTransactions.id, id), eq(bankTransactions.userId, userId)));
         reopened += Number(res[0]?.affectedRows ?? 0);

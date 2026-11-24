@@ -2,7 +2,7 @@
 // The category icon and tone idea and the date handling are copied from the personal home
 // (src/pages/PersonalDashboard.tsx), not imported from it.
 import {
-  ArrowDownRight, ArrowUpRight, Banknote, Building2, Car, CircleDollarSign, Cloud, CreditCard, Dumbbell, FileBadge, Film, Fuel, HandCoins,
+  ArrowDownRight, ArrowUpRight, Banknote, Building2, Car, CircleDollarSign, Cloud, Coffee, CreditCard, Globe, HandHeart, ReceiptText, Dumbbell, FileBadge, Film, Fuel, HandCoins,
   HeartPulse, House, Music, Newspaper, ParkingCircle, Receipt, RotateCcw, Send, Shield, ShieldPlus, ShoppingBag, Smartphone, TrendingUp, Tv,
   Utensils, Wifi, Zap, type LucideIcon,
 } from "lucide-react";
@@ -36,6 +36,16 @@ const CAT_STYLE: Record<string, CatStyle> = {
   insurance: { icon: Shield, tone: "bg-violet-50 text-violet-600" },
   health_insurance: { icon: ShieldPlus, tone: "bg-rose-50 text-rose-600" },
   government: { icon: FileBadge, tone: "bg-slate-100 text-slate-600" },
+  fast_food: { icon: Utensils, tone: "bg-orange-50 text-orange-600" },
+  coffee: { icon: Coffee, tone: "bg-amber-50 text-amber-700" },
+  retail: { icon: ShoppingBag, tone: "bg-violet-50 text-violet-600" },
+  wholesale: { icon: ShoppingBag, tone: "bg-violet-50 text-violet-600" },
+  rideshare: { icon: Car, tone: "bg-slate-100 text-slate-700" },
+  food_delivery: { icon: Utensils, tone: "bg-orange-50 text-orange-600" },
+  car_insurance: { icon: Car, tone: "bg-sky-50 text-sky-600" },
+  donations: { icon: HandHeart, tone: "bg-rose-50 text-rose-600" },
+  remittance: { icon: Globe, tone: "bg-teal-50 text-teal-600" },
+  tax_refund: { icon: ReceiptText, tone: "bg-emerald-50 text-emerald-600" },
 };
 
 /** Icon and tone for a category key; a plain arrow or receipt when the key is unknown. */
