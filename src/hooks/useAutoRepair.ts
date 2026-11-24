@@ -22,6 +22,8 @@ export function useAutoRepair() {
           if (!data.success) console.error("[AutoRepair] Failed:", data.error);
         },
         onError: (err) => {
+          // Maintenance mode doesn't let customers save: nothing to repair now, it runs on the next sign-in.
+          if (err.data?.code === "SERVICE_UNAVAILABLE") return;
           console.error("[AutoRepair] Error:", err.message);
         },
       });

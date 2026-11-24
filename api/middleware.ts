@@ -3,6 +3,8 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { memberCan } from "./lib/team";
+import { maintenanceBlocks, maintenanceOn } from "./lib/maintenance";
+import { msg } from "./lib/i18n";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -27,6 +29,11 @@ const requireAuth = t.middleware(async (opts) => {
       code: "FORBIDDEN",
       message: ctx.lang === "en" ? "Your team access doesn't include this." : "Tu acceso de equipo no incluye esto.",
     });
+  }
+
+  // Maintenance mode (Admin · Sistema): customers can look but not change anything until it's turned off.
+  if (opts.type === "mutation" && maintenanceBlocks(opts.path, opts.type, ctx.user.role === "admin" && !ctx.member) && (await maintenanceOn())) {
+    throw new TRPCError({ code: "SERVICE_UNAVAILABLE", message: msg(ctx.lang, "maintenance") });
   }
 
   return next({ ctx: { ...ctx, user: ctx.user } });

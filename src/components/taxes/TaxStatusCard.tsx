@@ -64,15 +64,13 @@ export function TaxStatusCard({ year, step, stepDates, selected, onSelect }: {
     <section className="rounded-[16px] border border-slate-200 bg-white p-4 sm:p-5" aria-labelledby="tax-status-h">
       <div className="flex items-center justify-between gap-3">
         <h2 id="tax-status-h" className="text-[13px] font-semibold text-slate-500">{tt.p.track.title(year)}</h2>
-        <span className="inline-flex items-center gap-2 rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
+        <span className="inline-flex items-center gap-2 text-xs font-semibold text-emerald-700">
           <i className="tx-ping relative h-[7px] w-[7px] rounded-full bg-emerald-600" aria-hidden="true" />{finished ? t.finished : t.live}
         </span>
       </div>
 
       <div key={view.swap} className={cn("mt-3.5 flex items-start gap-3.5", view.swap > 0 && "tx-focus")} aria-live="polite">
-        <span className={cn("grid h-12 w-12 shrink-0 place-items-center rounded-[14px] transition-colors duration-700", view.now >= 5 ? "bg-emerald-50 text-emerald-600" : "bg-blue-50 text-blue-600")} aria-hidden="true">
-          <Icon className="h-6 w-6" strokeWidth={1.8} />
-        </span>
+        <Icon className={cn("mt-1 h-8 w-8 shrink-0 transition-colors duration-700", view.now >= 5 ? "text-emerald-600" : "text-blue-600")} strokeWidth={1.6} aria-hidden="true" />
         <div className="min-w-0">
           <p className="text-[12.5px] font-medium text-slate-500">{t.stepOf(view.now + 1, when(view.now))}</p>
           <h3 className="mt-0.5 text-[21px] font-bold leading-tight tracking-[-0.02em] text-slate-900 [text-wrap:balance]">{tt.steps[view.now]?.[0]}</h3>

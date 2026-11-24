@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Download, Eye, FileText } from "lucide-react";
+import { ChevronDown, CircleCheck, Download, Eye, FileText } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
@@ -14,7 +14,7 @@ import type { Doc } from "./taxView";
 const FOCUS = "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2";
 
 /** The top of a document's first page (drawn by pdf.js), or the photo. */
-function DocThumb({ doc, tag, sealed }: { doc: Doc; tag: string; sealed: boolean }) {
+function DocThumb({ doc, sealed }: { doc: Doc; sealed: boolean }) {
   const { data, isError } = trpc.tax.file.useQuery({ id: doc.id }, { staleTime: 5 * 60_000 });
   const box = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -34,8 +34,7 @@ function DocThumb({ doc, tag, sealed }: { doc: Doc; tag: string; sealed: boolean
       {data && !isPdf && <img src={`data:${data.mimeType};base64,${data.dataBase64}`} alt="" className="h-full w-full object-cover object-top" />}
       {!drawn && isPdf && <span className="absolute inset-0 animate-pulse bg-slate-200/60" aria-hidden="true" />}
       {isError && <span className="absolute inset-0 grid place-items-center text-slate-400"><FileText className="h-8 w-8" aria-hidden="true" /></span>}
-      <span className="absolute left-2 top-2 rounded-md bg-white px-1.5 py-0.5 text-[10.5px] font-extrabold tracking-wide text-slate-900 shadow-sm">{tag}</span>
-      {sealed && <span className="absolute bottom-2 right-2 grid h-7 w-7 place-items-center rounded-full bg-emerald-600 text-white shadow-[0_4px_10px_-3px_rgba(5,150,105,0.6)]" aria-hidden="true"><Check className="h-4 w-4" strokeWidth={3} /></span>}
+      {sealed && <CircleCheck className="absolute bottom-2 right-2 h-8 w-8 fill-emerald-600 text-white drop-shadow-[0_4px_8px_rgba(5,150,105,0.45)]" strokeWidth={2.2} aria-hidden="true" />}
     </div>
   );
 }
@@ -89,7 +88,7 @@ export function TaxReturnDocs({ mode, year, docs, approvedAt, showMine, onOpen }
               return (
                 <li key={d.id} className="grid content-start gap-2.5 rounded-[14px] border border-slate-200 p-2.5 transition-[box-shadow,transform] duration-300 hover:-translate-y-px hover:shadow-[0_10px_24px_-14px_rgba(15,23,42,0.35)]">
                   <button type="button" onClick={() => onOpen(d)} className={cn("block rounded-[11px]", FOCUS)} aria-label={`${t.view}: ${title}`}>
-                    <DocThumb doc={d} tag={t.tag[d.kind] ?? "PDF"} sealed={d === signed} />
+                    <DocThumb doc={d} sealed={d === signed} />
                   </button>
                   <div className="min-w-0 px-0.5">
                     <b className="block truncate text-[13.5px] font-semibold text-slate-900">{title}</b>
@@ -121,7 +120,7 @@ export function TaxReturnDocs({ mode, year, docs, approvedAt, showMine, onOpen }
             <ul className="min-h-0 overflow-hidden">
               {mine.map((d) => (
                 <li key={d.id} className="flex items-center gap-3 border-b border-slate-100 px-1 py-2.5 last:border-0">
-                  <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-500"><FileText className="h-4 w-4" aria-hidden="true" /></span>
+                  <FileText className="h-5 w-5 shrink-0 text-slate-400" strokeWidth={1.8} aria-hidden="true" />
                   <span className="min-w-0 flex-1">
                     <b className="block truncate text-[13px] font-semibold text-slate-900">{tt.docs[mode][d.kind]?.title ?? d.fileName}</b>
                     <small className="block truncate text-xs text-slate-500">{d.fileName} · {formatFileSize(d.size)}</small>

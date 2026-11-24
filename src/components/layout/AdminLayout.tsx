@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { Link, Navigate, Outlet, useLocation } from "react-router";
 import { ArrowLeft, CreditCard, FileText, Headphones, Home, MoreHorizontal, Server, UserX, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { MaintenanceReminder } from "@/components/MaintenanceScreen";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { trpc } from "@/providers/trpc";
 import { useAuth } from "@/hooks/useAuth";
@@ -105,6 +106,7 @@ export default function AdminLayout() {
           </Link>
         </header>
 
+        <MaintenanceReminder className="px-4 sm:px-8" />
         <main key={pathname} className="animate-in fade-in pb-28 [animation-duration:450ms] lg:pb-0">
           <Outlet />
         </main>

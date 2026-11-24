@@ -439,3 +439,21 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
   .tx-now .tx-dot, .tx-now .tx-dot::after, .tx-arrive .tx-dot::before, .tx-focus, .tx-ping::after, .tx-row.tx-enter, .tx-row.tx-enter > *,
   .tx-row.tx-leave, .tx-dots > span, .tx-menu, .tx-fab, .tx-fab[data-leaving="true"], .tx-peek, .tx-peek[data-leaving="true"] { animation: none; }
 }
+
+/* Maintenance mode (MaintenanceScreen, MaintenanceReminder): open and light, nothing boxed. */
+.mt-screen { background: radial-gradient(60% 50% at 50% 0%, #dbeafe 0%, rgba(219, 234, 254, 0) 70%), radial-gradient(40% 40% at 85% 100%, #fef3c7 0%, rgba(254, 243, 199, 0) 70%), #f8fafc; animation: mt-in 0.7s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.mt-screen[data-leaving="true"] { animation: mt-out 0.55s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.mt-box > * { animation: mt-rise 0.9s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.mt-box > *:nth-child(2) { animation-delay: 0.08s; } .mt-box > *:nth-child(3) { animation-delay: 0.16s; } .mt-box > *:nth-child(4) { animation-delay: 0.24s; } .mt-box > *:nth-child(5) { animation-delay: 0.32s; } .mt-box > *:nth-child(6) { animation-delay: 0.4s; }
+.mt-gear { animation: mt-spin 9s linear infinite; }
+.mt-gear-rev { animation: mt-spin 6s linear infinite reverse; }
+.mt-ping::after { content: ""; position: absolute; inset: -4px; border-radius: 9999px; border: 2px solid #f59e0b; opacity: 0; animation: tx-ping 2.2s cubic-bezier(0.33, 0, 0.15, 1) infinite; }
+.mt-remind::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 3px; background: linear-gradient(90deg, #f59e0b, #fbbf24, #f59e0b); background-size: 200% 100%; animation: mt-flow 3s linear infinite; }
+@keyframes mt-in { from { opacity: 0; } }
+@keyframes mt-out { to { opacity: 0; } }
+@keyframes mt-rise { from { opacity: 0; transform: translateY(10px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
+@keyframes mt-spin { to { transform: rotate(360deg); } }
+@keyframes mt-flow { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .mt-screen, .mt-screen[data-leaving="true"], .mt-box > *, .mt-gear, .mt-gear-rev, .mt-ping::after, .mt-remind::before { animation: none; }
+}

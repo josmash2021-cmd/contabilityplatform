@@ -8,31 +8,16 @@ import { deleteUserQuotesData } from "./quotes-router";
 import { deleteUserReconcileData } from "./reconcile-router";
 import { deleteUserFirstUseData } from "./lib/userDataCleanup";
 import { deleteUserSupportData } from "./lib/support";
-import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, systemSettings, payouts } from "@db/schema";
+import { users, subscriptions, subscriptionPayments, bankAccounts, bankTransactions, sales, payouts } from "@db/schema";
 import { eq, desc, sql, and } from "drizzle-orm";
 import { buildOverview, buildPayments, editablePayment, isGiftPayment, paymentSource, userStatus, type AdminSubRow, type AdminPayRow, type StatusKind, type TaxRow } from "./lib/adminOverview";
 import { allTrialUntil, setTrialUntil, trialUntil } from "./lib/trialExtensions";
 import { getTrialInfo } from "./lib/trial";
 import { accountMode } from "./lib/plans";
 import { rowsOf, utcDate } from "./lib/support";
+import { readMaintenance, writeMaintenance } from "./lib/maintenance";
 
-// ── DB-based Maintenance Mode (persists across restarts) ──
-const MAINTENANCE_KEY = "maintenance_mode";
-const MAINTENANCE_MSG_KEY = "maintenance_message";
-const DEFAULT_MSG = "Estamos en mantenimiento. Volveremos pronto.";
-
-async function getSetting(db: any, key: string, fallback: string = ""): Promise<string> {
-  try {
-    const rows = await db.select().from(systemSettings).where(eq(systemSettings.key, key)).limit(1);
-    return rows[0]?.value ?? fallback;
-  } catch { return fallback; }
-}
-
-async function setSetting(db: any, key: string, value: string) {
-  try {
-    await db.insert(systemSettings).values({ key, value }).onDuplicateKeyUpdate({ set: { value, updatedAt: new Date() } });
-  } catch { /* table may not exist yet */ }
-}
+// Maintenance mode lives in api/lib/maintenance.ts (settings, cache and what customers can't do while it's on).
 
 type Db = ReturnType<typeof getDb>;
 // getDb() is untyped here: the rows are typed by hand.
@@ -87,7 +72,7 @@ export const adminRouter = createRouter({
       support = { chats: Number(row?.chats ?? 0), oldestAt: utcDate(row?.oldest) };
     } catch { /* no support tables yet */ }
     const system = {
-      maintenance: (await getSetting(db, MAINTENANCE_KEY)) === "true",
+      maintenance: (await readMaintenance(db)).enabled,
       email: !!(process.env.SMTP_USER && process.env.SMTP_PASS),
       bank: !!(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET),
       payments: !!process.env.STRIPE_SECRET_KEY,
@@ -605,24 +590,16 @@ export const adminRouter = createRouter({
       return { success: true, message: "Pago eliminado" };
     }),
 
-  // ── Toggle maintenance mode (persisted in DB) ──
+  // ── Maintenance mode: on/off, the admin's message (optional) and when it's expected back (optional) ──
   toggleMaintenance: adminQuery
     .input(z.object({
       enabled: z.boolean(),
-      message: z.string().optional(),
-    }).optional())
+      message: z.string().max(300).nullable().optional(),
+      minutes: z.number().int().min(0).max(24 * 60).nullable().optional(),
+    }))
     .mutation(async ({ input }) => {
-      const db = getDb();
-      const current = (await getSetting(db, MAINTENANCE_KEY)) === "true";
-      const newEnabled = input?.enabled ?? !current;
-      await setSetting(db, MAINTENANCE_KEY, String(newEnabled));
-      if (input?.message) await setSetting(db, MAINTENANCE_MSG_KEY, input.message);
-      const msg = await getSetting(db, MAINTENANCE_MSG_KEY, DEFAULT_MSG);
-      return {
-        success: true,
-        enabled: newEnabled,
-        message: msg,
-      };
+      const state = await writeMaintenance(getDb(), input);
+      return { success: true, ...state };
     }),
 
   // ── Create a payout (withdrawal) ──
@@ -680,11 +657,6 @@ export const adminRouter = createRouter({
       return { success: true, message: "Retiro eliminado" };
     }),
 
-  // ── Get maintenance status (public, from DB) ──
-  maintenanceStatus: publicQuery.query(async () => {
-    const db = getDb();
-    const enabled = (await getSetting(db, MAINTENANCE_KEY)) === "true";
-    const message = await getSetting(db, MAINTENANCE_MSG_KEY, DEFAULT_MSG);
-    return { enabled, message };
-  }),
+  // ── Maintenance status (public: the customer's screen asks for it) ──
+  maintenanceStatus: publicQuery.query(async () => readMaintenance(getDb())),
 });

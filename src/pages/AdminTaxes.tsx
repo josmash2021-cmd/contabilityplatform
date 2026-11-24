@@ -595,7 +595,7 @@ function StepControl({ returnId, step, needs }: { returnId: number; step: number
         )}
         <span className={cn("text-xs", nextBlock ? "font-semibold text-amber-700" : "text-neutral-500")} data-step-reason="">{nextBlock ? why(nextBlock) : next !== null ? l.liveNote : ""}</span>
       </div>
-      <div className="grid gap-2 rounded-xl bg-neutral-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-neutral-600">
+      <div className="grid gap-2 border-l-2 border-neutral-200 pl-3.5 text-[12.5px] leading-relaxed text-neutral-600">
         {lock(needs.fed && needs.f8879, name(TAX_STEP.sign), l.lockDocs)}
         {lock(needs.signed, name(TAX_STEP.filed), l.lockSign)}
         <p className="flex items-start gap-2.5"><RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" aria-hidden /><span>{l.backAlways}</span></p>

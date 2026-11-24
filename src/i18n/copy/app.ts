@@ -108,9 +108,13 @@ const es = {
   logout: "Cerrar sesión",
   loading: "Cargando",
   maintenance: {
-    title: "Bajo mantenimiento",
-    text: "Estamos realizando mejoras. Volveremos pronto.",
-    later: "Por favor intenta más tarde.",
+    title: "Estamos mejorando la app",
+    text: "Volvemos en unos minutos. Tus datos están guardados y seguros; no se pierde nada.",
+    status: "En mantenimiento",
+    back: (time: string) => `Volvemos aprox. a las ${time}`,
+    auto: "Esta página se abre sola cuando terminemos",
+    urgent: "¿Algo urgente?",
+    close: "Cerrar la vista previa",
   },
   trial: {
     banner: (days: number) => `Prueba gratis: te ${days === 1 ? "queda 1 día" : `quedan ${days} días`} con acceso completo.`,
@@ -233,9 +237,13 @@ const en: AppCopy = {
   logout: "Log out",
   loading: "Loading",
   maintenance: {
-    title: "Under maintenance",
-    text: "We're making improvements. We'll be back soon.",
-    later: "Please try again later.",
+    title: "We're improving the app",
+    text: "We'll be back in a few minutes. Your data is saved and safe; nothing is lost.",
+    status: "Under maintenance",
+    back: (time: string) => `Back around ${time}`,
+    auto: "This page opens by itself when we're done",
+    urgent: "Something urgent?",
+    close: "Close the preview",
   },
   trial: {
     banner: (days: number) => `Free trial: ${days === 1 ? "1 day" : `${days} days`} of full access left.`,

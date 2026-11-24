@@ -9,6 +9,8 @@ import { cn } from "@/lib/utils";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Logo } from "@/components/Logo";
+import { MaintenanceReminder, MaintenanceScreen } from "@/components/MaintenanceScreen";
+import { useExit } from "@/hooks/useExit";
 import { SubscriptionExpiredOverlay } from "@/components/SubscriptionExpiredOverlay";
 import { SubscriptionPageGate } from "@/components/SubscriptionGate";
 import { useCopy } from "@/i18n/useI18n";
@@ -22,7 +24,7 @@ import type { Feature } from "@contracts/planFeatures";
 import {
   Home, Inbox, Tag, ShoppingCart, ClipboardList, Users, Wallet, Truck, Landmark, ArrowLeftRight, BarChart3, BookOpen,
   FileText, Sparkles, UsersRound, Settings, PieChart, Target, Repeat, Shield, Plus, MoreHorizontal, Lock,
-  LogOut, Construction, Gift, Loader2, Camera, User, Banknote, type LucideIcon,
+  LogOut, Gift, Loader2, Camera, User, Banknote, type LucideIcon,
 } from "lucide-react";
 
 type Item = { path: string; icon: LucideIcon; feature?: Feature };
@@ -306,19 +308,13 @@ export function AppLayout() {
   const planLabel = !plan ? "" : plan.trial ? t.shell.plan.trial : plan.tier ? t.shell.plan[plan.tier] : t.shell.plan.none;
 
   // ── Maintenance mode ──
-  const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, { refetchInterval: 10000 });
-  const isMaintenance = maintenance?.enabled === true;
+  const { data: maintenance } = trpc.admin.maintenanceStatus.useQuery(undefined, { refetchInterval: 10000, refetchOnWindowFocus: true });
+  // Customers see the notice (it fades away by itself when it's turned off); the admin gets a reminder line instead.
+  const maintenanceView = useExit(maintenance?.enabled === true && !isAdmin, 600);
 
   return (
     <div className="flex h-screen bg-slate-50">
-      {isMaintenance && !isAdmin && (
-        <div className="fixed inset-0 z-[100] flex flex-col items-center justify-center bg-neutral-900 p-6">
-          <Construction className="mb-4 h-16 w-16 animate-pulse text-amber-400" />
-          <h2 className="mb-2 text-center text-xl font-semibold text-white">{t.maintenance.title}</h2>
-          <p className="max-w-sm text-center text-sm text-neutral-400">{maintenance?.message || t.maintenance.text}</p>
-          <p className="mt-4 text-xs text-neutral-600">{t.maintenance.later}</p>
-        </div>
-      )}
+      {maintenanceView.mounted && <MaintenanceScreen message={maintenance?.message ?? null} until={maintenance?.until ?? null} leaving={maintenanceView.leaving} />}
 
       {/* ── Desktop side menu ── */}
       <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-white lg:flex">
@@ -347,6 +343,7 @@ export function AppLayout() {
         </header>
 
         <main className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
+          {isAdmin && !memberRole && <MaintenanceReminder className="px-4 lg:px-8" />}
           <ViewAsBanner />
           <TeamBanner />
           <TrialBanner />

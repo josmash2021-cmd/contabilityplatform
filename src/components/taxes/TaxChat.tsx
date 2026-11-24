@@ -60,10 +60,10 @@ function FileCard({ name, size, mine, tone, onOpen, onSave, saveLabel, extra }: 
   return (
     <div className={cn("relative flex w-64 max-w-full items-center gap-3 overflow-hidden rounded-[18px] p-2.5", mine ? (tone === "admin" ? "bg-neutral-100" : "bg-blue-50") : tone === "admin" ? "bg-neutral-100" : "bg-slate-100")}>
       <button type="button" onClick={onOpen} disabled={!onOpen} className={cn("flex min-w-0 flex-1 items-center gap-3 rounded-xl text-left disabled:cursor-default", FOCUS)}>
-        <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-100 text-[10px] font-extrabold text-red-600">{ext === "JPEG" ? "JPG" : ext}</span>
+        <FileText className="h-9 w-9 shrink-0 text-red-500" strokeWidth={1.5} aria-hidden="true" />
         <span className="min-w-0">
           <b className="block truncate text-[13px] font-semibold text-slate-900">{name}</b>
-          <small className="block text-[11.5px] text-slate-500">{ext === "PDF" ? "PDF · " : ""}{formatFileSize(size)}</small>
+          <small className="block text-[11.5px] text-slate-500">{ext === "JPEG" ? "JPG" : ext} · {formatFileSize(size)}</small>
         </span>
       </button>
       {onSave && <SaveButton onClick={onSave} label={saveLabel} className="bg-white shadow-sm" />}
