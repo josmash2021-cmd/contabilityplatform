@@ -16,14 +16,15 @@ import { msg, type Lang } from "./lib/i18n";
 import { decryptTaxFile, encryptTaxFile, hasTaxKey } from "./lib/taxCrypto";
 import { decodeSignature, sha256, signatureId, signedPdf } from "./lib/taxSign";
 import { sealKey } from "./lib/taxSeal";
-import { utcDate } from "./lib/support";
+import { rowsOf, utcDate } from "./lib/support";
+import { isOnline, setPresence, taxChanged, taxTyping } from "./lib/taxLive";
 import { sendMail } from "./lib/mailer";
 import { taxStepMail } from "./lib/taxMail";
 import { lockTax, maskEmail, requireTaxUnlocked, sendTaxCode, taxGateOn, taxUnlocked, verifyTaxCode } from "./lib/taxGate";
 import {
   DRAFT_STEP, PREPARER_DOC_KINDS, TAX_FILE_TYPES, TAX_MAX_FILE_BYTES, TAX_MAX_FILES_PER_KIND, TAX_QUESTIONS, TAX_STEP_COUNT,
-  ID_TYPES, PAPER_8879, canSend, currentTaxYear, filingDeadline, isClientDocKind, missingToSend, sameName,
-  type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
+  ID_TYPES, PAPER_8879, canSend, currentTaxYear, filingDeadline, isClientDocKind, missingToSend, sameName, stepBlock,
+  type StepNeeds, type TaxChatFile, type TaxChatMessage, type TaxDocMeta, type TaxMessage, type TaxMode, type TaxReturnMeta, type TaxReturnRow,
 } from "@contracts/taxRules";
 
 type Db = ReturnType<typeof getDb>;
@@ -124,6 +125,23 @@ export function ensureTaxTables(db: Db): Promise<void> {
         INDEX taxIdChecks_returnId_idx (returnId)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
     `);
+    // Photos and documents sent in the chat (each belongs to one message), encrypted like the tax documents.
+    // userId = the return's owner (the client), so only they and the preparers can open them.
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS taxMessageFiles (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        messageId BIGINT UNSIGNED NOT NULL,
+        returnId BIGINT UNSIGNED NOT NULL,
+        userId BIGINT UNSIGNED NOT NULL,
+        fileName VARCHAR(255) NOT NULL,
+        mimeType VARCHAR(100) NOT NULL,
+        size INT NOT NULL,
+        data LONGBLOB NOT NULL,
+        createdAt TIMESTAMP DEFAULT NOW() NOT NULL,
+        INDEX taxMessageFiles_message (messageId),
+        INDEX taxMessageFiles_return (returnId)
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4
+    `);
     // Added later (additive, nullable): when the client approved the finished return ("Revisa y firma"), and the
     // client's full name as on their ID (the preparer sets it; the client types it the same to sign).
     const addColumn = (q: ReturnType<typeof sql>) => db.execute(q).catch((e: unknown) => {
@@ -151,6 +169,8 @@ export async function deleteUserTaxData(db: Db, userId: number): Promise<void> {
       await db.delete(taxReturns).where(inArray(taxReturns.id, ids));
     }
     await db.delete(taxDocuments).where(eq(taxDocuments.userId, userId));
+    // The chat's photos and documents (a table that may not exist yet).
+    await db.execute(sql`DELETE FROM taxMessageFiles WHERE userId = ${userId}`).catch((e: unknown) => { if (!isMissingTable(e)) throw e; });
   } catch (e: unknown) {
     // The tables don't exist until someone uses Impuestos: nothing to delete then.
     if (!isMissingTable(e)) throw e;
@@ -218,9 +238,15 @@ function modeOf(user: CtxUser): TaxMode {
   return accountMode(user.modePreference);
 }
 
+/** approvedAt comes from raw SQL as UTC text: make it an exact moment, so the page shows the right day. */
+function fixTimes<T extends { approvedAt: Date | string | null }>(r: T): T {
+  return { ...r, approvedAt: utcDate(r.approvedAt) };
+}
+
 async function findReturn(db: Db, userId: number, mode: TaxMode, year: number): Promise<TaxReturnMeta | null> {
-  return (await db.select(retMeta).from(taxReturns)
-    .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), eq(taxReturns.taxYear, year))).limit(1))[0] ?? null;
+  const r: TaxReturnMeta | undefined = (await db.select(retMeta).from(taxReturns)
+    .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), eq(taxReturns.taxYear, year))).limit(1))[0];
+  return r ? fixTimes(r) : null;
 }
 
 async function getOrCreateReturn(db: Db, userId: number, mode: TaxMode, year: number): Promise<TaxReturnMeta> {
@@ -241,6 +267,63 @@ async function filesByKind(db: Db, returnId: number): Promise<Record<string, num
 /** Moves the return to the top of the preparer's list when the client does something. */
 async function touch(db: Db, returnId: number) {
   await db.update(taxReturns).set({ updatedAt: new Date() }).where(eq(taxReturns.id, returnId));
+}
+
+/** Tells both pages of a return (the client's and the preparer's) that it changed, live. Never throws. */
+async function announce(db: Db, returnId: number, userId?: number | null): Promise<void> {
+  try {
+    taxChanged(returnId, userId ?? (await ownerOf(db, returnId)));
+  } catch { /* the pages catch up on their own */ }
+}
+
+/** Whose return it is (the client's user id). */
+async function ownerOf(db: Db, returnId: number): Promise<number | null> {
+  const r = (await db.select({ userId: taxReturns.userId }).from(taxReturns).where(eq(taxReturns.id, returnId)).limit(1))[0];
+  return r ? Number(r.userId) : null;
+}
+
+/** The chat of a return, oldest first, each message with the photos and documents sent with it. */
+async function chatMessages(db: Db, returnId: number): Promise<TaxChatMessage[]> {
+  const messages: TaxMessage[] = await db.select().from(taxMessages).where(eq(taxMessages.returnId, returnId)).orderBy(taxMessages.createdAt, taxMessages.id);
+  type FileRow = { id: number; messageId: number; fileName: string; mimeType: string; size: number };
+  const files = rowsOf<FileRow>(await db.execute(sql`SELECT id, messageId, fileName, mimeType, size FROM taxMessageFiles WHERE returnId = ${returnId} ORDER BY id`));
+  const byMessage = new Map<number, TaxChatFile[]>();
+  for (const f of files) {
+    const list = byMessage.get(Number(f.messageId)) ?? [];
+    list.push({ id: Number(f.id), messageId: Number(f.messageId), fileName: f.fileName, mimeType: f.mimeType, size: Number(f.size) });
+    byMessage.set(Number(f.messageId), list);
+  }
+  return messages.map((m) => ({ ...m, files: byMessage.get(Number(m.id)) ?? [] }));
+}
+
+/** A photo or document sent in the chat: a message (with an optional line of text) and its encrypted file. */
+async function addChatFile(db: Db, a: { returnId: number; userId: number; fromRole: "client" | "preparer"; authorName: string | null; body: string; buf: Buffer; fileName: string; mimeType: string }) {
+  const res = await db.insert(taxMessages).values({ returnId: a.returnId, fromRole: a.fromRole, authorName: a.authorName, body: a.body });
+  const messageId = Number((res as unknown as [{ insertId: number }])[0].insertId);
+  await db.execute(sql`INSERT INTO taxMessageFiles (messageId, returnId, userId, fileName, mimeType, size, data)
+    VALUES (${messageId}, ${a.returnId}, ${a.userId}, ${a.fileName}, ${a.mimeType}, ${a.buf.length}, ${encryptTaxFile(a.buf)})`);
+}
+
+type ChatFileRow = { userId: number; fileName: string; mimeType: string; data: Buffer };
+async function chatFileRow(db: Db, id: number): Promise<ChatFileRow | null> {
+  return rowsOf<ChatFileRow>(await db.execute(sql`SELECT userId, fileName, mimeType, data FROM taxMessageFiles WHERE id = ${id} LIMIT 1`))[0] ?? null;
+}
+
+/** What the return has before moving it forward: the 1040 and the 8879 uploaded, and the client's signature. */
+async function stepNeeds(db: Db, returnId: number): Promise<StepNeeds> {
+  const docs: { kind: string }[] = await db.select({ kind: taxDocuments.kind }).from(taxDocuments)
+    .where(and(eq(taxDocuments.returnId, returnId), eq(taxDocuments.source, "preparer"), inArray(taxDocuments.kind, ["final_fed", "f8879"])));
+  const r = (await db.select({ approvedAt: sql<Date | string | null>`approvedAt` }).from(taxReturns).where(eq(taxReturns.id, returnId)).limit(1))[0];
+  return { fed: docs.some((d) => d.kind === "final_fed"), f8879: docs.some((d) => d.kind === "f8879"), signed: !!r?.approvedAt };
+}
+
+/** The current return of a client (for the live stream: whether the preparer has the chat open). */
+export async function clientReturnId(user: CtxUser): Promise<number | null> {
+  try {
+    const db = getDb();
+    await ensureTaxTables(db);
+    return (await findReturn(db, Number(user.id), modeOf(user), currentTaxYear()))?.id ?? null;
+  } catch { return null; }
 }
 
 function stepDatesWith(dates: (string | null)[] | null | undefined, step: number): (string | null)[] {
@@ -323,8 +406,8 @@ export const taxRouter = createRouter({
     const access = await taxAccess(db, ctx.user);
     const mode = modeOf(ctx.user);
     const year = currentTaxYear();
-    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null, signName: null as string | null, inPerson: null as { open: boolean; until: string | null } | null };
-    const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxMessage[], past: [] as TaxReturnMeta[], missing: null };
+    const base = { access, mode, year, keyReady: hasTaxKey(), gate: taxGateOn(), locked: false, maskedEmail: null as string | null, preparerName: null as string | null, signName: null as string | null, inPerson: null as { open: boolean; until: string | null } | null, preparerOnline: false };
+    const empty = { ret: null as TaxReturnMeta | null, docs: [] as TaxDocMeta[], messages: [] as TaxChatMessage[], past: [] as TaxReturnMeta[], missing: null };
     if (!access.allowed) return { ...base, ...empty };
     const userId = Number(ctx.user.id);
     // "Primero, confirma que eres tú": nothing of the return until this tab has the code.
@@ -332,9 +415,9 @@ export const taxRouter = createRouter({
     await ensureTaxTables(db);
     const ret = await findReturn(db, userId, mode, year);
     const docs: TaxDocMeta[] = ret ? await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt) : [];
-    const messages: TaxMessage[] = ret ? await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt) : [];
-    const past: TaxReturnMeta[] = await db.select(retMeta).from(taxReturns)
-      .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), lt(taxReturns.taxYear, year))).orderBy(desc(taxReturns.taxYear));
+    const messages: TaxChatMessage[] = ret ? await chatMessages(db, ret.id) : [];
+    const past: TaxReturnMeta[] = (await db.select(retMeta).from(taxReturns)
+      .where(and(eq(taxReturns.userId, userId), eq(taxReturns.mode, mode), lt(taxReturns.taxYear, year))).orderBy(desc(taxReturns.taxYear))).map(fixTimes);
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
     // "Tu preparador": the first name of whoever prepares the returns (the app's admin), not a second "Tu preparador".
@@ -344,7 +427,7 @@ export const taxRouter = createRouter({
     // Signing in the office: open while the preparer, with the client and their photo ID, has opened it.
     const check = ret && ret.step === SIGN_STEP && !ret.approvedAt ? await latestIdCheck(db, ret.id) : null;
     const inPerson = check ? { open: check.open, until: check.open ? check.openUntil : null } : null;
-    return { ...base, preparerName, signName, inPerson, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
+    return { ...base, preparerName, signName, inPerson, preparerOnline: ret ? isOnline(ret.id, "preparer") : false, ret, docs, messages, past, missing: missingToSend(mode, ret?.answers ?? {}, counts) };
   }),
 
   /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */
@@ -394,7 +477,7 @@ export const taxRouter = createRouter({
     const ret: TaxReturnMeta | undefined = (await db.select(retMeta).from(taxReturns).where(and(eq(taxReturns.id, input.returnId), eq(taxReturns.userId, Number(ctx.user.id)))).limit(1))[0];
     if (!ret) throw new TRPCError({ code: "NOT_FOUND", message: msg(ctx.lang, "taxNotFound") });
     const docs: TaxDocMeta[] = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
-    return { ret, docs };
+    return { ret: fixTimes(ret), docs };
   }),
 
   saveAnswers: unlockedQuery
@@ -410,6 +493,7 @@ export const taxRouter = createRouter({
       const answers = { ...(ret.answers ?? {}) };
       for (const [k, v] of Object.entries(input.answers)) if (allowed.has(k)) answers[k] = v;
       await db.update(taxReturns).set({ answers }).where(eq(taxReturns.id, ret.id));
+      void announce(db, ret.id, Number(ctx.user.id));
       return { answers };
     }),
 
@@ -435,6 +519,7 @@ export const taxRouter = createRouter({
         returnId: ret.id, userId, kind: input.kind, source: "client", fileName, mimeType: input.mimeType, size: buf.length, data: encryptTaxFile(buf),
       });
       await touch(db, ret.id);
+      void announce(db, ret.id, userId);
       return { ok: true };
     }),
 
@@ -449,6 +534,7 @@ export const taxRouter = createRouter({
     const ret = (await db.select({ step: taxReturns.step }).from(taxReturns).where(eq(taxReturns.id, doc.returnId)).limit(1))[0];
     if (doc.status === "ok" || (ret && ret.step >= FILED_STEP)) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxLocked") });
     await db.delete(taxDocuments).where(eq(taxDocuments.id, doc.id));
+    void announce(db, doc.returnId, userId);
     return { ok: true };
   }),
 
@@ -480,6 +566,7 @@ export const taxRouter = createRouter({
       await db.update(taxReturns).set({ step: 0, stepDates: stepDatesWith([], 0), consentAt: now, submittedAt: now }).where(eq(taxReturns.id, ret.id));
       await db.execute(sql`UPDATE taxReturns SET lang = ${ctx.lang === "en" ? "en" : "es"} WHERE id = ${ret.id}`);
       void notifyStep(db, ret.id, 0);
+      void announce(db, ret.id, Number(ctx.user.id));
       return { ok: true };
     }),
 
@@ -522,7 +609,9 @@ export const taxRouter = createRouter({
         .where(and(eq(taxDocuments.returnId, ret.id), eq(taxDocuments.source, "preparer"), eq(taxDocuments.kind, "f8879"),
           input.docId ? eq(taxDocuments.id, input.docId) : undefined))
         .orderBy(desc(taxDocuments.createdAt), desc(taxDocuments.id)).limit(1))[0];
-      const original = f8879 ? decryptTaxFile(Buffer.from(f8879.data)) : null;
+      // There's nothing to sign until the preparer uploads the 8879.
+      if (!f8879) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxNo8879") });
+      const original = decryptTaxFile(Buffer.from(f8879.data));
       // Whole seconds: the time on the PDF, in taxSignatures and in the signature ID are the same.
       const signedAt = new Date(Math.floor(Date.now() / 1000) * 1000);
       const ip = (ctx.req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || ctx.req.headers.get("x-real-ip") || "").slice(0, 80) || null;
@@ -556,6 +645,7 @@ export const taxRouter = createRouter({
         : "Firmé la autorización de e-file (Formulario 8879). Revisé mi declaración y los datos son correctos. Ya la puedes presentar.";
       await db.insert(taxMessages).values({ returnId: ret.id, fromRole: "client", authorName: ctx.user.name ?? null, body });
       await touch(db, ret.id);
+      void announce(db, ret.id, userId);
       return { ok: true, already: false };
     }),
 
@@ -566,6 +656,52 @@ export const taxRouter = createRouter({
     const ret = await getOrCreateReturn(db, Number(ctx.user.id), modeOf(ctx.user), currentTaxYear());
     await db.insert(taxMessages).values({ returnId: ret.id, fromRole: "client", authorName: ctx.user.name ?? null, body: input.body });
     await touch(db, ret.id);
+    void announce(db, ret.id, Number(ctx.user.id));
+    return { ok: true };
+  }),
+
+  /** A photo or document in the chat, with an optional line of text. */
+  sendFile: unlockedQuery
+    .input(z.object({ ...fileInput, body: z.string().trim().max(2000).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await requireAccess(db, ctx.user, ctx.lang);
+      const { buf, fileName } = decodeFile(input, ctx.lang);
+      await ensureTaxTables(db);
+      const userId = Number(ctx.user.id);
+      const ret = await getOrCreateReturn(db, userId, modeOf(ctx.user), currentTaxYear());
+      await addChatFile(db, { returnId: ret.id, userId, fromRole: "client", authorName: ctx.user.name ?? null, body: input.body ?? "", buf, fileName, mimeType: input.mimeType });
+      await touch(db, ret.id);
+      void announce(db, ret.id, userId);
+      return { ok: true };
+    }),
+
+  /** A photo or document from the chat, decrypted. Only the client whose return it is (preparers: adminChatFile). */
+  chatFile: unlockedQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const f = await chatFileRow(db, input.id);
+    if (!f || Number(f.userId) !== Number(ctx.user.id)) throw new TRPCError({ code: "NOT_FOUND", message: msg(ctx.lang, "taxNotFound") });
+    return { fileName: f.fileName, mimeType: f.mimeType, dataBase64: decryptTaxFile(Buffer.from(f.data)).toString("base64") };
+  }),
+
+  /** Typing in the chat: the preparer sees "escribiendo…". */
+  typing: unlockedQuery.mutation(async ({ ctx }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const userId = Number(ctx.user.id);
+    const ret = await findReturn(db, userId, modeOf(ctx.user), currentTaxYear());
+    if (ret) taxTyping(ret.id, userId, "client");
+    return { ok: true };
+  }),
+
+  /** This tab has the chat open (a heartbeat while it's open) or closed it: the preparer sees "En línea". */
+  chatPresence: unlockedQuery.input(z.object({ tab: z.string().min(4).max(40), open: z.boolean() })).mutation(async ({ ctx, input }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const userId = Number(ctx.user.id);
+    const ret = await findReturn(db, userId, modeOf(ctx.user), currentTaxYear());
+    if (ret) setPresence(ret.id, userId, "client", input.tab, input.open);
     return { ok: true };
   }),
 
@@ -577,6 +713,7 @@ export const taxRouter = createRouter({
     if (ret) {
       await db.update(taxMessages).set({ readAt: new Date() })
         .where(and(eq(taxMessages.returnId, ret.id), eq(taxMessages.fromRole, "preparer"), isNull(taxMessages.readAt)));
+      void announce(db, ret.id, Number(ctx.user.id));
     }
     return { ok: true };
   }),
@@ -595,7 +732,7 @@ export const taxRouter = createRouter({
     type Count = { returnId: number; n: number };
     const pend = new Map<number, number>(pending.map((r: Count) => [r.returnId, Number(r.n)]));
     const unr = new Map<number, number>(unread.map((r: Count) => [r.returnId, Number(r.n)]));
-    return rets.map((r): TaxReturnRow => ({ ...r, pendingDocs: pend.get(r.id) ?? 0, unreadMessages: unr.get(r.id) ?? 0 }));
+    return rets.map((r): TaxReturnRow => ({ ...fixTimes(r), pendingDocs: pend.get(r.id) ?? 0, unreadMessages: unr.get(r.id) ?? 0 }));
   }),
 
   adminGet: adminQuery.input(z.object({ returnId: z.number().int().positive() })).query(async ({ input }) => {
@@ -605,11 +742,67 @@ export const taxRouter = createRouter({
       .leftJoin(users, eq(users.id, taxReturns.userId)).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
     if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
     const docs: TaxDocMeta[] = await db.select(docMeta).from(taxDocuments).where(eq(taxDocuments.returnId, ret.id)).orderBy(taxDocuments.createdAt);
-    const messages: TaxMessage[] = await db.select().from(taxMessages).where(eq(taxMessages.returnId, ret.id)).orderBy(taxMessages.createdAt);
+    const messages = await chatMessages(db, ret.id);
     const counts: Record<string, number> = {};
     for (const d of docs) if (d.source === "client") counts[d.kind] = (counts[d.kind] ?? 0) + 1;
-    return { ret, docs, messages, missing: missingToSend(ret.mode, ret.answers ?? {}, counts), idCheck: await latestIdCheck(db, ret.id) };
+    return {
+      ret: fixTimes(ret), docs, messages, missing: missingToSend(ret.mode, ret.answers ?? {}, counts), idCheck: await latestIdCheck(db, ret.id),
+      // What moving forward needs (the page shows the locks), and whether the client has the chat open now.
+      needs: await stepNeeds(db, ret.id), clientOnline: isOnline(ret.id, "client"),
+    };
   }),
+
+  /** One of the return's documents, decrypted, for the preparer (no Impuestos code: that one is the client's). */
+  adminFile: adminQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const doc = (await db.select().from(taxDocuments).where(eq(taxDocuments.id, input.id)).limit(1))[0];
+    if (!doc) throw new TRPCError({ code: "NOT_FOUND", message: msg(ctx.lang, "taxNotFound") });
+    return { fileName: doc.fileName, mimeType: doc.mimeType, dataBase64: decryptTaxFile(Buffer.from(doc.data)).toString("base64") };
+  }),
+
+  /** A photo or document from a client's chat, decrypted. */
+  adminChatFile: adminQuery.input(z.object({ id: z.number().int().positive() })).query(async ({ ctx, input }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const f = await chatFileRow(db, input.id);
+    if (!f) throw new TRPCError({ code: "NOT_FOUND", message: msg(ctx.lang, "taxNotFound") });
+    return { fileName: f.fileName, mimeType: f.mimeType, dataBase64: decryptTaxFile(Buffer.from(f.data)).toString("base64") };
+  }),
+
+  /** The preparer is typing to this client: they see "escribiendo…". */
+  adminTyping: adminQuery.input(z.object({ returnId: z.number().int().positive() })).mutation(async ({ input }) => {
+    const db = getDb();
+    await ensureTaxTables(db);
+    const owner = await ownerOf(db, input.returnId);
+    if (owner) taxTyping(input.returnId, owner, "preparer");
+    return { ok: true };
+  }),
+
+  /** The preparer has this client's chat open (heartbeat) or left it: the client sees "En línea". */
+  adminChatPresence: adminQuery
+    .input(z.object({ returnId: z.number().int().positive(), tab: z.string().min(4).max(40), open: z.boolean() }))
+    .mutation(async ({ input }) => {
+      const db = getDb();
+      await ensureTaxTables(db);
+      const owner = await ownerOf(db, input.returnId);
+      if (owner) setPresence(input.returnId, owner, "preparer", input.tab, input.open);
+      return { ok: true };
+    }),
+
+  /** A photo or document to the client, in the chat. */
+  adminSendFile: adminQuery
+    .input(z.object({ returnId: z.number().int().positive(), ...fileInput, body: z.string().trim().max(2000).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      const { buf, fileName } = decodeFile(input, ctx.lang);
+      await ensureTaxTables(db);
+      const owner = await ownerOf(db, input.returnId);
+      if (!owner) throw new TRPCError({ code: "NOT_FOUND" });
+      await addChatFile(db, { returnId: input.returnId, userId: owner, fromRole: "preparer", authorName: ctx.user.name ?? null, body: input.body ?? "", buf, fileName, mimeType: input.mimeType });
+      void announce(db, input.returnId, owner);
+      return { ok: true };
+    }),
 
   /**
    * "Revisé su identificación en persona" (IRS Pub. 1345, in-person e-signature): the preparer inspected a
@@ -639,6 +832,7 @@ export const taxRouter = createRouter({
       await db.execute(sql`INSERT INTO taxIdChecks (returnId, userId, checkedBy, checkedByName, idType, taxIdKind, taxIdLast4, data, openUntil)
         VALUES (${ret.id}, ${ret.userId}, ${Number(ctx.user.id)}, ${ctx.user.name ?? null}, ${input.idType}, ${input.taxIdKind}, ${digits.slice(-4)}, ${data},
         ${canSign ? sql`NOW() + INTERVAL 30 MINUTE` : null})`);
+      void announce(db, ret.id, ret.userId);
       return { ok: true, open: canSign };
     }),
 
@@ -652,6 +846,7 @@ export const taxRouter = createRouter({
       if (!check) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, "taxIdCheckNone") });
       await db.execute(sql`UPDATE taxIdChecks SET openUntil = ${input.open ? sql`NOW() + INTERVAL 30 MINUTE` : null}
         WHERE returnId = ${input.returnId} ORDER BY id DESC LIMIT 1`);
+      void announce(db, input.returnId);
       return { ok: true };
     }),
 
@@ -661,6 +856,7 @@ export const taxRouter = createRouter({
     await ensureTaxTables(db);
     await db.update(taxMessages).set({ readAt: new Date() })
       .where(and(eq(taxMessages.returnId, input.returnId), eq(taxMessages.fromRole, "client"), isNull(taxMessages.readAt)));
+    void announce(db, input.returnId);
     return { ok: true };
   }),
 
@@ -681,21 +877,26 @@ export const taxRouter = createRouter({
             AND NOT EXISTS (SELECT 1 FROM taxDocuments WHERE returnId = ${doc.returnId} AND kind = 'f8879_signed')`);
         }
       }
+      if (doc) void announce(db, doc.returnId);
       return { ok: true };
     }),
 
   adminSetStep: adminQuery
     .input(z.object({ returnId: z.number().int().positive(), step: z.number().int().min(DRAFT_STEP).max(TAX_STEP_COUNT - 1) }))
-    .mutation(async ({ input }) => {
+    .mutation(async ({ ctx, input }) => {
       const db = getDb();
       await ensureTaxTables(db);
-      const ret = (await db.select({ step: taxReturns.step, stepDates: taxReturns.stepDates }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
+      const ret = (await db.select({ step: taxReturns.step, stepDates: taxReturns.stepDates, userId: taxReturns.userId }).from(taxReturns).where(eq(taxReturns.id, input.returnId)).limit(1))[0];
       if (!ret) throw new TRPCError({ code: "NOT_FOUND" });
+      // Forward only with what that step needs: Revisa y firma with the 1040 and the 8879, Enviada with the signature.
+      const block = stepBlock(input.step, ret.step, await stepNeeds(db, input.returnId));
+      if (block) throw new TRPCError({ code: "BAD_REQUEST", message: msg(ctx.lang, block === "docs" ? "taxStepNeedsDocs" : "taxStepNeedsSignature") });
       await db.update(taxReturns).set({ step: input.step, stepDates: stepDatesWith(ret.stepDates, input.step) }).where(eq(taxReturns.id, input.returnId));
       // Back before "Revisa y firma": the client approves again when it comes back.
       if (input.step < SIGN_STEP) await db.execute(sql`UPDATE taxReturns SET approvedAt = NULL WHERE id = ${input.returnId}`);
       // Forward: the client gets the email of the step it reached (going back sends nothing).
       if (input.step > ret.step && input.step >= 0) void notifyStep(db, input.returnId, input.step);
+      void announce(db, input.returnId, ret.userId);
       return { ok: true };
     }),
 
@@ -713,6 +914,7 @@ export const taxRouter = createRouter({
       if (input.fed !== undefined) set.fedResult = input.fed;
       if (input.state !== undefined) set.stateResult = input.state;
       if (Object.keys(set).length) await db.update(taxReturns).set(set).where(eq(taxReturns.id, input.returnId));
+      void announce(db, input.returnId);
       return { ok: true };
     }),
 
@@ -737,9 +939,11 @@ export const taxRouter = createRouter({
         if (have.some((d: { kind: string }) => d.kind === "f8879") && have.some((d: { kind: string }) => d.kind === "final_fed")) {
           await db.update(taxReturns).set({ step: SIGN_STEP, stepDates: stepDatesWith(now.stepDates, SIGN_STEP) }).where(eq(taxReturns.id, input.returnId));
           void notifyStep(db, input.returnId, SIGN_STEP);
+          void announce(db, input.returnId, ret.userId);
           return { ok: true, movedToSign: true };
         }
       }
+      void announce(db, input.returnId, ret.userId);
       return { ok: true, movedToSign: false };
     }),
 
@@ -747,7 +951,9 @@ export const taxRouter = createRouter({
     const db = getDb();
     await ensureTaxTables(db);
     // The signed 8879 is the record of the client's signature: it stays.
+    const doc = (await db.select({ returnId: taxDocuments.returnId }).from(taxDocuments).where(eq(taxDocuments.id, input.docId)).limit(1))[0];
     await db.delete(taxDocuments).where(and(eq(taxDocuments.id, input.docId), eq(taxDocuments.source, "preparer"), ne(taxDocuments.kind, "f8879_signed")));
+    if (doc) void announce(db, doc.returnId);
     return { ok: true };
   }),
 
@@ -757,6 +963,7 @@ export const taxRouter = createRouter({
       const db = getDb();
       await ensureTaxTables(db);
       await db.insert(taxMessages).values({ returnId: input.returnId, fromRole: "preparer", authorName: ctx.user.name ?? null, body: input.body });
+      void announce(db, input.returnId);
       return { ok: true };
     }),
 });

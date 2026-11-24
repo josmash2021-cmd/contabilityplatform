@@ -6,15 +6,27 @@ import { useCopy } from "@/i18n/useI18n";
 import { taxesCopy } from "@/i18n/copy/taxes";
 import { base64ToBlobUrl } from "@/lib/taxFiles";
 
-type Props = { docId: number | null; title?: string; onClose: () => void };
+type Props = {
+  docId: number | null; title?: string; onClose: () => void;
+  /** The preparer's pages: through the admin's own calls (no client Impuestos code). */
+  admin?: boolean;
+  /** A photo or document sent in the chat (docId is then the chat file's id). */
+  chat?: boolean;
+};
 
 /**
- * Opens one tax document (decrypted by the server for its owner or a preparer).
- * Photos show inline; PDFs in a frame, with a download button for phones that can't show them.
+ * Opens one tax document (decrypted by the server for its owner or a preparer), or a photo or document from the
+ * chat. Photos show inline; PDFs in a frame, with a download button for phones that can't show them.
  */
-export function TaxFileViewer({ docId, title, onClose }: Props) {
+export function TaxFileViewer({ docId, title, onClose, admin = false, chat = false }: Props) {
   const t = useCopy(taxesCopy);
-  const { data, isLoading, isError } = trpc.tax.file.useQuery({ id: docId ?? 0 }, { enabled: docId !== null, staleTime: 60_000, gcTime: 0 });
+  const input = { id: docId ?? 0 };
+  const opts = (on: boolean) => ({ enabled: docId !== null && on, staleTime: 60_000, gcTime: 0 });
+  const own = trpc.tax.file.useQuery(input, opts(!admin && !chat));
+  const prep = trpc.tax.adminFile.useQuery(input, opts(admin && !chat));
+  const ownChat = trpc.tax.chatFile.useQuery(input, opts(!admin && chat));
+  const prepChat = trpc.tax.adminChatFile.useQuery(input, opts(admin && chat));
+  const { data, isLoading, isError } = chat ? (admin ? prepChat : ownChat) : (admin ? prep : own);
   const [url, setUrl] = useState<string | null>(null);
 
   useEffect(() => {

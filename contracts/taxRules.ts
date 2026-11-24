@@ -162,6 +162,24 @@ export type TaxMessage = {
   createdAt: Date;
 };
 
+/** A photo or document sent in the chat (the bytes are fetched apart, encrypted like the tax documents). */
+export type TaxChatFile = { id: number; messageId: number; fileName: string; mimeType: string; size: number };
+/** A chat message with what was sent with it. */
+export type TaxChatMessage = TaxMessage & { files: TaxChatFile[] };
+
+/** What a return needs before the preparer moves it forward to a step. */
+export type StepNeeds = { fed: boolean; f8879: boolean; signed: boolean };
+/**
+ * Why the preparer can't move a return forward to `target` yet: "docs" (Revisa y firma and later need the 1040 and
+ * the 8879 uploaded) or "signature" (Enviada and later need the client's signed 8879). Going back is always allowed.
+ */
+export function stepBlock(target: number, current: number, has: StepNeeds): "docs" | "signature" | null {
+  if (target <= current) return null;
+  if (target >= TAX_STEP.sign && (!has.fed || !has.f8879)) return "docs";
+  if (target >= TAX_STEP.filed && !has.signed) return "signature";
+  return null;
+}
+
 /** A return in the preparer's list, with who it belongs to and what needs attention. */
 export type TaxReturnRow = TaxReturnMeta & { name: string | null; email: string | null; pendingDocs: number; unreadMessages: number };
 

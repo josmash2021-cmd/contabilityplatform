@@ -3,34 +3,7 @@ import { FileText, Loader2, Maximize2 } from "lucide-react";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
 import type { Doc } from "./taxView";
-
-/** The first page of a PDF, drawn by pdf.js (loaded only when a preview is shown). */
-async function renderFirstPage(bytes: Uint8Array, canvas: HTMLCanvasElement, width: number): Promise<void> {
-  const pdfjs = await import("pdfjs-dist");
-  const worker = (await import("pdfjs-dist/build/pdf.worker.min.mjs?url")).default;
-  pdfjs.GlobalWorkerOptions.workerSrc = worker;
-  const doc = await pdfjs.getDocument({ data: bytes }).promise;
-  try {
-    const page = await doc.getPage(1);
-    const base = page.getViewport({ scale: 1 });
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    const vp = page.getViewport({ scale: (width / base.width) * dpr });
-    canvas.width = Math.round(vp.width);
-    canvas.height = Math.round(vp.height);
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-    await page.render({ canvasContext: ctx, viewport: vp }).promise;
-  } finally {
-    void doc.destroy();
-  }
-}
-
-function toBytes(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
+import { renderFirstPage, toBytes } from "@/lib/pdfThumb";
 
 /**
  * A document the preparer sent (the 1040, Alabama's Form 40, the 8879), half open: the top of its first page

@@ -26,9 +26,11 @@ function Row({ icon, tone, title, meta }: { icon: ReactNode; tone: "info" | "goo
  * files sent, the preparer's review, the results and documents the preparer sent, the client's approval
  * at "Revisa y firma" (tax.sign, our own e-signature), the e-file and acceptance dates, and where to follow the refund.
  */
-export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName, signName, inPerson, onAsk, onPick, busyKind }: {
+export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerName, signName, inPerson, onAsk, onPick, busyKind, plainNow = false }: {
   i: number; ret: Ret; mode: TaxMode; docs: readonly Doc[]; onOpen: (d: Doc) => void; onSeeNow: () => void; preparerName: string;
   signName: string | null; inPerson: InPerson; onAsk: () => void; onPick: PickFn; busyKind: string | null;
+  /** The step card above already says which step it is: the current one shows only its details. */
+  plainNow?: boolean;
 }) {
   const t = useCopy(taxesCopy);
   const p = t.p.panel;
@@ -155,6 +157,13 @@ export function TaxStepPanel({ i, ret, mode, docs, onOpen, onSeeNow, preparerNam
   }
 
   const tag = !now ? <Dst tone="good">{p.doneOn(date(i))}</Dst> : st >= TAX_STEP_COUNT - 1 ? <Dst tone="good">{t.p.track.done}</Dst> : <Dst tone="open">{t.p.track.now}</Dst>;
+  if (plainNow && now) {
+    return (
+      <section className="rounded-[14px] border border-slate-200 bg-white px-4 pb-4 pt-1.5" aria-live="polite" aria-label={t.steps[i]?.[0]}>
+        {body}
+      </section>
+    );
+  }
   return (
     <section className="rounded-[14px] border border-slate-200 bg-white p-4" aria-live="polite" aria-labelledby="tax-panel-h">
       <div className="flex items-start justify-between gap-3">

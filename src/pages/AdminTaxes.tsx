@@ -2,12 +2,12 @@
 // /admin/impuestos      → every client's return, newest activity first.
 // /admin/impuestos/:id  → one return: steps, answers, documents, results, messages.
 // All words come from src/i18n/copy/taxes.ts. No IRS or Alabama logos or seals.
-import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useCallback, useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { toast } from "sonner";
 import {
-  AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, Inbox, Loader2,
-  MessageCircle, Receipt, RotateCcw, Send, Shield, Trash2, Upload,
+  AlertCircle, Check, CheckCircle2, ChevronLeft, ChevronRight, Eye, FileText, Inbox, Loader2, Lock,
+  MessageCircle, Receipt, RotateCcw, Shield, Trash2, Upload,
 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TaxFileViewer } from "@/components/taxes/TaxFileViewer";
+import { TaxChat, type ChatMsg } from "@/components/taxes/TaxChat";
+import { useTaxChat } from "@/components/taxes/useTaxChat";
+import { useChatPresence, useTaxLive, useTypingFlag } from "@/hooks/useTaxLive";
+import { taxLiveCopy } from "@/i18n/copy/taxLive";
 import { useAuth } from "@/hooks/useAuth";
 import { trpc } from "@/providers/trpc";
 import { useCopy, useLang } from "@/i18n/useI18n";
@@ -24,8 +28,8 @@ import { taxesCopy, type TaxesCopy } from "@/i18n/copy/taxes";
 import { TAX_ACCEPT, TaxFileError, formatFileSize, prepareTaxUpload } from "@/lib/taxFiles";
 import { cn } from "@/lib/utils";
 import {
-  DRAFT_STEP, ID_TYPES, PREPARER_DOC_KINDS, TAX_DOC_KINDS, TAX_QUESTIONS, TAX_STEP, TAX_STEP_COUNT, type IdType,
-  type Missing, type PreparerDocKind, type TaxDocMeta, type TaxMessage, type TaxMode, type TaxResult,
+  DRAFT_STEP, ID_TYPES, PREPARER_DOC_KINDS, TAX_DOC_KINDS, TAX_QUESTIONS, TAX_STEP, TAX_STEP_COUNT, stepBlock, type IdType,
+  type Missing, type PreparerDocKind, type StepNeeds, type TaxDocMeta, type TaxMode, type TaxResult,
 } from "@contracts/taxRules";
 
 type Viewing = { id: number; title: string } | null;
@@ -142,7 +146,9 @@ function ReturnList() {
   const { lang } = useLang();
   const locale = intlLocale(lang);
   const navigate = useNavigate();
-  const { data, isLoading, isError } = trpc.tax.adminList.useQuery(undefined, { refetchInterval: 30_000, refetchOnWindowFocus: true });
+  const { data, isLoading, isError } = trpc.tax.adminList.useQuery(undefined, { refetchInterval: 120_000, refetchOnWindowFocus: true });
+  const utils = trpc.useUtils();
+  useTaxLive({ kind: "list" }, { onChanged: () => void utils.tax.adminList.invalidate() });
   const rows = data ?? [];
   const toReview = rows.reduce((n, r) => n + r.pendingDocs, 0);
   const unread = rows.reduce((n, r) => n + r.unreadMessages, 0);
@@ -283,17 +289,23 @@ function ReturnDetail({ returnId }: { returnId: number }) {
   const locale = intlLocale(lang);
   const utils = trpc.useUtils();
   const valid = Number.isInteger(returnId) && returnId > 0;
-  const { data, isLoading, error } = trpc.tax.adminGet.useQuery({ returnId }, { enabled: valid, refetchInterval: 30_000, refetchOnWindowFocus: true });
-  const { mutate: markRead } = trpc.tax.adminMarkRead.useMutation({ onSuccess: () => utils.tax.adminList.invalidate() });
+  const { data, isLoading, error } = trpc.tax.adminGet.useQuery({ returnId }, { enabled: valid, refetchInterval: 120_000, refetchOnWindowFocus: true });
   const [viewing, setViewing] = useState<Viewing>(null);
-
-  // The client's messages count as read once the preparer opens the return (once per visit).
-  const markedFor = useRef<number | null>(null);
+  // Live: what the client does shows at once; "escribiendo…" and "En línea" while they have the chat open.
+  const typing = useTypingFlag();
+  const [online, setOnline] = useState<boolean | null>(null);
+  useTaxLive(valid ? { kind: "preparer", returnId } : null, {
+    onChanged: () => { void utils.tax.adminGet.invalidate({ returnId }); void utils.tax.adminList.invalidate(); },
+    onTyping: typing.ping, onPresence: setOnline,
+  });
+  // A new message from the client: "escribiendo…" stops.
+  const lastClient = [...(data?.messages ?? [])].reverse().find((m) => m.fromRole === "client")?.id ?? 0;
+  const { stop: stopTyping } = typing;
   useEffect(() => {
-    if (!valid || markedFor.current === returnId) return;
-    markedFor.current = returnId;
-    markRead({ returnId });
-  }, [valid, returnId, markRead]);
+    if (!lastClient) return;
+    const id = setTimeout(stopTyping, 0);
+    return () => clearTimeout(id);
+  }, [lastClient, stopTyping]);
 
   if (!valid || error) {
     return (
@@ -316,14 +328,16 @@ function ReturnDetail({ returnId }: { returnId: number }) {
     );
   }
 
-  const { ret, docs, messages, missing, idCheck } = data;
+  const { ret, docs, messages, missing, idCheck, needs } = data;
   const mode: TaxMode = ret.mode;
   const name = ret.name || ret.email || t.admin.noName;
   const resultsKey = JSON.stringify([ret.filingStatus, ret.fedResult, ret.stateResult, ret.legalName]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6 p-4 lg:p-6">
+    <div className="mx-auto max-w-5xl space-y-6 p-4 lg:p-6 xl:max-w-[1320px]">
       <BackLink to="/admin/impuestos" label={t.admin.back} />
+      <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
+      <div className="min-w-0 space-y-6">
 
       {/* Header */}
       <div className="rounded-2xl bg-gradient-to-br from-neutral-900 to-neutral-800 p-5 text-white sm:p-6">
@@ -349,7 +363,7 @@ function ReturnDetail({ returnId }: { returnId: number }) {
         </CardHeader>
         <CardContent>
           <StepTracker step={ret.step} dates={ret.stepDates} />
-          <StepControl key={ret.step} returnId={ret.id} step={ret.step} />
+          <StepControl key={ret.step} returnId={ret.id} step={ret.step} needs={needs} />
         </CardContent>
       </Card>
 
@@ -361,9 +375,12 @@ function ReturnDetail({ returnId }: { returnId: number }) {
       <SignCard key={`${ret.step}-${idCheck?.checkedAt ?? ""}`} returnId={ret.id} step={ret.step} approvedAt={ret.approvedAt} idCheck={idCheck} legalName={ret.legalName ?? ret.name ?? ""} />
       <ClientDocs mode={mode} docs={docs} onView={setViewing} />
       <PreparerDocs returnId={ret.id} docs={docs} onView={setViewing} />
-      <MessagesThread returnId={ret.id} clientName={name} messages={messages} />
+      </div>
 
-      <TaxFileViewer docId={viewing?.id ?? null} title={viewing?.title} onClose={() => setViewing(null)} />
+      <AdminChat returnId={ret.id} clientName={name} messages={messages as ChatMsg[]} online={online ?? data.clientOnline} typing={typing.typing} />
+      </div>
+
+      <TaxFileViewer admin docId={viewing?.id ?? null} title={viewing?.title} onClose={() => setViewing(null)} />
     </div>
   );
 }
@@ -532,8 +549,9 @@ function StepTracker({ step, dates }: { step: number; dates: (string | null)[] |
   );
 }
 
-function StepControl({ returnId, step }: { returnId: number; step: number }) {
+function StepControl({ returnId, step, needs }: { returnId: number; step: number; needs: StepNeeds }) {
   const t = useCopy(taxesCopy);
+  const l = useCopy(taxLiveCopy).admin;
   const refresh = useRefresh();
   const onError = useErrorToast();
   const id = useId();
@@ -545,28 +563,59 @@ function StepControl({ returnId, step }: { returnId: number; step: number }) {
     },
     onError,
   });
-
+  const name = (i: number) => (i === TAX_STEP.sign ? t.p.short[i] : t.stepsShort[i]) ?? String(i + 1);
+  const why = (b: "docs" | "signature" | null) =>
+    b === "docs" ? l.needDocs([!needs.fed && l.fed, !needs.f8879 && l.f8879].filter(Boolean).join(l.and))
+      : b === "signature" ? l.needSignature : "";
+  const next = step < TAX_STEP_COUNT - 1 ? step + 1 : null;
+  const nextBlock = next !== null ? stepBlock(next, step, needs) : null;
+  const targetBlock = stepBlock(target, step, needs);
+  const move = (to: number) => save.mutate({ returnId, step: to });
   const submit = (e: FormEvent) => {
     e.preventDefault();
-    if (target !== step) save.mutate({ returnId, step: target });
+    if (target !== step && !targetBlock) move(target);
   };
+  const lock = (ok: boolean, label: string, text: string) => (
+    <p className="flex items-start gap-2.5">
+      {ok ? <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0 text-emerald-600" aria-hidden /> : <Lock className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" aria-hidden />}
+      <span><b className="font-semibold text-neutral-900">{label}</b> {text}</span>
+    </p>
+  );
 
   return (
-    <form onSubmit={submit} className="mt-6 flex flex-col gap-2 border-t border-neutral-100 pt-4 sm:flex-row sm:items-end">
-      <div className="flex-1 space-y-1.5">
-        <Label htmlFor={id} className="text-xs text-neutral-500">{t.admin.step}</Label>
-        <select id={id} value={target} onChange={(e) => setTarget(Number(e.target.value))} className={selectClass}>
-          <option value={DRAFT_STEP}>{t.draftStep}</option>
-          {t.steps.slice(0, TAX_STEP_COUNT).map(([label], i) => (
-            <option key={i} value={i}>{i + 1}. {label}</option>
-          ))}
-        </select>
+    <div className="mt-6 space-y-4 border-t border-neutral-100 pt-4" data-step-control="">
+      <div className="flex flex-wrap items-center gap-2">
+        {next !== null ? (
+          <Button type="button" onClick={() => move(next)} disabled={!!nextBlock || save.isPending} className="bg-black text-white hover:bg-neutral-800" data-move-next="">
+            {save.isPending ? <Loader2 className="animate-spin" aria-hidden /> : null}{l.moveTo(name(next))}<ChevronRight aria-hidden />
+          </Button>
+        ) : <span className="text-sm text-neutral-500">{l.last}</span>}
+        {step > DRAFT_STEP && (
+          <Button type="button" variant="outline" onClick={() => move(step - 1)} disabled={save.isPending}>{l.back}</Button>
+        )}
+        <span className={cn("text-xs", nextBlock ? "font-semibold text-amber-700" : "text-neutral-500")} data-step-reason="">{nextBlock ? why(nextBlock) : next !== null ? l.liveNote : ""}</span>
       </div>
-      <Button type="submit" disabled={target === step || save.isPending} className="bg-black text-white hover:bg-neutral-800">
-        {save.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Check aria-hidden />}
-        {t.admin.setStep}
-      </Button>
-    </form>
+      <div className="grid gap-2 rounded-xl bg-neutral-50 px-3.5 py-3 text-[12.5px] leading-relaxed text-neutral-600">
+        {lock(needs.fed && needs.f8879, name(TAX_STEP.sign), l.lockDocs)}
+        {lock(needs.signed, name(TAX_STEP.filed), l.lockSign)}
+        <p className="flex items-start gap-2.5"><RotateCcw className="mt-0.5 h-4 w-4 shrink-0 text-neutral-400" aria-hidden /><span>{l.backAlways}</span></p>
+      </div>
+      <form onSubmit={submit} className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="flex-1 space-y-1.5">
+          <Label htmlFor={id} className="text-xs text-neutral-500">{l.toAny}</Label>
+          <select id={id} value={target} onChange={(e) => setTarget(Number(e.target.value))} className={selectClass}>
+            <option value={DRAFT_STEP}>{t.draftStep}</option>
+            {t.steps.slice(0, TAX_STEP_COUNT).map(([label], i) => {
+              const blocked = !!stepBlock(i, step, needs);
+              return <option key={i} value={i} disabled={blocked}>{i + 1}. {label}{blocked ? ` (${l.locked})` : ""}</option>;
+            })}
+          </select>
+        </div>
+        <Button type="submit" variant="outline" disabled={target === step || !!targetBlock || save.isPending}>
+          <Check aria-hidden />{l.go}
+        </Button>
+      </form>
+    </div>
   );
 }
 
@@ -1011,81 +1060,46 @@ function PreparerDocs({ returnId, docs, onView }: { returnId: number; docs: TaxD
   );
 }
 
-// ── Messages ──
-function MessagesThread({ returnId, clientName, messages }: { returnId: number; clientName: string; messages: TaxMessage[] }) {
+// ── Chat with the client, live ──
+function AdminChat({ returnId, clientName, messages, online, typing }: { returnId: number; clientName: string; messages: ChatMsg[]; online: boolean; typing: boolean }) {
   const t = useCopy(taxesCopy);
-  const { lang } = useLang();
-  const locale = intlLocale(lang);
-  const refresh = useRefresh();
-  const onError = useErrorToast();
-  const replyId = useId();
-  const listRef = useRef<HTMLDivElement>(null);
-  const [body, setBody] = useState("");
-  const send = trpc.tax.adminSendMessage.useMutation({
-    onSuccess: async () => {
-      setBody("");
-      await refresh();
-    },
-    onError,
-  });
-
-  // Show the newest message.
+  const tl = useCopy(taxLiveCopy).chat;
+  const utils = trpc.useUtils();
+  const adminGet = utils.tax.adminGet;
+  const adminList = utils.tax.adminList;
+  const refetch = useCallback(() => adminGet.invalidate({ returnId }), [adminGet, returnId]);
+  const chat = useTaxChat({ side: "preparer", returnId }, refetch, t.errors);
+  const box = useRef<HTMLDivElement>(null);
+  const [inView, setInView] = useState(false);
+  const [viewing, setViewing] = useState<Viewing>(null);
   useEffect(() => {
-    const el = listRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
-
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    const text = body.trim();
-    if (text) send.mutate({ returnId, body: text });
-  };
+    const el = box.current;
+    if (!el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver(([e]) => setInView(!!e && e.isIntersecting && e.intersectionRatio >= 0.3), { threshold: [0, 0.3, 0.6] });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  // "En línea" for the client while this chat is on screen.
+  useChatPresence(inView, chat.presence);
+  // On screen: the client's messages count as read (they see "Visto").
+  const unread = messages.filter((m) => m.fromRole === "client" && !m.readAt).length;
+  const { mutate: markRead } = trpc.tax.adminMarkRead.useMutation();
+  useEffect(() => {
+    if (!inView || unread === 0) return;
+    const id = setTimeout(() => {
+      if (document.visibilityState === "visible") markRead({ returnId }, { onSuccess: () => { void refetch(); void adminList.invalidate(); } });
+    }, 700);
+    return () => clearTimeout(id);
+  }, [inView, unread, markRead, returnId, refetch, adminList]);
+  const initials = clientName.split(/\s+/).filter(Boolean).slice(0, 2).map((w) => w.charAt(0).toUpperCase()).join("") || "?";
 
   return (
-    <Card className="gap-4 border-neutral-200/80 shadow-sm">
-      <CardHeader>
-        <h2 className="text-base font-semibold leading-none">{t.admin.messages}</h2>
-      </CardHeader>
-      <CardContent className="space-y-3">
-        <div ref={listRef} role="log" aria-label={t.admin.messages} className="max-h-[28rem] space-y-3 overflow-y-auto rounded-xl bg-neutral-50 p-3">
-          {messages.length === 0 ? (
-            <p className="py-6 text-center text-sm text-neutral-400">{t.chat.empty}</p>
-          ) : (
-            messages.map((m) => {
-              const mine = m.fromRole === "preparer";
-              return (
-                <div key={m.id} className={cn("flex", mine ? "justify-end" : "justify-start")}>
-                  <div
-                    className={cn(
-                      "max-w-[85%] rounded-2xl px-3.5 py-2.5 text-sm",
-                      mine ? "rounded-br-md bg-neutral-900 text-white" : "rounded-bl-md border border-neutral-200 bg-white text-neutral-800",
-                    )}
-                  >
-                    <p className={cn("mb-0.5 text-[11px] font-semibold", mine ? "text-neutral-300" : "text-neutral-500")}>
-                      {mine ? m.authorName || t.admin.preparer : m.authorName || clientName}
-                    </p>
-                    <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                    <p className="mt-1 text-[10px] text-neutral-400">
-                      <time dateTime={new Date(m.createdAt).toISOString()}>{fmtDateTime(m.createdAt, locale)}</time>
-                    </p>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-
-        <form onSubmit={submit} className="space-y-2">
-          <Label htmlFor={replyId} className="sr-only">{t.admin.reply}</Label>
-          <Textarea id={replyId} value={body} onChange={(e) => setBody(e.target.value)} placeholder={t.admin.replyPlaceholder} maxLength={2000} rows={3} />
-          <div className="flex justify-end">
-            <Button type="submit" disabled={!body.trim() || send.isPending} className="bg-black text-white hover:bg-neutral-800">
-              {send.isPending ? <Loader2 className="animate-spin" aria-hidden /> : <Send aria-hidden />}
-              {t.admin.reply}
-            </Button>
-          </div>
-        </form>
-      </CardContent>
-    </Card>
+    <div ref={box} className="h-[620px] overflow-hidden rounded-2xl border border-neutral-200/80 bg-white shadow-sm xl:sticky xl:top-6 xl:h-[calc(100dvh-3rem)] xl:max-h-[820px]" data-admin-chat="">
+      <TaxChat me="preparer" tone="admin" title={clientName} initials={initials} online={online} typing={typing} messages={messages} pending={chat.pending}
+        onSend={chat.send} onFiles={(f) => void chat.sendFiles(f)} onTyping={chat.typing} onRetry={chat.retry}
+        onOpenFile={(f) => setViewing({ id: f.id, title: f.fileName })} onSaveFile={(f) => void chat.save(f)}
+        placeholder={tl.adminPlaceholder} emptyText={tl.adminEmpty} className="h-full" />
+      <TaxFileViewer admin chat docId={viewing?.id ?? null} title={viewing?.title} onClose={() => setViewing(null)} />
+    </div>
   );
 }

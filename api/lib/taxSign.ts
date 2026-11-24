@@ -132,7 +132,8 @@ function stampSignature(pdf: PDFDocument, spot: SignSpot, sig: PDFImage, font: P
 export async function signedPdf(original: { bytes: Uint8Array; mimeType: string } | null, signaturePng: Uint8Array, a: SignAudit, spot: SignSpot | null = null, seal: SealKey | null = null): Promise<Uint8Array> {
   let pdf: PDFDocument;
   if (original?.mimeType === "application/pdf") {
-    try { pdf = await PDFDocument.load(original.bytes, { ignoreEncryption: true }); } catch { pdf = await PDFDocument.create(); }
+    // A damaged PDF can load and still have no pages: then the signature goes on its own page.
+    try { pdf = await PDFDocument.load(original.bytes, { ignoreEncryption: true }); pdf.getPageCount(); } catch { pdf = await PDFDocument.create(); }
   } else {
     pdf = await PDFDocument.create();
     if (original && (original.mimeType === "image/png" || original.mimeType === "image/jpeg")) {

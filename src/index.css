@@ -366,3 +366,76 @@ section[data-offscreen] *, section[data-offscreen] *::before, section[data-offsc
   .pl-veil, .pl-sheet, .pl-step, .pl-row, .pl-wire, .pl-ring-spin, .pl-ok::after { animation: none; }
   .pl-check path { animation: none; stroke-dashoffset: 0; }
 }
+
+/* Impuestos, live (TaxStatusCard, TaxChat, TaxChatDock). One soft curve; nothing appears all at once. */
+/* The step card: the current step turns green with its check, the line runs, the new one lights up and breathes. */
+.tx-fill { transition: width 1.3s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-dot { transition: background-color 0.7s cubic-bezier(0.33, 0, 0.15, 1), border-color 0.7s cubic-bezier(0.33, 0, 0.15, 1), box-shadow 0.7s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-dot > .tx-check { opacity: 0; transform: scale(0.3) rotate(-25deg); transition: opacity 0.5s cubic-bezier(0.33, 0, 0.15, 1), transform 0.7s cubic-bezier(0.3, 1.5, 0.5, 1); }
+.tx-done .tx-dot > .tx-check { opacity: 1; transform: none; transition-delay: 0.15s; }
+.tx-now .tx-dot { animation: tx-halo 2.8s cubic-bezier(0.33, 0, 0.15, 1) infinite; }
+.tx-now .tx-dot::after { content: ""; position: absolute; width: 9px; height: 9px; border-radius: 9999px; background: #2563eb; animation: tx-core 0.7s cubic-bezier(0.3, 1.5, 0.5, 1) both; }
+.tx-arrive .tx-dot::before { content: ""; position: absolute; inset: -3px; border-radius: 9999px; border: 2px solid #2563eb; animation: tx-ring 1.1s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.tx-focus { animation: tx-focus 1s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.tx-ping::after { content: ""; position: absolute; inset: -4px; border-radius: 9999px; border: 2px solid #059669; opacity: 0; animation: tx-ping 2.4s cubic-bezier(0.33, 0, 0.15, 1) infinite; }
+@keyframes tx-halo { 0%, 100% { box-shadow: 0 0 0 5px #eff6ff; } 50% { box-shadow: 0 0 0 9px rgba(37, 99, 235, 0.07); } }
+@keyframes tx-core { from { transform: scale(0); } }
+@keyframes tx-ring { from { transform: scale(0.8); opacity: 0.9; } to { transform: scale(2.1); opacity: 0; } }
+@keyframes tx-focus { from { opacity: 0; filter: blur(8px); transform: translateY(6px); } to { opacity: 1; filter: none; transform: none; } }
+@keyframes tx-ping { 0% { transform: scale(0.4); opacity: 0.7; } 80%, 100% { transform: scale(1.4); opacity: 0; } }
+
+/* The chat: each message opens its own space, then rises out of a soft blur; "escribiendo" comes and goes the same. */
+.tx-scroll { scrollbar-width: none; overscroll-behavior: contain; -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 40px, #000 calc(100% - 10px), transparent 100%); mask-image: linear-gradient(to bottom, transparent 0, #000 40px, #000 calc(100% - 10px), transparent 100%); }
+.tx-scroll::-webkit-scrollbar { display: none; }
+.tx-row { display: grid; grid-template-rows: 1fr; }
+.tx-row > * { min-height: 0; }
+.tx-row.tx-enter { animation: tx-open 0.8s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.tx-row.tx-enter > * { animation: tx-msg 1s cubic-bezier(0.33, 0, 0.15, 1) both; animation-delay: inherit; }
+.tx-row.tx-leave { animation: tx-close 0.45s cubic-bezier(0.33, 0, 0.15, 1) both; }
+@keyframes tx-open { from { grid-template-rows: 0fr; } }
+@keyframes tx-close { to { grid-template-rows: 0fr; opacity: 0; } }
+@keyframes tx-msg { from { opacity: 0; transform: translateY(14px) scale(0.96); filter: blur(6px); } 60% { filter: blur(0); } to { opacity: 1; transform: none; filter: none; } }
+.tx-dots > span { display: block; width: 6px; height: 6px; border-radius: 9999px; background: #94a3b8; animation: tx-bob 1.3s cubic-bezier(0.33, 0, 0.15, 1) infinite; }
+.tx-dots > span:nth-child(2) { animation-delay: 0.15s; }
+.tx-dots > span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes tx-bob { 0%, 60%, 100% { transform: none; opacity: 0.5; } 30% { transform: translateY(-4px); opacity: 1; } }
+.tx-presence { display: grid; grid-template-rows: 0fr; opacity: 0; transform: translateY(-4px); transition: grid-template-rows 0.7s cubic-bezier(0.33, 0, 0.15, 1), opacity 0.7s cubic-bezier(0.33, 0, 0.15, 1), transform 0.7s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-presence > * { min-height: 0; overflow: hidden; }
+.tx-presence[data-on="true"] { grid-template-rows: 1fr; opacity: 1; transform: none; }
+.tx-ondot { transform: scale(0); transition: transform 0.6s cubic-bezier(0.3, 1.5, 0.5, 1); }
+[data-on="true"] > .tx-ondot, [data-on="true"] .tx-ondot { transform: none; }
+.tx-menu { transform-origin: bottom left; animation: tx-pop 0.45s cubic-bezier(0.33, 0, 0.15, 1) both; }
+@keyframes tx-pop { from { opacity: 0; transform: translateY(8px) scale(0.95); } }
+.tx-bar { width: 0; animation: tx-grow 6s cubic-bezier(0.1, 0.6, 0.3, 1) forwards; }
+@keyframes tx-grow { to { width: 92%; } }
+
+/* Phones: the chat is a solid sheet that slides up from the bottom and back down; the page behind dims a little. */
+.tx-sheet { transform: translateY(100%); border-radius: 28px 28px 0 0; transition: transform 0.65s cubic-bezier(0.32, 0.72, 0, 1), border-radius 0.65s cubic-bezier(0.32, 0.72, 0, 1); }
+.tx-sheet[data-open="true"] { transform: none; border-radius: 0; }
+.tx-sheet[data-open="false"] { transition-duration: 0.55s; }
+.tx-scrim { opacity: 0; transition: opacity 0.6s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-scrim[data-open="true"] { opacity: 1; }
+/* Computers before sending: a window that rises out of the bubble. */
+.tx-window { transform-origin: bottom right; opacity: 0; transform: translateY(16px) scale(0.96); transition: opacity 0.5s cubic-bezier(0.33, 0, 0.15, 1), transform 0.65s cubic-bezier(0.32, 0.72, 0, 1); }
+.tx-window[data-open="true"] { opacity: 1; transform: none; }
+/* The bubble, and its message growing out of the avatar like a speech bubble. */
+.tx-fab { animation: tx-fab-in 0.7s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.tx-fab[data-leaving="true"] { animation: tx-fab-out 0.35s cubic-bezier(0.33, 0, 0.15, 1) both; }
+@keyframes tx-fab-in { from { opacity: 0; transform: translateY(16px) scale(0.85); } }
+@keyframes tx-fab-out { to { opacity: 0; transform: translateY(10px) scale(0.88); } }
+.tx-peek { transform-origin: 22px calc(100% + 16px); animation: tx-peek-in 0.75s cubic-bezier(0.32, 0.72, 0, 1) both; }
+.tx-peek[data-leaving="true"] { animation: tx-peek-out 0.4s cubic-bezier(0.33, 0, 0.15, 1) both; }
+.tx-peek::after { content: ""; position: absolute; left: 15px; bottom: -7px; width: 13px; height: 13px; background: #fff; border-right: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; border-bottom-right-radius: 3px; transform: rotate(45deg); }
+@keyframes tx-peek-in { from { opacity: 0; transform: translateY(10px) scale(0.55); } }
+@keyframes tx-peek-out { to { opacity: 0; transform: translateY(8px) scale(0.8); } }
+/* Computers after sending: the chat column folds away to the right and the page takes the full width (and back). */
+.tx-layout { transition: grid-template-columns 0.85s cubic-bezier(0.33, 0, 0.15, 1), column-gap 0.85s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-dock { transition: opacity 0.5s cubic-bezier(0.33, 0, 0.15, 1), transform 0.85s cubic-bezier(0.33, 0, 0.15, 1); }
+.tx-dock[data-folded="true"] { opacity: 0; transform: translateX(36px); pointer-events: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .tx-fill, .tx-dot, .tx-dot > .tx-check, .tx-presence, .tx-ondot, .tx-sheet, .tx-scrim, .tx-window, .tx-layout, .tx-dock { transition: none; }
+  .tx-bar { animation: none; width: 60%; }
+  .tx-now .tx-dot, .tx-now .tx-dot::after, .tx-arrive .tx-dot::before, .tx-focus, .tx-ping::after, .tx-row.tx-enter, .tx-row.tx-enter > *,
+  .tx-row.tx-leave, .tx-dots > span, .tx-menu, .tx-fab, .tx-fab[data-leaving="true"], .tx-peek, .tx-peek[data-leaving="true"] { animation: none; }
+}

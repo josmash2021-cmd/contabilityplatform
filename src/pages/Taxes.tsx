@@ -7,23 +7,28 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/personal/ConfirmDialog";
 import { TaxFileViewer } from "@/components/taxes/TaxFileViewer";
 import { TaxTrack } from "@/components/taxes/TaxTrack";
-import { TaxDocsCard, TaxDocsDone, TaxPick, type PickFn, type PickSource } from "@/components/taxes/TaxDocs";
+import { TaxDocsCard, TaxPick, type PickFn, type PickSource } from "@/components/taxes/TaxDocs";
 import { TaxFlowA } from "@/components/taxes/TaxFlowA";
-import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { intlLocale } from "@/i18n/lang";
-import { TaxAgencies, TaxHistory, TaxPreparer } from "@/components/taxes/TaxSide";
+import { TaxAgencies, TaxHistory } from "@/components/taxes/TaxSide";
+import { TaxStatusCard } from "@/components/taxes/TaxStatusCard";
+import { TaxReturnDocs } from "@/components/taxes/TaxReturnDocs";
+import { ClientChatDock, ClientChatOverlays } from "@/components/taxes/TaxClientChat";
+import { useClientChat } from "@/components/taxes/useClientChat";
+import { useMedia } from "@/hooks/useMedia";
+import { taxLiveCopy } from "@/i18n/copy/taxLive";
 import { TaxStepPanel } from "@/components/taxes/TaxStepPanel";
 import { TaxCare, TaxPast } from "@/components/taxes/TaxPages";
 import { TaxGate } from "@/components/taxes/TaxGate";
 import { clearTaxUnlock } from "@/lib/taxUnlock";
-import { FILED_STEP, clientFiles, daysUntil, longDay, shortDate, type Current, type Doc } from "@/components/taxes/taxView";
+import { FILED_STEP, clientFiles, daysUntil, longDay, type Current, type Doc } from "@/components/taxes/taxView";
 import { listNames } from "@/components/personal/txKit";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { taxesCopy, type TaxesCopy } from "@/i18n/copy/taxes";
 import { TaxFileError, prepareTaxUpload } from "@/lib/taxFiles";
-import { DRAFT_STEP, filingDeadline, shownDocKinds, type Answers } from "@contracts/taxRules";
+import { DRAFT_STEP, TAX_STEP, filingDeadline, shownDocKinds, type Answers } from "@contracts/taxRules";
 
 const card = "rounded-[14px] border border-slate-200 bg-white p-4";
 const cols = "mt-3.5 grid items-start gap-3.5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]";
@@ -51,7 +56,7 @@ type View = { kind: "main" } | { kind: "care" } | { kind: "past"; id: number };
 export default function Taxes() {
   const t = useCopy(taxesCopy);
   const navigate = useNavigate();
-  const { data, isLoading, isError, refetch, isFetching } = trpc.tax.current.useQuery(undefined, { refetchInterval: 60_000 });
+  const { data, isLoading, isError, refetch, isFetching } = trpc.tax.current.useQuery(undefined, { refetchInterval: 120_000 });
   const [view, setView] = useState<View>({ kind: "main" });
   const [viewing, setViewing] = useState<{ id: number; title: string } | null>(null);
   const go = (v: View) => { setView(v); scrollPageTop(); };
@@ -130,12 +135,14 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const t = useCopy(taxesCopy);
   const p = t.p;
   const utils = trpc.useUtils();
-  const { mode, year, ret, docs, messages, past, missing } = data;
+  const { mode, year, ret, docs, past, missing } = data;
   const step = ret?.step ?? DRAFT_STEP;
   const draft = step === DRAFT_STEP;
   const answers: Answers = ret?.answers ?? {};
-  const [askOpen, setAskOpen] = useState(false);
   const locale = intlLocale(useLang().lang);
+  // The chat with the preparer, live (bubble + sheet on phones; a column beside the return on computers).
+  const desktop = useMedia("(min-width: 1024px)");
+  const chat = useClientChat(data, desktop, !draft, { photo: useCopy(taxLiveCopy).chat.photo, errors: t.errors });
   const [selected, setSelected] = useState<number | null>(null);
   const [busyKind, setBusyKind] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Doc | null>(null);
@@ -241,20 +248,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
       <input ref={inputs.pdf} type="file" accept="application/pdf" multiple className="hidden" tabIndex={-1} aria-hidden="true" onChange={(e) => void onFiles(e, "pdf")} />
     </>
   );
-  const ask = (
-    <>
-      <button type="button" onClick={() => setAskOpen(true)}
-        className={`fixed bottom-[calc(96px+env(safe-area-inset-bottom,0px))] right-4 z-30 inline-flex items-center gap-2 rounded-full bg-slate-900 py-2 pl-2 pr-4 text-[13px] font-semibold text-white shadow-[0_14px_30px_-12px_rgba(2,6,23,0.6)] transition hover:bg-slate-800 active:scale-[0.97] lg:bottom-6 lg:right-6 ${FOCUS}`}>
-        <span className="grid h-7 w-7 place-items-center rounded-full bg-blue-600 text-xs font-bold">{preparerName.charAt(0).toUpperCase()}</span>{p.flow.ask(preparerName)}
-      </button>
-      <Dialog open={askOpen} onOpenChange={setAskOpen}>
-        <DialogContent className="top-auto bottom-0 h-auto max-h-[92dvh] gap-0 overflow-y-auto rounded-t-[24px] p-0 sm:bottom-auto sm:max-w-[460px] sm:rounded-[20px]">
-          <DialogTitle className="sr-only">{p.prep.title}</DialogTitle>
-          <div className="p-2"><TaxPreparer messages={messages} fallbackName={data.preparerName} assignedOn={draft ? null : shortDate(ret?.submittedAt, locale, new Date().getFullYear())} /></div>
-        </DialogContent>
-      </Dialog>
-    </>
-  );
+  const ask = <ClientChatOverlays c={chat} />;
   const removeDialog = (
     <ConfirmDialog open={removing !== null} onOpenChange={(o) => { if (!o) setRemoving(null); }}
       title={p.docs.removeTitle(removing?.fileName ?? "")} text={p.docs.removeText} confirmLabel={p.docs.removeOk} cancelLabel={p.prep.cancel}
@@ -271,7 +265,7 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
         <TaxFlowA mode={mode} year={year} answers={answers} docs={docs} unanswered={unanswered} incomeMissing={!!missing?.income}
           busyAnswers={saveAnswers.isPending} onAnswer={onAnswer} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving}
           preparerName={preparerName} deadline={longDay(deadline, locale)} daysLeft={daysUntil(deadline, new Date())}
-          sending={submit.isPending} onSend={() => submit.mutate({ consent: true, terms: true })} onAsk={() => setAskOpen(true)} />
+          sending={submit.isPending} onSend={() => submit.mutate({ consent: true, terms: true })} onAsk={chat.open} />
         <div className={cols}>
           <TaxAgencies year={year} />
           {past.length ? <div className="grid min-w-0 gap-3.5"><TaxHistory past={past} onOpen={onPast} /></div> : null}
@@ -285,42 +279,41 @@ function TaxMain({ data, onOpen, onCare, onPast }: { data: Current; onOpen: (d: 
   const sel = selected === null || selected > step ? step : selected;
   const editable = step < FILED_STEP;
   const redo = docs.filter((d) => d.source === "client" && d.status === "redo");
-  const prepDocs = docs.filter((d) => d.source === "preparer");
+  // While the client still has to sign, the forms are in the signing panel; after, in "Tu declaración, lista".
+  const signing = step === TAX_STEP.sign && !ret?.approvedAt;
   return (
-    <div className="mx-auto max-w-6xl pb-28 lg:pb-16">
+    <div className="mx-auto max-w-[1240px] pb-28 lg:pb-16">
       {header}{keyWarn}
-      <TaxTrack title={p.track.title(year)} step={step} stepDates={ret?.stepDates} selected={sel} onSelect={(i) => setSelected(i === step ? null : i)} />
-      {/* What the preparer asked to upload again: once, here, each with its own button. */}
-      {redo.length > 0 && editable && (
-        <section className="mt-3.5 rounded-[14px] border border-amber-200 bg-amber-50 p-4" aria-labelledby="tax-redo-h">
-          <h2 id="tax-redo-h" className="flex items-center gap-2 font-semibold text-amber-900"><AlertCircle className="h-4 w-4" aria-hidden="true" />{t.todo.title}</h2>
-          <p className="mt-0.5 text-sm text-amber-800">{t.todo.text}</p>
-          <ul className="mt-2.5 grid gap-2">
-            {redo.map((d) => (
-              <li key={d.id} className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl bg-white/80 px-3 py-2.5 ring-1 ring-amber-100">
-                <span className="min-w-0 flex-[1_1_220px] text-sm text-amber-900"><b>{titleOf(d.kind)}</b>{d.note ? <span className="block text-[13px] text-amber-800">{d.note}</span> : null}</span>
-                <TaxPick kind={d.kind} title={titleOf(d.kind)} has replace={d} onPick={pick} busy={busyKind === d.kind} />
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <div className={cols}>
-        {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName}
-          signName={data.signName ?? null} inPerson={data.inPerson ?? null} onAsk={() => setAskOpen(true)} onPick={pick} busyKind={busyKind} />}
+      <div className={cn("tx-layout grid items-start", chat.docked ? (chat.folded ? "grid-cols-[minmax(0,1fr)_0px] gap-x-0" : "grid-cols-[minmax(0,1fr)_400px] gap-x-3.5") : "grid-cols-1")}>
         <div className="grid min-w-0 gap-3.5">
-          <TaxAgencies year={year} stack />
-          <TaxHistory past={past} onOpen={onPast} />
-          <TaxPreparer messages={messages} compact fallbackName={data.preparerName} assignedOn={shortDate(ret?.submittedAt, locale, new Date().getFullYear())} />
+          <TaxStatusCard year={year} step={step} stepDates={ret?.stepDates} selected={sel} onSelect={(i) => setSelected(i === step ? null : i)} />
+          {/* What the preparer asked to upload again: once, here, each with its own button. */}
+          {redo.length > 0 && editable && (
+            <section className="rounded-[14px] border border-amber-200 bg-amber-50 p-4" aria-labelledby="tax-redo-h">
+              <h2 id="tax-redo-h" className="flex items-center gap-2 font-semibold text-amber-900"><AlertCircle className="h-4 w-4" aria-hidden="true" />{t.todo.title}</h2>
+              <p className="mt-0.5 text-sm text-amber-800">{t.todo.text}</p>
+              <ul className="mt-2.5 grid gap-2">
+                {redo.map((d) => (
+                  <li key={d.id} className="flex flex-wrap items-center justify-between gap-2.5 rounded-xl bg-white/80 px-3 py-2.5 ring-1 ring-amber-100">
+                    <span className="min-w-0 flex-[1_1_220px] text-sm text-amber-900"><b>{titleOf(d.kind)}</b>{d.note ? <span className="block text-[13px] text-amber-800">{d.note}</span> : null}</span>
+                    <TaxPick kind={d.kind} title={titleOf(d.kind)} has replace={d} onPick={pick} busy={busyKind === d.kind} />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {ret && <TaxStepPanel i={sel} ret={ret} mode={mode} docs={docs} onOpen={onOpen} onSeeNow={() => setSelected(null)} preparerName={preparerName}
+            signName={data.signName ?? null} inPerson={data.inPerson ?? null} onAsk={chat.open} onPick={pick} busyKind={busyKind} plainNow />}
+          {!signing && <TaxReturnDocs mode={mode} year={year} docs={docs} approvedAt={ret?.approvedAt ?? null} showMine={!editable} onOpen={onOpen} />}
+          {editable && <TaxDocsCard mode={mode} answers={answers} docs={docs} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving} />}
+          {past.length > 0 ? (
+            <div className="grid items-start gap-3.5 md:grid-cols-2">
+              <TaxAgencies year={year} stack />
+              <div className="grid min-w-0 gap-3.5"><TaxHistory past={past} onOpen={onPast} /></div>
+            </div>
+          ) : <TaxAgencies year={year} />}
         </div>
-      </div>
-      <div className="mt-3.5 grid gap-3.5">
-        {editable ? (
-          <>
-            <TaxDocsCard mode={mode} answers={answers} docs={docs} onPick={pick} busyKind={busyKind} onOpen={onOpen} onRemove={setRemoving} />
-            {prepDocs.length > 0 && <TaxDocsDone mode={mode} docs={prepDocs} onOpen={onOpen} preparerOnly />}
-          </>
-        ) : <TaxDocsDone mode={mode} docs={docs} onOpen={onOpen} />}
+        {chat.docked && <ClientChatDock c={chat} />}
       </div>
       {foot}
       {fileInputs}{removeDialog}{ask}

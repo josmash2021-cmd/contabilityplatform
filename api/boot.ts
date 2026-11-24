@@ -15,6 +15,8 @@ import { subscriptions, subscriptionPayments, users } from "@db/schema";
 import { eq, desc, and } from "drizzle-orm";
 import Stripe from "stripe";
 import { normalizeSubStatus } from "./lib/subscriptionStatus";
+import { liveStream } from "./lib/taxLive";
+import { clientReturnId } from "./tax-router";
 
 const app = new Hono<{ Bindings: HttpBindings }>();
 
@@ -266,6 +268,24 @@ app.get("/api/sync-all", async (c) => {
   }
   syncAllBalances();
   return c.json({ status: "sync started" });
+});
+
+// Impuestos, live (api/lib/taxLive.ts): the page hears at once when something changes, who's typing and who has
+// the chat open. ?returnId=N is one return's preparer page, ?list=1 the preparers' list; else a client's own page.
+app.get("/api/tax/live", async (c) => {
+  const ctx = await createContext({ req: c.req.raw, resHeaders: new Headers(), info: {} } as unknown as Parameters<typeof createContext>[0]);
+  const user = ctx.user;
+  if (!user) return c.json({ error: "Unauthorized" }, 401);
+  const returnId = c.req.query("returnId");
+  if (returnId !== undefined || c.req.query("list") !== undefined) {
+    // Preparers only (a team member never gets the owner's role).
+    if (user.role !== "admin" || ctx.member) return c.json({ error: "Forbidden" }, 403);
+    const id = returnId ? Number(returnId) : null;
+    if (id !== null && !(Number.isInteger(id) && id > 0)) return c.json({ error: "Bad request" }, 400);
+    return liveStream(c, { kind: "preparer", returnId: id });
+  }
+  if (ctx.member) return c.json({ error: "Forbidden" }, 403);
+  return liveStream(c, { kind: "client", userId: Number(user.id), returnId: await clientReturnId(user) });
 });
 
 app.use("/api/trpc/*", async (c) => {

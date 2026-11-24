@@ -88,3 +88,19 @@ export function formatFileSize(n: number): string {
 export function taxDeadline(taxYear: number, locale: string): string {
   return new Date(taxYear + 1, 3, 15).toLocaleDateString(locale, { day: "numeric", month: "short", year: "numeric" });
 }
+
+/** "Guardar": the file goes to the phone or computer (downloads folder, or the phone's save sheet). */
+export function saveTaxFile(file: { fileName: string; mimeType: string; dataBase64: string }): void {
+  const url = base64ToBlobUrl(file.dataBase64, file.mimeType);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = file.fileName || "documento";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
+}
+
+/** Photos the browser can show (HEIC can't in most): the chat shows these as pictures, the rest as files. */
+export const showsAsPicture = (mimeType: string) => mimeType === "image/jpeg" || mimeType === "image/png" || mimeType === "image/webp";
