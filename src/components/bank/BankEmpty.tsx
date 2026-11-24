@@ -16,7 +16,7 @@ export function BankEmpty({ canConnect, limit, onConnect }: { canConnect: boolea
           <ul className="mt-4 flex flex-wrap justify-center gap-x-4 gap-y-1.5 text-[13px] text-slate-600">
             {t.points.map((p) => <li key={p} className="inline-flex items-center gap-1.5"><Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />{p}</li>)}
           </ul>
-          <button type="button" onClick={onConnect}
+          <button type="button" onClick={onConnect} data-guide="bank-connect"
             className="mt-5 inline-flex min-h-11 items-center gap-2 rounded-[10px] bg-blue-600 px-4 text-sm font-semibold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 sm:min-h-10">
             <Landmark className="h-4 w-4" aria-hidden="true" />{t.button}
           </button>

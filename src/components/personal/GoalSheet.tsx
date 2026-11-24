@@ -161,7 +161,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
               <ul className="grid gap-1.5">
                 {menu.map((m) => (
                   <li key={`${m.k}-${m.card?.id ?? ""}`}>
-                    <button type="button" onClick={() => start(m.k, m.card)}
+                    <button type="button" onClick={() => start(m.k, m.card)} data-guide={`goal-tpl-${m.k}`}
                       className="flex min-h-14 w-full items-center gap-3 rounded-xl border border-slate-200 px-3 py-2.5 text-left hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-[10px] bg-blue-50 text-blue-600"><m.icon className="h-[18px] w-[18px]" aria-hidden="true" /></span>
                       <span className="min-w-0">
@@ -176,7 +176,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
           ) : (
             <form onSubmit={submit} noValidate>
               <label htmlFor={`${uid}-name`} className={plabel}>{f.name}</label>
-              <input id={`${uid}-name`} value={name} onChange={(e) => setName(e.target.value)} placeholder={f.namePh} autoComplete="off" maxLength={100} className={pinput} />
+              <input id={`${uid}-name`} data-guide="goal-name" value={name} onChange={(e) => setName(e.target.value)} placeholder={f.namePh} autoComplete="off" maxLength={100} className={pinput} />
               {debt ? (
                 <dl className="mt-3 divide-y divide-slate-200 rounded-xl border border-slate-200 text-sm">
                   <div className="flex items-center justify-between gap-3 px-3 py-2.5">
@@ -193,11 +193,11 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
                   <div className="mt-3 grid gap-3 sm:grid-cols-2">
                     <div>
                       <label htmlFor={`${uid}-goal`} className={plabel}>{f.goal}</label>
-                      <input id={`${uid}-goal`} type="number" inputMode="decimal" min={1} step={50} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="1500" className={pinput} />
+                      <input id={`${uid}-goal`} data-guide="goal-amount" type="number" inputMode="decimal" min={1} step={50} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="1500" className={pinput} />
                     </div>
                     <div>
                       <label htmlFor={`${uid}-mo`} className={plabel}>{f.monthly}</label>
-                      <input id={`${uid}-mo`} type="number" inputMode="decimal" min={0} step={10} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="150" className={pinput} />
+                      <input id={`${uid}-mo`} data-guide="goal-monthly" type="number" inputMode="decimal" min={0} step={10} value={monthly} onChange={(e) => setMonthly(e.target.value)} placeholder="150" className={pinput} />
                     </div>
                   </div>
                   <div className="mt-3">
@@ -223,7 +223,7 @@ export function GoalSheet({ state, goals, today, onClose, onSaved }: {
               {hint && <p className="mt-3 rounded-[10px] bg-slate-100 px-3 py-2.5 text-sm text-slate-900" aria-live="polite">{hint}</p>}
               {err && <p className="mt-2 text-[13px] text-red-600" role="alert">{err}</p>}
               <div className="mt-3.5 flex flex-wrap gap-2">
-                <button type="submit" disabled={busy} className={pbtnPrimary}>
+                <button type="submit" disabled={busy} className={pbtnPrimary} data-guide="goal-save">
                   {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{editing ? f.save : f.create}
                 </button>
                 {!editing && <button type="button" onClick={() => { setTpl(null); setErr(""); }} className={pbtn}>{f.back}</button>}

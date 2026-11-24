@@ -78,7 +78,7 @@ export function BankBottom({ accounts, canManage, locked, limit, onConnect }: {
               <span id={`${id}-lock`} className="sr-only">{t.locked(limit)}</span>
             </button>
           ) : (
-            <button type="button" onClick={onConnect} className={BTN}><Plus className="h-4 w-4" aria-hidden="true" />{t.connect}</button>
+            <button type="button" onClick={onConnect} data-guide="bank-connect" className={BTN}><Plus className="h-4 w-4" aria-hidden="true" />{t.connect}</button>
           )}
 
           <label htmlFor={`${id}-csv`} className="sr-only">{t.csvFile}</label>

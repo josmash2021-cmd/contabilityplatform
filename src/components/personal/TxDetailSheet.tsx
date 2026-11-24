@@ -113,7 +113,7 @@ export function TxDetailSheet({ row, onClose, monthRows, accounts, institutions,
                   {options.map((c) => {
                     const on = c === category;
                     return (
-                      <button key={c} type="button" aria-pressed={on} disabled={busy}
+                      <button key={c} type="button" aria-pressed={on} disabled={busy} data-guide={`cat-${c}`}
                         onClick={() => { if (!on && row.id !== null) setCat.mutate({ id: row.id, category: c }); }}
                         className={cn(smBtn, "min-h-10", on && "border-blue-600 bg-blue-50 text-blue-700 hover:bg-blue-50")}>
                         {catLabel(c, type)}

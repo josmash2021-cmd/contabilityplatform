@@ -11,6 +11,8 @@ import type { Lang } from "@/i18n/lang";
 import { settingsCopy } from "@/i18n/copy/settings";
 import { billingCopy } from "@/i18n/copy/billing";
 import { Dst, Fld, Item, SetTitle } from "./ui";
+import { USER_COLORS } from "@contracts/bubble";
+import { USER_COLOR_CLASSES } from "@/lib/userColor";
 import { BTN_PRIMARY, BTN_SM, FOCUS, INP, READONLY, SET_SUB } from "./styles";
 
 type Mode = "business" | "personal";
@@ -47,7 +49,40 @@ export function AccountSection({ mode, onLanguage }: { mode: Mode; onLanguage: (
           {save.isPending && <Loader2 className="h-4 w-4 animate-spin" />}{save.isPending ? t.saving : t.save}
         </button>
       </div>
+      <UserColorPicker initial={(user?.name || "C").trim().charAt(0).toUpperCase()} />
     </form>
+  );
+}
+
+/** The color of the person's circle: saved as soon as they pick one (no Guardar). */
+function UserColorPicker({ initial }: { initial: string }) {
+  const a = useCopy(settingsCopy).account;
+  const utils = trpc.useUtils();
+  const look = trpc.settings.look.useQuery(undefined, { staleTime: 10 * 60_000 });
+  const pick = trpc.settings.setColor.useMutation({
+    onSuccess: (r) => { utils.settings.look.setData(undefined, r); toast.success(a.colorSaved); },
+    onError: (e) => toast.error(e.message),
+  });
+  const now = pick.isPending ? pick.variables?.color : look.data?.color ?? "blue";
+  return (
+    <div className="mt-6 border-t border-slate-100 pt-4">
+      <p className="text-sm font-semibold text-slate-900" id="set-color-title">{a.colorTitle}</p>
+      <p className="text-[13px] text-slate-500">{a.colorSub}</p>
+      <div role="radiogroup" aria-labelledby="set-color-title" className="mt-3 flex flex-wrap items-center gap-2.5">
+        {USER_COLORS.map((c) => {
+          const on = c === now;
+          return (
+            <button key={c} type="button" role="radio" aria-checked={on} aria-label={a.colors[c]} title={a.colors[c]} data-guide={`color-${c}`}
+              onClick={() => { if (!on) pick.mutate({ color: c }); }}
+              className={cn("grid h-10 w-10 place-items-center rounded-full text-sm font-bold ring-1 transition-[box-shadow,transform] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 active:scale-95",
+                USER_COLOR_CLASSES[c].circle, on && "shadow-[0_0_0_2px_#fff,0_0_0_4px_#0f172a]")}>
+              {initial}
+            </button>
+          );
+        })}
+        <span className="ml-1 text-[13px] font-medium text-slate-600" aria-live="polite">{now ? a.colors[now] : ""}</span>
+      </div>
+    </div>
   );
 }
 

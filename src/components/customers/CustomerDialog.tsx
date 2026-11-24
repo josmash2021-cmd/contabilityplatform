@@ -72,21 +72,21 @@ function FormBody({ customer, onClose, onCreated }: { customer: Customer | null;
       <div className="grid gap-3 sm:grid-cols-2">
         <label className={LABEL}>
           <span>{f.firstName} <small className="font-normal text-slate-500">({f.required})</small></span>
-          <input value={form.name} onChange={set("name")} placeholder={f.firstNamePh} autoComplete="off" autoFocus={!customer} aria-invalid={nameBad}
+          <input value={form.name} onChange={set("name")} data-guide="customer-name" placeholder={f.firstNamePh} autoComplete="off" autoFocus={!customer} aria-invalid={nameBad}
             aria-describedby={nameBad ? `${id}-name-err` : undefined} className={cn(FIELD, nameBad && "border-red-300")} />
           {nameBad && <small id={`${id}-name-err`} className="text-xs font-normal text-red-700">{f.nameMissing}</small>}
         </label>
         <label className={LABEL}>
           {f.lastName}
-          <input value={form.lastName} onChange={set("lastName")} placeholder={f.lastNamePh} autoComplete="off" className={FIELD} />
+          <input value={form.lastName} onChange={set("lastName")} data-guide="customer-last" placeholder={f.lastNamePh} autoComplete="off" className={FIELD} />
         </label>
         <label className={LABEL}>
           {f.phone}
-          <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} placeholder="(555) 000-0000" autoComplete="off" className={FIELD} />
+          <input type="tel" inputMode="tel" value={form.phone} onChange={set("phone")} data-guide="customer-phone" placeholder="(555) 000-0000" autoComplete="off" className={FIELD} />
         </label>
         <label className={LABEL}>
           {f.email}
-          <input type="email" value={form.email} onChange={set("email")} placeholder="nombre@correo.com" autoComplete="off" className={FIELD} />
+          <input type="email" value={form.email} onChange={set("email")} data-guide="customer-email" placeholder="nombre@correo.com" autoComplete="off" className={FIELD} />
         </label>
       </div>
       <label className={LABEL}>
@@ -97,7 +97,7 @@ function FormBody({ customer, onClose, onCreated }: { customer: Customer | null;
         {f.notes}
         <input value={form.notes} onChange={set("notes")} placeholder={f.notesPh} autoComplete="off" className={FIELD} />
       </label>
-      <button type="submit" disabled={busy} className={cn(btn("primary"), "mt-1")}>
+      <button type="submit" disabled={busy} className={cn(btn("primary"), "mt-1")} data-guide="customer-save">
         {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
         {busy ? f.saving : customer ? f.save : f.create}
       </button>

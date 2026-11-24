@@ -50,6 +50,7 @@ const messages = {
     assistantFileTooBig: "Ese archivo es muy grande. Las fotos pueden pesar hasta 5 MB y los PDF hasta 10 MB.",
     assistantFileOnly: "Revisa este archivo y dime lo importante.",
     assistantDeclined: "No puedo ayudar con eso. Pregúntame sobre tus ingresos, gastos, ventas o metas.",
+    bubbleReportLead: "[Lo mandó el asistente de la app]",
   },
   en: {
     emailExists: "An account with this email already exists",
@@ -91,6 +92,7 @@ const messages = {
     assistantFileTooBig: "That file is too big. Photos can be up to 5 MB and PDFs up to 10 MB.",
     assistantFileOnly: "Look at this file and tell me what matters.",
     assistantDeclined: "I can't help with that. Ask me about your income, spending, sales or goals.",
+    bubbleReportLead: "[Sent by the app's assistant]",
   },
 } as const;
 

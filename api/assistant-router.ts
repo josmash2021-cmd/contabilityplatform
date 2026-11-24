@@ -22,6 +22,11 @@ import {
 } from "./lib/assistantTools";
 import { budgetStatus, spendingByCategory } from "./lib/budgets";
 import { msg } from "./lib/i18n";
+import { bubblePrompt, bubbleTools, type BubbleOut } from "./lib/bubble";
+import { REPORT_MAX } from "@contracts/bubble";
+import { addMessage, ensureSupportTables, notifyAdmins, chatById } from "./lib/support";
+import { randomBytes, createHash } from "node:crypto";
+import { users } from "@db/schema";
 
 type Db = ReturnType<typeof getDb>;
 
@@ -177,7 +182,7 @@ async function questionsThisMonth(db: Db, userId: number): Promise<number> {
   return Number(rows[0]?.n ?? 0);
 }
 
-export function systemPrompt(mode: "business" | "personal", today: string): string {
+export function systemPrompt(mode: "business" | "personal", today: string, bubble = false): string {
   const who = mode === "business"
     ? "a small-business owner (often a one-person or family business: sales at a point of sale, clients, services, expenses, a connected bank)"
     : "a person managing their household money (a connected bank, spending by category, subscriptions, savings goals)";
@@ -189,7 +194,9 @@ How to answer:
 - Pick sensible date ranges yourself ("este mes" = from the 1st of this month to today; "el mes pasado" = the whole previous month) and say which range you used.
 - Amounts are US dollars; write them like $1,234.56.
 - You can explain what the numbers mean and give practical, general money tips. Do not give tax, legal or investment advice as if it were professional advice; for their tax return, tell them to ask their preparer in the Impuestos section.
-- You only read data. You can't change, delete or send anything, move money, or see other people's data. If asked to do something in the app, explain where in the app they can do it.
+${bubble
+    ? "- You only read data yourself; you can't change, delete or send anything, move money, or see other people's data. To do something on screen, offer a task (see below)."
+    : "- You only read data. You can't change, delete or send anything, move money, or see other people's data. If asked to do something in the app, explain where in the app they can do it."}
 - Plain text only: no markdown headings, tables or bold markers. For lists, use short lines starting with "• ".
 - Under your answer the app shows links to the screens and records your numbers came from (from the tools you called), so don't write links or paths yourself.
 - The person may attach photos or PDFs (a receipt, an invoice, a bank statement, a letter). Read them carefully and answer about them; compare with their data using the tools when it helps. You can't save a file into the app: to keep a receipt, tell them to use Gastos → Foto de recibo.
@@ -230,6 +237,8 @@ export const assistantRouter = createRouter({
       question: z.string().trim().max(1000),
       chatId: z.number().int().min(0).nullable().optional(),
       attachments: z.array(attachment).max(ATTACH_MAX_FILES).optional(),
+      // Asked from the bubble: the page they're on (it also gets the bubble's tools and knowledge, api/lib/bubble.ts).
+      bubble: z.object({ page: z.string().trim().max(200) }).optional(),
     }).refine((x) => x.question.length > 0 || (x.attachments?.length ?? 0) > 0, { message: "question or attachment required" }))
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
@@ -271,6 +280,12 @@ export const assistantRouter = createRouter({
       // Every tool call made for this answer: they become its sources.
       const calls: ToolCall[] = [];
       const today = todayCentral();
+      const bubbleOut: BubbleOut = { task: null, report: null };
+      const system = systemPrompt(plan.mode, today, !!input.bubble) + (input.bubble ? bubblePrompt(plan.mode, input.bubble.page || "/", plan) : "");
+      const tools = [
+        ...assistantTools(db, userId, plan.mode, today, (c) => calls.push(c)),
+        ...(input.bubble ? bubbleTools(db, userId, plan.mode, today, bubbleOut) : []),
+      ];
       try {
         const final = await api.beta.messages.toolRunner({
           model: MODEL,
@@ -283,8 +298,8 @@ export const assistantRouter = createRouter({
           betas: ["server-side-fallback-2026-07-01"],
           fallbacks: "default",
           cache_control: { type: "ephemeral" },
-          system: systemPrompt(plan.mode, today),
-          tools: assistantTools(db, userId, plan.mode, today, (c) => calls.push(c)),
+          system,
+          tools,
           messages: [
             ...history.map((m) => ({ role: m.role, content: m.content })),
             { role: "user", content: blocks.length ? [...blocks, { type: "text" as const, text: questionText }] : questionText },
@@ -316,7 +331,32 @@ export const assistantRouter = createRouter({
       const attached = files.length ? JSON.stringify(files.map((f) => ({ name: f.name, mime: f.mime }))) : null;
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, chatId, attachments) VALUES (${userId}, 'user', ${input.question}, ${chatCol}, ${attached})`);
       await db.execute(sql`INSERT INTO assistantMessages (userId, role, content, sources, chatId) VALUES (${userId}, 'assistant', ${answer}, ${sources.length ? JSON.stringify(sources) : null}, ${chatCol})`);
-      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId };
+      return { answer, sources, remaining: Math.max(0, limit - used - 1), chatId, task: bubbleOut.task, report: bubbleOut.report };
+    }),
+
+  /**
+   * The bubble's "Avisar a soporte": the app's own fault, in the bubble's words, goes to Admin · Soporte as a new chat
+   * (the admins get the usual email). The person tapped it; nothing goes without that tap. One a minute at most.
+   */
+  report: authedQuery
+    .input(z.object({ summary: z.string().trim().min(5).max(REPORT_MAX), page: z.string().trim().max(200).optional() }))
+    .mutation(async ({ ctx, input }) => {
+      const db = getDb();
+      await ensureSupportTables(db);
+      const userId = Number(ctx.user.id);
+      const recent = (await db.execute(sql`SELECT COUNT(*) AS n FROM supportChats WHERE userId = ${userId} AND page LIKE 'asistente:%' AND createdAt > NOW() - INTERVAL 1 MINUTE`) as unknown as [Array<{ n: number | string }>])[0][0];
+      if (Number(recent?.n ?? 0) > 0) return { ok: true, chatId: null };
+      const [me] = await db.select({ name: users.name, email: users.email }).from(users).where(eq(users.id, userId)).limit(1);
+      const tokenHash = createHash("sha256").update(randomBytes(24).toString("hex")).digest("hex");
+      const page = `asistente:${(input.page || "/").slice(0, 180)}`;
+      const res = await db.execute(sql`INSERT INTO supportChats (tokenHash, userId, name, email, lang, status, page, notifiedAt)
+        VALUES (${tokenHash}, ${userId}, ${(me?.name ?? "").slice(0, 80) || null}, ${me?.email ?? null}, ${ctx.lang}, 'waiting', ${page}, CURRENT_TIMESTAMP)`);
+      const chatId = Number((res as unknown as [{ insertId: number }])[0].insertId);
+      const body = `${msg(ctx.lang, "bubbleReportLead")} ${input.summary}`;
+      await addMessage(db, chatId, "visitor", body);
+      const chat = await chatById(db, chatId);
+      if (chat) void notifyAdmins(db, chat, body, false).catch(() => {});
+      return { ok: true, chatId };
     }),
 
   /**

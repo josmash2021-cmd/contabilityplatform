@@ -178,7 +178,7 @@ export default function Customers() {
           right={(canImport || canEdit) && !isEmpty ? (
             <div className="flex flex-wrap gap-1.5">
               {canImport && <button type="button" onClick={() => setImportOpen(true)} className={btn()}><Upload className="h-4 w-4" aria-hidden />{t.importExcel}</button>}
-              {canEdit && <button type="button" onClick={openNew} className={btn("primary")}>{t.newClient}</button>}
+              {canEdit && <button type="button" onClick={openNew} data-guide="customer-new" className={btn("primary")}>{t.newClient}</button>}
             </div>
           ) : undefined}
         />
@@ -306,7 +306,7 @@ function EmptyState({ canEdit, canImport, onNew, onImport }: { canEdit: boolean;
       <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{canEdit ? t.empty.text : t.empty.readOnlyText}</p>
       {canEdit && (
         <div className="mx-auto mt-5 flex max-w-sm flex-col gap-2 sm:max-w-none sm:flex-row sm:justify-center">
-          <button type="button" onClick={onNew} className={btn("primary")}><UserPlus className="h-4 w-4" aria-hidden />{t.empty.add}</button>
+          <button type="button" onClick={onNew} data-guide="customer-new" className={btn("primary")}><UserPlus className="h-4 w-4" aria-hidden />{t.empty.add}</button>
           {canImport && <button type="button" onClick={onImport} className={btn()}><Upload className="h-4 w-4" aria-hidden />{t.importExcel}</button>}
         </div>
       )}

@@ -1,3 +1,5 @@
+import { AssistantBubble } from "@/components/assistant/AssistantBubble";
+import { USER_COLOR_CLASSES } from "@/lib/userColor";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense } from "react";
 import { preloadWhenIdle } from "@/lib/preloadPages";
 import { toast } from "sonner";
@@ -125,6 +127,7 @@ function SideNav({ groups, pathname, locked, label, t, onGo, counts }: NavProps)
                 <li key={item.path}>
                   <button
                     onClick={() => onGo(item.path)}
+                    data-nav={item.path}
                     aria-current={on ? "page" : undefined}
                     title={lock ? t.shell.locked : undefined}
                     className={cn(
@@ -173,10 +176,11 @@ function NewMenu({ items, t, onGo }: { items: [string, string, string?][]; t: Ap
 }
 
 function AccountMenu({ name, email, initial, t, onGo, logout }: { name: string; email?: string | null; initial: string; t: AppCopy; onGo: (p: string) => void; logout: () => void }) {
+  const { data: look } = trpc.settings.look.useQuery(undefined, { staleTime: 10 * 60_000 });
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <button className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-blue-50 text-sm font-bold text-blue-700 ring-1 ring-blue-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" aria-label={t.shell.accountMenu}>
+        <button className={cn("grid h-9 w-9 shrink-0 place-items-center rounded-full text-sm font-bold ring-1 transition-colors duration-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500", USER_COLOR_CLASSES[look?.color ?? "blue"].circle)} aria-label={t.shell.accountMenu} data-guide="account-circle">
           {initial}
         </button>
       </DropdownMenuTrigger>
@@ -440,6 +444,12 @@ export function AppLayout() {
         </Sheet>
       </div>
 
+      {/* The assistant's bubble: every page but the Asistente itself; the account's owner only (not team members). */}
+      {!memberRole && (
+        <AssistantBubble mode={userMode} onGo={go}
+          hidden={pathname === "/assistant" || pathname === "/personal/assistant" || maintenanceView.mounted} />
+      )}
+
       {/* Subscription expired overlay — shown on all pages when the subscription expires */}
       <SubscriptionExpiredOverlay />
     </div>
@@ -449,7 +459,7 @@ export function AppLayout() {
 function TabButton({ item, on, label, onGo, count = 0 }: { item: Item; on: boolean; label: string; onGo: (p: string) => void; count?: number }) {
   const Icon = item.icon;
   return (
-    <button onClick={() => onGo(item.path)} aria-current={on ? "page" : undefined}
+    <button onClick={() => onGo(item.path)} aria-current={on ? "page" : undefined} data-nav={item.path}
       className={cn("grid min-h-[48px] justify-items-center gap-0.5 rounded-lg px-1 py-1.5 text-[11px] font-semibold", on ? "text-blue-600" : "text-slate-500")}>
       <span className="relative">
         <Icon className="h-[22px] w-[22px]" strokeWidth={on ? 2.2 : 1.8} aria-hidden />

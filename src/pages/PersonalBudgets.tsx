@@ -273,15 +273,15 @@ export default function PersonalBudgets() {
             <span className="inline-flex flex-wrap items-center gap-1.5">
               <span className="text-sm tabular-nums text-slate-900">{fmt0(it.spent)} {t.of}</span>
               <input autoFocus type="number" inputMode="decimal" min={0} step={10} value={draft} onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey}
-                aria-label={t.inputAria(name)} className={cn(pinput, "w-[100px] min-h-10 px-2 sm:min-h-[34px]")} />
-              <button type="button" onClick={() => commitEdit(it)} disabled={setBudget.isPending} className={pbtnSmPrimary}>{t.save}</button>
+                aria-label={t.inputAria(name)} data-guide="budget-edit-amt" className={cn(pinput, "w-[100px] min-h-10 px-2 sm:min-h-[34px]")} />
+              <button type="button" onClick={() => commitEdit(it)} disabled={setBudget.isPending} className={pbtnSmPrimary} data-guide="budget-edit-save">{t.save}</button>
               <button type="button" onClick={() => setEditing(null)} aria-label={t.cancelEdit} className={cn(pbtnSm, "w-10 px-0 sm:w-9")}><X className="h-4 w-4" aria-hidden="true" /></button>
             </span>
           ) : (
             <span className="text-sm tabular-nums text-slate-900">
               <b>{fmt0(it.spent)}</b> <span className="text-slate-500">{t.of}</span>{" "}
               {canEdit ? (
-                <button type="button" onClick={() => startEdit(it)} aria-label={t.editAria(name)}
+                <button type="button" onClick={() => startEdit(it)} aria-label={t.editAria(name)} data-guide={`budget-edit-${it.category}`}
                   className="-mx-1.5 -my-1 inline-flex min-h-8 items-center gap-1 rounded-md px-1.5 py-1 font-bold text-blue-600 hover:bg-blue-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                   {it.baseLimit !== null ? fmt0(it.baseLimit) : t.setOne}<Pencil className="h-[13px] w-[13px]" aria-hidden="true" />
                 </button>
@@ -328,23 +328,23 @@ export default function PersonalBudgets() {
       <div className="mt-2 grid gap-2 border-t border-slate-200 pt-3 sm:grid-cols-[minmax(0,1fr)_140px_auto] sm:items-end">
         <div>
           <label htmlFor={`${uid}-addc`} className={plabel}>{t.addCategory}</label>
-          <select id={`${uid}-addc`} value={addCat} onChange={(e) => setAddCat(e.target.value)} className={pinput}>
+          <select id={`${uid}-addc`} data-guide="budget-add-cat" value={addCat} onChange={(e) => setAddCat(e.target.value)} className={pinput}>
             <option value="">{t.addPick}</option>
             {addable.map((k) => <option key={k} value={k}>{label(k)}</option>)}
           </select>
         </div>
         <div>
           <label htmlFor={`${uid}-adda`} className={plabel}>{t.addAmount}</label>
-          <input id={`${uid}-adda`} type="number" inputMode="decimal" min={1} step={10} value={addAmt} onChange={(e) => setAddAmt(e.target.value)} className={pinput} />
+          <input id={`${uid}-adda`} data-guide="budget-add-amt" type="number" inputMode="decimal" min={1} step={10} value={addAmt} onChange={(e) => setAddAmt(e.target.value)} className={pinput} />
         </div>
         <div className="flex gap-2">
-          <button type="button" onClick={saveAdd} disabled={setBudget.isPending} className={cn(pbtnSmPrimary, "min-h-11 sm:min-h-10")}>{t.save}</button>
+          <button type="button" onClick={saveAdd} data-guide="budget-add-save" disabled={setBudget.isPending} className={cn(pbtnSmPrimary, "min-h-11 sm:min-h-10")}>{t.save}</button>
           <button type="button" onClick={() => { setAdding(false); setAddErr(""); }} className={cn(pbtnSm, "min-h-11 sm:min-h-10")}>{t.cancelEdit}</button>
         </div>
         {addErr && <p className="text-[13px] text-red-600 sm:col-span-3" role="alert">{addErr}</p>}
       </div>
     ) : (
-      <button type="button" onClick={() => setAdding(true)} className="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-md text-[13px] font-semibold text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-9">
+      <button type="button" onClick={() => setAdding(true)} data-guide="budget-add" className="mt-1 inline-flex min-h-11 items-center gap-1.5 rounded-md text-[13px] font-semibold text-blue-600 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 sm:min-h-9">
         <Plus className="h-4 w-4" aria-hidden="true" />{t.addOther}
       </button>
     )

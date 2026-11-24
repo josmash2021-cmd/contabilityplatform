@@ -194,7 +194,7 @@ export function useExpenseFlows({ today, canRead, canAddPhoto, photoBlocked, quo
             <DialogDescription className="text-sm text-slate-500">{t.form.pickText}</DialogDescription>
           </DialogHeader>
           <button
-            type="button" onClick={openPhoto}
+            type="button" onClick={openPhoto} data-guide="receipt-photo"
             className="grid min-h-28 place-items-center gap-1.5 rounded-xl border border-dashed border-slate-300 bg-slate-100 p-5 text-center text-sm font-semibold text-slate-900 transition hover:bg-slate-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
           >
             <Camera className="h-7 w-7 text-blue-600" aria-hidden="true" />

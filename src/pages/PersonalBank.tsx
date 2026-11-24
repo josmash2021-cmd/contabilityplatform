@@ -111,7 +111,7 @@ export default function PersonalBank() {
             <ul className="mt-5 space-y-2">
               {t.connect.points.map((p) => <li key={p} className="flex items-start gap-2 text-sm text-slate-200"><ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-emerald-400" aria-hidden="true" />{p}</li>)}
             </ul>
-            <button type="button" onClick={() => setConnecting(true)} className="mt-6 inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-100">
+            <button type="button" onClick={() => setConnecting(true)} data-guide="bank-connect" className="mt-6 inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-100">
               <Landmark className="h-4 w-4" aria-hidden="true" />{t.connect.button}
             </button>
           </section>
@@ -139,7 +139,7 @@ export default function PersonalBank() {
                 </div>
               )}
               <div className="mt-3.5 flex flex-wrap gap-2">
-                <button type="button" onClick={() => setConnecting(true)} className={cn(ui.secondary, "font-semibold")}><Plus className="h-4 w-4" aria-hidden="true" />{t.connectAnother}</button>
+                <button type="button" onClick={() => setConnecting(true)} data-guide="bank-connect" className={cn(ui.secondary, "font-semibold")}><Plus className="h-4 w-4" aria-hidden="true" />{t.connectAnother}</button>
                 <button type="button" onClick={() => setCsvOpen(true)} disabled={accounts.length === 0} className={ui.secondary}><Upload className="h-4 w-4" aria-hidden="true" />{t.importCsv}</button>
                 <button type="button" onClick={() => refresh.mutate()} disabled={refresh.isPending} className={ui.secondary}>
                   {refresh.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}{t.refresh}

@@ -3,6 +3,8 @@
 // (AES-256-GCM with TAX_FILES_KEY, api/lib/taxCrypto.ts), with a size limit and a real image-type check.
 // `settings.get` hands it back as a data URL, so every document that already shows `logo` keeps working.
 import { z } from "zod";
+import { colorOf, setColor } from "./lib/userPrefs";
+import { USER_COLORS } from "@contracts/bubble";
 import { TRPCError } from "@trpc/server";
 import { createRouter, authedQuery, adminQuery } from "./middleware";
 import { getDb } from "./queries/connection";
@@ -291,6 +293,17 @@ export const settingsRouter = createRouter({
       await db.update(users).set({ password: await bcrypt.hash(input.next, 10) }).where(eq(users.id, userId));
       passwordLimiter.reset(String(userId));
       return { ok: true };
+    }),
+
+  /** The color of the person's own circle (the initial in the menu); blue when never chosen. */
+  look: authedQuery.query(async ({ ctx }) => ({ color: await colorOf(getDb(), Number(ctx.user.id)) })),
+
+  /** Ajustes › Perfil (or the assistant's bubble, with the same button): the circle's color, saved at once. */
+  setColor: authedQuery
+    .input(z.object({ color: z.enum(USER_COLORS) }))
+    .mutation(async ({ input, ctx }) => {
+      await setColor(getDb(), Number(ctx.user.id), input.color);
+      return { color: input.color };
     }),
 
   /** The person's own name (the one in the menu and on the team). The email is their login and stays. */

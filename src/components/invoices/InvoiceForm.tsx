@@ -98,7 +98,7 @@ function FormBody({ preset, services, customers, onCreated }: {
   return (
     <form onSubmit={submit(false)} className="flex min-h-0 flex-1 flex-col" noValidate>
       <div className="grid min-h-0 flex-1 content-start gap-2.5 overflow-y-auto px-4 pb-4 pt-2">
-        <CustomerField value={customer} onChange={setCustomer} customers={customers} t={q.form} />
+        <div data-guide="invoice-customer"><CustomerField value={customer} onChange={setCustomer} customers={customers} t={q.form} /></div>
         <LinesEditor lines={lines} onChange={(l) => { setLines(l); setError(null); }} services={services} t={q.lines} />
         <label htmlFor={`${id}-when`} className={LABEL}>
           {t.form.when}

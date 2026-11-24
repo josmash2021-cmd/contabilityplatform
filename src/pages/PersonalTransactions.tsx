@@ -48,6 +48,10 @@ export default function PersonalTransactions() {
     return { current, min: { y: current.y - 2, m: 1 }, days: makeDays(now) };
   }, []);
   const [picked, setPicked] = useState<YearMonth | null>(null);
+  const askedMonth = Number(params.get("month")), askedYear = Number(params.get("year"));
+  const asked = askedMonth >= 1 && askedMonth <= 12 && askedYear >= 2000 ? `${askedYear}-${askedMonth}` : "";
+  const [seenAsk, setSeenAsk] = useState("");
+  if (asked && seenAsk !== asked) { setSeenAsk(asked); setPicked({ y: askedYear, m: askedMonth }); }
   const period = picked ?? calendar.current;
   const [tab, setTab] = useState<Tab>("all");
   const [cat, setCat] = useState(() => params.get("cat") || "all");
@@ -253,7 +257,7 @@ export default function PersonalTransactions() {
           <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-[10px] bg-blue-50 px-3 py-2.5 text-[13px] text-slate-800">
             <Sparkles className="h-[18px] w-[18px] shrink-0 text-blue-600" aria-hidden="true" />
             <span className="min-w-0 flex-1">{t.banner(toReview)}</span>
-            <button type="button" disabled={confirmAll.isPending || reviewIds.length === 0} onClick={() => confirmAll.mutate({ ids: reviewIds })}
+            <button type="button" disabled={confirmAll.isPending || reviewIds.length === 0} onClick={() => confirmAll.mutate({ ids: reviewIds })} data-guide="review-all"
               className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-[10px] bg-blue-600 px-3.5 text-[13px] font-semibold text-white hover:bg-blue-500 disabled:opacity-60 sm:min-h-9">
               {confirmAll.isPending && <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />}{t.confirmAll(reviewIds.length || toReview)}
             </button>
@@ -286,7 +290,7 @@ export default function PersonalTransactions() {
               current={selectedAccountId} items={acctItems} onPick={setSelectedAccountId} className="max-w-[18rem]" />
           )}
           {hasAccounts && (
-            <button type="button" onClick={refresh} disabled={syncMutation.isPending} aria-label={t.refreshAria} title={t.refreshAria} className={cn(smBtn, "min-h-11 px-3.5 text-sm sm:min-h-10")}>
+            <button type="button" onClick={refresh} disabled={syncMutation.isPending} aria-label={t.refreshAria} data-guide="bank-refresh" title={t.refreshAria} className={cn(smBtn, "min-h-11 px-3.5 text-sm sm:min-h-10")}>
               {syncMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> : <RefreshCw className="h-4 w-4" aria-hidden="true" />}
               <span>{t.refresh}</span>
             </button>
@@ -387,7 +391,7 @@ function TxLine({ row, fresh, acct, t, catLabel, onOpen }: {
   onOpen: () => void;
 }) {
   return (
-    <button type="button" onClick={onOpen} aria-label={row.manual ? t.editAria(row.name) : t.openRow(row.name)}
+    <button type="button" onClick={onOpen} aria-label={row.manual ? t.editAria(row.name) : t.openRow(row.name)} data-tx-id={row.id ?? undefined}
       className="grid min-h-[60px] w-full grid-cols-[36px_minmax(0,1fr)_auto] items-center gap-3 px-3.5 py-2.5 text-left transition-colors hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500">
       <TxLogo row={row} size={36} />
       <span className="min-w-0">

@@ -17,7 +17,7 @@ export function ConnectBankHero({ onConnect, children }: { onConnect: () => void
         ))}
       </ul>
       <div className="mt-6 flex flex-wrap items-center gap-3">
-        <button type="button" onClick={onConnect}
+        <button type="button" onClick={onConnect} data-guide="bank-connect"
           className="inline-flex h-11 items-center gap-2 rounded-[10px] bg-white px-5 text-sm font-semibold text-slate-900 hover:bg-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-2 focus-visible:ring-offset-slate-900">
           <Landmark className="h-4 w-4" aria-hidden="true" />{t.button}
         </button>

@@ -195,7 +195,7 @@ export default function PersonalGoals() {
     <AnimatedPage className="p-4 lg:p-8">
       <div className="mx-auto max-w-6xl">
         <PageHead title={t.title} sub={t.subtitle} right={
-          <button type="button" onClick={() => setSheet({ mode: "new" })} className={pbtnPrimary}><Plus className="h-4 w-4" aria-hidden="true" />{t.newGoal}</button>
+          <button type="button" onClick={() => setSheet({ mode: "new" })} data-guide="goal-new" className={pbtnPrimary}><Plus className="h-4 w-4" aria-hidden="true" />{t.newGoal}</button>
         } />
 
         {q.isLoading ? (
@@ -213,7 +213,7 @@ export default function PersonalGoals() {
             <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl bg-blue-50 text-blue-600"><Target className="h-6 w-6" aria-hidden="true" /></span>
             <h2 className="mt-3 font-bold text-slate-900">{t.empty.title}</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">{t.empty.text}</p>
-            <button type="button" onClick={() => setSheet({ mode: "new" })} className={cn(pbtnSmPrimary, "mt-3")}>{t.empty.cta}</button>
+            <button type="button" onClick={() => setSheet({ mode: "new" })} data-guide="goal-new" className={cn(pbtnSmPrimary, "mt-3")}>{t.empty.cta}</button>
           </section>
         ) : (
           <>

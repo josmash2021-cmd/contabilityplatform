@@ -27,7 +27,7 @@ export function ChatBubble({ show, label, title, initials, online, unread, unrea
   const content = peek ?? lastPeek;
   if (!fab.mounted) return null;
   return createPortal(
-    <div className={cn("fixed z-40 flex w-max flex-col items-start gap-3.5", className)}>
+    <div data-tax-dock="" className={cn("fixed z-40 flex w-max flex-col items-start gap-3.5", className)}>
       {bubble.mounted && content && (
         <button type="button" onClick={onOpen} data-leaving={bubble.leaving}
           className="tx-peek relative grid w-0 min-w-full gap-0.5 rounded-[20px] rounded-bl-md border border-slate-200 bg-white px-4 pb-3 pt-2.5 text-left shadow-[0_20px_42px_-18px_rgba(15,23,42,0.45)] transition-transform duration-200 hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
