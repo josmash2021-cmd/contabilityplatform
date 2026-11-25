@@ -3,7 +3,7 @@ import { USER_COLOR_CLASSES } from "@/lib/userColor";
 import { startTransition, useEffect, useLayoutEffect, useMemo, useRef, useState, Suspense } from "react";
 import { preloadWhenIdle } from "@/lib/preloadPages";
 import { toast } from "sonner";
-import { Outlet, useLocation, useNavigate, Link } from "react-router";
+import { Outlet, useLocation, useNavigate, useNavigationType, Link } from "react-router";
 import { useAuth } from "@/hooks/useAuth";
 import { useAutoRepair } from "@/hooks/useAutoRepair";
 import { trpc } from "@/providers/trpc";
@@ -202,6 +202,7 @@ function AccountMenu({ name, email, initial, t, onGo, logout }: { name: string; 
 export function AppLayout() {
   const location = useLocation();
   const navigate = useNavigate();
+  const navType = useNavigationType();
   const { user, logout, isAdmin } = useAuth();
   const t = useCopy(appCopy);
   const userMode: "business" | "personal" = user?.modePreference === "personal" ? "personal" : "business";
@@ -277,6 +278,44 @@ export function AppLayout() {
     const raf = requestAnimationFrame(() => requestAnimationFrame(() => { el.dataset.fx = "in"; }));
     return () => cancelAnimationFrame(raf);
   }, [location.key, location.pathname]);
+  // Every page opens from its top (owner: "a veces abre desde el medio y no se ve el título"): all pages share one
+  // scrolling <main>, which kept the last page's position. Going back (browser back) returns to where they were.
+  const mainRef = useRef<HTMLElement>(null);
+  const scrolls = useRef(new Map<string, number>());
+  const scrollPath = useRef(location.pathname);
+  const scrollKey = useRef(location.key);
+  // Our own jumps (to the top, or back to where they were) and the browser trimming a page that got shorter aren't
+  // the person scrolling: those moments don't overwrite where they were on the page they left.
+  const quietUntil = useRef(0);
+  useEffect(() => {
+    const el = mainRef.current;
+    if (!el) return;
+    const save = () => { if (performance.now() >= quietUntil.current) scrolls.current.set(scrollKey.current, el.scrollTop); };
+    el.addEventListener("scroll", save, { passive: true });
+    return () => el.removeEventListener("scroll", save);
+    // Re-attached on every change of page: <main> may not be there yet on the very first render (the app still loading).
+  }, [location.key]);
+  useLayoutEffect(() => {
+    const el = mainRef.current;
+    const changed = scrollPath.current !== location.pathname;
+    scrollPath.current = location.pathname;
+    scrollKey.current = location.key;
+    if (!el || !changed) return;
+    const back = navType === "POP" ? scrolls.current.get(location.key) : undefined;
+    quietUntil.current = performance.now() + 300;
+    el.scrollTop = 0;
+    if (window.scrollY) window.scrollTo(0, 0);
+    if (!back) return;
+    // The page may still be loading its data: try for a moment until it's tall enough.
+    let tries = 0, raf = 0;
+    const put = () => {
+      quietUntil.current = performance.now() + 300;
+      el.scrollTop = back;
+      if (Math.abs(el.scrollTop - back) > 2 && ++tries < 60) raf = requestAnimationFrame(put);
+    };
+    raf = requestAnimationFrame(put);
+    return () => cancelAnimationFrame(raf);
+  }, [location.key, location.pathname, navType]);
   // The tapped item shows as selected right away (before the page has changed); a change of page from
   // anywhere else (back button, a link) takes over, because `from` no longer matches.
   const [pend, setPend] = useState<{ to: string; from: string } | null>(null);
@@ -346,7 +385,7 @@ export function AppLayout() {
           <AccountMenu name={displayName} email={user?.email} initial={initial} t={t} onGo={go} logout={logout} />
         </header>
 
-        <main className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
+        <main ref={mainRef} className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
           {isAdmin && !memberRole && <MaintenanceReminder className="px-4 lg:px-8" />}
           <ViewAsBanner />
           <TeamBanner />

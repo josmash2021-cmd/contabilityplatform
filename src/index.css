@@ -90,17 +90,38 @@
   pointer-events: none !important;
 }
 
-/* Sonner toast overrides — always on top, solid background */
-[data-sonner-toast] {
+/* The notices (sonner, main.tsx; owner chose "Cristal claro", 2026-11-25): light glass, a colored dot, the words and,
+   when there is one, "Deshacer" as an underlined word. No X, no timer line; a swipe takes it away. Always on top. */
+[data-sonner-toaster] { z-index: 99999 !important; --width: 344px; }
+[data-sonner-toast][data-styled="true"] {
   z-index: 99999 !important;
-  background: #ffffff !important;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.12) !important;
-  border: 1px solid #e5e5e5 !important;
+  background: rgba(255, 255, 255, 0.9) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(1.6);
+  backdrop-filter: blur(16px) saturate(1.6);
+  border: 0 !important;
+  border-radius: 16px !important;
+  box-shadow: 0 0 0 1px rgba(15, 23, 42, 0.06), 0 22px 44px -18px rgba(15, 23, 42, 0.42) !important;
+  padding: 13px 16px !important;
+  gap: 12px !important;
+  color: #0f172a !important;
+  font-family: inherit !important;
+  cursor: grab;
 }
-
-[data-sonner-toaster] {
-  z-index: 99999 !important;
+[data-sonner-toast][data-styled="true"][data-swiping="true"] { cursor: grabbing; }
+[data-sonner-toast][data-styled="true"] [data-icon] { width: 8px !important; height: 8px !important; margin: 0 !important; flex: none; align-self: center; }
+[data-sonner-toast][data-styled="true"] [data-content] { gap: 1px !important; min-width: 0; }
+[data-sonner-toast][data-styled="true"] [data-title] { font-size: 14px !important; font-weight: 600 !important; line-height: 1.38 !important; color: #0f172a !important; }
+[data-sonner-toast][data-styled="true"] [data-description] { font-size: 12.5px !important; line-height: 1.4 !important; color: #5b6678 !important; }
+[data-sonner-toast][data-styled="true"] [data-button] {
+  background: none !important; color: #2563eb !important; padding: 0 !important; height: auto !important; margin-left: auto !important;
+  font-size: 13.5px !important; font-weight: 650 !important; text-decoration: underline; text-underline-offset: 3px; border-radius: 0 !important; flex: none;
 }
+[data-sonner-toast][data-styled="true"] [data-close-button] { display: none !important; }
+.pb-dot { display: block; width: 8px; height: 8px; border-radius: 50%; background: #2563eb; }
+.pb-dot[data-tone="ok"] { background: #059669; box-shadow: 0 0 0 3px rgba(5, 150, 105, 0.14); }
+.pb-dot[data-tone="err"] { background: #dc2626; box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.14); }
+.pb-dot[data-tone="warn"] { background: #d97706; box-shadow: 0 0 0 3px rgba(217, 119, 6, 0.14); }
+.pb-dot[data-tone="info"] { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14); }
 
 @keyframes authSplineIn {
   from { opacity: 0; }

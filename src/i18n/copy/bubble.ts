@@ -22,8 +22,8 @@ const es = {
   noneLeft: "Ya usaste las preguntas de este mes. Vuelven el día 1.",
   left: (n: number) => `Te ${n === 1 ? "queda 1 pregunta" : `quedan ${n} preguntas`} este mes.`,
   stopped: "Lo dejé ahí. Cuando quieras, lo seguimos.",
-  stoppedNote: "Me detuve porque tocaste la pantalla. Tócame si quieres seguir.",
-  goOn: "Me detuve porque tocaste la pantalla. ¿Lo seguimos?",
+  stoppedNote: "Me detuve porque me tocaste. Tócame si quieres seguir.",
+  goOn: "Me detuve porque me tocaste. ¿Lo seguimos?",
   missing: "No encontré dónde hacerlo en esta pantalla. Puede que tu plan no lo tenga o que algo haya cambiado.",
   step: (i: number, n: number | null) => (n ? `Paso ${i} de ${n}` : `Paso ${i}`),
   more: { auto: "Abro Más para llegar a las otras páginas.", teach: "Toca Más." },
@@ -48,7 +48,7 @@ const es = {
   } as Sugg,
   tasks: {
     tour: {
-      intro: { auto: "Te enseño la app, página por página: qué hay en cada una y para qué sirve. Si quieres parar, toca afuera.", teach: "Te enseño la app. Toca cada página cuando te la marque." },
+      intro: { auto: "Te enseño la app, página por página: qué hay en cada una y para qué sirve. Si quieres parar, tócame.", teach: "Te enseño la app. Toca cada página cuando te la marque." },
       page: (name: string) => ({ auto: `Vamos a ${name}.`, teach: `Toca ${name}.` }),
       pageOf: (i: number, n: number) => `Página ${i} de ${n}`,
       whole: (next: string) => ({ auto: `Esa es toda la página. Ahora vamos a ${next}.`, teach: `Esa es toda la página. Ahora vamos a ${next}.` }),
@@ -252,8 +252,8 @@ const en: BubbleCopy = {
   noneLeft: "You've used this month's questions. They come back on the 1st.",
   left: (n: number) => `${n} ${n === 1 ? "question" : "questions"} left this month.`,
   stopped: "I left it there. We can pick it up whenever you want.",
-  stoppedNote: "I stopped because you tapped the screen. Tap me to go on.",
-  goOn: "I stopped because you tapped the screen. Shall we go on?",
+  stoppedNote: "I stopped because you tapped me. Tap me to go on.",
+  goOn: "I stopped because you tapped me. Shall we go on?",
   missing: "I couldn't find where to do it on this screen. Your plan may not have it, or something changed.",
   step: (i: number, n: number | null) => (n ? `Step ${i} of ${n}` : `Step ${i}`),
   more: { auto: "I open More to reach the other pages.", teach: "Tap More." },
@@ -278,7 +278,7 @@ const en: BubbleCopy = {
   },
   tasks: {
     tour: {
-      intro: { auto: "I'll show you the app, page by page: what's on each one and what it's for. To stop, tap outside.", teach: "I'll show you the app. Tap each page when I light it." },
+      intro: { auto: "I'll show you the app, page by page: what's on each one and what it's for. To stop, tap me.", teach: "I'll show you the app. Tap each page when I light it." },
       page: (name: string) => ({ auto: `Let's go to ${name}.`, teach: `Tap ${name}.` }),
       pageOf: (i: number, n: number) => `Page ${i} of ${n}`,
       whole: (next: string) => ({ auto: `That's the whole page. Now let's go to ${next}.`, teach: `That's the whole page. Now let's go to ${next}.` }),

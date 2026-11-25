@@ -1,8 +1,8 @@
 // The admin's own shell, apart from the business app: a menu on computers (Resumen, Usuarios, Pagos, Impuestos,
 // Soporte, Bloqueados, Sistema, and "Volver a mi cuenta"), a bar at the bottom on phones with "Más" for the rest.
 // The counts on the menu and the system card come from admin.overview (the same numbers as the Resumen).
-import { useEffect, useState } from "react";
-import { Link, Navigate, Outlet, useLocation } from "react-router";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { Link, Navigate, Outlet, useLocation, useNavigationType } from "react-router";
 import { ArrowLeft, CreditCard, FileText, Headphones, Home, MoreHorizontal, Server, UserX, Users, type LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { MaintenanceReminder } from "@/components/MaintenanceScreen";
@@ -37,7 +37,15 @@ export default function AdminLayout() {
   const { isAdmin } = useAuth();
   const t = useCopy(adminCopy);
   const { pathname } = useLocation();
+  const navType = useNavigationType();
   const [more, setMore] = useState(false);
+  // Every page opens from its top (the window scrolls here; going back, the browser returns to where they were).
+  const lastPath = useRef(pathname);
+  useLayoutEffect(() => {
+    if (lastPath.current === pathname) return;
+    lastPath.current = pathname;
+    if (navType !== "POP") window.scrollTo(0, 0);
+  }, [pathname, navType]);
   const { data: o } = trpc.admin.overview.useQuery(undefined, { enabled: isAdmin, refetchInterval: 20_000, refetchOnWindowFocus: true });
   useEffect(() => { if (isAdmin) preloadWhenIdle("admin"); }, [isAdmin]);
 

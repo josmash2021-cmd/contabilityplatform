@@ -1,7 +1,7 @@
 // ── The bubble's hands: it flies to what it shows, lights it, presses it, types into it ──
-// "Hazlo por mí" (auto): it does each step with the app's own buttons while the person watches; any tap of theirs
-// outside the bubble stops it. "Enséñame" (teach): it lights each step and waits for the person to do it; a tap
-// outside what's lit ends it. Plain DOM on purpose (the elements are React's, but the bubble, its cloud and the glow
+// "Hazlo por mí" (auto): it does each step with the app's own buttons while the person watches. "Enséñame" (teach): it
+// lights each step and waits for the person to do it. Only a tap on the bubble itself stops either (owner,
+// 2026-11-25). Plain DOM on purpose (the elements are React's, but the bubble, its cloud and the glow
 // are its own). From the prototype the owner approved, made more human (owner, 2026-11-24): soft arcs that start calm
 // and land gently, the page and the bubble move together (it "pulls" the page), it presses where it stands (no going
 // back and forth), the glow appears in place and follows its element if the page redraws, words come in one by one
@@ -75,7 +75,9 @@ export type GuideEnv = {
   onMove?: (dx: number, dy: number) => void;
 };
 
-const WORD_MS = 150, PAUSE_MS = 450, MIN_READ_MS = 1800;
+// Its words come in one every WORD_MS; then it waits long enough to read the whole line calmly (owner, 2026-11-25:
+// "los quita rápido, no se alcanza a leer"): a pause plus a little more per word, and never under MIN_READ_MS.
+const WORD_MS = 150, PAUSE_MS = 1400, PER_WORD_MS = 110, MIN_READ_MS = 2600;
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c] as string);
 
@@ -199,8 +201,6 @@ export class Guide {
   private token = 0;
   /** What it's working on now (marked data-ab-here; no frame is drawn, owner 2026-11-24). */
   private here: HTMLElement | null = null;
-  /** While it asks: the person's taps here are their answer, not a stop. */
-  private allow: HTMLElement | null = null;
   private answer: ((v: string | null) => void) | null = null;
   private readDone: (() => void) | null = null;
   private stepDone: (() => void) | null = null;
@@ -272,8 +272,9 @@ export class Guide {
     if (this.run) return;
     if (fly) void this.flyTo(this.env.home()); else this.setPos(this.env.home());
   }
-  /** How long a flight of this length takes: calm, the farther the longer (0.75–2 s). */
-  private flightMs(dist: number) { return Math.max(750, Math.min(2000, 450 + dist * 1.15)); }
+  /** How long a flight of this length takes: calm, the farther the longer (0.75–2.4 s; a long one across the screen
+   *  stays well under its top speed, so it never looks rushed). */
+  private flightMs(dist: number) { return Math.max(750, Math.min(2400, 450 + dist * 1.4)); }
   /**
    * A soft arc that bows upward like a hand's gesture, tighter near the end so it lands straight on its spot, with a
    * calm start and a long gentle landing.
@@ -402,12 +403,13 @@ export class Guide {
     words.forEach((w, i) => {
       const open = 0.7 + ((i * 37) % 10) / 70 + Math.min(0.08, w.length / 120);
       kf.push({ transform: `scale(${(1 + (1 - open) * 0.55).toFixed(3)}, ${open.toFixed(3)})`, offset: ((i + 0.45) / n) * f * 0.98, easing: "ease-in-out" });
-      kf.push({ transform: "scale(.97, 1.03)", offset: Math.min((i + 0.95) / n, 0.98) * f * 0.98, easing: "ease-in-out" });
+      kf.push({ transform: "scale(.97, 1.03)", offset: ((i + 0.95) / n) * f * 0.98, easing: "ease-in-out" });
     });
     kf.push({ transform: "scale(1, 1)", offset: f, easing: "cubic-bezier(.34,1.45,.64,1)" });
     kf.push({ transform: "scale(1.08, 1.08)", offset: f + (1 - f) * 0.4, easing: "cubic-bezier(.34,1.45,.64,1)" });
     kf.push({ transform: "scale(1, 1)", offset: 1 });
-    const a = m.animate(kf, { duration: total });
+    let a: Animation;
+    try { a = m.animate(kf, { duration: total }); } catch { return; } // never let the star stop its words
     this.mouth = a;
     a.onfinish = () => { if (this.mouth === a) this.mouth = null; };
   }
@@ -465,7 +467,7 @@ export class Guide {
   async note(text: string, at: P = this.pos, holdMs = 4200) {
     this.talk(`<div class="ab-spoken">${esc(text)}</div>`, at);
     const words = this.speak();
-    await sleep(Math.max(holdMs, words * WORD_MS + 1800));
+    await sleep(Math.max(holdMs, words * (WORD_MS + PER_WORD_MS) + 2600));
     this.hush();
   }
   /** The cloud's words come in one by one (a fade, never a blur); returns how many. */
@@ -498,7 +500,7 @@ export class Guide {
     this.talk(`${label ? `<div class="ab-step"><i></i>${esc(label)}</div>` : ""}<div class="ab-spoken">${esc(text)}</div>`, at, avoid, aboveFirst, choices);
     return this.speak();
   }
-  private readMs(words: number) { return Math.max(MIN_READ_MS, words * WORD_MS + PAUSE_MS); }
+  private readMs(words: number) { return Math.max(MIN_READ_MS, words * (WORD_MS + PER_WORD_MS) + PAUSE_MS); }
 
   // ── What it works on: no frame around it (owner: "quítale los bordes"); the bubble and its cloud say it ──
   private light(el: HTMLElement) {
@@ -535,31 +537,81 @@ export class Guide {
     const tx = Math.min(Math.max(r.left + Math.min(r.width / 2, 22), r.right - Math.min(r.width * 0.28, 34)), a.right - 6);
     // (inside what's seen; a tab of the phone's bottom bar is pressed right on it)
     const ty = Math.min(Math.max(r.top + r.height / 2, a.top + 6), a.bottom - 6);
-    // One fluid gesture (owner: "smooth, no robótico"): it leans in onto the point, squeezes as it presses (the button
-    // sinks with it, a soft ripple right there, the real click) and eases back with a gentle bounce, without hops.
-    const sq = b.querySelector<HTMLElement>(".ab-squash");
-    const dx = tx - (this.pos.x + size / 2), dy = ty - (this.pos.y + size / 2);
-    const ms = this.reduce ? 1 : 920;
-    const anim = sq?.animate?.([
-      { translate: "0px 0px", scale: "1", easing: "cubic-bezier(.42,0,.2,1)" },
-      { translate: `${dx * 0.92}px ${dy * 0.92}px`, scale: "0.93", offset: 0.4, easing: "cubic-bezier(.3,0,.25,1)" },
-      { translate: `${dx}px ${dy}px`, scale: "0.84", offset: 0.52, easing: "cubic-bezier(.25,.1,.2,1)" },
-      { translate: `${dx * 0.12}px ${dy * 0.12}px`, scale: "1.04", offset: 0.82, easing: "cubic-bezier(.3,0,.3,1)" },
-      { translate: "0px 0px", scale: "1" },
-    ], { duration: ms });
-    await sleep(ms * 0.44);
-    if (!this.alive()) { anim?.cancel(); return; }
+    // The press (owner chose "Gota", 2026-11-25): the bubble lets a little drop fall onto the point; where it lands the
+    // button sinks a little and water rings open inside it (no ring around it, no lean). The real click as it lands.
+    const R = size / 2, cx = this.pos.x + R, cy = this.pos.y + R;
+    const ang = Math.atan2(ty - cy, tx - cx);
+    const sx = cx + Math.cos(ang) * (R - 4), sy = cy + Math.sin(ang) * (R - 4);
+    const ms = this.reduce ? 1 : 640;
+    // the bubble gives a little as the drop leaves it
+    b.querySelector<HTMLElement>(".ab-squash")?.animate?.([{ scale: "1" }, { scale: "0.95 1.03", offset: 0.35 }, { scale: "1.02 0.99", offset: 0.7 }, { scale: "1" }], { duration: this.reduce ? 1 : 720, easing: "ease-in-out" });
+    const d = document.createElement("span");
+    d.className = "ab-drop";
+    d.style.setProperty("--ab-dsize", `${Math.round(size * 0.25)}px`);
+    document.body.appendChild(d);
+    const mid = { x: (sx + tx) / 2, y: Math.min(sy, ty) - 6 };
+    d.animate?.([
+      { translate: `${sx}px ${sy}px`, scale: "0.2" },
+      { translate: `${sx}px ${sy}px`, scale: "1", offset: 0.3 },
+      { translate: `${mid.x}px ${mid.y}px`, scale: "1", offset: 0.65, easing: "cubic-bezier(.55,0,1,.45)" },
+      { translate: `${tx}px ${ty}px`, scale: "1.15" },
+    ], { duration: ms, easing: "cubic-bezier(.4,0,.6,1)", fill: "forwards" });
+    await sleep(ms);
+    if (!this.alive()) { d.remove(); return; }
+    // it lands: it spreads and goes into the button
+    d.animate?.([{ translate: `${tx}px ${ty}px`, scale: "1.15", opacity: 1 }, { translate: `${tx}px ${ty}px`, scale: "1.6", opacity: 0 }], { duration: this.reduce ? 1 : 200, fill: "forwards" });
+    setTimeout(() => d.remove(), 260);
     el.classList.remove("ab-untap"); el.classList.add("ab-tapped");
-    const rip = document.createElement("span");
-    rip.className = "ab-ripple"; rip.style.left = `${tx}px`; rip.style.top = `${ty}px`;
-    document.body.appendChild(rip); setTimeout(() => rip.remove(), 1200);
-    await sleep(ms * 0.16);
+    this.water(el, tx, ty);
+    await sleep(this.reduce ? 0 : 150);
     el.classList.remove("ab-tapped"); el.classList.add("ab-untap");
     setTimeout(() => el.classList.remove("ab-untap"), 700);
     this.unlight();
-    if (!this.alive()) { anim?.cancel(); return; }
+    if (!this.alive()) return;
     el.click();
-    await sleep(ms * 0.42);
+    await sleep(this.reduce ? 0 : 520);
+  }
+  /** Water rings inside what it pressed, from where the drop fell: a bright crest and a soft trough, clipped to the
+   *  button's own shape (like the bubble's rings; nothing drawn around it). Marked with the point, for the checks. */
+  private water(el: HTMLElement, tx: number, ty: number) {
+    const r = el.getBoundingClientRect();
+    const box = document.createElement("span");
+    box.className = "ab-water";
+    box.dataset.tx = String(Math.round(tx));
+    box.dataset.ty = String(Math.round(ty));
+    Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px`, borderRadius: getComputedStyle(el).borderRadius || "12px" });
+    document.body.appendChild(box);
+    if (this.reduce) { setTimeout(() => box.remove(), 300); return; }
+    const NS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(NS, "svg");
+    svg.setAttribute("viewBox", `0 0 ${r.width} ${r.height}`);
+    box.appendChild(svg);
+    const x = tx - r.left, y = ty - r.top;
+    const reach = Math.hypot(Math.max(x, r.width - x), Math.max(y, r.height - y)) * 1.05;
+    const rings = [0, 1].map((i) => {
+      const g = document.createElementNS(NS, "g"), crest = document.createElementNS(NS, "circle"), trough = document.createElementNS(NS, "circle");
+      crest.setAttribute("class", "ab-crest"); trough.setAttribute("class", "ab-trough");
+      for (const c of [trough, crest]) { c.setAttribute("cx", x.toFixed(1)); c.setAttribute("cy", y.toFixed(1)); c.setAttribute("r", "0"); g.appendChild(c); }
+      g.style.opacity = "0";
+      svg.appendChild(g);
+      return { g, crest, trough, delay: i * 170, dur: 1050 + i * 200, reach: reach * (1 - i * 0.25), a: 1 - i * 0.3 };
+    });
+    const t0 = performance.now();
+    const step = (now: number) => {
+      let left = 0;
+      for (const w of rings) {
+        const p = (now - t0 - w.delay) / w.dur;
+        if (p < 0) { left++; continue; }
+        if (p >= 1) { w.g.style.opacity = "0"; continue; }
+        left++;
+        const rad = 1 + w.reach * (1 - Math.pow(1 - p, 2.6)), thick = 1.9 - p * 1.1;
+        w.crest.setAttribute("r", rad.toFixed(2)); w.crest.setAttribute("stroke-width", thick.toFixed(2));
+        w.trough.setAttribute("r", (rad + thick + 0.4).toFixed(2)); w.trough.setAttribute("stroke-width", (thick * 0.8).toFixed(2));
+        w.g.style.opacity = (w.a * (p < 0.1 ? p / 0.1 : Math.pow(1 - (p - 0.1) / 0.9, 1.6))).toFixed(3);
+      }
+      if (left) requestAnimationFrame(step); else box.remove();
+    };
+    requestAnimationFrame(step);
   }
   private touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
   private async typeIn(el: HTMLInputElement, text: string) {
@@ -640,36 +692,21 @@ export class Guide {
 
   // ── The person ──
   /**
-   * The person's touch. Only a real TAP stops it (owner: on the phone it went to its corner when they just scrolled to
-   * read): pressing and lifting in the same spot. Sliding the page, a long press, its cloud and panel never stop it;
-   * while it asks, the form it's filling (the open sheet) is theirs to touch. A tap on the bubble itself stops it at once.
+   * The person's touch (owner, 2026-11-25): ONLY a tap on the bubble itself stops it. Touching anywhere else (the page,
+   * scrolling to read, its cloud, the form it asks about) never cancels what it's doing; on the last step that only
+   * shows where they go on, their tap just ends the wait.
    */
-  private downAt: { x: number; y: number; t: number; id: number } | null = null;
-  /** Whether the last stop was the person's tap (the bubble then says why it stopped). */
+  /** Whether the last stop was the person's tap on the bubble (it then says why it stopped). */
   stoppedByPerson = false;
   private onDown = (e: PointerEvent) => {
-    this.downAt = null;
     if (!this.run || !e.isTrusted) return;
     const target = e.target as Node;
-    if (this.env.own(target) && !this.env.bubble.contains(target)) return;
-    if (this.allow && this.allow.contains(target)) return;
-    if (this.answer && target instanceof Element && target.closest("[role='dialog']")) return;
-    if (this.lastShow && !this.env.bubble.contains(target)) { this.readDone?.(); return; }
-    // Teach: inside what's lit is them doing the step.
-    if (this.run.mode === "teach" && this.run.el && this.run.el.contains(target)) return;
     if (this.env.bubble.contains(target)) { this.stoppedAt = performance.now(); this.stop(true); return; }
-    this.downAt = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
+    if (this.env.own(target)) return;
+    if (this.lastShow) this.readDone?.();
   };
-  private onUp = (e: PointerEvent) => {
-    const d = this.downAt;
-    this.downAt = null;
-    if (!d || !this.run || !e.isTrusted || e.pointerId !== d.id) return;
-    // A slide (scrolling to read) or a long press isn't "stop".
-    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12 || performance.now() - d.t > 700) return;
-    this.stoppedAt = performance.now();
-    this.stop(true);
-  };
-  private onCancel = () => { this.downAt = null; };
+  private onUp = () => {};
+  private onCancel = () => {};
   private onClick = (e: MouseEvent) => {
     if (!this.run || this.run.mode !== "teach" || !e.isTrusted || !this.run.el) return;
     if (this.run.el.contains(e.target as Node) && this.stepDone && this.currentAct === "tap") {
@@ -687,7 +724,6 @@ export class Guide {
     this.readDone?.();
     this.stepDone?.();
     const a = this.answer; this.answer = null; a?.(null);
-    this.allow = null;
     this.hush();
     this.unlight();
     this.env.bubble.classList.remove("ab-talking");
@@ -776,7 +812,7 @@ export class Guide {
         } else {
           this.unlight();
           const words = this.say(label, text);
-          await this.waitRead(Math.min(2600, Math.max(1300, words * WORD_MS + PAUSE_MS)));
+          await this.waitRead(Math.min(3600, Math.max(2000, words * (WORD_MS + PER_WORD_MS) + 900)));
           if (!this.alive()) return;
           this.hush();
           if (location.pathname + location.search !== path) this.env.navigate(path);
@@ -830,7 +866,6 @@ export class Guide {
         if (!this.alive()) return null;
         await this.reach(el, "show");
         if (!this.alive()) return null;
-        this.allow = opts?.allow ?? null;
         if (this.run) this.run.el = opts?.allow ?? el;
         const b = this.env.bubble;
         b.classList.add("ab-talking");
@@ -841,7 +876,6 @@ export class Guide {
           this.answer = (v) => { clearInterval(poll); done(v); };
           if (opts?.until) poll = window.setInterval(() => { if (opts.until?.()) { const a = this.answer; this.answer = null; clearInterval(poll); a?.("dom"); } }, 150);
         });
-        this.allow = null;
         this.hush();
         return this.alive() ? value : null;
       },

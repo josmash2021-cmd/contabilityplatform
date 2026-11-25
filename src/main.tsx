@@ -40,16 +40,18 @@ createRoot(document.getElementById('root')!).render(
       <I18nProvider>
       <TRPCProvider>
         <App />
-        {/* Bottom right on computer and phone, above whatever is fixed at the bottom (--toast-bottom in index.css). */}
+        {/* The notices (owner chose "Cristal claro", 2026-11-25): light glass in the middle of the bottom, a colored dot
+            and the words, no X and no timer line; it goes by itself, or with a swipe (down or to a side). Above whatever
+            is fixed at the bottom (--toast-bottom in index.css); the assistant's bubble steps up over it on phones. */}
         <Toaster
-          position="bottom-right"
+          position="bottom-center"
           className="z-[9999]"
-          offset={{ bottom: "var(--toast-bottom)", right: 24 }}
+          offset={{ bottom: "var(--toast-bottom)" }}
           mobileOffset={{ bottom: "var(--toast-bottom)", left: 12, right: 12 }}
           visibleToasts={1}
-          duration={4000}
-          richColors
-          closeButton
+          duration={6000}
+          swipeDirections={["bottom", "left", "right"]}
+          icons={{ success: <i className="pb-dot" data-tone="ok" />, error: <i className="pb-dot" data-tone="err" />, warning: <i className="pb-dot" data-tone="warn" />, info: <i className="pb-dot" data-tone="info" /> }}
         />
       </TRPCProvider>
       </I18nProvider>

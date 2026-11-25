@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router";
 import { toast } from "sonner";
 import type { inferRouterOutputs } from "@trpc/server";
@@ -101,6 +101,17 @@ function OwnerHome() {
   const { data: plan } = trpc.subscription.planInfo.useQuery(undefined, { staleTime: 60_000 });
   const has = (f: Feature) => !!plan?.features.includes(f);
   const { data: review } = trpc.review.count.useQuery(undefined, { staleTime: 60_000 });
+  // When the app opens, it confirms by itself what it's sure about (api/lib/autoConfirm.ts), so Inicio's count only
+  // has what needs the owner. It used to run only on Banco and Movimientos, so Inicio could show them all (owner).
+  const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
+    onSuccess: (d) => {
+      if ((d.fixed ?? 0) > 0 || (d.autoConfirmed ?? 0) > 0) {
+        void utils.review.count.invalidate(); void utils.review.list.invalidate(); void utils.review.autoRecent.invalidate(); void utils.home.overview.invalidate();
+      }
+    },
+    onError: () => {},
+  });
+  useEffect(() => { const id = setTimeout(() => autoFix(), 1500); return () => clearTimeout(id); }, [autoFix]);
   const { data: billList } = trpc.vendors.bills.list.useQuery({ filter: "unpaid", today: dates.today, limit: 500 }, { enabled: has("vendors") });
   const { data: tax } = trpc.tax.reminders.useQuery(undefined, { enabled: has("taxes") });
   const { data: receiptUse } = trpc.receipts.usage.useQuery(undefined, { enabled: has("receipts") });

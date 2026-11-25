@@ -2,7 +2,7 @@
 // A clear soap bubble with a star (the prototype the owner approved, 2026-11-24). Tap it: a small panel (a sheet from
 // below on phones) where they ask anything; the same assistant answers with their own data and knows the page they're
 // on (api/lib/bubble.ts). When it's something done in the app, the answer comes with "Hazlo por mí" (the bubble does it
-// with the app's own buttons while they watch; any tap of theirs stops it) and "Enséñame" (it lights each step and
+// with the app's own buttons while they watch; only a tap on the bubble stops it) and "Enséñame" (it lights each step and
 // waits for them). Only the closed list of tasks (contracts/bubble.ts, ./tasks.ts). When the fault is the app's, the
 // answer comes with "Avisar a soporte". It never opens by itself; with it closed nothing shows over the page.
 import { useEffect, useRef, useState, type FormEvent } from "react";
@@ -46,7 +46,19 @@ function homeOf(size: number): { x: number; y: number } {
   const dock = document.querySelector("[data-tax-dock]");
   const dockH = dock && visible(dock) ? Math.max(0, vh - tabH - dock.getBoundingClientRect().top) + 8 : 0;
   const gap = vw < 1024 ? 14 : 24;
-  return { x: vw - size - gap, y: vh - size - gap - tabH - dockH };
+  const x = vw - size - gap;
+  let y = vh - size - gap - tabH - dockH;
+  // A notice at the bottom (sonner): above it while it shows, so it never covers the bubble (owner, 2026-11-25).
+  for (const n of document.querySelectorAll<HTMLElement>("[data-sonner-toast]")) {
+    if (n.dataset.removed === "true" || n.dataset.visible === "false") continue;
+    const r = n.getBoundingClientRect();
+    if (r.width < 2 || r.right < x || r.left > x + size) continue;
+    // where it ends up (its rise in may still be under way): its own height above the toaster's bottom line
+    const line = n.closest("[data-sonner-toaster]")?.getBoundingClientRect().bottom ?? r.bottom;
+    const top = Math.min(r.top, line - n.offsetHeight);
+    if (y + size > top - 10) y = top - size - 10;
+  }
+  return { x, y };
 }
 
 export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "personal"; onGo: (path: string) => void; hidden: boolean }) {
@@ -105,7 +117,13 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     buddyRef.current = bd;
     const onResize = () => g.rest();
     window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); bd?.destroy(); buddyRef.current = null; g.destroy(); guideRef.current = null; };
+    // A notice comes or goes: back to its corner (above the notice while it shows), flying softly.
+    const toaster = document.querySelector("section[aria-label^='Notifications']");
+    let moveId = 0;
+    const onNotes = () => { window.clearTimeout(moveId); moveId = window.setTimeout(() => g.rest(true), 90); };
+    const notes = toaster ? new MutationObserver(onNotes) : null;
+    if (toaster) notes?.observe(toaster, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-removed", "data-visible"] });
+    return () => { window.removeEventListener("resize", onResize); notes?.disconnect(); window.clearTimeout(moveId); bd?.destroy(); buddyRef.current = null; g.destroy(); guideRef.current = null; };
     // Made once: the step words follow talkLang (a ref), the size and navigation follow their refs.
   }, []);
   // A new page: back to its corner (the tax preparer's bubble may be there now).
