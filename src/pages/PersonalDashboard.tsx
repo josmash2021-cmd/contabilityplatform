@@ -20,7 +20,7 @@ import { cn } from "@/lib/utils";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { personalHomeCopy, type PersonalHomeCopy } from "@/i18n/copy/personalHome";
-import { DRAFT_STEP } from "@contracts/taxRules";
+import { DRAFT_STEP, currentTaxYear, taxReminder } from "@contracts/taxRules";
 
 /** Plaid's quiet sync answers with how many movements it added. */
 const added = (d: unknown) => typeof d === "object" && d !== null && "added" in d && Number((d as { added?: unknown }).added) > 0;
@@ -119,7 +119,16 @@ export default function PersonalDashboard() {
     const [a, b] = t.today.taxRedo(redo);
     taxItems.push({ key: "tax-redo", tone: "bad", icon: FileText, title: a, text: b, action: { label: t.today.open, to: "/personal/taxes" } });
   } else if (tax?.allowed && (tax.step ?? DRAFT_STEP) === DRAFT_STEP && tax.needsDocs) {
-    taxItems.push({ key: "tax-docs", tone: "info", icon: FileText, title: t.today.taxDocs[0], text: t.today.taxDocs[1], action: { label: t.today.open, to: "/personal/taxes" } });
+    // Only in season (owner, 2026-11-25): nothing Oct–Dec, the W-2 line in January, the days left at the end
+    const season = taxReminder(tax.taxYear ?? currentTaxYear());
+    const action = { label: t.today.open, to: "/personal/taxes" };
+    if (season.phase === "w2") taxItems.push({ key: "tax-docs", tone: "info", icon: FileText, title: t.today.taxDocs[0], text: t.today.taxW2, action });
+    else if (season.phase === "open") taxItems.push({ key: "tax-docs", tone: "info", icon: FileText, title: t.today.taxDocs[0], text: t.today.taxDocs[1], action });
+    else if (season.phase === "last") {
+      const day = new Date(`${season.deadline}T12:00:00Z`).toLocaleDateString(locale, { timeZone: "UTC", day: "numeric", month: "long" });
+      const [a, b] = t.today.taxLast(season.daysLeft, day);
+      taxItems.push({ key: "tax-docs", tone: "warn", icon: FileText, title: a, text: b, action });
+    }
   }
   const goalList = ((goals ?? []) as Goal[]).filter((g) => g.isActive !== false).slice(0, 3);
 

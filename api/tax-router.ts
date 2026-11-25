@@ -433,7 +433,7 @@ export const taxRouter = createRouter({
   /** What the home screens remind about, without the documents (so it works while Impuestos is closed). */
   reminders: authedQuery.query(async ({ ctx }) => {
     const db = getDb();
-    if (!(await taxAccess(db, ctx.user)).allowed) return { allowed: false, step: null as number | null, redo: 0, needsDocs: false };
+    if (!(await taxAccess(db, ctx.user)).allowed) return { allowed: false, step: null as number | null, redo: 0, needsDocs: false, taxYear: currentTaxYear() };
     await ensureTaxTables(db);
     const userId = Number(ctx.user.id);
     const mode = modeOf(ctx.user);
@@ -447,6 +447,8 @@ export const taxRouter = createRouter({
       allowed: true, step: ret?.step ?? DRAFT_STEP,
       redo: docs.filter((d) => d.source === "client" && d.status === "redo").length,
       needsDocs: missing.docs.length > 0 || !!missing.income,
+      // Para hoy asks for the documents only in season (contracts/taxRules.ts taxReminder)
+      taxYear: currentTaxYear(),
     };
   }),
 

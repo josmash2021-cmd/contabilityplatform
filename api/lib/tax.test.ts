@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { randomBytes } from "node:crypto";
 import { decryptTaxFile, encryptTaxFile, TaxKeyMissingError } from "./taxCrypto";
-import { canSend, currentTaxYear, isClientDocKind, missingToSend, shownDocKinds } from "@contracts/taxRules";
+import { alabamaDay, canSend, currentTaxYear, isClientDocKind, missingToSend, shownDocKinds, taxReminder } from "@contracts/taxRules";
 import { sniffTaxFile } from "../tax-router";
 
 const KEY = randomBytes(32).toString("base64");
@@ -41,6 +41,39 @@ describe("tax year", () => {
   it("before October, on last year's", () => {
     expect(currentTaxYear(new Date(2027, 1, 10))).toBe(2026);
     expect(currentTaxYear(new Date(2027, 3, 14))).toBe(2026);
+  });
+});
+
+describe("Para hoy's tax reminder, by season", () => {
+  // noon in Alabama (18:00 UTC in winter, 17:00 in spring)
+  const at = (y: number, m: number, d: number, h = 18) => new Date(Date.UTC(y, m - 1, d, h));
+  it("stays out from October to December: that year's documents don't exist yet", () => {
+    expect(taxReminder(2026, at(2026, 10, 1)).phase).toBe("off");
+    expect(taxReminder(2026, at(2026, 11, 25)).phase).toBe("off");
+    expect(taxReminder(2026, at(2026, 12, 31)).phase).toBe("off");
+  });
+  it("uses Alabama's day: 11 pm on December 31 there is still December", () => {
+    const lateNight = new Date(Date.UTC(2027, 0, 1, 5)); // 11 pm Dec 31 in Central time
+    expect(alabamaDay(lateNight)).toBe("2026-12-31");
+    expect(taxReminder(2026, lateNight).phase).toBe("off");
+  });
+  it("January says when the W-2s arrive; February on, the usual reminder", () => {
+    expect(taxReminder(2026, at(2027, 1, 1)).phase).toBe("w2");
+    expect(taxReminder(2026, at(2027, 1, 31)).phase).toBe("w2");
+    expect(taxReminder(2026, at(2027, 2, 1)).phase).toBe("open");
+    expect(taxReminder(2026, at(2027, 4, 1, 17)).phase).toBe("open");
+  });
+  it("the last two weeks count the days, then it goes", () => {
+    expect(taxReminder(2026, at(2027, 4, 2, 17))).toEqual({ phase: "last", daysLeft: 13, deadline: "2027-04-15" });
+    expect(taxReminder(2026, at(2027, 4, 14, 17)).daysLeft).toBe(1);
+    expect(taxReminder(2026, at(2027, 4, 15, 17))).toEqual({ phase: "last", daysLeft: 0, deadline: "2027-04-15" });
+    expect(taxReminder(2026, at(2027, 4, 16, 17)).phase).toBe("after");
+    expect(taxReminder(2026, at(2027, 7, 1, 17)).phase).toBe("after");
+  });
+  it("a deadline moved off a weekend moves the last two weeks with it", () => {
+    // April 15, 2028 is a Saturday: the deadline is Monday the 17th
+    expect(taxReminder(2027, at(2028, 4, 4, 17))).toEqual({ phase: "last", daysLeft: 13, deadline: "2028-04-17" });
+    expect(taxReminder(2027, at(2028, 4, 3, 17)).phase).toBe("open");
   });
 });
 

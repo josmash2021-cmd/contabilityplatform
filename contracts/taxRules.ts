@@ -114,6 +114,36 @@ export function filingDeadline(taxYear: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+/** The day it is in Alabama (Central time), "YYYY-MM-DD". */
+export function alabamaDay(now: Date = new Date()): string {
+  const p = new Intl.DateTimeFormat("en-US", { timeZone: "America/Chicago", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(now);
+  const v = (t: Intl.DateTimeFormatPartTypes) => p.find((x) => x.type === t)?.value ?? "";
+  return `${v("year")}-${v("month")}-${v("day")}`;
+}
+
+export type TaxReminderPhase = "off" | "w2" | "open" | "last" | "after";
+export type TaxReminder = { phase: TaxReminderPhase; daysLeft: number; deadline: string };
+
+/**
+ * When Inicio's "Para hoy" asks for the tax documents (owner, 2026-11-25: "los taxes se empiezan a preparar desde
+ * enero"): not from October to December (that year's W-2s and 1099s don't exist yet), in January saying they arrive
+ * by January 31, from February 1 the usual reminder, the last two weeks (13 days before the deadline through the
+ * deadline itself) counting the days left, and not after the deadline. Alabama days.
+ */
+export function taxReminder(taxYear: number, now: Date = new Date()): TaxReminder {
+  const today = alabamaDay(now), deadline = filingDeadline(taxYear);
+  const day = (s: string) => Date.UTC(+s.slice(0, 4), +s.slice(5, 7) - 1, +s.slice(8, 10));
+  const daysLeft = Math.round((day(deadline) - day(today)) / 86_400_000);
+  const y = taxYear + 1;
+  let phase: TaxReminderPhase;
+  if (today < `${y}-01-01`) phase = "off";
+  else if (today < `${y}-02-01`) phase = "w2";
+  else if (daysLeft > 13) phase = "open";
+  else if (daysLeft >= 0) phase = "last";
+  else phase = "after";
+  return { phase, daysLeft: Math.max(0, daysLeft), deadline };
+}
+
 /** Documents that arrive by January 31 (W-2, 1099s, 1098): shown as "Llega a más tardar el 31 de enero". */
 export const ARRIVES_BY_JAN31: ReadonlySet<string> = new Set(["w2", "int", "home", "k1099", "payroll"]);
 

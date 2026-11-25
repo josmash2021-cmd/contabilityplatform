@@ -23,7 +23,7 @@ import { appCopy } from "@/i18n/copy/app";
 import { teamCopy } from "@/i18n/copy/team";
 import { receiptCategoryLabel, receiptsCopy } from "@/i18n/copy/receipts";
 import type { Feature } from "@contracts/planFeatures";
-import { DRAFT_STEP } from "@contracts/taxRules";
+import { DRAFT_STEP, currentTaxYear, taxReminder } from "@contracts/taxRules";
 import { cn } from "@/lib/utils";
 
 type Overview = inferRouterOutputs<AppRouter>["home"]["overview"];
@@ -167,7 +167,16 @@ function OwnerHome() {
     const [a, b] = t.tasks.taxRedo(redo);
     tasks.push({ tone: "bad", icon: FileText, title: a, text: b, action: { label: t.tasks.open, to: "/taxes" } });
   } else if (tax?.allowed && (tax.step ?? DRAFT_STEP) === DRAFT_STEP && tax.needsDocs) {
-    tasks.push({ tone: "info", icon: FileText, title: t.tasks.taxDocs[0], text: t.tasks.taxDocs[1], action: { label: t.tasks.upload, to: "/taxes" } });
+    // Only in season (owner, 2026-11-25): nothing Oct–Dec, the 1099 line in January, the days left at the end
+    const season = taxReminder(tax.taxYear ?? currentTaxYear());
+    const action = { label: t.tasks.upload, to: "/taxes" };
+    if (season.phase === "w2") tasks.push({ tone: "info", icon: FileText, title: t.tasks.taxDocs[0], text: t.tasks.taxW2, action });
+    else if (season.phase === "open") tasks.push({ tone: "info", icon: FileText, title: t.tasks.taxDocs[0], text: t.tasks.taxDocs[1], action });
+    else if (season.phase === "last") {
+      const day = new Date(`${season.deadline}T12:00:00Z`).toLocaleDateString(locale, { timeZone: "UTC", day: "numeric", month: "long" });
+      const [a, b] = t.tasks.taxLast(season.daysLeft, day);
+      tasks.push({ tone: "warn", icon: FileText, title: a, text: b, action });
+    }
   }
   if (receiptUse && receiptUse.cap !== null && receiptUse.remaining !== null && receiptUse.remaining <= 5) {
     const [a, b] = t.tasks.receipts(receiptUse.remaining);
