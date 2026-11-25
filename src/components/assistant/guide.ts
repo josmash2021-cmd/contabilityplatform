@@ -214,6 +214,8 @@ export class Guide {
     this.env = env;
     this.setPos(env.home());
     document.addEventListener("pointerdown", this.onDown, true);
+    document.addEventListener("pointerup", this.onUp, true);
+    document.addEventListener("pointercancel", this.onCancel, true);
     document.addEventListener("click", this.onClick, true);
     window.visualViewport?.addEventListener("resize", this.onView);
     window.visualViewport?.addEventListener("scroll", this.onView);
@@ -235,6 +237,8 @@ export class Guide {
   destroy() {
     this.stop();
     document.removeEventListener("pointerdown", this.onDown, true);
+    document.removeEventListener("pointerup", this.onUp, true);
+    document.removeEventListener("pointercancel", this.onCancel, true);
     document.removeEventListener("click", this.onClick, true);
     window.visualViewport?.removeEventListener("resize", this.onView);
     window.visualViewport?.removeEventListener("scroll", this.onView);
@@ -407,6 +411,12 @@ export class Guide {
     requestAnimationFrame(() => requestAnimationFrame(() => { g.style.transition = ""; g.style.transform = "none"; }));
   }
   /** Says a line by itself (no steps), word by word, then goes quiet. */
+  /** Once it's back in its corner, it says something there (why it stopped). */
+  async noteAtHome(text: string) {
+    for (let i = 0; i < 30 && this.landed; i++) await sleep(100);
+    if (this.run) return;
+    await this.note(text, this.pos, 5200);
+  }
   async note(text: string, at: P = this.pos, holdMs = 4200) {
     this.talk(`<div class="ab-spoken">${esc(text)}</div>`, at);
     const words = this.speak();
@@ -575,18 +585,37 @@ export class Guide {
   }
 
   // ── The person ──
+  /**
+   * The person's touch. Only a real TAP stops it (owner: on the phone it went to its corner when they just scrolled to
+   * read): pressing and lifting in the same spot. Sliding the page, a long press, its cloud and panel never stop it;
+   * while it asks, the form it's filling (the open sheet) is theirs to touch. A tap on the bubble itself stops it at once.
+   */
+  private downAt: { x: number; y: number; t: number; id: number } | null = null;
+  /** Whether the last stop was the person's tap (the bubble then says why it stopped). */
+  stoppedByPerson = false;
   private onDown = (e: PointerEvent) => {
+    this.downAt = null;
     if (!this.run || !e.isTrusted) return;
     const target = e.target as Node;
-    // A tap on the bubble while it works stops it, like a tap anywhere else; its cloud and panel never do.
     if (this.env.own(target) && !this.env.bubble.contains(target)) return;
     if (this.allow && this.allow.contains(target)) return;
+    if (this.answer && target instanceof Element && target.closest("[role='dialog']")) return;
     if (this.lastShow && !this.env.bubble.contains(target)) { this.readDone?.(); return; }
-    // Teach: inside what's lit is them doing the step; anywhere else ends it. Auto: any tap of theirs stops it.
+    // Teach: inside what's lit is them doing the step.
     if (this.run.mode === "teach" && this.run.el && this.run.el.contains(target)) return;
-    this.stoppedAt = performance.now();
-    this.stop();
+    if (this.env.bubble.contains(target)) { this.stoppedAt = performance.now(); this.stop(true); return; }
+    this.downAt = { x: e.clientX, y: e.clientY, t: performance.now(), id: e.pointerId };
   };
+  private onUp = (e: PointerEvent) => {
+    const d = this.downAt;
+    this.downAt = null;
+    if (!d || !this.run || !e.isTrusted || e.pointerId !== d.id) return;
+    // A slide (scrolling to read) or a long press isn't "stop".
+    if (Math.hypot(e.clientX - d.x, e.clientY - d.y) > 12 || performance.now() - d.t > 700) return;
+    this.stoppedAt = performance.now();
+    this.stop(true);
+  };
+  private onCancel = () => { this.downAt = null; };
   private onClick = (e: MouseEvent) => {
     if (!this.run || this.run.mode !== "teach" || !e.isTrusted || !this.run.el) return;
     if (this.run.el.contains(e.target as Node) && this.stepDone && this.currentAct === "tap") {
@@ -597,9 +626,10 @@ export class Guide {
   private alive() { return !!this.run && this.run.token === this.token && !this.stopped; }
 
   /** Stops whatever it's doing and goes back to its corner. */
-  stop() {
+  stop(byPerson = false) {
     if (!this.run) return;
     this.stopped = true;
+    this.stoppedByPerson = byPerson;
     this.readDone?.();
     this.stepDone?.();
     const a = this.answer; this.answer = null; a?.(null);
@@ -615,6 +645,7 @@ export class Guide {
   async runSteps(steps: Step[], mode: GuideMode): Promise<GuideEnd> {
     this.stop();
     this.stopped = false;
+    this.stoppedByPerson = false;
     const token = ++this.token;
     this.run = { mode, token, el: null };
     let shown = 0;
@@ -712,6 +743,7 @@ export class Guide {
   async runScript(script: (k: ScriptKit) => Promise<"done" | "missing">, mode: GuideMode): Promise<GuideEnd> {
     this.stop();
     this.stopped = false;
+    this.stoppedByPerson = false;
     const token = ++this.token;
     this.run = { mode, token, el: null };
     const kit: ScriptKit = {

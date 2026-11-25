@@ -213,6 +213,10 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     } else if (end === "missing") {
       add({ role: "bot", text: plan.missing ?? w.missing });
       window.setTimeout(() => setOpen(true), 300);
+    } else if (g.stoppedByPerson) {
+      // It went back to its corner because they tapped: it says so, and the chat offers to go on.
+      void g.noteAtHome(w.stoppedNote);
+      add({ role: "bot", text: w.goOn, task, lang: l });
     } else {
       add({ role: "bot", text: w.stopped });
     }
