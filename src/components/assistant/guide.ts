@@ -73,6 +73,8 @@ export type GuideEnv = {
   moreWords: { auto: string; teach: string };
   /** The bubble moved by (dx, dy): its little companion moves with it in the same frame (buddy.ts). */
   onMove?: (dx: number, dy: number) => void;
+  /** The drawn bubble (orb.ts): its star becomes a wave while the words come in, then a star again. */
+  voice?: { say: (words: string[], wordMs: number) => void; hush: () => void };
 };
 
 // Its words come in one every WORD_MS; then it waits long enough to read the whole line calmly (owner, 2026-11-25:
@@ -389,39 +391,17 @@ export class Guide {
     requestAnimationFrame(() => { this.tie(at, pick, w, h); setTimeout(() => say.classList.add("ab-on"), this.reduce ? 0 : 130); });
   }
   hush() { this.env.cloud.classList.remove("ab-on"); this.env.neck.classList.remove("ab-on"); this.quietStar(); }
-  private mouth: Animation | null = null;
   /**
-   * While its words come in, the star moves like a mouth (owner, 2026-11-25): one "syllable" a word, each a little
-   * different (wider and shorter as it opens), then it settles back into its star with a tiny happy bounce.
+   * While its words come in, its star becomes a soft, slow wave that follows them (owner chose bubble "2",
+   * 2026-11-25), then turns back into the star (orb.ts). Never in the way of its words.
    */
   private talkStar(words: string[]) {
-    const m = this.env.bubble.querySelector<SVGPathElement>(".ab-mouth");
-    if (!m || this.reduce || typeof m.animate !== "function" || !words.length) return;
-    this.mouth?.cancel();
-    const n = words.length, talk = n * WORD_MS + 200, settle = 420, total = talk + settle, f = talk / total;
-    const kf: Keyframe[] = [{ transform: "scale(1, 1)", offset: 0, easing: "ease-in-out" }];
-    words.forEach((w, i) => {
-      const open = 0.7 + ((i * 37) % 10) / 70 + Math.min(0.08, w.length / 120);
-      kf.push({ transform: `scale(${(1 + (1 - open) * 0.55).toFixed(3)}, ${open.toFixed(3)})`, offset: ((i + 0.45) / n) * f * 0.98, easing: "ease-in-out" });
-      kf.push({ transform: "scale(.97, 1.03)", offset: ((i + 0.95) / n) * f * 0.98, easing: "ease-in-out" });
-    });
-    kf.push({ transform: "scale(1, 1)", offset: f, easing: "cubic-bezier(.34,1.45,.64,1)" });
-    kf.push({ transform: "scale(1.08, 1.08)", offset: f + (1 - f) * 0.4, easing: "cubic-bezier(.34,1.45,.64,1)" });
-    kf.push({ transform: "scale(1, 1)", offset: 1 });
-    let a: Animation;
-    try { a = m.animate(kf, { duration: total }); } catch { return; } // never let the star stop its words
-    this.mouth = a;
-    a.onfinish = () => { if (this.mouth === a) this.mouth = null; };
+    if (this.reduce || !words.length) return;
+    try { this.env.voice?.say(words, WORD_MS); } catch { /* the words go on */ }
   }
-  /** The cloud went before the words ended (it was stopped): the star closes softly instead of snapping. */
+  /** The cloud went (or it was stopped): the wave settles back into the star softly. */
   private quietStar() {
-    const a = this.mouth;
-    if (!a || a.playState !== "running") return;
-    this.mouth = null;
-    const m = this.env.bubble.querySelector<SVGPathElement>(".ab-mouth");
-    const now = m ? getComputedStyle(m).transform : "none";
-    a.cancel();
-    if (m && now && now !== "none") m.animate([{ transform: now }, { transform: "scale(1, 1)" }], { duration: 260, easing: "cubic-bezier(.3,0,.2,1)" });
+    try { this.env.voice?.hush(); } catch { /* nothing to settle */ }
   }
   /**
    * The drop (owner chose it, 2026-11-24): from just inside the bubble's rim to the cloud's nearest edge, narrow at the

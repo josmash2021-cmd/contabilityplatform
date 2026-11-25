@@ -1,5 +1,5 @@
 // ── The assistant's bubble: on every page of the app ──
-// A clear soap bubble with a star (the prototype the owner approved, 2026-11-24). Tap it: a small panel (a sheet from
+// A soap bubble in blue, gray and clear with the app's star (orb.ts; owner chose "2", 2026-11-25). Tap it: a small panel (a sheet from
 // below on phones) where they ask anything; the same assistant answers with their own data and knows the page they're
 // on (api/lib/bubble.ts). When it's something done in the app, the answer comes with "Hazlo por mí" (the bubble does it
 // with the app's own buttons while they watch; only a tap on the bubble stops it) and "Enséñame" (it lights each step and
@@ -25,6 +25,7 @@ import { Guide, glide, viewArea, visible, type GuideMode } from "./guide";
 import { offerLine, planFor, type TaskCtx } from "./tasks";
 import { goalScript, type GoalResult } from "./goalScript";
 import { Buddy } from "./buddy";
+import { BubbleOrb, drawStill } from "./orb";
 import "./bubble.css";
 
 /** "Hazlo por mí" in their own words: the task starts at once, without the buttons. */
@@ -33,8 +34,6 @@ const DO_IT = /\bh[aá]z(lo|melo|me)\b|\bpor m[ií]\b|\bdo it\b|\bfor me\b/i;
 type Msg = { id: number; role: "me" | "bot"; text: string; task?: BubbleTask | null; report?: BubbleReport | null; used?: boolean; reported?: "sending" | "sent"; lang?: Lang };
 
 let nextId = 1;
-const STAR = "M12 2 C12.6 7.4 16.6 11.4 22 12 C16.6 12.6 12.6 16.6 12 22 C11.4 16.6 7.4 12.6 2 12 C7.4 11.4 11.4 7.4 12 2 Z";
-const STAR_SOFT = "M12 4.5 C13.6 8.8 15.2 10.4 19.5 12 C15.2 13.6 13.6 15.2 12 19.5 C10.4 15.2 8.8 13.6 4.5 12 C8.8 10.4 10.4 8.8 12 4.5 Z";
 
 /** Where it rests: the lower right corner, above the phone's tab bar and above the tax preparer's bubble. */
 function homeOf(size: number): { x: number; y: number } {
@@ -82,6 +81,11 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const msgsRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const guideRef = useRef<Guide | null>(null);
+  // The bubble itself, drawn (owner chose "2", 2026-11-25: orb.ts), the companion's and the panel's little ones.
+  const orbRef = useRef<HTMLCanvasElement>(null);
+  const budOrbRef = useRef<HTMLCanvasElement>(null);
+  const miniRef = useRef<HTMLCanvasElement>(null);
+  const liveOrb = useRef<BubbleOrb | null>(null);
   const goRef = useRef(onGo);
   // The language the bubble speaks in while it works: the one of the answer (they wrote in it), not always the app's.
   const talkLang = useRef<Lang>(lang);
@@ -99,17 +103,27 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
 
   // The bubble's hands (made once; reads the latest size/navigation through refs).
   const sizeRef = useRef(size);
-  useEffect(() => { sizeRef.current = size; guideRef.current?.rest(); }, [size]);
   useEffect(() => {
-    if (!bubbleRef.current || !cloudRef.current || !neckRef.current || !budRef.current || !skinRef.current || !wavesRef.current) return;
+    sizeRef.current = size;
+    guideRef.current?.rest();
+    liveOrb.current?.setSize(size);
+    if (budOrbRef.current) drawStill(budOrbRef.current, Math.round(size * 0.4), false);
+  }, [size]);
+  // The panel's little bubble: drawn once, still.
+  useEffect(() => { if (miniRef.current) drawStill(miniRef.current, 36, true); }, []);
+  useEffect(() => {
+    if (!bubbleRef.current || !cloudRef.current || !neckRef.current || !budRef.current || !skinRef.current || !wavesRef.current || !orbRef.current) return;
     const own = (n: Node) => [bubbleRef.current, cloudRef.current, panelRef.current, scrimRef.current].some((el) => !!el && el.contains(n));
     let bd: Buddy | null = null;
+    const orb = new BubbleOrb(orbRef.current, sizeRef.current);
+    liveOrb.current = orb;
     const g = new Guide({
       bubble: bubbleRef.current, cloud: cloudRef.current, neck: neckRef.current,
       home: () => homeOf(sizeRef.current), size: () => sizeRef.current,
       navigate: (p) => goRef.current(p), own, stepLabel: (i, n) => bubbleCopy[talkLang.current].step(i, n),
       get moreWords() { return bubbleCopy[talkLang.current].more; },
       onMove: (dx, dy) => bd?.moved(dx, dy),
+      voice: orb,
     });
     guideRef.current = g;
     // Its little companion (owner, 2026-11-25): now and then it jumps out, floats glued to it, falls back in like a drop.
@@ -123,7 +137,7 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     const onNotes = () => { window.clearTimeout(moveId); moveId = window.setTimeout(() => g.rest(true), 90); };
     const notes = toaster ? new MutationObserver(onNotes) : null;
     if (toaster) notes?.observe(toaster, { childList: true, subtree: true, attributes: true, attributeFilter: ["data-removed", "data-visible"] });
-    return () => { window.removeEventListener("resize", onResize); notes?.disconnect(); window.clearTimeout(moveId); bd?.destroy(); buddyRef.current = null; g.destroy(); guideRef.current = null; };
+    return () => { window.removeEventListener("resize", onResize); notes?.disconnect(); window.clearTimeout(moveId); bd?.destroy(); buddyRef.current = null; g.destroy(); guideRef.current = null; orb.destroy(); liveOrb.current = null; };
     // Made once: the step words follow talkLang (a ref), the size and navigation follow their refs.
   }, []);
   // A new page: back to its corner (the tax preparer's bubble may be there now).
@@ -134,7 +148,7 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   useEffect(() => { if (hidden) guideRef.current?.stop(); }, [hidden]);
   // Out of sight (panel open, a page without it): its little companion goes at once too.
   const gone = hidden || (open && !running);
-  useEffect(() => { buddyRef.current?.setAway(gone); }, [gone]);
+  useEffect(() => { buddyRef.current?.setAway(gone); liveOrb.current?.setAway(gone); }, [gone]);
 
   /** The task's words in one language (the answer's). */
   const ctxIn = (l: Lang): TaskCtx => ({
@@ -278,23 +292,15 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
       <div ref={cloudRef} className="ab-say" aria-live="polite" />
       {/* Its little companion and the film that joins them for a moment (buddy.ts); never takes taps */}
       <svg className="ab-skin" aria-hidden="true"><path ref={skinRef} /></svg>
-      <div ref={budRef} className={cn("ab-buddy", gone && "ab-gone")} aria-hidden="true" style={{ ["--ab-bsize" as string]: `${Math.round(size * 0.4)}px` }}><i /></div>
+      <div ref={budRef} className={cn("ab-buddy", gone && "ab-gone")} aria-hidden="true" style={{ ["--ab-bsize" as string]: `${Math.round(size * 0.4)}px` }}><i><canvas ref={budOrbRef} /></i></div>
       <button
         ref={bubbleRef} type="button" onClick={toggle} aria-label={t.open} aria-expanded={open} data-running={running ? "1" : undefined}
         className={cn("ab-bubble", gone && "ab-gone")}
         style={{ ["--ab-size" as string]: `${size}px` }}
       >
         <span className="ab-squash">
-          <span className="ab-film" /><span className="ab-waves"><svg ref={wavesRef} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" /></span><span className="ab-glint" /><span className="ab-glint2" />
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <defs><linearGradient id="ab-sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3b82f6" /><stop offset=".55" stopColor="#6366f1" /><stop offset="1" stopColor="#a855f7" /></linearGradient></defs>
-            <g className="ab-star">
-              <path className="ab-mouth" fill="url(#ab-sg)" d={STAR}>
-                <animate attributeName="d" dur="6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" values={`${STAR};${STAR_SOFT};${STAR}`} />
-              </path>
-            </g>
-            <g className="ab-spark"><path fill="#a5b4fc" d="M19.5 2.2 C19.7 4 20.9 5.1 22.6 5.3 C20.9 5.5 19.7 6.7 19.5 8.4 C19.3 6.7 18.1 5.5 16.4 5.3 C18.1 5.1 19.3 4 19.5 2.2 Z" transform="translate(-1 -1) scale(.9)" /></g>
-          </svg>
+          <canvas ref={orbRef} className="ab-orb" aria-hidden="true" />
+          <span className="ab-waves"><svg ref={wavesRef} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" /></span>
         </span>
       </button>
 
@@ -302,7 +308,7 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
       <section ref={panelRef} data-ab-panel="" role="dialog" aria-label={t.title} aria-hidden={!open || hidden}
         className={cn("ab-panel", (!open || hidden) && "ab-closed")}>
         <div className="ab-head">
-          <span className="ab-mini" aria-hidden="true"><span className="ab-film" /><svg viewBox="0 0 24 24"><path fill="url(#ab-sg)" d={STAR} /></svg></span>
+          <span className="ab-mini" aria-hidden="true"><canvas ref={miniRef} /></span>
           <span className="min-w-0"><b className="block text-[15px] font-bold">{t.title}</b><small className="block text-xs text-slate-500">{t.sub}</small></span>
           <button type="button" className="ab-x" onClick={() => setOpen(false)} aria-label={t.close}><X className="h-5 w-5" aria-hidden="true" /></button>
         </div>

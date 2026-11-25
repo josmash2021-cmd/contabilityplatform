@@ -8,6 +8,7 @@ import App from './App.tsx'
 import { I18nProvider } from "@/i18n/I18nProvider"
 import { oneToastAtATime } from "@/lib/oneToast"
 import { reloadForNewVersion } from "@/lib/newVersion"
+import { warmingUp } from "@/lib/preloadPages"
 
 // One notification at a time: a new one replaces the one on screen.
 oneToastAtATime()
@@ -30,7 +31,10 @@ window.addEventListener("unhandledrejection", (e) => {
 
 // A piece of code (or its styles) from an older version couldn't be downloaded (a tab opened before we published):
 // reload once to get the new version. If it just did, the error screen takes over (src/components/ErrorBoundary.tsx).
+// Not while pages warm up in the background (src/lib/preloadPages.ts): a warm-up the browser cut short used to reload
+// the whole app under the person's hands; that page's own loader reloads when they open it, if its code is gone.
 window.addEventListener("vite:preloadError", (e) => {
+  if (warmingUp()) return
   if (reloadForNewVersion()) e.preventDefault()
 })
 

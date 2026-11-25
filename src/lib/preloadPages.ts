@@ -5,6 +5,13 @@ export type PreloadGroup = "app" | "admin";
 
 const loaders: Record<PreloadGroup, (() => Promise<unknown>)[]> = { app: [], admin: [] };
 const started = new Set<PreloadGroup>();
+let warming = 0;
+
+/** True while a page is warming up in the background: if its piece can't be fetched then, that's no reason to
+ * reload the app (main.tsx); when the person opens that page, its own loader reloads if the code is really gone. */
+export function warmingUp() {
+  return warming > 0;
+}
 
 export function registerPreload(group: PreloadGroup, load: () => Promise<unknown>) {
   loaders[group].push(load);
@@ -17,7 +24,8 @@ export function preloadWhenIdle(group: PreloadGroup) {
   if (saveData) return;
   const run = async () => {
     for (const load of loaders[group]) {
-      try { await load(); } catch { /* a page that fails here loads (and reports) when it's opened */ }
+      warming++;
+      try { await load(); } catch { /* a page that fails here loads (and reports) when it's opened */ } finally { warming--; }
       await new Promise((r) => window.setTimeout(r, 40)); // one at a time, never in the way
     }
   };
