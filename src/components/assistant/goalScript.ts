@@ -55,7 +55,7 @@ export function goalScript(task: Goal, c: TaskCtx, h: GoalHints, result: GoalRes
     };
     let all = false;
 
-    await k.nav("/personal/goals", c.t.navTo(c.t.goal.page), step());
+    if (location.pathname !== "/personal/goals") await k.nav("/personal/goals", c.t.navTo(c.t.goal.page), step());
     const add = await k.find(g("goal-new"));
     if (!add) return "missing";
     await k.tap(add, step(), c.t.goal.new.auto);

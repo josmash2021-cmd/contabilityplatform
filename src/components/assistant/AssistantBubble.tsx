@@ -24,6 +24,7 @@ import { moneyAuto } from "@/components/personal/personalUtils";
 import { Guide, glide, viewArea, visible, type GuideMode } from "./guide";
 import { offerLine, planFor, type TaskCtx } from "./tasks";
 import { goalScript, type GoalResult } from "./goalScript";
+import { Buddy } from "./buddy";
 import "./bubble.css";
 
 /** "Hazlo por mí" in their own words: the task starts at once, without the buttons. */
@@ -60,6 +61,10 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const bubbleRef = useRef<HTMLButtonElement>(null);
   const cloudRef = useRef<HTMLDivElement>(null);
   const neckRef = useRef<SVGSVGElement>(null);
+  const budRef = useRef<HTMLDivElement>(null);
+  const skinRef = useRef<SVGPathElement>(null);
+  const wavesRef = useRef<SVGSVGElement>(null);
+  const buddyRef = useRef<Buddy | null>(null);
   const panelRef = useRef<HTMLElement>(null);
   const scrimRef = useRef<HTMLDivElement>(null);
   const msgsRef = useRef<HTMLDivElement>(null);
@@ -84,18 +89,23 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
   const sizeRef = useRef(size);
   useEffect(() => { sizeRef.current = size; guideRef.current?.rest(); }, [size]);
   useEffect(() => {
-    if (!bubbleRef.current || !cloudRef.current || !neckRef.current) return;
+    if (!bubbleRef.current || !cloudRef.current || !neckRef.current || !budRef.current || !skinRef.current || !wavesRef.current) return;
     const own = (n: Node) => [bubbleRef.current, cloudRef.current, panelRef.current, scrimRef.current].some((el) => !!el && el.contains(n));
+    let bd: Buddy | null = null;
     const g = new Guide({
       bubble: bubbleRef.current, cloud: cloudRef.current, neck: neckRef.current,
       home: () => homeOf(sizeRef.current), size: () => sizeRef.current,
       navigate: (p) => goRef.current(p), own, stepLabel: (i, n) => bubbleCopy[talkLang.current].step(i, n),
       get moreWords() { return bubbleCopy[talkLang.current].more; },
+      onMove: (dx, dy) => bd?.moved(dx, dy),
     });
     guideRef.current = g;
+    // Its little companion (owner, 2026-11-25): now and then it jumps out, floats glued to it, falls back in like a drop.
+    bd = new Buddy({ bubble: bubbleRef.current, buddy: budRef.current, skin: skinRef.current, waves: wavesRef.current, cloud: cloudRef.current, pos: () => g.position, size: () => sizeRef.current });
+    buddyRef.current = bd;
     const onResize = () => g.rest();
     window.addEventListener("resize", onResize);
-    return () => { window.removeEventListener("resize", onResize); g.destroy(); guideRef.current = null; };
+    return () => { window.removeEventListener("resize", onResize); bd?.destroy(); buddyRef.current = null; g.destroy(); guideRef.current = null; };
     // Made once: the step words follow talkLang (a ref), the size and navigation follow their refs.
   }, []);
   // A new page: back to its corner (the tax preparer's bubble may be there now).
@@ -104,6 +114,9 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
     return () => window.clearTimeout(id);
   }, [pathname]);
   useEffect(() => { if (hidden) guideRef.current?.stop(); }, [hidden]);
+  // Out of sight (panel open, a page without it): its little companion goes at once too.
+  const gone = hidden || (open && !running);
+  useEffect(() => { buddyRef.current?.setAway(gone); }, [gone]);
 
   /** The task's words in one language (the answer's). */
   const ctxIn = (l: Lang): TaskCtx => ({
@@ -245,17 +258,20 @@ export function AssistantBubble({ mode, onGo, hidden }: { mode: "business" | "pe
       {/* The drop that joins the bubble and its cloud (no frame around what it shows: owner, 2026-11-24) */}
       <svg ref={neckRef} className="ab-neck" aria-hidden="true"><g><path className="ab-neck-fill" /><path className="ab-neck-side" /><path className="ab-neck-side" /></g></svg>
       <div ref={cloudRef} className="ab-say" aria-live="polite" />
+      {/* Its little companion and the film that joins them for a moment (buddy.ts); never takes taps */}
+      <svg className="ab-skin" aria-hidden="true"><path ref={skinRef} /></svg>
+      <div ref={budRef} className={cn("ab-buddy", gone && "ab-gone")} aria-hidden="true" style={{ ["--ab-bsize" as string]: `${Math.round(size * 0.4)}px` }}><i /></div>
       <button
         ref={bubbleRef} type="button" onClick={toggle} aria-label={t.open} aria-expanded={open} data-running={running ? "1" : undefined}
-        className={cn("ab-bubble", (hidden || (open && !running)) && "ab-gone")}
+        className={cn("ab-bubble", gone && "ab-gone")}
         style={{ ["--ab-size" as string]: `${size}px` }}
       >
         <span className="ab-squash">
-          <span className="ab-film" /><span className="ab-glint" /><span className="ab-glint2" />
+          <span className="ab-film" /><span className="ab-waves"><svg ref={wavesRef} viewBox={`0 0 ${size} ${size}`} aria-hidden="true" /></span><span className="ab-glint" /><span className="ab-glint2" />
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <defs><linearGradient id="ab-sg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stopColor="#3b82f6" /><stop offset=".55" stopColor="#6366f1" /><stop offset="1" stopColor="#a855f7" /></linearGradient></defs>
             <g className="ab-star">
-              <path fill="url(#ab-sg)" d={STAR}>
+              <path className="ab-mouth" fill="url(#ab-sg)" d={STAR}>
                 <animate attributeName="d" dur="6s" repeatCount="indefinite" calcMode="spline" keySplines=".45 0 .55 1;.45 0 .55 1" values={`${STAR};${STAR_SOFT};${STAR}`} />
               </path>
             </g>

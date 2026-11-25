@@ -37,6 +37,27 @@
 .ab-bubble.ab-gone { opacity: 0; pointer-events: none; }
 .ab-bubble.ab-talking svg { animation: ab-glow 1.4s ease-in-out infinite; }
 
+/* While it speaks, its star moves like a mouth (guide.ts talkStar) */
+.ab-bubble .ab-mouth { transform-box: fill-box; transform-origin: 50% 50%; }
+/* Rings on the big bubble where its little companion goes in or comes out, like on water (buddy.ts): a bright crest
+   and a soft dark trough that open and fade, clipped to the bubble. Not the star's svg rules. */
+.ab-bubble .ab-waves { position: absolute; inset: 0; clip-path: circle(50% at 50% 50%); pointer-events: none; }
+.ab-bubble .ab-waves svg, .ab-bubble.ab-talking .ab-waves svg { position: absolute; inset: 0; margin: 0; width: 100%; height: 100%; filter: none; animation: none; overflow: hidden; }
+.ab-waves .ab-crest { fill: none; stroke: rgba(255,255,255,.95); }
+.ab-waves .ab-trough { fill: none; stroke: rgba(79,70,229,.36); }
+/* Its little companion: a small soap bubble that comes out now and then and floats glued to it (under the cloud) */
+.ab-buddy { position: fixed; left: 0; top: 0; z-index: 78; width: var(--ab-bsize, 26px); height: var(--ab-bsize, 26px); pointer-events: none;
+  translate: var(--bx, 0px) var(--by, 0px); will-change: translate; transition: opacity .3s var(--ab-ease); }
+.ab-buddy i { position: absolute; inset: 0; border-radius: 50%; scale: var(--bs, 0);
+  background: radial-gradient(circle at 50% 50%, rgba(255,255,255,.22) 0 54%, rgba(255,255,255,.7) 90%, rgba(255,255,255,.95) 100%);
+  box-shadow: 0 0 0 1.2px rgba(255,255,255,.95), 0 0 0 3px rgba(129,140,248,.2), inset 0 -3px 5px rgba(56,189,248,.3), inset 3px 3px 5px rgba(236,72,153,.22), 0 6px 12px -6px rgba(15,23,42,.45); }
+/* (no frosted glass: what's under it, a button's words, stays sharp) */
+.ab-buddy i::after { content: ""; position: absolute; left: 22%; top: 16%; width: 34%; height: 22%; border-radius: 50%; border-top: 2px solid rgba(255,255,255,.95); transform: rotate(-28deg); }
+.ab-buddy.ab-gone { opacity: 0; transition: none; }
+/* The film between the two while they join or part, like two soap bubbles touching */
+.ab-skin { position: fixed; inset: 0; width: 100vw; height: 100vh; z-index: 78; pointer-events: none; overflow: visible; }
+.ab-skin path { fill: rgba(255,255,255,.55); stroke: rgba(165,180,252,.85); stroke-width: 1.1; }
+
 /* Its little cloud: the words come in one by one */
 .ab-say { position: fixed; z-index: 79; max-width: 270px; background: #fff; border: 1px solid #dfe3f6; border-radius: 18px; padding: 11px 14px;
   font-size: 14px; line-height: 1.45; color: #0f172a; box-shadow: 0 18px 40px -18px rgba(15,23,42,.45); pointer-events: none;
@@ -67,10 +88,12 @@
   box-shadow: 0 0 0 2px rgba(129,140,248,.75), 0 0 0 7px rgba(129,140,248,.16), 0 12px 32px -10px rgba(99,102,241,.4); transition: opacity .2s ease-out; }
 .ab-spot.ab-on { opacity: 1; transition: opacity .45s var(--ab-ease); }
 .ab-spot.ab-ping::before { content: ""; position: absolute; inset: -2px; border-radius: 16px; animation: ab-pingKf 1.2s var(--ab-ease) 1; }
-.ab-tapped { transform: scale(.94) !important; filter: brightness(.9); transition: transform .16s ease, filter .16s ease !important; }
-.ab-untap { transition: transform .5s var(--ab-spring), filter .4s var(--ab-ease) !important; }
-.ab-ripple { position: fixed; z-index: 79; width: 64px; height: 64px; margin: -32px 0 0 -32px; border-radius: 50%; pointer-events: none;
-  border: 2px solid rgba(129,140,248,.85); background: radial-gradient(circle, rgba(99,102,241,.28), rgba(236,72,153,.12) 60%, transparent 72%); animation: ab-rip .9s var(--ab-ease) forwards; }
+.ab-tapped { transform: scale(.955) !important; filter: brightness(.95); transition: transform .22s cubic-bezier(.3,0,.2,1), filter .22s ease !important; }
+.ab-untap { transition: transform .6s var(--ab-spring), filter .5s var(--ab-ease) !important; }
+/* Where it touches: a soft circle that opens and fades (not a hard ring) */
+.ab-ripple { position: fixed; z-index: 79; width: 56px; height: 56px; margin: -28px 0 0 -28px; border-radius: 50%; pointer-events: none;
+  box-shadow: 0 0 0 1.5px rgba(129,140,248,.7); background: radial-gradient(circle, rgba(129,140,248,.32), rgba(236,72,153,.1) 62%, transparent 72%);
+  animation: ab-rip 1s cubic-bezier(.2,.7,.2,1) forwards; }
 .ab-caret { caret-color: #2563eb; }
 
 /* The panel: grows out of the bubble on computers; a sheet from below on phones */
@@ -136,7 +159,7 @@
 @keyframes ab-glow { 0%, 100% { filter: drop-shadow(0 2px 6px rgba(79,70,229,.35)); } 50% { filter: drop-shadow(0 0 10px rgba(129,140,248,.95)); } }
 @keyframes ab-wordIn { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: none; } }
 @keyframes ab-pingKf { from { box-shadow: 0 0 0 0 rgba(129,140,248,.6); } to { box-shadow: 0 0 0 16px rgba(129,140,248,0); } }
-@keyframes ab-rip { from { transform: scale(.25); opacity: 1; } to { transform: scale(2.3); opacity: 0; } }
+@keyframes ab-rip { 0% { transform: scale(.3); opacity: 0; } 18% { opacity: .95; } 100% { transform: scale(2.1); opacity: 0; } }
 @keyframes ab-rise { from { opacity: 0; transform: translateY(8px); filter: blur(4px); } to { opacity: 1; transform: none; filter: none; } }
 @keyframes ab-dot { 0%, 100% { opacity: .35; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-3px); } }
 

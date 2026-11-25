@@ -71,6 +71,8 @@ export type GuideEnv = {
   stepLabel: (i: number, n: number | null) => string;
   /** What it says when it opens the phone's "Más" sheet. */
   moreWords: { auto: string; teach: string };
+  /** The bubble moved by (dx, dy): its little companion moves with it in the same frame (buddy.ts). */
+  onMove?: (dx: number, dy: number) => void;
 };
 
 const WORD_MS = 150, PAUSE_MS = 450, MIN_READ_MS = 1800;
@@ -111,7 +113,7 @@ export function viewArea(): { left: number; top: number; right: number; bottom: 
   return { left, top, right: Math.min(right, window.innerWidth), bottom: Math.min(bottom, window.innerHeight) };
 }
 /** The top of the phone's tab bar, or the bottom of what's seen. */
-function bottomLimit(): number {
+export function bottomLimit(): number {
   const tab = document.querySelector("nav[data-tabbar]");
   const seen = viewArea().bottom;
   return tab && visible(tab) ? Math.min(seen, tab.getBoundingClientRect().top) : seen;
@@ -215,6 +217,14 @@ export class Guide {
     this.setPos(env.home());
     document.addEventListener("pointerdown", this.onDown, true);
     document.addEventListener("pointerup", this.onUp, true);
+    // A touch on its cloud (an answer) or on the bubble is never "outside" for an open sheet: Radix closes a sheet
+    // on a pointerdown outside it, and the cloud lives outside the sheet. That closed "Nueva meta" when they picked
+    // an answer, and the bubble went to its corner (owner, 2026-11-25). Our own capture listener above still sees it.
+    for (const el of [env.cloud, env.bubble]) {
+      el.addEventListener("pointerdown", (e) => e.stopPropagation());
+      // keep the focus where it is (tapping an answer mustn't pull it out of the sheet)
+      el.addEventListener("mousedown", (e) => e.preventDefault());
+    }
     document.addEventListener("pointercancel", this.onCancel, true);
     document.addEventListener("click", this.onClick, true);
     window.visualViewport?.addEventListener("resize", this.onView);
@@ -251,9 +261,11 @@ export class Guide {
 
   // ── Moving ──
   setPos(p: P) {
+    const dx = p.x - this.pos.x, dy = p.y - this.pos.y;
     this.pos = p;
     this.env.bubble.style.setProperty("--x", `${p.x}px`);
     this.env.bubble.style.setProperty("--y", `${p.y}px`);
+    this.env.onMove?.(dx, dy);
   }
   /** Back to its corner (also after the window or the page changes). */
   rest(fly = false) {
@@ -375,7 +387,40 @@ export class Guide {
     // The drop grows out of the bubble first, then the cloud.
     requestAnimationFrame(() => { this.tie(at, pick, w, h); setTimeout(() => say.classList.add("ab-on"), this.reduce ? 0 : 130); });
   }
-  hush() { this.env.cloud.classList.remove("ab-on"); this.env.neck.classList.remove("ab-on"); }
+  hush() { this.env.cloud.classList.remove("ab-on"); this.env.neck.classList.remove("ab-on"); this.quietStar(); }
+  private mouth: Animation | null = null;
+  /**
+   * While its words come in, the star moves like a mouth (owner, 2026-11-25): one "syllable" a word, each a little
+   * different (wider and shorter as it opens), then it settles back into its star with a tiny happy bounce.
+   */
+  private talkStar(words: string[]) {
+    const m = this.env.bubble.querySelector<SVGPathElement>(".ab-mouth");
+    if (!m || this.reduce || typeof m.animate !== "function" || !words.length) return;
+    this.mouth?.cancel();
+    const n = words.length, talk = n * WORD_MS + 200, settle = 420, total = talk + settle, f = talk / total;
+    const kf: Keyframe[] = [{ transform: "scale(1, 1)", offset: 0, easing: "ease-in-out" }];
+    words.forEach((w, i) => {
+      const open = 0.7 + ((i * 37) % 10) / 70 + Math.min(0.08, w.length / 120);
+      kf.push({ transform: `scale(${(1 + (1 - open) * 0.55).toFixed(3)}, ${open.toFixed(3)})`, offset: ((i + 0.45) / n) * f * 0.98, easing: "ease-in-out" });
+      kf.push({ transform: "scale(.97, 1.03)", offset: Math.min((i + 0.95) / n, 0.98) * f * 0.98, easing: "ease-in-out" });
+    });
+    kf.push({ transform: "scale(1, 1)", offset: f, easing: "cubic-bezier(.34,1.45,.64,1)" });
+    kf.push({ transform: "scale(1.08, 1.08)", offset: f + (1 - f) * 0.4, easing: "cubic-bezier(.34,1.45,.64,1)" });
+    kf.push({ transform: "scale(1, 1)", offset: 1 });
+    const a = m.animate(kf, { duration: total });
+    this.mouth = a;
+    a.onfinish = () => { if (this.mouth === a) this.mouth = null; };
+  }
+  /** The cloud went before the words ended (it was stopped): the star closes softly instead of snapping. */
+  private quietStar() {
+    const a = this.mouth;
+    if (!a || a.playState !== "running") return;
+    this.mouth = null;
+    const m = this.env.bubble.querySelector<SVGPathElement>(".ab-mouth");
+    const now = m ? getComputedStyle(m).transform : "none";
+    a.cancel();
+    if (m && now && now !== "none") m.animate([{ transform: now }, { transform: "scale(1, 1)" }], { duration: 260, easing: "cubic-bezier(.3,0,.2,1)" });
+  }
   /**
    * The drop (owner chose it, 2026-11-24): from just inside the bubble's rim to the cloud's nearest edge, narrow at the
    * bubble and wide at the cloud, with a soft waist; white like the cloud, with its border on the sides.
@@ -431,6 +476,7 @@ export class Guide {
     const nodes: Text[] = [];
     while (walker.nextNode()) nodes.push(walker.currentNode as Text);
     let n = 0;
+    const said: string[] = [];
     for (const node of nodes) {
       const frag = document.createDocumentFragment();
       for (const part of (node.textContent ?? "").split(/(\s+)/)) {
@@ -439,11 +485,13 @@ export class Guide {
         const w = document.createElement("span");
         w.className = "ab-w";
         w.textContent = part;
+        said.push(part);
         w.style.animationDelay = `${this.reduce ? 0 : n++ * WORD_MS}ms`;
         frag.appendChild(w);
       }
       node.replaceWith(frag);
     }
+    this.talkStar(said);
     return n;
   }
   private say(label: string, text: string, at?: P, avoid?: DOMRect, aboveFirst = false, choices?: Choice[]) {
@@ -487,25 +535,31 @@ export class Guide {
     const tx = Math.min(Math.max(r.left + Math.min(r.width / 2, 22), r.right - Math.min(r.width * 0.28, 34)), a.right - 6);
     // (inside what's seen; a tab of the phone's bottom bar is pressed right on it)
     const ty = Math.min(Math.max(r.top + r.height / 2, a.top + 6), a.bottom - 6);
-    // A short dip onto it (its center on that point), the press, the ripple right there, the real click.
-    const back = { ...this.pos };
-    await this.flyTo({ x: tx - size / 2, y: ty - size / 2 }, 280);
-    if (!this.alive()) return;
-    b.style.setProperty("--px", "0px");
-    b.style.setProperty("--py", "0px");
-    b.classList.add("ab-press"); el.classList.remove("ab-untap"); el.classList.add("ab-tapped");
+    // One fluid gesture (owner: "smooth, no robótico"): it leans in onto the point, squeezes as it presses (the button
+    // sinks with it, a soft ripple right there, the real click) and eases back with a gentle bounce, without hops.
+    const sq = b.querySelector<HTMLElement>(".ab-squash");
+    const dx = tx - (this.pos.x + size / 2), dy = ty - (this.pos.y + size / 2);
+    const ms = this.reduce ? 1 : 920;
+    const anim = sq?.animate?.([
+      { translate: "0px 0px", scale: "1", easing: "cubic-bezier(.42,0,.2,1)" },
+      { translate: `${dx * 0.92}px ${dy * 0.92}px`, scale: "0.93", offset: 0.4, easing: "cubic-bezier(.3,0,.25,1)" },
+      { translate: `${dx}px ${dy}px`, scale: "0.84", offset: 0.52, easing: "cubic-bezier(.25,.1,.2,1)" },
+      { translate: `${dx * 0.12}px ${dy * 0.12}px`, scale: "1.04", offset: 0.82, easing: "cubic-bezier(.3,0,.3,1)" },
+      { translate: "0px 0px", scale: "1" },
+    ], { duration: ms });
+    await sleep(ms * 0.44);
+    if (!this.alive()) { anim?.cancel(); return; }
+    el.classList.remove("ab-untap"); el.classList.add("ab-tapped");
     const rip = document.createElement("span");
     rip.className = "ab-ripple"; rip.style.left = `${tx}px`; rip.style.top = `${ty}px`;
-    document.body.appendChild(rip); setTimeout(() => rip.remove(), 1100);
-    await sleep(300);
-    b.classList.remove("ab-press"); el.classList.remove("ab-tapped"); el.classList.add("ab-untap");
-    setTimeout(() => el.classList.remove("ab-untap"), 600);
+    document.body.appendChild(rip); setTimeout(() => rip.remove(), 1200);
+    await sleep(ms * 0.16);
+    el.classList.remove("ab-tapped"); el.classList.add("ab-untap");
+    setTimeout(() => el.classList.remove("ab-untap"), 700);
     this.unlight();
-    if (!this.alive()) return;
+    if (!this.alive()) { anim?.cancel(); return; }
     el.click();
-    // Steps back to its corner (if the button is still there), so it doesn't cover what comes next.
-    await sleep(120);
-    if (el.isConnected && visible(el)) await this.flyTo(back, 300); else await sleep(380);
+    await sleep(ms * 0.42);
   }
   private touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
   private async typeIn(el: HTMLInputElement, text: string) {
@@ -658,8 +712,9 @@ export class Guide {
       const text = mode === "auto" ? s.auto : s.teach;
       const label = s.label ?? this.env.stepLabel(shown, steps.every((x) => !x.when) ? steps.length : null);
 
-      // A page change: the menu item (on a phone through "Más"), or straight there.
+      // A page change: the menu item (on a phone through "Más"), or straight there. Already there: it knows, skips it.
       if (s.go || s.nav) {
+        if (this.onPage(s)) { shown--; continue; }
         await this.runNav(s, mode, text, label);
         if (!this.alive()) return "stopped";
         continue;
@@ -694,6 +749,13 @@ export class Guide {
   }
 
   /** A page change: the menu item (on a phone through "Más"), or straight there; then the new page settles. */
+  /** Whether it's already on the page a step goes to (a menu page with nothing else; or the very same address). */
+  onPage(s: Step) {
+    const path = s.go ?? s.nav ?? "";
+    if (!path) return false;
+    if (s.nav && !path.includes("?")) return location.pathname === path;
+    return location.pathname + location.search === path;
+  }
   private async runNav(s: Step, mode: GuideMode, text: string, label: string) {
     const path = s.go ?? s.nav ?? "/";
     const before = document.querySelector("main .page-fx > div");
@@ -752,6 +814,7 @@ export class Guide {
       nav: async (path, words, label) => {
         if (!this.alive()) return;
         const one: Step = { ...words, nav: path, label };
+        if (this.onPage(one)) return;
         await this.runNav(one, mode, mode === "auto" ? words.auto : words.teach, label);
       },
       find: (sel, ms = 8000) => this.waitEl(() => firstVisible(sel), ms),
