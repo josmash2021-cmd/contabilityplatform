@@ -321,7 +321,7 @@ export default function PersonalDashboard() {
             ) : (
               <span className="text-[13px] text-slate-500">
                 {t.hero.monthFlow(when.monthName, money(income), money(expense))}
-                {canBudget && <> · <Link to="/personal/budgets" className="font-semibold text-blue-600 hover:underline">{t.hero.setBudgets}</Link></>}
+                {canBudget && <> · <Link to="/personal/budgets" data-guide="home-budgets" className="font-semibold text-blue-600 hover:underline">{t.hero.setBudgets}</Link></>}
               </span>
             )}
           </section>
@@ -472,7 +472,7 @@ function TodayCard({ items, title, more, all, onAll }: { items: Item[]; title: s
       <ul className="mt-2.5 grid gap-2">
         {items.map((it, i) => {
           let action: ReactNode = <span />;
-          if (it.action?.to) action = <Link to={it.action.to} className={smBtn}>{it.action.label}</Link>;
+          if (it.action?.to) action = <Link to={it.action.to} className={smBtn} data-guide={`home-${it.key}`}>{it.action.label}</Link>;
           else if (it.action?.onClick) action = <button type="button" onClick={it.action.onClick} className={smBtn}>{it.action.label}</button>;
           return (
             <li key={it.key} className={cn("grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2.5 rounded-xl bg-slate-100 px-3 py-2.5 md:gap-3 md:py-[11px]", i >= 3 && !all ? "hidden md:grid" : "grid")}>
@@ -505,7 +505,7 @@ function GoalsCard({ goals, t }: { goals: Goal[]; t: PersonalHomeCopy }) {
       {goals.length === 0 ? (
         <div className="mt-3 rounded-xl bg-slate-100 p-3.5 text-sm text-slate-600">
           <p>{t.goals.none}</p>
-          <Link to="/personal/goals" className="mt-2 inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline"><Target className="h-4 w-4" aria-hidden="true" />{t.goals.create}</Link>
+          <Link to="/personal/goals?new=1" data-guide="home-goal-create" className="mt-2 inline-flex items-center gap-1 font-semibold text-blue-600 hover:underline"><Target className="h-4 w-4" aria-hidden="true" />{t.goals.create}</Link>
         </div>
       ) : goals.map((g) => {
         const target = num(g.targetAmount);

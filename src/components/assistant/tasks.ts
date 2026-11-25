@@ -49,7 +49,7 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
       const edit = g(`budget-edit-${task.category}`);
       const has = () => onScreen(edit);
       return plan([
-        { ...t.navTo(t.budget.page), nav: "/personal/budgets" },
+        { ...t.navTo(t.budget.page), nav: "/personal/budgets", via: `${g("home-budgets")}, ${g("home-nobudget")}` },
         { ...t.budget.edit(cat), el: edit, act: "tap", when: has },
         { ...t.budget.amount(amt), el: g("budget-edit-amt"), act: "type", value: String(task.amount), when: () => onScreen(g("budget-edit-amt")) },
         { ...t.save, el: g("budget-edit-save"), act: "tap", when: () => onScreen(g("budget-edit-save")) },
@@ -63,8 +63,9 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
       // "Enséñame" (the person does it); "Hazlo por mí" asks as it goes (goalScript.ts).
       const A = t.goalAsk;
       const steps: Step[] = [
-        { ...t.navTo(t.goal.page), nav: "/personal/goals" },
-        { ...t.goal.new, el: g("goal-new"), act: "tap" },
+        { ...t.navTo(t.goal.page), nav: "/personal/goals", via: g("home-goal-create") },
+        // (Inicio's "Crear una meta" already opens the form)
+        { ...t.goal.new, el: g("goal-new"), act: "tap", when: () => !onScreen(g("goal-tpls")) && !onScreen(g("goal-name")) },
         { ...(task.kind && task.kind !== "other" ? { auto: A.kinds[task.kind], teach: A.kinds[task.kind] } : t.goal.other), el: g(`goal-tpl-${task.kind ?? "other"}`), act: "tap" },
         { ...(task.name ? t.goal.name(task.name) : { auto: A.nameEmpty, teach: A.nameEmpty }), el: g("goal-name"), act: "type", value: task.name ?? "" },
         { ...(task.amount ? t.goal.amount(c.money(task.amount)) : { auto: A.amount("", "", null), teach: A.amount("", "", null).replace(/ Te sugiero \.| I suggest \./, "") }), el: g("goal-amount"), act: "type", value: task.amount ? String(task.amount) : "" },
@@ -91,7 +92,7 @@ export function planFor(task: BubbleTask, c: TaskCtx): TaskPlan {
     }
     case "review":
       return plan([
-        { ...t.navTo(t.review.page), nav: "/personal/transactions" },
+        { ...t.navTo(t.review.page), nav: "/personal/transactions", via: g("home-review") },
         { ...t.review.all, el: g("review-all"), act: "tap" },
       ], t.review.done, null, t.review.missing);
     case "sync_bank":

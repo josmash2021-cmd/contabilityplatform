@@ -14,6 +14,9 @@ export type Step = {
   teach: string;
   /** A page from the menu: it taps the menu item (on a phone, through "Más" when needed), else it goes there. */
   nav?: string;
+  /** A shortcut on the page they're on that gets there too (Home's "Crear una meta", "Confirmar"...): when it's on
+   *  screen the bubble taps it instead of going through the menu (owner, 2026-11-25: whatever is more direct). */
+  via?: string;
   /** A page with details (?month=…): it goes there itself. */
   go?: string;
   /** What it works on: a CSS selector (the first one on screen) or a finder (the tour: a section by its heading). */
@@ -40,7 +43,7 @@ export type ScriptKit = {
   mode: GuideMode;
   alive: () => boolean;
   /** Goes to a page from the menu (on a phone through "Más"). */
-  nav: (path: string, words: { auto: string; teach: string }, label: string) => Promise<void>;
+  nav: (path: string, words: { auto: string; teach: string }, label: string, via?: string) => Promise<void>;
   /** The first element on screen for a selector, waiting for it. */
   find: (sel: string, ms?: number) => Promise<HTMLElement | null>;
   /** Flies to it and says something (no answer needed). */
@@ -728,9 +731,17 @@ export class Guide {
       const text = mode === "auto" ? s.auto : s.teach;
       const label = s.label ?? this.env.stepLabel(shown, steps.every((x) => !x.when) ? steps.length : null);
 
-      // A page change: the menu item (on a phone through "Más"), or straight there. Already there: it knows, skips it.
+      // A page change: the menu item (on a phone through "Más"), or straight there. Already there: it knows, skips it
+      // without a word. A shortcut on this page that gets there (Home's own links) goes first: fewer taps.
       if (s.go || s.nav) {
         if (this.onPage(s)) { shown--; continue; }
+        const via = s.via ? firstVisible(s.via) : null;
+        if (via) {
+          await this.doEl(via, { ...s, act: "tap" }, mode, text, label);
+          if (!this.alive()) return "stopped";
+          await this.waitEl(() => (this.onPage({ ...s, go: undefined }) || this.onPage(s) ? document.body : null), 4000);
+          continue;
+        }
         await this.runNav(s, mode, text, label);
         if (!this.alive()) return "stopped";
         continue;
@@ -827,10 +838,18 @@ export class Guide {
     const kit: ScriptKit = {
       mode,
       alive: () => this.alive(),
-      nav: async (path, words, label) => {
+      nav: async (path, words, label, via) => {
         if (!this.alive()) return;
         const one: Step = { ...words, nav: path, label };
         if (this.onPage(one)) return;
+        // a shortcut on this page (Home's "Crear una meta"): it taps that instead of going through the menu
+        const short = via ? firstVisible(via) : null;
+        if (short) {
+          await this.reach(short, "tap");
+          if (this.alive()) await this.tapOn(short);
+          await this.waitEl(() => (location.pathname === path ? document.body : null), 4000);
+          return;
+        }
         await this.runNav(one, mode, mode === "auto" ? words.auto : words.teach, label);
       },
       find: (sel, ms = 8000) => this.waitEl(() => firstVisible(sel), ms),

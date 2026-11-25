@@ -55,10 +55,16 @@ export function goalScript(task: Goal, c: TaskCtx, h: GoalHints, result: GoalRes
     };
     let all = false;
 
-    if (location.pathname !== "/personal/goals") await k.nav("/personal/goals", c.t.navTo(c.t.goal.page), step());
-    const add = await k.find(g("goal-new"));
-    if (!add) return "missing";
-    await k.tap(add, step(), c.t.goal.new.auto);
+    // Already on Metas: it just starts. On Inicio: its own "Crear una meta" (opens the form at once). Else the menu.
+    if (location.pathname !== "/personal/goals") await k.nav("/personal/goals", c.t.navTo(c.t.goal.page), step(), g("home-goal-create"));
+    if (!shown(g("goal-tpls"))) {
+      // the form may already be opening (Inicio's shortcut): a moment before pressing Nueva meta
+      if (!(await k.find(g("goal-tpls"), 1200))) {
+        const add = await k.find(g("goal-new"));
+        if (!add) return "missing";
+        await k.tap(add, step(), c.t.goal.new.auto);
+      }
+    }
     const list = await k.find(g("goal-tpls"));
     if (!list) return "missing";
 
