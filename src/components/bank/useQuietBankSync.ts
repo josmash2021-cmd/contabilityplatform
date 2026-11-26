@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { trpc } from "@/providers/trpc";
+import { readAgain } from "@/lib/readAgain";
 
 type SyncResult = { success?: boolean; added?: number; error?: string };
 
@@ -36,7 +37,7 @@ export function useQuietBankSync({ enabled, year, month, accountId }: { enabled:
   const { mutate: syncRecent, isPending: recentPending } = trpc.bank.syncRecent.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: syncMonth, isPending: monthPending } = trpc.bank.syncTransactions.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: refreshBalances } = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: (d) => { if (d.success) { void utils.bank.listAccounts.invalidate(); void utils.bank.getAllPlaidAccounts.invalidate(); void utils.banks.overview.invalidate(); } },
+    onSuccess: (d) => { if (d.success) void readAgain(utils.bank.listAccounts, utils.bank.getAllPlaidAccounts, utils.banks.overview); },
     onError: () => {},
   });
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({

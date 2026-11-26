@@ -19,6 +19,7 @@ import { accountName, accountTitle, localToday, shortDay, type OverviewAccount }
 import { useBankInfo, useInstitutions } from "@/components/bank/useBanks";
 import { useQuietBankSync } from "@/components/bank/useQuietBankSync";
 import { trpc } from "@/providers/trpc";
+import { readAgain } from "@/lib/readAgain";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { bancosCopy } from "@/i18n/copy/bancos";
 import { bankCopy } from "@/i18n/copy/bank";
@@ -123,7 +124,7 @@ export default function Bank() {
   const { mutate: refreshItems, mutateAsync: refreshItemsNow } = trpc.banks.refreshItems.useMutation({
     onSuccess: (r) => {
       note(r.results);
-      if (r.results.some((x) => x.ok)) { void utils.banks.invalidate(); void invalidateInstitutions(); }
+      if (r.results.some((x) => x.ok)) { void readAgain(utils.banks.overview, utils.brand.institutions).then(() => utils.banks.invalidate()); void invalidateInstitutions(); }
     },
     onError: () => { /* quiet */ },
   });

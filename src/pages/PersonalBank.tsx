@@ -14,6 +14,7 @@ import { accountLabel, accountTypeLabel, institutionOf, relTime, smBtn, type Ins
 import { money, ui } from "@/components/personal/personalUtils";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
+import { readAgain } from "@/lib/readAgain";
 import { useCopy, useLang } from "@/i18n/useI18n";
 import { intlLocale } from "@/i18n/lang";
 import { personalBankCopy, type PersonalBankCopy } from "@/i18n/copy/personalBank";
@@ -50,7 +51,7 @@ export default function PersonalBank() {
 
   // Quietly bring every bank up to date on arrival (balances, a card's limit, the last days of movements).
   const { mutate: quietRefresh, mutateAsync: refreshItemsNow } = trpc.banks.refreshItems.useMutation({
-    onSuccess: (d) => { if (d.results.some((r) => r.ok)) { void utils.banks.overview.invalidate(); void utils.bank.getMonthData.invalidate(); } void utils.brand.institutions.invalidate(); },
+    onSuccess: (d) => { void (d.results.some((r) => r.ok) ? readAgain(utils.banks.overview, utils.bank.getMonthData, utils.brand.institutions) : readAgain(utils.brand.institutions)); },
     onError: () => {},
   });
   useEffect(() => { if (hasBank) quietRefresh(); }, [hasBank, quietRefresh]);

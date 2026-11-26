@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ReconnectBank } from "@/components/personal/ReconnectBank";
 import { TxDetailSheet } from "@/components/personal/TxDetailSheet";
 import { TxLogo } from "@/components/personal/TxLogo";
+import { readAgain } from "@/lib/readAgain";
 import {
   bankRow, institutionOf, isStreaming, listNames, makeDays, relTime, smBtn, useCatLabel, type Institution, type TxRow,
 } from "@/components/personal/txKit";
@@ -97,7 +98,8 @@ export default function PersonalDashboard() {
   const { mutate: syncRecent, mutateAsync: syncRecentNow } = trpc.bank.syncRecent.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
   const { mutate: syncMonth } = trpc.bank.syncTransactions.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
   const { mutate: refreshBalances, mutateAsync: refreshBalancesNow } = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: () => { void utils.bank.listAccounts.invalidate(); void utils.banks.overview.invalidate(); },
+    // Read the accounts again even if the screen's first read is still on its way (readAgain)
+    onSuccess: () => { void readAgain(utils.bank.listAccounts, utils.banks.overview, utils.brand.institutions); },
     onError: () => {},
   });
   // Pull down to refresh (phones): ask the bank again now, then every number on the page
