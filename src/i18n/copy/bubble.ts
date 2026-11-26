@@ -124,6 +124,7 @@ const es = {
       done: "Ese fue el recorrido. Pregúntame lo que quieras de cualquier página, o dime hazlo por mí y lo hago.",
     },
     navTo: (page: string) => ({ auto: `Primero vamos a ${page}.`, teach: `Toca ${page} en el menú.` }),
+    navHere: (page: string) => ({ auto: `Lo abro desde aquí, en Inicio: ${page}.`, teach: `Toca aquí, en Inicio: te lleva a ${page}.` }),
     goTo: (page: string) => ({ auto: `Te llevo a ${page}.`, teach: `Te llevo a ${page}.` }),
     save: { auto: "Y guardo.", teach: "Toca Guardar." },
     budget: {
@@ -354,6 +355,7 @@ const en: BubbleCopy = {
       done: "That was the tour. Ask me anything about any page, or say do it for me and I'll do it.",
     },
     navTo: (page: string) => ({ auto: `First, let's go to ${page}.`, teach: `Tap ${page} in the menu.` }),
+    navHere: (page: string) => ({ auto: `I'll open it from here on Home: ${page}.`, teach: `Tap here, on Home: it takes you to ${page}.` }),
     goTo: (page: string) => ({ auto: `Taking you to ${page}.`, teach: `Taking you to ${page}.` }),
     save: { auto: "And save.", teach: "Tap Save." },
     budget: {

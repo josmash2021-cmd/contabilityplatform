@@ -17,6 +17,8 @@ export type Step = {
   /** A shortcut on the page they're on that gets there too (Home's "Crear una meta", "Confirmar"...): when it's on
    *  screen the bubble taps it instead of going through the menu (owner, 2026-11-25: whatever is more direct). */
   via?: string;
+  /** What it says when it uses that shortcut (not the menu's words: it's pointing at Home's own button). */
+  viaSay?: { auto: string; teach: string };
   /** A page with details (?month=…): it goes there itself. */
   go?: string;
   /** What it works on: a CSS selector (the first one on screen) or a finder (the tour: a section by its heading). */
@@ -737,7 +739,8 @@ export class Guide {
         if (this.onPage(s)) { shown--; continue; }
         const via = s.via ? firstVisible(s.via) : null;
         if (via) {
-          await this.doEl(via, { ...s, act: "tap" }, mode, text, label);
+          const viaText = s.viaSay ? (mode === "auto" ? s.viaSay.auto : s.viaSay.teach) : text;
+          await this.doEl(via, { ...s, act: "tap" }, mode, viaText, label);
           if (!this.alive()) return "stopped";
           await this.waitEl(() => (this.onPage({ ...s, go: undefined }) || this.onPage(s) ? document.body : null), 4000);
           continue;
