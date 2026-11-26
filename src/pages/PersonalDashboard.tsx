@@ -5,13 +5,15 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
+import { pullCopy } from "@/i18n/copy/pull";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ReconnectBank } from "@/components/personal/ReconnectBank";
 import { TxDetailSheet } from "@/components/personal/TxDetailSheet";
 import { TxLogo } from "@/components/personal/TxLogo";
 import {
-  bankRow, institutionOf, isStreaming, listNames, makeDays, smBtn, useCatLabel, type Institution, type TxRow,
+  bankRow, institutionOf, isStreaming, listNames, makeDays, relTime, smBtn, useCatLabel, type Institution, type TxRow,
 } from "@/components/personal/txKit";
 import { localTodayKey, money, num, txDay, upperFirst, type Goal } from "@/components/personal/personalUtils";
 import { trpc } from "@/providers/trpc";
@@ -82,17 +84,28 @@ export default function PersonalDashboard() {
   const { data: tax } = trpc.tax.reminders.useQuery(undefined, { staleTime: 5 * 60_000 });
   const { data: review } = trpc.review.count.useQuery(undefined, { enabled: hasBank, staleTime: 60_000 });
   const { data: subsData } = trpc.subs.list.useQuery({ today: when.days.today }, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
-  const { data: institutions } = trpc.brand.institutions.useQuery(undefined, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
+  const { data: institutions, dataUpdatedAt: instsAt } = trpc.brand.institutions.useQuery(undefined, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
   const insts = institutions as Institution[] | undefined;
+  // When Plaid last brought the bank's data, for the bank that's furthest behind: nobody takes old money for
+  // today's (owner, 2026-11-26: "se ve dinero viejo"). Green under 12 hours, amber after.
+  const stalest = (insts ?? []).filter((i) => i.bankUpdatedAt).sort((a, b) => Date.parse(a.bankUpdatedAt as string) - Date.parse(b.bankUpdatedAt as string))[0] ?? null;
+  const fromBank = stalest ? relTime(stalest.bankUpdatedAt, instsAt, locale, t.hero.justNow) : null;
+  const bankBehind = !!stalest && instsAt - Date.parse(stalest.bankUpdatedAt as string) > 12 * 60 * 60 * 1000;
 
   // ── Keep the bank fresh, quietly: new transactions and balances on arrival, then the month every 3 minutes ──
   const refreshMonth = () => { void utils.bank.getMonthData.invalidate(); void utils.review.count.invalidate(); };
-  const { mutate: syncRecent } = trpc.bank.syncRecent.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
+  const { mutate: syncRecent, mutateAsync: syncRecentNow } = trpc.bank.syncRecent.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
   const { mutate: syncMonth } = trpc.bank.syncTransactions.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
-  const { mutate: refreshBalances } = trpc.bank.refreshAllBalances.useMutation({
+  const { mutate: refreshBalances, mutateAsync: refreshBalancesNow } = trpc.bank.refreshAllBalances.useMutation({
     onSuccess: () => { void utils.bank.listAccounts.invalidate(); void utils.banks.overview.invalidate(); },
     onError: () => {},
   });
+  // Pull down to refresh (phones): ask the bank again now, then every number on the page
+  const pullT = useCopy(pullCopy);
+  const pullRefresh = async () => {
+    if (hasBank) await Promise.allSettled([syncRecentNow(), refreshBalancesNow()]);
+    await utils.invalidate();
+  };
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
     onSuccess: (d) => {
       if ((d.fixed ?? 0) > 0 || (d.autoConfirmed ?? 0) > 0) refreshMonth();
@@ -150,6 +163,7 @@ export default function PersonalDashboard() {
   if (bank && !hasBank) {
     return (
       <AnimatedPage className="p-4 lg:p-8">
+      <PullToRefresh onRefresh={pullRefresh} label={pullT} />
         <div className="mx-auto max-w-6xl">
           {header}
           <div className="grid gap-3.5 lg:grid-cols-[1.4fr_1fr]">
@@ -284,6 +298,7 @@ export default function PersonalDashboard() {
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
+      <PullToRefresh onRefresh={pullRefresh} label={pullT} />
       <div className="mx-auto max-w-6xl">
         {header}
 
@@ -322,6 +337,12 @@ export default function PersonalDashboard() {
               <span className="text-[13px] text-slate-500">
                 {t.hero.monthFlow(when.monthName, money(income), money(expense))}
                 {canBudget && <> · <Link to="/personal/budgets" data-guide="home-budgets" className="font-semibold text-blue-600 hover:underline">{t.hero.setBudgets}</Link></>}
+              </span>
+            )}
+            {stalest && fromBank && (
+              <span className="mt-1 flex items-center gap-2 text-[12px] text-slate-500" data-bank-fresh={bankBehind ? "behind" : "ok"}>
+                <i className={cn("h-1.5 w-1.5 shrink-0 rounded-full", bankBehind ? "bg-amber-500" : "bg-emerald-500")} aria-hidden="true" />
+                {t.hero.fromBank(stalest.name, fromBank)}
               </span>
             )}
           </section>

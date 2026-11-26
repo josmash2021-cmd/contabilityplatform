@@ -49,7 +49,7 @@ export function AccountDetail({ account: a, bank, now, canManage, syncing, recon
   const q = trpc.banks.accountMonth.useQuery({ accountId: a.id, year, month }, { staleTime: 60_000 });
   const card = a.kind !== "cash";
   const needs = bank.needsReconnect;
-  const updated = relTime(a.lastSyncedAt, now, c.rel);
+  const updated = relTime(bank.bankUpdatedAt ?? a.lastSyncedAt, now, c.rel);
   const monthName = legacy.months[month - 1] ?? "";
   const cat = (k: string) => categoryLabel(k, c.categories, legacy.categories);
 
@@ -74,7 +74,7 @@ export function AccountDetail({ account: a, bank, now, canManage, syncing, recon
               <BankLogo name={bank.name} logo={bank.logo} color={bank.color} size={32} />
               <span className="min-w-0 truncate">{accountTitle(a)}</span>
             </h1>
-            <p className="mt-0.5 text-sm text-slate-500">{t.sub(typeLabel(a, c.accounts.types), bank.name, updated ? c.accounts.updated(updated) : c.accounts.never)}</p>
+            <p className="mt-0.5 text-sm text-slate-500">{t.sub(typeLabel(a, c.accounts.types), bank.name, updated ? (bank.bankUpdatedAt ? c.accounts.fromBank(updated) : c.accounts.updated(updated)) : c.accounts.never)}</p>
           </div>
           <div className="flex items-center gap-2">
             {needs && canManage && <button type="button" onClick={onReconnect} disabled={reconnecting} className={BTN_SM_PRIMARY}>{c.alert.button}</button>}

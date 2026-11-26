@@ -35,6 +35,7 @@ export function useBankInfo(accounts: OverviewAccount[], institutions: Instituti
         color: inst?.color ?? null,
         needsReconnect: now ? now === "needs_reconnect" : inst?.status === "needs_reconnect",
         lastSuccessAt: inst?.lastSuccessAt ?? null,
+        bankUpdatedAt: inst?.bankUpdatedAt ?? null,
       });
     }
     return out;

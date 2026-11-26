@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Landmark, Loader2, Lock, Plus, RefreshCw, ShieldCheck, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
+import { pullCopy } from "@/i18n/copy/pull";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccountSheet } from "@/components/personal/AccountSheet";
@@ -47,11 +49,17 @@ export default function PersonalBank() {
   ]);
 
   // Quietly bring every bank up to date on arrival (balances, a card's limit, the last days of movements).
-  const { mutate: quietRefresh } = trpc.banks.refreshItems.useMutation({
+  const { mutate: quietRefresh, mutateAsync: refreshItemsNow } = trpc.banks.refreshItems.useMutation({
     onSuccess: (d) => { if (d.results.some((r) => r.ok)) { void utils.banks.overview.invalidate(); void utils.bank.getMonthData.invalidate(); } void utils.brand.institutions.invalidate(); },
     onError: () => {},
   });
   useEffect(() => { if (hasBank) quietRefresh(); }, [hasBank, quietRefresh]);
+  // Pull down to refresh (phones): every bank again, then the page
+  const pullT = useCopy(pullCopy);
+  const pullRefresh = async () => {
+    if (hasBank) await refreshItemsNow().catch(() => undefined);
+    await utils.invalidate();
+  };
 
   const refresh = trpc.bank.refreshAllBalances.useMutation({
     onSuccess: (d) => {
@@ -68,7 +76,8 @@ export default function PersonalBank() {
   const net = have - owe;
   const oweSub = owe === 0 ? t.kpi.oweNone : debts.length === 1 ? accountLabel(debts[0], t.accountFallback) : t.kpi.oweMany(debts.length);
   const open = openId !== null ? accounts.find((a) => a.id === openId) ?? null : null;
-  const updatedOf = (a: OverviewAccount) => relTime(a.lastSyncedAt, now, locale, t.justNow);
+  // When the bank's data really came (Plaid's last update), not when the app last asked Plaid
+  const updatedOf = (a: OverviewAccount) => relTime(institutionOf(insts, a.id)?.bankUpdatedAt ?? a.lastSyncedAt, now, locale, t.justNow);
   const reconnect = (a: OverviewAccount) => {
     const inst = institutionOf(insts, a.id);
     setOpenId(null);
@@ -92,6 +101,7 @@ export default function PersonalBank() {
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
+      <PullToRefresh onRefresh={pullRefresh} label={pullT} />
       <div className="mx-auto max-w-6xl">
         <header className="mb-4 flex flex-wrap items-end justify-between gap-3">
           <div className="min-w-0">
@@ -197,7 +207,7 @@ function AccountRow({ account: a, inst, updated, t, onOpen, onReconnect }: {
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
             <span>{accountTypeLabel(a, t.types)}</span>
             {needs && <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700"><i className="h-[7px] w-[7px] rounded-full bg-current" aria-hidden="true" />{t.needsReconnect}</span>}
-            <span>{updated ? t.updated(updated) : t.neverUpdated}</span>
+            <span>{updated ? (inst?.bankUpdatedAt ? t.fromBank(updated) : t.updated(updated)) : t.neverUpdated}</span>
           </span>
         </span>
         <span className={cn("text-right text-sm font-bold tabular-nums", owes ? "text-red-600" : "text-slate-900")}>

@@ -139,7 +139,9 @@ export function useCatLabel() {
 }
 
 /** A bank's logo and look from brand.institutions (Plaid's logo and color), found by one of its account ids. */
-export type Institution = { itemId: string; name: string; logo: string | null; color: string | null; accountIds: number[]; status: string };
+export type Institution = { itemId: string; name: string; logo: string | null; color: string | null; accountIds: number[]; status: string;
+  /** When Plaid last brought this bank's data (null: not known yet). */
+  bankUpdatedAt?: string | null };
 export function institutionOf(list: readonly Institution[] | undefined, accountId: number | null | undefined): Institution | null {
   if (!list || accountId === null || accountId === undefined) return null;
   return list.find((i) => i.accountIds.includes(Number(accountId))) ?? null;

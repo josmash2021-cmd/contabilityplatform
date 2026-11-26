@@ -14,6 +14,10 @@ export const bankInstitutionsTable = mysqlTable("bankInstitutions", {
   lastSuccessAt: timestamp("lastSuccessAt"),
   lastErrorAt: timestamp("lastErrorAt"),
   metaFetchedAt: timestamp("metaFetchedAt"),
+  /** When Plaid last brought this bank's data (Plaid's last_successful_update). */
+  bankUpdatedAt: timestamp("bankUpdatedAt"),
+  /** The webhook address Plaid has for this connection. */
+  webhook: varchar("webhook", { length: 255 }),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 

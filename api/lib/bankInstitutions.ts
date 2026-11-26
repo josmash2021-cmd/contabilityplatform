@@ -8,12 +8,19 @@ import { bankAccounts } from "@db/schema";
 import { institutionLogoDataUrl, normalizeColor, plaidErrorCode, statusForError, type InstitutionStatus } from "./brand";
 import { bankInstitutionsTable, type BankInstitutionRow } from "./brandSchema";
 import { ensureBrandTables } from "./brandTables";
+import { plaidWebhookUrl } from "./plaidWebhook";
 
 type Db = ReturnType<typeof getDb>;
 
 /** The subset of the Plaid SDK client used here (the SDK object is untyped where the app creates it). */
 export type PlaidLike = {
-  itemGet(req: { access_token: string }): Promise<{ data: { item: { item_id?: string; institution_id?: string | null; error?: { error_code?: string | null } | null } } }>;
+  itemGet(req: { access_token: string }): Promise<{ data: {
+    item: { item_id?: string; institution_id?: string | null; webhook?: string | null; error?: { error_code?: string | null } | null };
+    /** When Plaid last brought the bank's movements (and with them its balances). */
+    status?: { transactions?: { last_successful_update?: string | null } | null } | null;
+  } }>;
+  /** Tells Plaid where to post this connection's webhooks (api/lib/plaidWebhook.ts). */
+  itemWebhookUpdate?(req: { access_token: string; webhook: string }): Promise<unknown>;
   institutionsGetById(req: { institution_id: string; country_codes: string[]; options?: { include_optional_metadata?: boolean } }): Promise<{
     data: { institution: { institution_id?: string; name?: string | null; logo?: string | null; primary_color?: string | null } };
   }>;
@@ -31,6 +38,8 @@ export type Institution = {
   errorCode: string | null;
   lastSuccessAt: string | null;
   lastErrorAt: string | null;
+  /** When Plaid last brought this bank's data: what the screens show as "Lo último de tu banco" (null: not known yet). */
+  bankUpdatedAt: string | null;
 };
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -112,15 +121,17 @@ export async function trackPlaid<T>(db: Db, userId: number, itemId: string | nul
 export async function refreshInstitution(db: Db, client: PlaidLike, userId: number, itemKey: string, accessToken: string, opts: { meta: boolean } = { meta: true }): Promise<boolean> {
   const k = `${userId}:${itemKey}`;
   failedAt.set(k, Date.now());
-  let item: Awaited<ReturnType<PlaidLike["itemGet"]>>["data"]["item"];
+  let got: Awaited<ReturnType<PlaidLike["itemGet"]>>["data"];
   try {
-    item = (await timeout(client.itemGet({ access_token: accessToken }))).data.item;
+    got = (await timeout(client.itemGet({ access_token: accessToken }))).data;
   } catch (e: unknown) {
     await recordItemOutcome(db, userId, itemKey, { error: e }, { force: true });
     return false;
   }
+  const item = got.item;
   const itemError = item.error?.error_code ?? null;
   await recordItemOutcome(db, userId, itemKey, itemError ? { errorCode: itemError } : { ok: true }, { force: true });
+  await saveBankFreshness(db, client, userId, itemKey, accessToken, got.status?.transactions?.last_successful_update ?? null, item.webhook ?? null);
   if (!opts.meta || !item.institution_id) { failedAt.delete(k); return true; }
   try {
     const inst = (await timeout(client.institutionsGetById({
@@ -139,6 +150,33 @@ export async function refreshInstitution(db: Db, client: PlaidLike, userId: numb
   } catch (e: unknown) {
     console.error("[institutions] metadata not loaded:", e instanceof Error ? e.message : e);
     return false;
+  }
+}
+
+/**
+ * When Plaid last brought this bank's data (saved for the screens), and the webhook: when Plaid doesn't have the
+ * app's address for this connection yet (connections made before webhooks), it's set once (/item/webhook/update).
+ * Best effort: never throws.
+ */
+async function saveBankFreshness(db: Db, client: PlaidLike, userId: number, itemKey: string, accessToken: string, lastUpdate: string | null, webhook: string | null): Promise<void> {
+  try {
+    const at = lastUpdate ? new Date(lastUpdate) : null;
+    const want = plaidWebhookUrl();
+    let hook = webhook;
+    if (want && client.itemWebhookUpdate && (webhook ?? "") !== want) {
+      try {
+        await timeout(client.itemWebhookUpdate({ access_token: accessToken, webhook: want }));
+        hook = want;
+        console.log(`[institutions] webhook set for bank ${itemKey} (user ${userId})`);
+      } catch (e: unknown) {
+        console.error(`[institutions] webhook not set for bank ${itemKey}:`, plaidErrorCode(e) ?? (e instanceof Error ? e.message : e));
+      }
+    }
+    const set: Partial<BankInstitutionRow> = { webhook: hook ? hook.slice(0, 255) : null };
+    if (at && !Number.isNaN(at.getTime())) set.bankUpdatedAt = at;
+    await db.update(bankInstitutionsTable).set(set).where(and(eq(bankInstitutionsTable.userId, userId), eq(bankInstitutionsTable.itemId, itemKey)));
+  } catch (e: unknown) {
+    console.error("[institutions] bank time not saved:", e instanceof Error ? e.message : e);
   }
 }
 
@@ -224,6 +262,7 @@ export async function listInstitutions(db: Db, client: PlaidLike | null, userId:
       errorCode: row?.errorCode ?? null,
       lastSuccessAt: iso(row?.lastSuccessAt),
       lastErrorAt: iso(row?.lastErrorAt),
+      bankUpdatedAt: iso(row?.bankUpdatedAt),
     });
   }
   return out;

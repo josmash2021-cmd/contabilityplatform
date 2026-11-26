@@ -385,7 +385,7 @@ export function AppLayout() {
           <AccountMenu name={displayName} email={user?.email} initial={initial} t={t} onGo={go} logout={logout} />
         </header>
 
-        <main ref={mainRef} className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
+        <main ref={mainRef} data-app-main="" className="relative flex-1 overflow-y-auto pb-24 lg:pb-0">
           {isAdmin && !memberRole && <MaintenanceReminder className="px-4 lg:px-8" />}
           <ViewAsBanner />
           <TeamBanner />

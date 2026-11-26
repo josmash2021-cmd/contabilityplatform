@@ -32,7 +32,8 @@ export function AccountCard({ account: a, bank, now, canManage, syncing, reconne
   const needs = bank.needsReconnect;
   const debt = a.kind !== "cash";
   const title = accountTitle(a);
-  const updated = relTime(a.lastSyncedAt, now, c.rel);
+  // When the bank's data really came (Plaid's last update), not when the app last asked Plaid
+  const updated = relTime(bank.bankUpdatedAt ?? a.lastSyncedAt, now, c.rel);
   const usedPct = a.creditLimit ? Math.min(100, Math.max(0, (a.balance / a.creditLimit) * 100)) : null;
 
   return (
@@ -83,7 +84,7 @@ export function AccountCard({ account: a, bank, now, canManage, syncing, reconne
       )}
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-500">
-        <span>{updated ? t.updated(updated) : t.never}</span>
+        <span>{updated ? (bank.bankUpdatedAt ? t.fromBank(updated) : t.updated(updated)) : t.never}</span>
         <div className="flex items-center gap-1.5">
           {needs && canManage && (
             <button type="button" onClick={onReconnect} disabled={reconnecting} className={BTN_SM_PRIMARY}>{c.alert.button}</button>

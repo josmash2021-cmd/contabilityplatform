@@ -106,7 +106,7 @@ export function AccountSheet({ account, inst, siblings, updated, onReconnect, on
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-semibold text-slate-900">{s.connection}</p>
                 <p className={cn("text-xs", needs ? "font-semibold text-amber-700" : "text-slate-500")}>
-                  {needs ? s.connNeeds(bank) : updated ? s.connOk(updated) : s.connNever}
+                  {needs ? s.connNeeds(bank) : updated ? (inst?.bankUpdatedAt ? s.connFromBank(updated) : s.connOk(updated)) : s.connNever}
                 </p>
               </div>
               {needs ? (

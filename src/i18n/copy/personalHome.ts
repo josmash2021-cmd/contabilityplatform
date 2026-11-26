@@ -8,6 +8,9 @@ const es = {
   retry: "Reintentar",
   hero: {
     label: "Te quedan para gastar este mes",
+    // When Plaid last brought the bank's data (owner, 2026-11-26: "se ve dinero viejo")
+    fromBank: (bank: string, when: string) => `Lo último de ${bank}: ${when}`,
+    justNow: "hace un momento",
     overLabel: "Te pasaste de tu presupuesto por",
     until: (end: string) => `Hasta el ${end} · unos `,
     perDay: (amount: string) => `${amount} al día`,
@@ -107,6 +110,8 @@ const en: PersonalHomeCopy = {
   retry: "Try again",
   hero: {
     label: "Left to spend this month",
+    fromBank: (bank: string, when: string) => `Latest from ${bank}: ${when}`,
+    justNow: "just now",
     overLabel: "You went over your budget by",
     until: (end: string) => `Until ${end} · about `,
     perDay: (amount: string) => `${amount} a day`,

@@ -10,6 +10,8 @@ import {
 import type { AppRouter } from "../../api/router";
 import { isEmail, mailtoUrl, whatsappPhone, whatsappUrl } from "../../api/lib/invoices";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
+import { pullCopy } from "@/i18n/copy/pull";
 import { Skeleton } from "@/components/ui/skeleton";
 import { MerchantLogo } from "@/components/brand/MerchantLogo";
 import { PayBillDialog } from "@/components/vendors/PayBillDialog";
@@ -83,6 +85,14 @@ function OwnerHome() {
   const locale = intlLocale(lang);
   const { user } = useAuth();
   const utils = trpc.useUtils();
+  // Pull down to refresh (phones): ask the bank again now, then every number on the page
+  const pullT = useCopy(pullCopy);
+  const { mutateAsync: syncRecentNow } = trpc.bank.syncRecent.useMutation({ onError: () => {} });
+  const { mutateAsync: refreshBalancesNow } = trpc.bank.refreshAllBalances.useMutation({ onError: () => {} });
+  const pullRefresh = async () => {
+    await Promise.allSettled([syncRecentNow(), refreshBalancesNow()]);
+    await utils.invalidate();
+  };
   const [payBill, setPayBill] = useState<BillItem | null>(null);
 
   // The user's local day (computed once per language; the server checks it against its own clock).
@@ -191,6 +201,7 @@ function OwnerHome() {
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
+      <PullToRefresh onRefresh={pullRefresh} label={pullT} />
       <div className="mx-auto max-w-6xl">
         <header className="mb-[18px] flex flex-wrap items-end justify-between gap-3">
           <div>

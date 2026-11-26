@@ -11,6 +11,7 @@ import { autoConfirmPending, storedReviewsFor, unreviewed } from "./review-route
 import { ensureAutoTable, forgetAuto } from "./lib/autoConfirm";
 import { assertNotReconciled, closedPeriodIds } from "./reconcile-router";
 import { forgetInstitutions, itemKeyOf, refreshInstitution, trackPlaid, type PlaidLike } from "./lib/bankInstitutions";
+import { plaidWebhookUrl } from "./lib/plaidWebhook";
 import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
 import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName, trustedMerchantName } from "./lib/brand";
 import { CHAIN_CATEGORY, billFromPlaid, isCarWash, isGasStation, knownBill, knownChain, knownIncome, type KnownBill } from "./lib/bankRules";
@@ -1188,6 +1189,59 @@ export async function syncAllBankTransactions(opts: BgOptions = {}): Promise<{ b
   }
 }
 
+let statusRunning = false;
+
+/**
+ * Background, every hour: each connection's real time with its bank (Plaid's last update, shown as "Lo último de
+ * tu banco") and its webhook (set once for connections made before webhooks). Only /item/get (and, once,
+ * /item/webhook/update): no cost. Never throws.
+ */
+export async function refreshAllBankStatus(opts: BgOptions = {}): Promise<{ banks: number; failed: number; skipped?: "running" | "no-plaid" }> {
+  if (statusRunning) return { banks: 0, failed: 0, skipped: "running" };
+  statusRunning = true;
+  let banks = 0, failed = 0;
+  try {
+    const client = (opts.client !== undefined ? opts.client : process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET ? await initPlaid() : null) as unknown as PlaidLike | null;
+    if (!client || typeof client.itemGet !== "function") return { banks, failed, skipped: "no-plaid" };
+    const db = getDb();
+    for (const { userId, items } of await allUsersItems(db, opts.userIds)) {
+      for (const item of items) {
+        banks++;
+        if (!(await refreshInstitution(db, client, userId, item.key, item.token, { meta: false }))) failed++;
+      }
+    }
+    return { banks, failed };
+  } catch (e: unknown) {
+    console.error("[bank-status] Fatal error:", e instanceof Error ? e.message : e);
+    return { banks, failed };
+  } finally {
+    statusRunning = false;
+  }
+}
+
+/** Whose bank connection this Plaid item is (a connected, active account), for the webhook. */
+export async function userOfPlaidItem(itemId: string): Promise<number | null> {
+  const db = getDb();
+  const rows = await db.select({ userId: bankAccounts.userId }).from(bankAccounts)
+    .where(and(eq(bankAccounts.plaidItemId, itemId), eq(bankAccounts.isActive, true))).limit(1);
+  return rows[0] ? Number(rows[0].userId) : null;
+}
+
+/**
+ * Plaid's webhook said this user's bank has something new: read their banks now (new settled movements and
+ * balances, the same jobs as the background, only for them) and the bank's real time. "busy" when the
+ * background job is running right now (the webhook tries again in a moment).
+ */
+export async function syncUserBanksNow(userId: number, itemId: string): Promise<"done" | "busy"> {
+  const tx = await syncAllBankTransactions({ userIds: [userId] });
+  if (tx.skipped === "running") return "busy";
+  const bal = await syncAllBankBalances({ userIds: [userId] });
+  if (bal.skipped === "running") return "busy";
+  await refreshAllBankStatus({ userIds: [userId] });
+  console.log(`[plaid-webhook] bank ${itemId} (user ${userId}): ${tx.added} new movement(s), ${bal.updated} balance(s) updated`);
+  return "done";
+}
+
 // ─── HELPER: Format currency for anomaly descriptions ───
 function formatCurrencyVal(val: number): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" }).format(val);
@@ -1318,6 +1372,8 @@ export const bankRouter = createRouter({
         // Plaid's window speaks the owner's language (Spanish unless the app is in English).
         language: ctx.lang === "en" ? "en" : "es",
         transactions: { days_requested: 730 },
+        // Plaid posts here as soon as it brings something new from the bank (api/lib/plaidWebhook.ts)
+        ...(plaidWebhookUrl() ? { webhook: plaidWebhookUrl() as string } : {}),
       });
       console.log(`[createLinkToken] Link token created for user ${ctx.user.id}`);
       return { success: true as const, linkToken: res.data.link_token };

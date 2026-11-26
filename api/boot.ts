@@ -4,7 +4,8 @@ import { cors } from "hono/cors";
 import type { HttpBindings } from "@hono/node-server";
 import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
-import { syncAllBankBalances, syncAllBankTransactions } from "./bank-router";
+import { initPlaid, refreshAllBankStatus, syncAllBankBalances, syncAllBankTransactions, syncUserBanksNow, userOfPlaidItem } from "./bank-router";
+import { PLAID_WEBHOOK_PATH, cachedKeys, handlePlaidWebhook, plaidWebhookUrl, type PlaidVerificationKey } from "./lib/plaidWebhook";
 import { createContext } from "./context";
 import { env } from "./lib/env";
 import { invoicePeriod, invoiceSubscriptionId, subscriptionPeriod } from "./lib/stripePeriod";
@@ -33,6 +34,24 @@ app.get(Paths.oauthCallback, createOAuthCallbackHandler());
 
 // Health check endpoint
 app.get("/api/health", (c) => c.json({ status: "ok", version: "1.0.7-security" }));
+
+// ── Plaid Webhook: Plaid says a bank has something new; the app reads that user's banks (api/lib/plaidWebhook.ts) ──
+// Raw body: the signature (Plaid-Verification) is checked against this exact body before anything happens.
+const plaidKeys = cachedKeys(async (kid) => {
+  const client = await initPlaid();
+  if (!client) return null;
+  const res = await client.webhookVerificationKeyGet({ key_id: kid });
+  return (res?.data?.key ?? null) as PlaidVerificationKey | null;
+});
+app.post(PLAID_WEBHOOK_PATH, async (c) => {
+  const raw = await c.req.text();
+  const r = await handlePlaidWebhook(raw, c.req.header("plaid-verification"), {
+    keyOf: plaidKeys,
+    userOfItem: userOfPlaidItem,
+    readNow: syncUserBanksNow,
+  });
+  return c.json({ ok: r.status === 200 }, r.status);
+});
 
 // ── Stripe Webhook (raw body needed for signature verification) ──
 app.post("/api/webhooks/stripe", async (c) => {
@@ -228,9 +247,18 @@ if (env.isProduction) {
   setInterval(syncAllBalances, 5 * 60 * 1000);
   setTimeout(syncAllBalances, 10000);
 
-  // Transaction sync every 3 minutes
-  setInterval(syncAllTransactions, 3 * 60 * 1000);
+  // New movements: with Plaid's webhook they come as soon as Plaid has them (PLAID_WEBHOOK_PATH), so this is
+  // only the safety net, once an hour (owner, 2026-11-26); without a webhook address, every 3 minutes as before.
+  setInterval(syncAllTransactions, (plaidWebhookUrl() ? 60 : 3) * 60 * 1000);
   setTimeout(syncAllTransactions, 15000); // 5s after balance sync
+
+  // Each bank's real time with Plaid ("Lo último de tu banco") and its webhook address: every hour
+  const refreshBanks = async () => {
+    const r = await refreshAllBankStatus();
+    if (r.banks > 0) console.log(`[bank-status] ${r.banks} bank(s) checked, ${r.failed} not reachable`);
+  };
+  setInterval(refreshBanks, 60 * 60 * 1000);
+  setTimeout(refreshBanks, 30000);
 
   // Recurring invoices: create the sales that came due (safe to repeat; see api/quotes-router.ts)
   const runRecurring = async () => {

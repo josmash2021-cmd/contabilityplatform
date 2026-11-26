@@ -31,6 +31,15 @@ export function ensureBrandTables(db: Db): Promise<void> {
         INDEX bankInstitutions_item (itemId)
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     `);
+    // Added 2026-11-26 (owner: "se ve dinero viejo"): when Plaid last brought this bank's data (Plaid's own
+    // last_successful_update, not when the app asked Plaid) and the webhook address Plaid has for it.
+    const cols = (await db.execute(sql`
+      SELECT COLUMN_NAME AS c FROM information_schema.COLUMNS
+      WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'bankInstitutions'
+    `)) as unknown as [{ c: string }[]];
+    const have = new Set((cols[0] ?? []).map((r) => r.c));
+    if (!have.has("bankUpdatedAt")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN bankUpdatedAt TIMESTAMP NULL`);
+    if (!have.has("webhook")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN webhook VARCHAR(255) NULL`);
     // Public brand data Plaid sends with transactions (merchant_name / counterparties): one row per merchant.
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS merchantLogos (

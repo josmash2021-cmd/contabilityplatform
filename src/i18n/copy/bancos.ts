@@ -52,6 +52,8 @@ const es = {
     review: (n: number) => `Revisar ${n} →`,
     allReviewed: "Todo revisado",
     updated: (when: string) => `Actualizado ${when}`,
+    // When Plaid last brought the bank's data (not when the app asked Plaid): owner, 2026-11-26
+    fromBank: (when: string) => `Lo último de tu banco: ${when}`,
     never: "Sin actualizar todavía",
     view: "Ver movimientos",
     more: (name: string) => `Más opciones de ${name}`,
@@ -224,6 +226,7 @@ const en: BancosCopy = {
     review: (n: number) => `Review ${n} →`,
     allReviewed: "All reviewed",
     updated: (when: string) => `Updated ${when}`,
+    fromBank: (when: string) => `Latest from your bank: ${when}`,
     never: "Not updated yet",
     view: "See transactions",
     more: (name: string) => `More options for ${name}`,

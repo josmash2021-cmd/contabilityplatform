@@ -3,6 +3,8 @@ import { useSearchParams } from "react-router";
 import { AlertCircle, Info } from "lucide-react";
 import { toast } from "sonner";
 import { AnimatedPage } from "@/components/AnimatedPage";
+import { PullToRefresh } from "@/components/layout/PullToRefresh";
+import { pullCopy } from "@/i18n/copy/pull";
 import { PlaidLinkOverlay } from "@/components/PlaidLinkOverlay";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AccountCard } from "@/components/bank/AccountCard";
@@ -99,7 +101,7 @@ export default function Bank() {
     [primaryNeeds, primaryItem, health],
   );
   const banks = useBankInfo(accounts, institutions, session, c.fallbackBank);
-  const bankOf = (a: OverviewAccount) => banks.get(a.itemId) ?? { itemId: a.itemId, name: c.fallbackBank, logo: null, color: null, needsReconnect: false, lastSuccessAt: null };
+  const bankOf = (a: OverviewAccount) => banks.get(a.itemId) ?? { itemId: a.itemId, name: c.fallbackBank, logo: null, color: null, needsReconnect: false, lastSuccessAt: null, bankUpdatedAt: null };
   const note = (results: SyncOutcome[]) => setHealth((prev) => {
     const next = { ...prev };
     for (const r of results) {
@@ -118,13 +120,19 @@ export default function Bank() {
   };
 
   // Every bank's balances and last week of movements once per visit (the owner's; members can't run it).
-  const { mutate: refreshItems } = trpc.banks.refreshItems.useMutation({
+  const { mutate: refreshItems, mutateAsync: refreshItemsNow } = trpc.banks.refreshItems.useMutation({
     onSuccess: (r) => {
       note(r.results);
       if (r.results.some((x) => x.ok)) { void utils.banks.invalidate(); void invalidateInstitutions(); }
     },
     onError: () => { /* quiet */ },
   });
+  // Pull down to refresh (phones): every bank again, then the page
+  const pullT = useCopy(pullCopy);
+  const pullRefresh = async () => {
+    await refreshItemsNow().catch(() => undefined);
+    await utils.invalidate();
+  };
   useEffect(() => {
     if (hasBank && canManage) refreshItems({ today });
   }, [hasBank, canManage, refreshItems, today]);
@@ -214,6 +222,7 @@ export default function Bank() {
 
   return (
     <AnimatedPage className="p-4 lg:p-8">
+      <PullToRefresh onRefresh={pullRefresh} label={pullT} />
       <div className="mx-auto max-w-6xl space-y-4">
         {overview.isLoading ? (
           <>

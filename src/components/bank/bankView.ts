@@ -14,7 +14,9 @@ export type MonthMovement = AccountMonth["transactions"][number];
 export type Institution = Out["brand"]["institutions"][number];
 
 /** What the screen knows about one bank: its name and logo, and whether it needs the owner to sign in again. */
-export type BankInfo = { itemId: string; name: string; logo: string | null; color: string | null; needsReconnect: boolean; lastSuccessAt: string | null };
+export type BankInfo = { itemId: string; name: string; logo: string | null; color: string | null; needsReconnect: boolean; lastSuccessAt: string | null;
+  /** When Plaid last brought this bank's data (null: not known yet). */
+  bankUpdatedAt: string | null };
 
 const fmt = (n: number, digits: number) => Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 /** $1,234.56, with a real minus (−) when negative. */
