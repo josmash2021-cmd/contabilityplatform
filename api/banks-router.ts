@@ -24,6 +24,7 @@ import { REVIEW_WINDOW_DAYS } from "./lib/bankReview";
 import { addDays, effectiveToday, isIsoDate, utcToday } from "./lib/vendors";
 import { isDuplicateKey, isMissingTable } from "./lib/dbErrors";
 import { forgetInstitutions, itemKeyOf, recordItemOutcome } from "./lib/bankInstitutions";
+import { askBanksNow, balancesNow, heldBanks, type LiveClient } from "./lib/liveBalance";
 import type { Lang } from "./lib/i18n";
 import {
   CHANGE_DAYS, DEFAULT_SYNC_DAYS, MAX_NICKNAME, QUIET_SYNC_DAYS, accountKind, balanceSeries, clampSince, cleanNickname,
@@ -155,9 +156,12 @@ async function syncItem(db: Db, client: PlaidClient, userId: number, itemId: str
   const token = rows.find((r) => r.plaidAccessToken)?.plaidAccessToken;
   if (!token) return { itemId, ok: false, problem: "gone" };
   try {
-    // Balances first: they also tell us the connection works.
-    const res = await withTimeout(client.accountsGet({ access_token: token }), 15_000);
+    // Balances first: they also tell us the connection works. From the bank itself when it's switched on (once
+    // per bank every 15 minutes, api/lib/liveBalance.ts), else Plaid's copy.
+    const res = await balancesNow(db, client as LiveClient, userId, itemId, token, () => withTimeout(client.accountsGet({ access_token: token }), 15_000));
     await recordItemOutcome(db, userId, itemId, { ok: true });
+    // Plaid's copy never goes over a balance that came from the bank itself after it
+    const keepSaved = !res.live && (await heldBanks(db, userId)).has(itemId);
     const plaidAccounts = res.data.accounts ?? [];
     const byPlaidId = new Map<string, { id: number; bankName: string; accountNumber: string | null }>();
     const mine: Array<{ id: number; plaidAccountId: string | null; bankName: string; accountNumber: string | null }> = plaidAccounts.length
@@ -171,7 +175,7 @@ async function syncItem(db: Db, client: PlaidClient, userId: number, itemId: str
       const known = byPlaidId.get(pa.account_id);
       if (known) {
         await db.update(bankAccounts).set({
-          ...(bal != null ? { currentBalance: bal } : {}), accountType: pa.type || undefined, lastSyncedAt: new Date(), updatedAt: new Date(),
+          ...(bal != null && !keepSaved ? { currentBalance: bal } : {}), accountType: pa.type || undefined, lastSyncedAt: new Date(), updatedAt: new Date(),
         }).where(and(eq(bankAccounts.id, known.id), eq(bankAccounts.userId, userId)));
         if (pa.type === "credit") limits.push({ id: known.id, limit: typeof pa.balances?.limit === "number" ? pa.balances.limit : null });
       } else {
@@ -464,9 +468,13 @@ export const banksRouter = createRouter({
       return { ...(await syncItem(db, client, userId, input.itemId, rows, since, today)), since };
     }),
 
-  /** The quiet refresh when the screen opens: every bank's balances and its last few days of movements. */
+  /**
+   * The quiet refresh when the screen opens: every bank's balances and its last few days of movements.
+   * `pulled` (opening the page or pulling to refresh, owner 2026-11-27): also asks Plaid to go to the banks now (Transactions Refresh, when it's switched
+   * on; once per bank per hour). Plaid answers at once and the movements arrive by webhook.
+   */
   refreshItems: authedQuery
-    .input(z.object({ today: isoDay.optional() }).optional())
+    .input(z.object({ today: isoDay.optional(), pulled: z.boolean().optional() }).optional())
     .mutation(async ({ ctx, input }) => {
       const db = getDb();
       const userId = Number(ctx.user.id);
@@ -477,6 +485,11 @@ export const banksRouter = createRouter({
       const today = effectiveToday(input?.today, utcToday());
       const since = addDays(today, -QUIET_SYNC_DAYS);
       const results = await Promise.all([...items.entries()].map(([itemId, rows]) => syncItem(db, client, userId, itemId, rows, since, today)));
+      // Then ask Plaid to go to the banks for new movements (after the balances, so they never wait behind it)
+      if (input?.pulled) {
+        const asks = [...items.entries()].flatMap(([key, rows]) => { const token = rows.find((r) => r.plaidAccessToken)?.plaidAccessToken; return token ? [{ key, token }] : []; });
+        void askBanksNow(db, client as LiveClient, userId, asks).catch(() => 0);
+      }
       return { results };
     }),
 

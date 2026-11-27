@@ -12,6 +12,7 @@ import { ensureAutoTable, forgetAuto } from "./lib/autoConfirm";
 import { assertNotReconciled, closedPeriodIds } from "./reconcile-router";
 import { forgetInstitutions, itemKeyOf, refreshInstitution, trackPlaid, type PlaidLike } from "./lib/bankInstitutions";
 import { plaidWebhookUrl } from "./lib/plaidWebhook";
+import { askBanksNow, balancesNow, heldBanks, type LiveClient } from "./lib/liveBalance";
 import { rememberMerchantLogos, withMerchantLogos } from "./lib/merchantLogos";
 import { cleanAccountName, directLogoOf, plaidErrorCode, repairedName, trustedMerchantName } from "./lib/brand";
 import { CHAIN_CATEGORY, billFromPlaid, isCarWash, isGasStation, knownBill, knownChain, knownIncome, type KnownBill } from "./lib/bankRules";
@@ -979,12 +980,14 @@ async function doSyncTransactions(ctx: any, year?: number, month?: number, speci
     // Step 6: Update balances of the banks that answered (best effort, 10s timeout each)
     const balances = await forEachItem(db, userId, live.map((r) => r.item), (item) =>
       withTimeout<{ data: AccountsGetResponse }>(client.accountsGet({ access_token: item.token }), 10000, "Update balances"));
+    // A balance that came from the bank itself after Plaid's copy stays (api/lib/liveBalance.ts)
+    const held = await heldBanks(db, userId);
     for (const r of balances) {
       if (!r.ok) { console.log(`[SYNC] Balance update skipped for bank ${r.item.key}`); continue; }
       try {
         for (const plaidAcc of r.value.data.accounts || []) {
           const dbAccount = accountMap.get(plaidAcc.account_id);
-          if (dbAccount && plaidAcc.balances && !shadowed.has(dbAccount.id)) {
+          if (dbAccount && plaidAcc.balances && !shadowed.has(dbAccount.id) && !held.has(r.item.key)) {
             const bal = plaidBalance(plaidAcc);
             if (bal != null) await db.update(bankAccounts).set({ currentBalance: bal, lastSyncedAt: new Date(), updatedAt: new Date() }).where(eq(bankAccounts.id, dbAccount.id));
           }
@@ -1061,6 +1064,8 @@ export async function syncAllBankBalances(opts: BgOptions = {}): Promise<{ banks
         banks++;
         try {
           const res = await trackPlaid(db, userId, item.key, () => withTimeout(client.accountsGet({ access_token: item.token }), 15000, "Background balances"));
+          // A balance that came from the bank itself after Plaid's copy stays (read now, right before writing)
+          if ((await heldBanks(db, userId)).has(item.key)) continue;
           const fresh = new Map<string, string>();
           for (const plaidAcc of res.data.accounts || []) {
             const bal = plaidBalance(plaidAcc);
@@ -1696,7 +1701,9 @@ export const bankRouter = createRouter({
           let liveBalance = "0";
           try {
             const balances = await forEachItem(db, userId, live.map((r) => r.item), (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
-            const freshBalances = freshBalancesOf(balances);
+            // Banks whose saved balance came from the bank itself after Plaid's copy keep it (liveBalance.ts)
+            const held = await heldBanks(db, userId);
+            const freshBalances = freshBalancesOf(balances.filter((r) => !held.has(r.item.key)));
             // Update DB balances
             for (const dbAccount of userAccounts) {
               if (!dbAccount.plaidAccountId || shadowed.has(dbAccount.id)) continue;
@@ -2212,7 +2219,9 @@ export const bankRouter = createRouter({
 
       const outcomes = await forEachItem(db, userId, items, (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
       if (!outcomes.some((r) => r.ok)) throw new Error("No bank answered");
-      const freshBalances = freshBalancesOf(outcomes);
+      // Banks whose saved balance came from the bank itself after Plaid's copy keep it (liveBalance.ts)
+      const held = await heldBanks(db, userId);
+      const freshBalances = freshBalancesOf(outcomes.filter((r) => !held.has(r.item.key)));
 
       console.log(`[getLiveBalance] Plaid returned ${freshBalances.size} balances from ${outcomes.filter((r) => r.ok).length} of ${items.length} bank(s)`);
 
@@ -2238,7 +2247,11 @@ export const bankRouter = createRouter({
   }),
 
   // ─── REFRESH ALL BALANCES + DISCOVER NEW ACCOUNTS (every connected bank) ───
-  refreshAllBalances: authedQuery.mutation(async ({ ctx }) => {
+  // Opening Inicio or Banco, or pulling to refresh: the balance from the bank itself when it's switched on
+  // (once per bank every 15 minutes, api/lib/liveBalance.ts), else Plaid's copy. `pulled` (opening Inicio/Banco or a pull,
+  // owner 2026-11-27): also asks Plaid to go
+  // to the bank for new movements (Transactions Refresh, once per bank per hour; they arrive by webhook).
+  refreshAllBalances: authedQuery.input(z.object({ pulled: z.boolean().optional() }).optional()).mutation(async ({ ctx, input }) => {
     if (!ctx.user) return { success: false, error: "No autenticado" };
     if (!await hasActiveBank(ctx.user.id)) return { success: false, error: "No hay cuenta bancaria conectada" };
     const db = getDb();
@@ -2260,8 +2273,14 @@ export const bankRouter = createRouter({
         if (acc.plaidAccountId) accountMap.set(acc.plaidAccountId, acc);
       }
 
-      // Get ALL accounts from Plaid (including new ones), from every bank
-      const outcomes = await forEachItem(db, userId, items, (item) => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>);
+      // Get ALL accounts from Plaid (including new ones), from every bank: from the bank itself when allowed
+      const outcomes = await forEachItem(db, userId, items, (item) =>
+        balancesNow(db, client as LiveClient, userId, item.key, item.token, () => client.accountsGet({ access_token: item.token }) as Promise<{ data: AccountsGetResponse }>));
+      // Then (opening or a pull) ask Plaid to go to the bank for new movements: answers at once, they come by
+      // webhook. After the balances on purpose, so the balance never waits behind it or races its update.
+      if (input?.pulled) void askBanksNow(db, client as LiveClient, userId, items).catch(() => 0);
+      // Plaid's copy never goes over a balance that came from the bank itself after it
+      const held = await heldBanks(db, userId);
       const failedItems = outcomes.filter((r) => !r.ok).map((r) => r.item.key);
       const firstFailure = outcomes.find((r) => !r.ok);
       if (failedItems.length === items.length && firstFailure && !firstFailure.ok) {
@@ -2287,8 +2306,9 @@ export const bankRouter = createRouter({
           if (dbAccount) {
             // Update existing account balance
             if (bal != null) {
+              const keepSaved = !r.value.live && held.has(r.item.key);
               await db.update(bankAccounts).set({
-                currentBalance: bal,
+                ...(keepSaved ? {} : { currentBalance: bal }),
                 bankName: cleanAccountName(plaidAcc.name, plaidAcc.official_name), // Also update name in case it changed
                 accountType: plaidAcc.type || dbAccount.accountType,
                 lastSyncedAt: new Date(),

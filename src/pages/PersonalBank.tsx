@@ -11,6 +11,7 @@ import { CsvImportDialog } from "@/components/personal/CsvImportDialog";
 import { ReconnectBank } from "@/components/personal/ReconnectBank";
 import { AccountLogo } from "@/components/personal/TxLogo";
 import { accountLabel, accountTypeLabel, institutionOf, relTime, smBtn, type Institution, type OverviewAccount } from "@/components/personal/txKit";
+import { balanceAt } from "@/components/bank/bankView";
 import { money, ui } from "@/components/personal/personalUtils";
 import { trpc } from "@/providers/trpc";
 import { cn } from "@/lib/utils";
@@ -54,11 +55,12 @@ export default function PersonalBank() {
     onSuccess: (d) => { void (d.results.some((r) => r.ok) ? readAgain(utils.banks.overview, utils.bank.getMonthData, utils.brand.institutions) : readAgain(utils.brand.institutions)); },
     onError: () => {},
   });
-  useEffect(() => { if (hasBank) quietRefresh(); }, [hasBank, quietRefresh]);
+  // Opening also asks the bank for new movements (owner, 2026-11-27); once per bank per hour (liveBalance.ts)
+  useEffect(() => { if (hasBank) quietRefresh({ pulled: true }); }, [hasBank, quietRefresh]);
   // Pull down to refresh (phones): every bank again, then the page
   const pullT = useCopy(pullCopy);
   const pullRefresh = async () => {
-    if (hasBank) await refreshItemsNow().catch(() => undefined);
+    if (hasBank) await refreshItemsNow({ pulled: true }).catch(() => undefined);
     await utils.invalidate();
   };
 
@@ -78,7 +80,7 @@ export default function PersonalBank() {
   const oweSub = owe === 0 ? t.kpi.oweNone : debts.length === 1 ? accountLabel(debts[0], t.accountFallback) : t.kpi.oweMany(debts.length);
   const open = openId !== null ? accounts.find((a) => a.id === openId) ?? null : null;
   // When the bank's data really came (Plaid's last update), not when the app last asked Plaid
-  const updatedOf = (a: OverviewAccount) => relTime(institutionOf(insts, a.id)?.bankUpdatedAt ?? a.lastSyncedAt, now, locale, t.justNow);
+  const updatedOf = (a: OverviewAccount) => relTime(balanceAt(institutionOf(insts, a.id)) ?? a.lastSyncedAt, now, locale, t.justNow);
   const reconnect = (a: OverviewAccount) => {
     const inst = institutionOf(insts, a.id);
     setOpenId(null);
@@ -208,7 +210,7 @@ function AccountRow({ account: a, inst, updated, t, onOpen, onReconnect }: {
           <span className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500">
             <span>{accountTypeLabel(a, t.types)}</span>
             {needs && <span className="inline-flex items-center gap-1.5 font-semibold text-amber-700"><i className="h-[7px] w-[7px] rounded-full bg-current" aria-hidden="true" />{t.needsReconnect}</span>}
-            <span>{updated ? (inst?.bankUpdatedAt ? t.fromBank(updated) : t.updated(updated)) : t.neverUpdated}</span>
+            <span>{updated ? (balanceAt(inst) ? t.fromBank(updated) : t.updated(updated)) : t.neverUpdated}</span>
           </span>
         </span>
         <span className={cn("text-right text-sm font-bold tabular-nums", owes ? "text-red-600" : "text-slate-900")}>

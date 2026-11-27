@@ -18,6 +18,10 @@ export const bankInstitutionsTable = mysqlTable("bankInstitutions", {
   bankUpdatedAt: timestamp("bankUpdatedAt"),
   /** The webhook address Plaid has for this connection. */
   webhook: varchar("webhook", { length: 255 }),
+  /** When this bank's balance last came from the bank itself (Plaid Balance, api/lib/liveBalance.ts). */
+  liveBalanceAt: timestamp("liveBalanceAt"),
+  /** When the app last asked Plaid to go to this bank now (Transactions Refresh). */
+  txRefreshAt: timestamp("txRefreshAt"),
   updatedAt: timestamp("updatedAt").defaultNow().notNull(),
 });
 

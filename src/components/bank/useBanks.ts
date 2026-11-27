@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { trpc } from "@/providers/trpc";
-import type { BankInfo, Institution, OverviewAccount } from "./bankView";
+import { balanceAt, type BankInfo, type Institution, type OverviewAccount } from "./bankView";
 
 /** trpc.brand.institutions (the logos system): each bank connection's name, original logo and health. */
 export function useInstitutions(enabled: boolean) {
@@ -35,7 +35,7 @@ export function useBankInfo(accounts: OverviewAccount[], institutions: Instituti
         color: inst?.color ?? null,
         needsReconnect: now ? now === "needs_reconnect" : inst?.status === "needs_reconnect",
         lastSuccessAt: inst?.lastSuccessAt ?? null,
-        bankUpdatedAt: inst?.bankUpdatedAt ?? null,
+        bankUpdatedAt: balanceAt(inst),
       });
     }
     return out;

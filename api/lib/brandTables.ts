@@ -40,6 +40,10 @@ export function ensureBrandTables(db: Db): Promise<void> {
     const have = new Set((cols[0] ?? []).map((r) => r.c));
     if (!have.has("bankUpdatedAt")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN bankUpdatedAt TIMESTAMP NULL`);
     if (!have.has("webhook")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN webhook VARCHAR(255) NULL`);
+    // When the balance last came from the bank itself and when Plaid was last asked to go to the bank (both paid,
+    // api/lib/liveBalance.ts).
+    if (!have.has("liveBalanceAt")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN liveBalanceAt TIMESTAMP NULL`);
+    if (!have.has("txRefreshAt")) await db.execute(sql`ALTER TABLE bankInstitutions ADD COLUMN txRefreshAt TIMESTAMP NULL`);
     // Public brand data Plaid sends with transactions (merchant_name / counterparties): one row per merchant.
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS merchantLogos (

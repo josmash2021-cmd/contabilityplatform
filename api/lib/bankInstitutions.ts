@@ -40,6 +40,8 @@ export type Institution = {
   lastErrorAt: string | null;
   /** When Plaid last brought this bank's data: what the screens show as "Lo último de tu banco" (null: not known yet). */
   bankUpdatedAt: string | null;
+  /** When the balance last came from the bank itself (Plaid Balance, api/lib/liveBalance.ts); null: never. */
+  liveBalanceAt: string | null;
 };
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
@@ -263,6 +265,7 @@ export async function listInstitutions(db: Db, client: PlaidLike | null, userId:
       lastSuccessAt: iso(row?.lastSuccessAt),
       lastErrorAt: iso(row?.lastErrorAt),
       bankUpdatedAt: iso(row?.bankUpdatedAt),
+      liveBalanceAt: iso(row?.liveBalanceAt),
     });
   }
   return out;

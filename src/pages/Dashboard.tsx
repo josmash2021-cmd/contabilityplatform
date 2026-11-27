@@ -27,6 +27,7 @@ import { receiptCategoryLabel, receiptsCopy } from "@/i18n/copy/receipts";
 import type { Feature } from "@contracts/planFeatures";
 import { DRAFT_STEP, currentTaxYear, taxReminder } from "@contracts/taxRules";
 import { cn } from "@/lib/utils";
+import { readAgain } from "@/lib/readAgain";
 
 type Overview = inferRouterOutputs<AppRouter>["home"]["overview"];
 type Membership = NonNullable<inferRouterOutputs<AppRouter>["team"]["myMembership"]>;
@@ -90,9 +91,16 @@ function OwnerHome() {
   const { mutateAsync: syncRecentNow } = trpc.bank.syncRecent.useMutation({ onError: () => {} });
   const { mutateAsync: refreshBalancesNow } = trpc.bank.refreshAllBalances.useMutation({ onError: () => {} });
   const pullRefresh = async () => {
-    await Promise.allSettled([syncRecentNow(), refreshBalancesNow()]);
+    await Promise.allSettled([syncRecentNow(), refreshBalancesNow({ pulled: true })]);
     await utils.invalidate();
   };
+  // Opening Inicio: the balance from the bank itself and new movements (owner, 2026-11-27: "cuando abre debe ya
+  // estar actualizado"; limits in api/lib/liveBalance.ts), then the home numbers are read again (readAgain).
+  const { mutate: refreshOnOpen } = trpc.bank.refreshAllBalances.useMutation({
+    onSuccess: (d) => { if (d.success) void readAgain(utils.home.overview, utils.brand.institutions); },
+    onError: () => {},
+  });
+  useEffect(() => { refreshOnOpen({ pulled: true }); }, [refreshOnOpen]);
   const [payBill, setPayBill] = useState<BillItem | null>(null);
 
   // The user's local day (computed once per language; the server checks it against its own clock).

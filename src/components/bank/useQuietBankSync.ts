@@ -37,7 +37,7 @@ export function useQuietBankSync({ enabled, year, month, accountId }: { enabled:
   const { mutate: syncRecent, isPending: recentPending } = trpc.bank.syncRecent.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: syncMonth, isPending: monthPending } = trpc.bank.syncTransactions.useMutation({ onSuccess: handleSyncResult, onError: () => {} });
   const { mutate: refreshBalances } = trpc.bank.refreshAllBalances.useMutation({
-    onSuccess: (d) => { if (d.success) void readAgain(utils.bank.listAccounts, utils.bank.getAllPlaidAccounts, utils.banks.overview); },
+    onSuccess: (d) => { if (d.success) void readAgain(utils.bank.listAccounts, utils.bank.getAllPlaidAccounts, utils.banks.overview, utils.brand.institutions); },
     onError: () => {},
   });
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({

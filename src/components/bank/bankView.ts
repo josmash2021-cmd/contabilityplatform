@@ -15,8 +15,18 @@ export type Institution = Out["brand"]["institutions"][number];
 
 /** What the screen knows about one bank: its name and logo, and whether it needs the owner to sign in again. */
 export type BankInfo = { itemId: string; name: string; logo: string | null; color: string | null; needsReconnect: boolean; lastSuccessAt: string | null;
-  /** When Plaid last brought this bank's data (null: not known yet). */
+  /** How fresh this bank's balance is (balanceAt: Plaid's copy, or the bank itself when the app asked it). */
   bankUpdatedAt: string | null };
+
+/**
+ * How fresh a bank's balance is: when Plaid last brought the bank's data, or, when the app asked the bank itself
+ * after that (Plaid Balance, api/lib/liveBalance.ts), that time. The newest of the two; null when neither is known.
+ */
+export function balanceAt(i: { bankUpdatedAt?: string | null; liveBalanceAt?: string | null } | null | undefined): string | null {
+  const plaid = i?.bankUpdatedAt ?? null, live = i?.liveBalanceAt ?? null;
+  if (!plaid || !live) return plaid ?? live;
+  return Date.parse(live) > Date.parse(plaid) ? live : plaid;
+}
 
 const fmt = (n: number, digits: number) => Math.abs(n).toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 /** $1,234.56, with a real minus (−) when negative. */

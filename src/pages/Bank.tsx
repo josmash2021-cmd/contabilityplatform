@@ -131,11 +131,13 @@ export default function Bank() {
   // Pull down to refresh (phones): every bank again, then the page
   const pullT = useCopy(pullCopy);
   const pullRefresh = async () => {
-    await refreshItemsNow().catch(() => undefined);
+    await refreshItemsNow({ today, pulled: true }).catch(() => undefined);
     await utils.invalidate();
   };
+  // Opening the page also asks the bank for new movements (owner, 2026-11-27: "cuando abre debe ya estar
+  // actualizado"); the server limits it to once per bank per hour (api/lib/liveBalance.ts).
   useEffect(() => {
-    if (hasBank && canManage) refreshItems({ today });
+    if (hasBank && canManage) refreshItems({ today, pulled: true });
   }, [hasBank, canManage, refreshItems, today]);
 
   // ── Per-bank actions ──

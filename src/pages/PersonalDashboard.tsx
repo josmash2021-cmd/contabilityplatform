@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ReconnectBank } from "@/components/personal/ReconnectBank";
 import { TxDetailSheet } from "@/components/personal/TxDetailSheet";
 import { TxLogo } from "@/components/personal/TxLogo";
+import { balanceAt } from "@/components/bank/bankView";
 import { readAgain } from "@/lib/readAgain";
 import {
   bankRow, institutionOf, isStreaming, listNames, makeDays, relTime, smBtn, useCatLabel, type Institution, type TxRow,
@@ -87,25 +88,32 @@ export default function PersonalDashboard() {
   const { data: subsData } = trpc.subs.list.useQuery({ today: when.days.today }, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
   const { data: institutions, dataUpdatedAt: instsAt } = trpc.brand.institutions.useQuery(undefined, { enabled: hasBank, staleTime: 5 * 60_000, retry: false });
   const insts = institutions as Institution[] | undefined;
-  // When Plaid last brought the bank's data, for the bank that's furthest behind: nobody takes old money for
-  // today's (owner, 2026-11-26: "se ve dinero viejo"). Green under 12 hours, amber after.
-  const stalest = (insts ?? []).filter((i) => i.bankUpdatedAt).sort((a, b) => Date.parse(a.bankUpdatedAt as string) - Date.parse(b.bankUpdatedAt as string))[0] ?? null;
-  const fromBank = stalest ? relTime(stalest.bankUpdatedAt, instsAt, locale, t.hero.justNow) : null;
-  const bankBehind = !!stalest && instsAt - Date.parse(stalest.bankUpdatedAt as string) > 12 * 60 * 60 * 1000;
+  // How fresh the balance is, for the bank that's furthest behind: nobody takes old money for today's (owner,
+  // 2026-11-26: "se ve dinero viejo"). Plaid's copy, or the bank itself when the app asked it (balanceAt,
+  // api/lib/liveBalance.ts). Green under 12 hours, amber after. A balance from the bank itself says "Saldo de X",
+  // and when Plaid's movements are more than 12 hours older the line says that too.
+  const HALF_DAY = 12 * 60 * 60 * 1000;
+  const stalest = (insts ?? []).filter((i) => balanceAt(i)).sort((a, b) => Date.parse(balanceAt(a) as string) - Date.parse(balanceAt(b) as string))[0] ?? null;
+  const stalestAt = balanceAt(stalest);
+  const fromBank = stalestAt ? relTime(stalestAt, instsAt, locale, t.hero.justNow) : null;
+  const bankBehind = !!stalestAt && instsAt - Date.parse(stalestAt) > HALF_DAY;
+  const liveNow = !!stalest?.liveBalanceAt && stalestAt === stalest.liveBalanceAt && stalestAt !== stalest.bankUpdatedAt;
+  const movesRel = liveNow && stalest?.bankUpdatedAt && instsAt - Date.parse(stalest.bankUpdatedAt) > HALF_DAY
+    ? relTime(stalest.bankUpdatedAt, instsAt, locale, t.hero.justNow) : null;
 
   // ── Keep the bank fresh, quietly: new transactions and balances on arrival, then the month every 3 minutes ──
   const refreshMonth = () => { void utils.bank.getMonthData.invalidate(); void utils.review.count.invalidate(); };
   const { mutate: syncRecent, mutateAsync: syncRecentNow } = trpc.bank.syncRecent.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
   const { mutate: syncMonth } = trpc.bank.syncTransactions.useMutation({ onSuccess: (d) => { if (added(d)) refreshMonth(); }, onError: () => {} });
   const { mutate: refreshBalances, mutateAsync: refreshBalancesNow } = trpc.bank.refreshAllBalances.useMutation({
-    // Read the accounts again even if the screen's first read is still on its way (readAgain)
+    // The balance may have come from the bank itself: read the accounts and their times again (readAgain)
     onSuccess: () => { void readAgain(utils.bank.listAccounts, utils.banks.overview, utils.brand.institutions); },
     onError: () => {},
   });
   // Pull down to refresh (phones): ask the bank again now, then every number on the page
   const pullT = useCopy(pullCopy);
   const pullRefresh = async () => {
-    if (hasBank) await Promise.allSettled([syncRecentNow(), refreshBalancesNow()]);
+    if (hasBank) await Promise.allSettled([syncRecentNow(), refreshBalancesNow({ pulled: true })]);
     await utils.invalidate();
   };
   const { mutate: autoFix } = trpc.bank.autoFixCategories.useMutation({
@@ -118,7 +126,8 @@ export default function PersonalDashboard() {
   useEffect(() => {
     if (!hasBank) return;
     syncRecent();
-    refreshBalances();
+    // Opening Inicio also asks the bank for new movements (owner, 2026-11-27); once per bank per hour
+    refreshBalances({ pulled: true });
     const fix = setTimeout(() => autoFix(), 3000);
     const every = setInterval(() => syncMonth({ year: when.year, month: when.month }), 3 * 60_000);
     return () => { clearTimeout(fix); clearInterval(every); };
@@ -342,9 +351,12 @@ export default function PersonalDashboard() {
               </span>
             )}
             {stalest && fromBank && (
-              <span className="mt-1 flex items-center gap-2 text-[12px] text-slate-500" data-bank-fresh={bankBehind ? "behind" : "ok"}>
+              <span className="mt-1 flex items-center gap-2 text-[12px] text-slate-500" data-bank-fresh={bankBehind ? "behind" : "ok"} data-bank-live={liveNow ? "1" : undefined}>
                 <i className={cn("h-1.5 w-1.5 shrink-0 rounded-full", bankBehind ? "bg-amber-500" : "bg-emerald-500")} aria-hidden="true" />
-                {t.hero.fromBank(stalest.name, fromBank)}
+                <span className="min-w-0">
+                  {liveNow ? t.hero.balanceFrom(stalest.name, fromBank) : t.hero.fromBank(stalest.name, fromBank)}
+                  {movesRel && <> · {t.hero.movesFrom(movesRel)}</>}
+                </span>
               </span>
             )}
           </section>
