@@ -137,11 +137,14 @@ async function claim(db: Db, userId: number, itemKey: string, kind: LiveKind, no
 async function giveBack(db: Db, userId: number, itemKey: string, kind: LiveKind, prev: Date | null, e: unknown, nowMs: number) {
   countToday(kind, nowMs, -1);
   const code = plaidErrorCode(e);
+  // Plaid's own words (e.g. which product it says is missing), so the logs explain a refusal
+  const said = (e as { response?: { data?: { error_message?: unknown; error_type?: unknown } } } | null)?.response?.data;
+  const why = said ? ` · ${String(said.error_type ?? "")}: ${String(said.error_message ?? "").slice(0, 300)}` : "";
   if (code && NOT_ENABLED.has(code)) {
     pausedUntil[kind] = nowMs + PAUSE_MS;
-    console.error(`[live] Plaid says ${kind === "balance" ? "Balance" : "Transactions Refresh"} isn't enabled (${code}): paused 6 hours`);
+    console.error(`[live] Plaid says ${kind === "balance" ? "Balance" : "Transactions Refresh"} isn't enabled (${code}): paused 6 hours${why}`);
   } else {
-    console.error(`[live] ${kind} for bank ${itemKey} (user ${userId}) failed: ${code ?? (e instanceof Error ? e.message : String(e))}`);
+    console.error(`[live] ${kind} for bank ${itemKey} (user ${userId}) failed: ${code ?? (e instanceof Error ? e.message : String(e))}${why}`);
   }
   try { await stamp(db, userId, itemKey, kind, prev); } catch { /* the 15-minute wait then just applies */ }
 }
